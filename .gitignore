@@ -20,6 +20,11 @@ npm-debug.log*
 .cache/
 tmp/
 
+# 작업용 임시 스크립트 (_verify_tmp.sh, _dbcheck_tmp.js 등)
+_*_tmp.*
+_*tmp*.sh
+_*tmp*.js
+
 # PM2 런타임
 .pm2/
 

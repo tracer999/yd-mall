@@ -1,0 +1,24 @@
+# 줄바꿈 정규화
+# 이 저장소는 WSL(Linux) 과 Windows git 양쪽에서 접근되므로,
+# core.autocrlf 설정 차이로 파일 전체가 변경된 것처럼 보이는 문제를 막는다.
+# 저장소(blob)에는 항상 LF 로 저장하고, 체크아웃 시에도 LF 를 유지한다.
+* text=auto eol=lf
+
+# 셸 스크립트는 반드시 LF (CRLF 면 WSL 에서 실행 불가)
+*.sh text eol=lf
+
+# 바이너리 — 변환 금지
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.mp4 binary
