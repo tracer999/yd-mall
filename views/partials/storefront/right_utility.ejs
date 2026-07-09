@@ -1,0 +1,239 @@
+<%
+  /*
+   * 우측 유틸 레일 (P1.5 §4.5.4 / 설계 §7.2 Right Utility)
+   *  Login Box · Recent Products · App QR · Membership · Top Button
+   *
+   * layout_type = 'main_right_utility_v1' 인 페이지에서만 main_layout이 include한다.
+   * 섹션들이 전부 full-bleed(<section> + 자체 max-w 컨테이너)이므로 본문 흐름을 건드리지 않도록
+   * position:fixed 레일로 구현한다(부록 A CT-7 `utility_rail` 규약과 동일).
+   *
+   * 필요 로컬: user, cartCount, siteSettings
+   * QR/멤버십은 설정값이 있을 때만 노출한다(미설정 시 슬롯 자체를 숨김).
+   */
+  const _appUrl = (siteSettings && siteSettings.app_download_url) ? String(siteSettings.app_download_url).trim() : '';
+  const _appQrImage = (siteSettings && siteSettings.app_qr_image_url) ? String(siteSettings.app_qr_image_url).trim() : '';
+  const _membershipUrl = (siteSettings && siteSettings.membership_url) ? String(siteSettings.membership_url).trim() : '';
+%>
+
+<style>
+  .yd-rail {
+    position: fixed;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 45;
+    width: 74px;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    background: #fff;
+    border: 1px solid var(--gh-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    overflow: visible;
+  }
+  /* 본문(max-w 1400px)과 겹치지 않는 넓은 화면에서만 노출 */
+  @media (min-width: 1600px) {
+    .yd-rail { display: flex; }
+    /* 레일에 TOP이 포함되므로 레거시 플로팅 TOP 버튼은 숨긴다(중복 방지).
+       scrollTopBtn은 JS가 inline style로 display를 제어하므로 !important 필요. */
+    #scrollTopBtn { display: none !important; }
+    /* 히어로 내부 유틸 레일(장바구니/찜/최근본/TOP)도 전역 레일과 중복되므로 숨긴다.
+       (완전 제거는 부록 A CT-7에서) */
+    .hero-util-rail { display: none !important; }
+  }
+
+  .yd-rail__item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 10px 4px;
+    color: #4b5563;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color .15s, background-color .15s;
+  }
+  .yd-rail__item + .yd-rail__item { border-top: 1px solid #f1f2f4; }
+  .yd-rail__item:hover { color: var(--gh-primary); background: var(--gh-primary-soft); }
+  .yd-rail__item i { font-size: 20px; line-height: 1; }
+  .yd-rail__label { font-size: 10px; font-weight: 600; letter-spacing: -.02em; white-space: nowrap; }
+
+  .yd-rail__badge {
+    position: absolute;
+    top: 4px;
+    right: 12px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 9999px;
+    background: var(--gh-accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .yd-rail__top { border-top: 1px solid #f1f2f4; color: #6b7280; }
+
+  .yd-rail__qr { padding: 10px 6px; border-top: 1px solid #f1f2f4; text-align: center; }
+  .yd-rail__qr img { width: 58px; height: 58px; display: block; margin: 0 auto 4px; }
+
+  /* 최근 본 상품 패널 */
+  .yd-recent {
+    position: absolute;
+    right: 82px;
+    top: 0;
+    width: 200px;
+    max-height: 340px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--gh-border);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+    padding: 12px;
+  }
+  .yd-recent[hidden] { display: none; }
+  .yd-recent__title { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+  .yd-recent__empty { font-size: 12px; color: #9ca3af; padding: 12px 0; text-align: center; }
+  .yd-recent__item { display: flex; gap: 8px; align-items: center; padding: 6px 0; text-decoration: none; color: #374151; }
+  .yd-recent__item + .yd-recent__item { border-top: 1px solid #f6f7f8; }
+  .yd-recent__item img { width: 40px; height: 40px; object-fit: contain; border: 1px solid #f1f2f4; border-radius: 6px; background: #fff; }
+  .yd-recent__name { font-size: 11px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .yd-recent__item:hover .yd-recent__name { color: var(--gh-primary); }
+</style>
+
+<aside class="yd-rail" aria-label="바로가기 유틸리티">
+  <!-- Login Box -->
+  <% if (user) { %>
+    <a href="/mypage" class="yd-rail__item" title="마이쇼핑">
+      <i class="bi bi-person-circle" aria-hidden="true"></i>
+      <span class="yd-rail__label">마이쇼핑</span>
+    </a>
+  <% } else { %>
+    <a href="/auth/login" class="yd-rail__item" title="로그인">
+      <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+      <span class="yd-rail__label">로그인</span>
+    </a>
+  <% } %>
+
+  <!-- 장바구니 -->
+  <a href="/cart" class="yd-rail__item" title="장바구니">
+    <i class="bi bi-bag" aria-hidden="true"></i>
+    <span class="yd-rail__label">장바구니</span>
+    <% if (typeof cartCount !== 'undefined' && cartCount > 0) { %>
+      <span class="yd-rail__badge"><%= cartCount %></span>
+    <% } %>
+  </a>
+
+  <!-- 찜 -->
+  <a href="/likes" class="yd-rail__item" title="찜한 상품">
+    <i class="bi bi-heart" aria-hidden="true"></i>
+    <span class="yd-rail__label">찜</span>
+  </a>
+
+  <!-- 최근 본 상품 -->
+  <button type="button" class="yd-rail__item" id="yd-recent-btn" aria-expanded="false" aria-controls="yd-recent-panel" title="최근 본 상품">
+    <i class="bi bi-clock-history" aria-hidden="true"></i>
+    <span class="yd-rail__label">최근본</span>
+  </button>
+
+  <!-- 멤버십 숏컷 (설정 시에만) -->
+  <% if (_membershipUrl) { %>
+    <a href="<%= _membershipUrl %>" class="yd-rail__item" title="멤버십">
+      <i class="bi bi-award" aria-hidden="true"></i>
+      <span class="yd-rail__label">멤버십</span>
+    </a>
+  <% } %>
+
+  <!-- 앱 다운로드 QR (site_settings 에 QR 이미지가 등록된 경우에만 노출) -->
+  <% if (_appQrImage) { %>
+    <div class="yd-rail__qr">
+      <img src="<%= _appQrImage %>" alt="앱 다운로드 QR" loading="lazy" width="58" height="58">
+      <span class="yd-rail__label">앱다운</span>
+    </div>
+  <% } else if (_appUrl) { %>
+    <a href="<%= _appUrl %>" class="yd-rail__item" title="앱 다운로드">
+      <i class="bi bi-qr-code" aria-hidden="true"></i>
+      <span class="yd-rail__label">앱다운</span>
+    </a>
+  <% } %>
+
+  <!-- TOP -->
+  <button type="button" class="yd-rail__item yd-rail__top" id="yd-rail-top" title="맨 위로">
+    <i class="bi bi-chevron-up" aria-hidden="true"></i>
+    <span class="yd-rail__label">TOP</span>
+  </button>
+
+  <!-- 최근 본 상품 패널 -->
+  <div class="yd-recent" id="yd-recent-panel" hidden>
+    <p class="yd-recent__title">최근 본 상품</p>
+    <div id="yd-recent-list"></div>
+  </div>
+</aside>
+
+<script>
+(function () {
+  var STORAGE_KEY = 'yd_recent_products';
+
+  function readRecent() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function renderRecent() {
+    var list = readRecent();
+    var box = document.getElementById('yd-recent-list');
+    if (!box) return;
+    if (list.length === 0) {
+      box.innerHTML = '<p class="yd-recent__empty">최근 본 상품이 없습니다.</p>';
+      return;
+    }
+    box.innerHTML = list.slice(0, 10).map(function (p) {
+      return '<a class="yd-recent__item" href="' + esc(p.url) + '">'
+           + '<img src="' + esc(p.image || '/images/placeholder.png') + '" alt="' + esc(p.name) + '">'
+           + '<span class="yd-recent__name">' + esc(p.name) + '</span>'
+           + '</a>';
+    }).join('');
+  }
+
+  var btn = document.getElementById('yd-recent-btn');
+  var panel = document.getElementById('yd-recent-panel');
+  if (btn && panel) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var willOpen = panel.hasAttribute('hidden');
+      if (willOpen) { renderRecent(); panel.removeAttribute('hidden'); }
+      else { panel.setAttribute('hidden', ''); }
+      btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (e) {
+      if (!panel.contains(e.target) && e.target !== btn) {
+        panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { panel.setAttribute('hidden', ''); btn.setAttribute('aria-expanded', 'false'); }
+    });
+  }
+
+  var topBtn = document.getElementById('yd-rail-top');
+  if (topBtn) topBtn.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+})();
+</script>

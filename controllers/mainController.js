@@ -111,8 +111,12 @@ async function buildHomeContext(req, res) {
 exports.getHome = async (req, res) => {
     try {
         const { shared, renderData } = await buildHomeContext(req, res);
+        const page = await displayService.getHomePage();
         const sections = await displayService.getHomeSections(shared);
-        res.render('user/index', Object.assign({ sections: sections || [] }, renderData));
+        res.render('user/index', Object.assign({
+            sections: sections || [],
+            layoutType: (page && page.layout_type) || 'main_basic'
+        }, renderData));
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -126,7 +130,11 @@ exports.getHomePreview = async (req, res) => {
         const page = await displayService.getHomePage();
         const { shared, renderData } = await buildHomeContext(req, res);
         const sections = page ? await displayService.getDraftSections(page.id, shared) : [];
-        res.render('user/index', Object.assign({ sections: sections || [], isPreview: true }, renderData));
+        res.render('user/index', Object.assign({
+            sections: sections || [],
+            isPreview: true,
+            layoutType: (page && page.layout_type) || 'main_basic'
+        }, renderData));
     } catch (err) {
         console.error(err);
         res.status(500).send('미리보기 렌더 오류');

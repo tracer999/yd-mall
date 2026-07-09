@@ -1039,3 +1039,31 @@
                                 });
                             });
                         </script>
+<%
+  /* 최근 본 상품 기록 — 우측 유틸 레일(P1.5 §4.5.4)의 데이터 소스.
+     비로그인 포함 클라이언트 localStorage 기반. (로그인 사용자 recent_views 연동은 CT-8) */
+  const _detailPath = (product.slug && String(product.slug).trim())
+    ? '/products/' + encodeURIComponent(String(product.slug).trim())
+    : '/products/view/' + product.id;
+  const _js = (v) => JSON.stringify(v == null ? '' : String(v)).replace(/</g, '\u003c');
+%>
+<script>
+(function () {
+  var STORAGE_KEY = 'yd_recent_products';
+  var MAX = 10;
+  var item = {
+    id: <%= Number(product.id) %>,
+    name: <%- _js(product.name) %>,
+    image: <%- _js(product.main_image || '') %>,
+    url: <%- _js(_detailPath) %>
+  };
+  try {
+    var raw = localStorage.getItem(STORAGE_KEY);
+    var list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+    list = list.filter(function (p) { return p && p.id !== item.id; });
+    list.unshift(item);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX)));
+  } catch (e) { /* 저장 실패는 무시 (프라이빗 모드 등) */ }
+})();
+</script>

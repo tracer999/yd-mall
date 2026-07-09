@@ -243,14 +243,26 @@ CREATE TABLE IF NOT EXISTS `product_group_item` (
 
 > 목표: GS SHOP·신세계TV쇼핑형 **쇼핑몰 상단 구조(헤더 + GNB + 우측 유틸)와 레이아웃 골격**을 먼저 세운다. 그 위에 CT 컴포넌트를 배치(P2)한다. (설계 §7.2 `main_right_utility_v1`, §8 메뉴)
 
-> **🟡 부분 구현(2026-07-08) — 헤더·GNB·카테고리 드롭다운 완료, 레이아웃 골격/우측유틸 잔여**
+> **✅ 구현 완료(2026-07-09) — DoD(§4.5.5) 충족. 잔여는 폴리시 항목뿐**
+>
+> **(2026-07-09 추가분)** 레이아웃 골격 + 우측 유틸 레일 완료:
+> - ✅ `views/partials/storefront/header.ejs` **헤더 partial 분해**(§4.5.2). `main_layout.ejs` 794줄 → 601줄, header 204줄(800줄 규약 준수). 분해 전후 홈 HTML **바이트 동일**(주석/공백 제외) 확인 → 회귀 없음.
+> - ✅ `views/partials/storefront/right_utility.ejs` **우측 유틸 레일**(§4.5.4): 로그인박스(로그인/마이쇼핑) · 장바구니(cartCount 뱃지) · 찜 · 최근 본 상품(패널) · 멤버십 · 앱 QR · TOP.
+> - ✅ `page.layout_type` 연동: `main_layout.ejs`가 `layoutType`으로 분기(`main_basic` → 본문만 / `main_right_utility_v1` → 본문 + 레일). `mainController.getHome`·`getHomePreview`가 `page.layout_type` 주입. 홈 `page(id=1)`을 `main_right_utility_v1`로 전환.
+> - ✅ 최근 본 상품 기록: 상품 상세(`views/user/products/detail.ejs`)에서 localStorage(`yd_recent_products`, 최대 10건)에 적재 → 레일 패널이 렌더. (로그인 사용자 `recent_views` 테이블 연동은 **CT-8**)
+> - **⚠️ 설계 편차(의도적)**: §4.5.2는 "Content 2컬럼"이라 기술하나, 현행 섹션들이 전부 **full-bleed**(`<section>` + 자체 `max-w` 컨테이너 + 배경색)이라 본문을 2컬럼 컨테이너로 감싸면 **모든 섹션 배경이 잘려 회귀**가 발생한다. 따라서 우측 유틸을 **`position:fixed` 레일**로 구현했다(부록 A **CT-7 `utility_rail` 규약과 동일**, 참조몰도 동일 방식). 본문 흐름 무변경 = 회귀 0.
+> - **노출 규칙**: 레일은 `≥1600px`에서만 노출(본문 `max-w-1400px`와 미충돌). 그 미만에서는 기존 플로팅 TOP 버튼 유지. `≥1600px`에서는 레거시 `#scrollTopBtn`을 CSS로 숨겨 **TOP 중복 렌더 없음**(CT-7 DoD 선반영).
+> - **QR/멤버십**: 데이터 소스가 없어 `site_settings.app_qr_image_url` / `app_download_url` / `membership_url` 설정 시에만 노출(미설정 시 슬롯 숨김). 외부 QR 생성 서비스는 사용하지 않음.
+> - 검증: 홈 200 + 레일 렌더, `/products`·상품상세 레일 미노출(레이아웃 분기 정상), 상세 최근본 기록 JS 주입, 헤더 분해 전후 렌더 동일, pm2 신규 에러 없음.
+>
+> **(2026-07-08 기존분) — 헤더·GNB·카테고리 드롭다운**
 > - **참조 실사이트 재확인**: `shinsegaetvshopping.com/plan/planMain`·`/broadcast/main` 직접 확인 → 헤더(로고/검색바/로그인·마이쇼핑·장바구니·고객센터) + GNB(카테고리·쇼핑라이브·TV편성표·오늘특가·공동구매·베스트·이벤트&혜택) 확정.
 > - ✅ `storefront_menu` 테이블 + 시드(참조 GNB와 동일: 카테고리[고정]·쇼핑라이브·TV편성표·오늘특가·공동구매·베스트·이벤트&혜택). 미지원(쇼핑라이브/TV편성표/공동구매)은 `#` placeholder(P6 미디어 전).
 > - ✅ `middleware/menuData.js`: `gnbMenus`(href 해석) + **`categoryTree`(NORMAL 재귀 트리, 전체 뎁스)** + `currentPath`(활성 밑줄) 주입.
 > - ✅ `views/layouts/main_layout.ejs` **헤더 2행 재구성**: (행1) 로고 + **중앙 검색바** + 유저액션(로그인/마이쇼핑/장바구니/고객센터, 아이콘+라벨), (행2) **GNB = ☰카테고리(클릭 드롭다운) + 몰별 가변 메뉴(활성 밑줄)**. **"홈" 메뉴 제거**. 데스크톱+모바일 모두.
 > - ✅ `views/partials/storefront/category_node.ejs`(재귀) + 카테고리 클릭 시 **하위 카테고리 div 패널**(전체 뎁스, 현재 데이터는 평면 10개). 카테고리 버튼은 페이지 이동 아님(개별 카테고리만 이동). 토글 JS(외부클릭/ESC 닫힘).
 > - 검증: 홈 200, 헤더/GNB 구조 참조몰과 일치(스크린샷), 카테고리 링크 12개·패널 렌더, 회귀 없음.
-> - ⬜ **잔여**: (§4.5.2) `main_right_utility_v1` 2컬럼 레이아웃, (§4.5.4) **우측 유틸 레일**(퀵메뉴/내정보/최근본/QR/TOP), 카테고리 2단 컬럼(hover 확장)·3뎁스 드롭다운 정교화, 상단바 로그인 중복 정리, 메뉴/카테고리 관리 UI는 **P3**.
+> - ⬜ **잔여(폴리시, DoD 외)**: 카테고리 2단 컬럼(hover 확장)·3뎁스 드롭다운 정교화, 상단바 로그인 중복 정리(상단바 ↔ Row1 유저액션). 메뉴/카테고리 관리 UI는 **P3**.
 > - **현재 메뉴 변경 방법**: 관리 UI 전까지 `storefront_menu` DB 직접 수정. 예: `UPDATE storefront_menu SET name='공동구매' WHERE id=11;`
 
 ### 4.5.0 확정 원칙 — "구조 고정 · 메뉴 데이터화" (2026-07-08 사용자 확정)
@@ -588,7 +600,7 @@ CREATE TABLE IF NOT EXISTS `mall` (
 | image6 | `ranking_tabs` | 랭킹(카테고리 아이콘 탭 + BEST 랭크 뱃지 그리드) | `product_group` + 카테고리 탭 | 예 | 예정 |
 | (기존) | `product_grid` | N열 상품 그리드(베스트/신상품) | `product_group` | 예 | ✅ 구현(그리드 partial) |
 | (기존) | `category_showcase` | 카테고리별 상품 탭(AJAX) | `category` | 예 | ✅ 구현 |
-| image2, image7 | `utility_rail` | 바로접속 유틸 레일(장바구니/찜/최근본/TOP) | client + 고정 | 전역 1 | 부분(히어로 내) |
+| image2, image7 | `utility_rail` | 바로접속 유틸 레일(장바구니/찜/최근본/TOP) | client + 고정 | 전역 1 | 🟡 전역 레일 구현(P1.5 §4.5.4). 히어로 내부 레일 완전 제거는 CT-7 |
 | image2 | `quick_menu` | 퀵 사이드메뉴(출석체크/쇼핑라이브/웰컴혜택) | `menu` / config | 예 | 예정 |
 | image, image2 | `live_cards` | 라이브/추천방송 카드(ON-AIR 타이머) | P6 미디어 연계 | 예 | P6 |
 | (범용) | `recent_product` | 최근 본 상품 | client(localStorage) | 예 | 예정 |
@@ -758,8 +770,11 @@ CREATE TABLE IF NOT EXISTS `mall` (
 ### A.9 CT-7 ~ CT-9 — 경량 컴포넌트 (묶음)
 
 **CT-7 `utility_rail`(전역)** — 현재 히어로 내부 부분 구현을 전역 컴포넌트로 승격.
-- [ ] 히어로에서 유틸레일 분리 → 전역 partial(장바구니/찜/최근본/TOP, `position:fixed`).
-- [ ] `main_layout.ejs`에 조건부 포함(또는 `page_section position='global'` 규약). 최근본/찜 개수는 기존 미들웨어(`cartData` 등) 재사용.
+- [x] 전역 partial 신설: `views/partials/storefront/right_utility.ejs`(장바구니/찜/최근본/TOP + 로그인박스, `position:fixed`) — **P1.5 §4.5.4에서 선구현**.
+- [x] `main_layout.ejs`에 조건부 포함(`layout_type === 'main_right_utility_v1'`). 장바구니 수는 기존 `cartData` 미들웨어 재사용.
+- [x] 중복 렌더 방지: `≥1600px`에서 레거시 `#scrollTopBtn` 및 히어로 내부 `.hero-util-rail`을 CSS로 숨김.
+- [ ] **잔여**: 히어로(`hero_showcase.ejs`)에서 내부 유틸 레일 **완전 제거**(현재는 `<1600px` 구간을 위해 잔존). 전역 레일을 1600px 미만에서도 쓰려면 콘텐츠 경계 기준 위치 계산(`right: calc((100vw - 1400px)/2 - 90px)`) 또는 in-flow 컬럼 전환 필요.
+- [ ] **잔여**: 홈 외 전 페이지 노출(현재 `layout_type`이 `main_right_utility_v1`인 페이지 = 홈만). 찜 개수 뱃지용 미들웨어.
 - **DoD**: 전 페이지 공통 유틸레일 노출, TOP 스크롤 동작, **중복 렌더 없음**(전역 1 인스턴스 — 멀티인스턴스 아님).
 
 **CT-8 `recent_product`** — 최근 본 상품(client).
