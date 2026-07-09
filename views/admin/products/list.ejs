@@ -46,13 +46,19 @@
             <button type="submit" name="status" value="ON" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 bg-green-600 text-white hover:bg-green-700">판매중 처리</button>
             <button type="submit" name="status" value="SOLD_OUT" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 bg-yellow-500 text-white hover:bg-yellow-600">품절 처리</button>
             <button type="submit" name="status" value="OFF" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 bg-red-600 text-white hover:bg-red-700">판매중지 처리</button>
-            <div class="border-l border-gray-300 h-6 mx-1"></div>
-            <button type="button" id="shopify-sync-btn" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 bg-indigo-600 text-white hover:bg-indigo-700 gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
-                Shopify 동기화
-            </button>
+            <%# Shopify 미사용 시 동기화 버튼 숨김 (A3). 서버측 POST /admin/products/shopify-sync 는
+                isShopifySyncEnabled() 가드가 409 로 거부하므로 이중 방어다. %>
+            <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
+                <div class="border-l border-gray-300 h-6 mx-1"></div>
+                <button type="button" id="shopify-sync-btn" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 bg-indigo-600 text-white hover:bg-indigo-700 gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+                    Shopify 동기화
+                </button>
+            <% } %>
         </div>
-        <div id="shopify-sync-status" class="hidden mb-3 px-4 py-2 rounded-md text-sm"></div>
+        <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
+            <div id="shopify-sync-status" class="hidden mb-3 px-4 py-2 rounded-md text-sm"></div>
+        <% } %>
 
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -238,8 +244,10 @@
             }
         });
 
-        // Shopify 일괄 동기화
-        document.getElementById('shopify-sync-btn').addEventListener('click', async function() {
+        // Shopify 일괄 동기화 — Shopify 미사용 시 버튼이 렌더되지 않는다(A3).
+        // 가드가 없으면 null.addEventListener 로 이 스크립트 블록 전체가 죽는다.
+        const shopifySyncBtn = document.getElementById('shopify-sync-btn');
+        if (shopifySyncBtn) shopifySyncBtn.addEventListener('click', async function() {
             const checked = document.querySelectorAll('.product-checkbox:checked');
             if (checked.length === 0) {
                 alert('동기화할 상품을 먼저 선택하세요.');

@@ -199,13 +199,13 @@
 | 재고 관리 | 🟡 | `products.stock` 단일 필드. 재고 이력·알림 없음 |
 | 옵션/SKU 관리 | ⬜ | 단일 variant 전제 (Shopify 동기화도 Default Title 1개) |
 | 상품 일괄 업로드 | ⬜ | Shopify 동기화 스크립트만 존재 |
-| Shopify 동기화 | ✅ | `syncService.js` + `system_settings.shopify_sync_enabled` 토글 |
+| Shopify 동기화 | ⏸ | `syncService.js` + `shopify_sync_enabled=0` (미사용). 동기화 버튼도 숨김(A3) |
 
 ### 3.6 프로모션 관리
 | 기능 | 상태 | 근거 / 비고 |
 |---|---|---|
-| 쿠폰 관리 | 🟡 | `/admin/coupons` 라우트·뷰 존재, **admin_menus 비활성** |
-| 포인트 관리 | 🟡 | `/admin/points` 존재, **비활성** |
+| 쿠폰 관리 | ✅ | `/admin/coupons`. **A3에서 활성화**(필수 기능). 목록 핸들러 스모크 테스트 통과 |
+| 포인트 관리 | ✅ | `/admin/points`. **A3에서 활성화**. `point_transactions` 기반 |
 | 할인 관리 | ⬜ | `products.discount_rate` 필드만 |
 | 오늘특가 관리 | ⬜ | `product_badge='DEADLINE_SALE'` 수동 지정 |
 | 베스트 관리 | ⬜ | `product_badge='BEST'` 수동 지정 |
@@ -217,10 +217,10 @@
 | 기능 | 상태 | 근거 / 비고 |
 |---|---|---|
 | 회원 관리 | ✅ | `/admin/users` |
-| Shopify 주문 | ✅ | `/admin/shopify-orders` |
-| 판매(주문) 관리 | 🟡 | `/admin/sales` 존재, **비활성** |
-| 배송 관리 | 🟡 | `/admin/shipping` 존재, **비활성** |
-| 문의 관리 | 🟡 | `/admin/inquiries` 존재, **비활성** |
+| Shopify 주문 | ⏸ | **A3에서 메뉴 숨김**(현재 Shopify 미사용). 라우트·서비스·웹훅은 유지. `system_settings.shopify_sync_enabled=0` |
+| 판매(주문) 관리 | ✅ | `/admin/sales`. **A3에서 활성화**. `orders`/`order_items`/`shipments` 기반 |
+| 배송 관리 | ✅ | `/admin/shipping`. **A3에서 활성화**. `shipments` 기반 |
+| 문의 관리 | ✅ | `/admin/inquiries`. **A3에서 활성화**. `inquiryController` 기반 |
 | 취소/반품/교환 | ⬜ | — |
 | 회원 등급 관리 | ⬜ | — |
 | 리뷰 관리 | ⬜ | 리뷰 테이블은 있으나 관리 화면 없음 |
@@ -407,10 +407,51 @@ brand_likes         (사용자) user_id, category_id  ← 우측 레일 '찜한 
 ### A. 선행 정리
 - [x] **A1** `admin_menus` 8그룹 재편 + 2뎁스 사이드바 렌더 ✅ 2026-07-09 (§2.1)
 - [ ] **A2** `/admin/menus` → "관리자 메뉴 관리"로 개명 (그룹 이동은 A1에서 이미 완료)
-- [ ] **A3** 비활성 메뉴 정리: 쿠폰·포인트·판매·배송·문의 — 완성 후 활성화할지, 숨길지 **결정 필요**
+- [x] **A3** 필수 메뉴 활성화 + Shopify UI 숨김 ✅ 2026-07-09 (아래)
 
-> **A1에서 발견한 데이터 이슈**: `Shopify 주문`(id=20)의 `visible_roles` 가 비어 있어
-> **역할이 없는 사용자에게도 노출**된다. 다른 메뉴는 모두 역할이 지정돼 있다. A2/A3 에서 정리할 것.
+### A3 — 필수 메뉴 활성화 & Shopify 미사용 처리 (2026-07-09)
+
+> **사용자 확정**: 쿠폰·포인트·판매·배송·문의는 "비활성"이 아니라 **필수 기능**이다 → 활성화.
+> Shopify 는 현재 사용하지 않는다 → **기능(라우트·서비스·웹훅)은 그대로 두고 UI 만 숨긴다.**
+
+`node scripts/migrate_admin_menu_activate.js` (멱등)
+
+**사전 검증**: 활성화 전에 5개 화면의 목록 핸들러를 모의 req/res 로 호출해 **SQL 오류 없이 `render` 까지 도달**함을 확인했다(깨진 화면을 켜면 운영자가 500을 본다). 참조 테이블(`coupons`, `user_coupons`, `point_transactions`, `orders`, `shipments`, `inquiries`)도 모두 실재한다.
+
+| 메뉴 | 조치 | visible_roles |
+|---|---|---|
+| 쿠폰 관리 | 활성화 | `super_admin,admin` |
+| 포인트 관리 | 활성화 | `super_admin,admin` |
+| 판매 관리 | 활성화 | `super_admin,admin,customer_admin` |
+| 배송 관리 | 활성화 | `super_admin,customer_admin` |
+| 문의 관리 | 활성화 | `super_admin,admin,customer_admin` |
+| **Shopify 주문** | **비활성(메뉴 숨김)** | `super_admin,admin` (공백이던 것 보정) |
+
+> **A1에서 발견한 데이터 이슈 해소**: `Shopify 주문` 의 `visible_roles` 가 비어 있어 **역할 없는 사용자에게도
+> 노출**되고 있었다. 역할을 명시했고, 이제 역할 없는 사용자에게 보이는 메뉴는 0건이다.
+
+**결과**: 활성 잎 메뉴 18건 / 비활성 1건. 역할별 — `super_admin` 18잎, `admin` 16잎, `customer_admin` 4잎(주문/회원 관리 그룹만), 역할없음 0잎.
+
+#### Shopify UI 숨김 방식
+`middleware/shopifyFlag.js` 가 `res.locals.shopifyEnabled` 를 주입한다.
+단일 소스는 **`system_settings.shopify_sync_enabled`**(현재 `0`) → `process.env.SHOPIFY_SYNC_ENABLED`.
+관리자 시스템설정에서 토글을 켜면 즉시 되살아난다.
+
+| 위치 | 숨기는 것 |
+|---|---|
+| `partials/storefront/header.ejs` | 마켓(국가) 선택기 |
+| `user/cart.ejs` | 국가 선택기 + "해외 구매하기(Global)" 버튼 |
+| `user/products/detail.ejs` | 글로벌 체크아웃 버튼 + 현지가격 섹션 |
+| `admin/products/list.ejs` | "Shopify 동기화" 버튼 + 상태 표시줄 |
+| `admin_menus` | "Shopify 주문" 메뉴 |
+
+- **라우트·서비스·웹훅(`/shopify/webhooks`)은 그대로 살아 있다.** 노출만 막는다.
+- **이중 방어**: 서버측 `POST /admin/products/shopify-sync` 는 `isShopifySyncEnabled()` 가드가 409로 거부하고, `syncService` 의 상품 생성/수정/삭제 동기화도 no-op 이 된다.
+- ⚠️ 버튼을 숨길 때 **스크립트의 `getElementById(...).addEventListener` null 가드**를 반드시 함께 넣어야 한다. 없으면 그 페이지의 스크립트 블록 전체가 죽는다(상품목록에서 실제로 발생할 뻔했다).
+
+#### 함께 고친 버그
+`app.js` 전역 에러 핸들러가 **클라이언트 오류(400)를 500으로 보고**하고 있었다.
+잘못된 JSON 본문(`entity.parse.failed`, `err.status=400`)이 "Internal Server Error"로 나가 원인 추적을 방해하고 모니터링에 서버 장애로 잡힌다. `err.status/statusCode` 가 4xx 면 그대로 전달하도록 수정.
 
 ### B. 1차 구현 (핵심)
 - [ ] **B1** 카테고리 관리 트리 UI + `depthGuard`(max 3) + `is_active`/`pc·mobile_visible`

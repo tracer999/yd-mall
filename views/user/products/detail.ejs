@@ -324,8 +324,9 @@
 
                                                 <!-- Action Buttons -->
                                                 <div class="mt-auto flex flex-col gap-3">
-                                                    <!-- Shopify 글로벌 체크아웃 버튼 -->
-                                                    <% if (typeof shopifyMapping !== 'undefined' && shopifyMapping && shopifyMapping.shopify_variant_id) { %>
+                                                    <!-- Shopify 글로벌 체크아웃 버튼 (A3: Shopify 미사용 시 숨김) -->
+                                                    <% if ((typeof shopifyEnabled !== 'undefined' && shopifyEnabled)
+                                                           && typeof shopifyMapping !== 'undefined' && shopifyMapping && shopifyMapping.shopify_variant_id) { %>
                                                     <!-- 국가/통화는 상단 헤더의 마켓 선택기로 변경 (세션 기준) -->
                                                     <!-- Shopify에 동기화되어 실제 판매 가능한 상품만 노출: 현지 가격 조회 성공 시 표시 -->
                                                     <div id="shopify-global-section" class="hidden mt-3" data-handle="<%= shopifyMapping.shopify_handle %>">

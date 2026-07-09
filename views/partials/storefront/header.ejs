@@ -22,8 +22,11 @@
                     <%= siteSettings.header_slogan || '건강한 하루의 시작 | 와이디몰' %>
                 </span>
                 <div class="flex items-center gap-4">
-                    <%- include('../shopify-market-selector') %>
-                    <div class="h-4 w-px bg-gray-300 mx-1"></div>
+                    <%# Shopify 미사용 시 마켓(국가) 선택기 숨김 — res.locals.shopifyEnabled (A3) %>
+                    <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
+                        <%- include('../shopify-market-selector') %>
+                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
+                    <% } %>
                     <% if (user) { %>
                         <div class="flex items-center gap-2">
                             <% if (user.picture) { %>

@@ -204,6 +204,9 @@ async function startServer() {
     // Theme Middleware (P4) — 활성 테마의 스타일 토큰을 res.locals.theme 에 주입
     app.use(require('./middleware/themeData'));
 
+    // Shopify 사용 여부 (A3) — res.locals.shopifyEnabled 로 Shopify UI 노출 제어
+    app.use(require('./middleware/shopifyFlag'));
+
     // Visitor Logger Middleware (Global)
     app.use(require('./middleware/visitorLogger'));
 
@@ -275,6 +278,16 @@ async function startServer() {
         if (err && err.type === 'entity.too.large') {
             return res.status(413).send('Request Entity Too Large');
         }
+
+        // 클라이언트 오류(잘못된 JSON 등)를 500으로 보고하면 원인 추적이 어렵고
+        // 모니터링에 서버 장애로 잡힌다. body-parser 는 err.status 를 4xx 로 준다.
+        const status = Number(err && (err.status || err.statusCode));
+        if (status >= 400 && status < 500) {
+            console.warn(`${req.method} ${req.originalUrl} - ${status} ${err.message}`);
+            if (!res.headersSent) return res.status(status).send(err.expose ? err.message : 'Bad Request');
+            return;
+        }
+
         console.error(`${req.method} ${req.originalUrl} - ${err.message}`, err);
         if (!res.headersSent) {
             res.status(500).send('Internal Server Error');
