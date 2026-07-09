@@ -129,15 +129,22 @@ async function getCustomMenus(mallId) {
     return resolved;
 }
 
-/** parent_id 기반 재귀 트리 */
+/**
+ * parent_id 기반 재귀 트리.
+ *
+ * rows 는 이미 필터링된 목록(활성 + 뎁스 이내)이다. 부모가 필터에서 빠졌다면
+ * 자식도 함께 숨긴다 — 최상위로 승격시키면 부모를 비활성화했을 때 자식이
+ * 갑자기 GNB 최상위에 튀어나온다.
+ */
 function buildTree(rows) {
     const byId = {};
     const roots = [];
     rows.forEach((r) => { byId[r.id] = Object.assign({}, r, { children: [] }); });
     rows.forEach((r) => {
         const node = byId[r.id];
-        if (r.parent_id && byId[r.parent_id]) byId[r.parent_id].children.push(node);
-        else roots.push(node);
+        if (!r.parent_id) { roots.push(node); return; } // 최상위
+        const parent = byId[r.parent_id];
+        if (parent) parent.children.push(node); // 부모가 없으면 이 노드는 렌더하지 않는다
     });
     return roots;
 }

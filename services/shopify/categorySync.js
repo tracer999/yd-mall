@@ -9,6 +9,7 @@
  */
 const pool = require('../../config/db');
 const { adminQuery } = require('./adminClient');
+const { isShopifySyncEnabled } = require('./syncService');
 
 // ── GraphQL ───────────────────────────────────────────────────────────────
 
@@ -162,4 +163,25 @@ async function backfillCollectionIds() {
     return matched;
 }
 
-module.exports = { syncCategoryById, deleteCategoryFromShopify, backfillCollectionIds };
+/*
+ * Shopify 미사용 시 컬렉션 동기화를 건너뛴다.
+ *
+ * 이 가드가 없으면 카테고리를 추가/수정/삭제할 때마다 Shopify Admin API 를 호출한다.
+ * 미사용 상태에서는 매번 인증 실패로 배경 에러가 쌓이고, 삭제는 await 이므로 응답까지 느려진다.
+ * (services/shopify/syncService.js 의 상품 동기화 가드와 같은 원칙)
+ */
+function withSyncGuard(fn, label) {
+    return async (...args) => {
+        if (!isShopifySyncEnabled()) {
+            console.log(`[Shopify] 비활성화 상태 — ${label} 건너뜀`);
+            return { skipped: true, reason: 'shopify_sync_disabled' };
+        }
+        return fn(...args);
+    };
+}
+
+module.exports = {
+    syncCategoryById: withSyncGuard(syncCategoryById, '카테고리 컬렉션 동기화'),
+    deleteCategoryFromShopify: withSyncGuard(deleteCategoryFromShopify, '카테고리 컬렉션 삭제'),
+    backfillCollectionIds, // CLI 스크립트 전용 — 명시적으로 실행하므로 가드하지 않는다
+};

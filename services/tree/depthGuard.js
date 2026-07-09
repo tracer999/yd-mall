@@ -82,6 +82,40 @@ async function maxParentDepth(maxDepth) {
 }
 
 /**
+ * candidateParentId 가 nodeId 자신이거나 nodeId 의 후손인지 검사한다.
+ *
+ * 이걸 막지 않으면 부모를 자기 후손 밑으로 옮겨 **순환 참조**가 만들어지고,
+ * recalcSubtreeDepth 의 BFS 가 무한 루프에 빠진다(뎁스 상한에 걸려 예외가 나긴 하지만
+ * 그 전에 DB 를 이미 오염시킨다).
+ *
+ * @returns {Promise<boolean>} true 면 부모로 지정할 수 없다
+ */
+async function wouldCreateCycle({ table = 'categories', nodeId, candidateParentId, conn = pool }) {
+    if (!candidateParentId) return false;                       // 최상위로 이동은 항상 안전
+    if (Number(candidateParentId) === Number(nodeId)) return true; // 자기 자신
+
+    const { idCol, parentCol } = tableMeta(table);
+
+    // candidateParent 에서 위로 올라가며 nodeId 를 만나면 순환이다.
+    let cursor = Number(candidateParentId);
+    const seen = new Set();
+    while (cursor) {
+        if (seen.has(cursor)) return true; // 기존 데이터에 이미 순환이 있는 경우
+        seen.add(cursor);
+
+        const [rows] = await conn.query(
+            `SELECT \`${parentCol}\` AS parentId FROM \`${table}\` WHERE \`${idCol}\` = ?`,
+            [cursor]
+        );
+        if (rows.length === 0) return false;
+        const parentId = rows[0].parentId;
+        if (Number(parentId) === Number(nodeId)) return true;
+        cursor = parentId;
+    }
+    return false;
+}
+
+/**
  * nodeId 자신과 모든 후손의 depth 를 재계산해 갱신한다(BFS).
  * 부모를 다른 노드로 옮긴 직후에 호출한다.
  *
@@ -132,6 +166,7 @@ async function recalcSubtreeDepth({ table = 'categories', nodeId, maxDepth, conn
 module.exports = {
     assertDepthAllowed,
     recalcSubtreeDepth,
+    wouldCreateCycle,
     getCategoryMaxDepth,
     maxParentDepth,
     DepthLimitError,
