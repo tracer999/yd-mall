@@ -253,21 +253,33 @@
 | 항목 | 컬럼 | 상태 |
 |---|---|---|
 | 카테고리명 | `categories.name` | ✅ |
-| 상위 카테고리 | `categories.parent_id` | 컬럼 O, UI ⬜ |
-| depth (**최대 3**) | `categories.depth` | 컬럼 O(M1), 강제 로직 ⬜ |
+| 상위 카테고리 | `categories.parent_id` | ✅ B1 |
+| depth (**최대 3**) | `categories.depth` | ✅ B1 (앱 레이어 강제) |
 | URL slug | `categories.slug` | 컬럼 O(M1), 라우팅 ⬜ |
 | 노출 순서 | `categories.display_order` | ✅ |
-| 사용 여부 | `categories.is_active` | 컬럼 O(M1) |
-| PC/Mobile 노출 | `pc_visible` / `mobile_visible` | 컬럼 O(M1) |
+| 사용 여부 | `categories.is_active` | ✅ B1 |
+| PC/Mobile 노출 | `pc_visible` / `mobile_visible` | ✅ B1 |
 | 대표 이미지 | ⬜ | 메가메뉴용 |
 | SEO 제목/설명 | ⬜ | `seo_config` 미도입 |
 
-**필수 구현**: `services/tree/depthGuard.js`
-- `assertDepthAllowed({ parentId, maxDepth: 3 })` → `부모.depth + 1 > 3` 이면 저장 거부
-- `recalcSubtreeDepth(nodeId)` → 부모 이동 시 자신+후손 depth 일괄 갱신
+**구현 완료**: `services/tree/depthGuard.js`
+- `assertDepthAllowed({ parentId })` → `부모.depth + 1 > maxDepth` 면 저장 거부
+- `wouldCreateCycle({ nodeId, candidateParentId })` → 자기 자신/후손을 상위로 지정하면 거부
+- `recalcSubtreeDepth(nodeId)` → 부모 이동 시 자신+후손 depth 일괄 갱신 (트랜잭션 내)
 - `navigation_config.category_max_depth` (기본 3) 를 상한값 소스로 사용
 
-> **주의**: `type`(NORMAL/THEME/BRAND)은 뎁스가 아니다. 병렬 분류축이며 뎁스 제한은 각 type 트리 내부에서 독립 적용.
+> **주의**: `type`(NORMAL/THEME/BRAND)은 뎁스가 아니다. 병렬 분류축이며 뎁스 제한은 각 type 트리 내부에서 독립 적용. 부모도 같은 type 안에서만 선택할 수 있다.
+
+#### 4.1.1 계층 무결성에서 반드시 막아야 하는 3가지 (B1, 2026-07-09)
+
+| 경로 | 막지 않으면 | 처리 |
+|---|---|---|
+| 뎁스 초과 | 4단계 이상 생성 | `assertDepthAllowed` — MySQL CHECK 로는 `부모.depth + 1` 동적 검증 불가 |
+| 순환 참조 | `recalcSubtreeDepth` BFS 가 DB 를 오염시킨 뒤 예외 | `wouldCreateCycle` 을 **UPDATE 전에** 호출 |
+| 부모 삭제 | `parent_id` 가 `ON DELETE SET NULL` → 자식이 조용히 최상위로 승격 + `depth` 불일치 | 자식 있으면 삭제 차단 |
+
+관련 프론트 수정: `navigationService.buildTree` 는 부모가 필터(비활성/뎁스초과)에서 빠진 노드를
+최상위로 승격시키지 않고 함께 숨긴다.
 
 ### 4.2 일반 메뉴 관리 (ON/OFF)
 경로: `관리자 > 메뉴/카테고리 관리 > 일반 메뉴 관리`
@@ -490,9 +502,9 @@ brand_likes         (사용자) user_id, category_id  ← 우측 레일 '찜한 
 잘못된 JSON 본문(`entity.parse.failed`, `err.status=400`)이 "Internal Server Error"로 나가 원인 추적을 방해하고 모니터링에 서버 장애로 잡힌다. `err.status/statusCode` 가 4xx 면 그대로 전달하도록 수정.
 
 ### B. 1차 구현 (핵심)
-- [ ] **B1** 카테고리 관리 트리 UI + `depthGuard`(max 3) + `is_active`/`pc·mobile_visible`
+- [x] **B1** 카테고리 관리 트리 UI ✅ 2026-07-09 — `depthGuard`(max 3, 순환 차단) + `is_active`/`pc·mobile_visible` (아래 §4.1)
 - [x] **B2** 일반 메뉴 관리 ✅ 2026-07-09 — `/admin/feature-menus` (아래 §4.2.1)
-- [ ] **B3** 커스텀 메뉴 관리 (GNB 슬롯 3 제한, 서버 측 강제)
+- [ ] **B3** 커스텀 메뉴 관리 (GNB 슬롯 3 제한, 서버 측 강제) — ⏸ **후순위** (사용자 확정 2026-07-09): 커스텀 이외 정형화된 화면·관리가 모두 끝나고 기능 테스트를 마친 뒤 착수
 - [ ] **B4** 시스템 메뉴 설정 (`is_required` 잠금)
 - [ ] **B5** Header 설정 (`navigation_config` UI)
 - [ ] **B6** 상품 그룹 관리 전용 화면
