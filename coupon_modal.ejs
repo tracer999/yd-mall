@@ -1,0 +1,50 @@
+<!-- Coupon Selection Modal -->
+<div id="couponModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center overflow-y-auto h-full w-full z-50" style="display: none;">
+    <div class="relative mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center pb-3 border-b">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">쿠폰 선택</h3>
+            <button onclick="closeCouponModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="mt-3 max-h-96 overflow-y-auto">
+            <% if (coupons.length === 0) { %>
+                <div class="p-12 text-center text-gray-500">
+                    사용 가능한 쿠폰이 없습니다.
+                </div>
+            <% } else { %>
+                <div class="space-y-4 p-2">
+                    <% coupons.forEach(coupon => { %>
+                        <div class="coupon-item p-4 border rounded-lg cursor-pointer hover:border-green-500 hover:bg-green-50 transition"
+                             data-user-coupon-id="<%= coupon.user_coupon_id %>"
+                             data-name="<%= coupon.name %>"
+                             data-type="<%= coupon.type %>"
+                             data-amount="<%= coupon.discount_amount %>"
+                             data-min-purchase="<%= coupon.min_purchase %>">
+                            <h4 class="text-lg font-bold text-gray-800">
+                                <% if (coupon.type === 'percent') { %>
+                                    <%= coupon.discount_amount %>% 할인
+                                <% } else { %>
+                                    <%= Number(coupon.discount_amount).toLocaleString() %>원 할인
+                                <% } %>
+                            </h4>
+                            <p class="text-gray-600 mt-1"><%= coupon.name %></p>
+                            <p class="text-sm text-gray-500 mt-2">
+                                <% if (coupon.min_purchase > 0) { %>
+                                    <%= Number(coupon.min_purchase).toLocaleString() %>원 이상 구매 시
+                                <% } else { %>
+                                    조건 없음
+                                <% } %>
+                            </p>
+                            <% if (coupon.expires_at) { %>
+                                <p class="text-xs text-gray-400 mt-1">
+                                    유효기간: ~ <%= new Date(coupon.expires_at).toLocaleDateString() %>
+                                </p>
+                            <% } %>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>

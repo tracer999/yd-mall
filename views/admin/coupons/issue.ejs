@@ -1,0 +1,154 @@
+<div class="flex justify-center">
+    <div class="w-full lg:max-w-3xl">
+        <div class="mb-6">
+            <a href="/admin/coupons" class="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block">← 쿠폰 목록</a>
+        </div>
+
+        <% if (success) { %>
+        <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800"><%= success %></div>
+        <% } %>
+        <% if (error) { %>
+        <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800"><%= error %></div>
+        <% } %>
+
+        <% if (issueResult) { %>
+        <div class="mb-6 bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800">쿠폰 지급 결과 · <%= issueResult.couponName %></h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <% if (issueResult.issued && issueResult.issued.length) { %>
+                <div>
+                    <h4 class="text-sm font-medium text-green-700 mb-2">✓ 발급 완료 (<%= issueResult.issued.length %>명)</h4>
+                    <ul class="text-sm text-gray-700 space-y-1">
+                        <% issueResult.issued.forEach(function(item) { %>
+                        <li>ID <%= item.id %> · <%= item.user && item.user.name ? item.user.name : '-' %> · <%= item.user && item.user.phone ? item.user.phone : '-' %></li>
+                        <% }); %>
+                    </ul>
+                </div>
+                <% } %>
+                <% if (issueResult.failed && issueResult.failed.length) { %>
+                <div>
+                    <h4 class="text-sm font-medium text-amber-700 mb-2">✗ 미발급 (<%= issueResult.failed.length %>명)</h4>
+                    <ul class="text-sm text-gray-700 space-y-1">
+                        <% issueResult.failed.forEach(function(item) { %>
+                        <li>ID <%= item.id %> · <%= item.user && item.user.name ? item.user.name : '-' %> · <%= item.user && item.user.phone ? item.user.phone : '-' %> — <span class="text-amber-600"><%= item.reason %></span></li>
+                        <% }); %>
+                    </ul>
+                </div>
+                <% } %>
+            </div>
+        </div>
+        <% } %>
+
+        <div class="bg-white shadow-sm rounded-xl border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h3 class="text-lg font-semibold text-gray-800">쿠폰 지급</h3>
+                <p class="text-sm text-gray-500 mt-1">전체 회원 또는 특정 회원에게 쿠폰을 지급합니다. (1인 1장, 이미 보유 시 스킵)</p>
+            </div>
+            <form action="/admin/coupons/issue" method="POST" class="p-6 space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">지급할 쿠폰 <span class="text-red-500">*</span></label>
+                    <select name="coupon_id" required>
+                        <option value="">쿠폰 선택</option>
+                        <% if (coupons && coupons.length) { %>
+                        <% coupons.forEach(function(c) { %>
+                        <option value="<%= c.id %>"><%= c.name %> (<%= c.discount_amount %>원, <%= new Date(c.valid_to).toLocaleDateString() %>까지)</option>
+                        <% }); %>
+                        <% } %>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">지급 방식</label>
+                    <div class="space-y-3">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="issue_type" value="all" checked class="text-blue-600">
+                            <span>전체 회원 지급</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="issue_type" value="user" class="text-blue-600">
+                            <span>특정 회원 지급</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="userSelectField" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">회원 선택 (여러 명 선택 가능)</label>
+                    <div id="user_ids_hiddenWrap" class="hidden"></div>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <button type="button" id="openUserSearchBtn" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
+                            <i class="bi bi-search mr-2"></i>회원 검색
+                        </button>
+                        <span id="selectedUserDisplay" class="text-sm text-gray-600 hidden"></span>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <a href="/admin/coupons" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+                    <button type="submit" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">지급하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const radios = document.querySelectorAll('input[name="issue_type"]');
+    const userField = document.getElementById('userSelectField');
+    if (radios && userField) {
+        radios.forEach(function(r) {
+            r.addEventListener('change', function() {
+                userField.classList.toggle('hidden', this.value !== 'user');
+            });
+        });
+
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (document.querySelector('input[name="issue_type"]:checked')?.value === 'user') {
+            const ids = document.querySelectorAll('input[name="user_ids[]"]');
+            if (!ids || ids.length === 0) {
+                e.preventDefault();
+                alert('회원을 검색하여 선택해 주세요.');
+            }
+        }
+    });
+    }
+})();
+
+    document.getElementById('openUserSearchBtn')?.addEventListener('click', function() {
+        if (typeof openUserSearchModal === 'function') openUserSearchModal();
+    });
+</script>
+
+<div id="couponIssueUserModal" class="fixed inset-0 z-[100] hidden" aria-hidden="true" data-user-search-modal data-modal-id="couponIssueUserModal" data-input-name="user_ids" data-display-el-id="selectedUserDisplay" data-hidden-wrap-id="user_ids_hiddenWrap" data-multi-select="true">
+  <input type="hidden" id="couponIssueUserModal-selectedJson" value="">
+  <div class="fixed inset-0 bg-gray-500/60 backdrop-blur-sm modal-overlay" data-modal-close="couponIssueUserModal"></div>
+  <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
+    <div class="bg-white rounded-xl shadow-xl max-h-[90vh] w-full max-w-2xl pointer-events-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="couponIssueUserModal-title">
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 id="couponIssueUserModal-title" class="text-lg font-semibold text-gray-800">회원 검색</h3>
+        <button type="button" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100" data-modal-close="couponIssueUserModal" aria-label="닫기">
+          <i class="bi bi-x-lg text-lg"></i>
+        </button>
+      </div>
+      <div class="p-6 flex flex-col gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">이메일, 이름, 연락처, 생년월일 검색 (예: 1981-08-10)</label>
+          <div class="flex gap-2">
+            <input type="text" id="couponIssueUserModal-searchInput" placeholder="검색어 입력" class="flex-1 min-w-0 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-4 py-2.5">
+            <button type="button" id="couponIssueUserModal-searchBtn" class="flex-shrink-0 inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">검색</button>
+          </div>
+        </div>
+        <div id="couponIssueUserModal-results" class="border border-gray-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+          <p class="text-sm text-gray-500 p-4 text-center" id="couponIssueUserModal-emptyMsg">검색어를 입력하고 검색하세요.</p>
+          <ul id="couponIssueUserModal-resultList" class="divide-y divide-gray-100 hidden"></ul>
+        </div>
+        <div id="couponIssueUserModal-confirmArea" class="hidden pt-2 border-t border-gray-200">
+          <button type="button" class="w-full inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700" onclick="document.getElementById('couponIssueUserModal').dispatchEvent(new CustomEvent('confirm-multi-select'))">선택 완료</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/user-search-modal.js"></script>

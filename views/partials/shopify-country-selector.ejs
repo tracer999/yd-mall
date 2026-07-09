@@ -1,0 +1,79 @@
+<%#
+  Shopify Markets 국가 선택기 (Global Checkout 섹션에 삽입)
+  - 사용 가능한 국가 목록을 /shopify/markets API에서 동적으로 가져와 렌더링
+  - 선택한 국가는 POST /shopify/market-context 로 세션에 저장
+  - locals.shopifyMarket.country 가 현재 선택된 국가
+%>
+<div id="shopify-country-selector" class="mt-2">
+  <label for="shopify-country-select" class="block text-xs text-gray-500 mb-1">
+    🌏 Global Checkout 국가 선택
+  </label>
+  <div class="flex items-center gap-2">
+    <select
+      id="shopify-country-select"
+      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-green-500"
+      onchange="shopifySetCountry(this.value)"
+    >
+      <option value="">-- 국가 선택 --</option>
+    </select>
+    <span id="shopify-currency-badge" class="text-xs text-gray-500"></span>
+  </div>
+  <p class="text-xs text-gray-400 mt-1">
+    국가를 선택하면 해당 국가의 통화로 결제됩니다.
+  </p>
+</div>
+
+<script>
+(async function initCountrySelector() {
+  const select = document.getElementById('shopify-country-select');
+  const badge  = document.getElementById('shopify-currency-badge');
+  const currentCountry = '<%= locals.shopifyMarket && locals.shopifyMarket.country ? locals.shopifyMarket.country : "" %>';
+
+  try {
+    const res = await fetch('/shopify/markets');
+    if (!res.ok) return;
+    const data = await res.json();
+    const countries = data.availableCountries || [];
+
+    countries.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.isoCode;
+      opt.textContent = `${c.name} (${c.currency.isoCode} ${c.currency.symbol})`;
+      if (c.isoCode === currentCountry) opt.selected = true;
+      select.appendChild(opt);
+    });
+
+    if (currentCountry) updateBadge(countries, currentCountry);
+  } catch (e) {
+    console.warn('[ShopifySelector] Markets 조회 실패:', e.message);
+  }
+
+  function updateBadge(countries, code) {
+    const c = countries.find(x => x.isoCode === code);
+    badge.textContent = c ? `${c.currency.isoCode} ${c.currency.symbol}` : '';
+  }
+
+  window.shopifySetCountry = async function(code) {
+    if (!code) return;
+    try {
+      await fetch('/shopify/market-context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ countryCode: code }),
+      });
+      // 배지 갱신
+      const res = await fetch('/shopify/markets');
+      if (res.ok) {
+        const data = await res.json();
+        updateBadge(data.availableCountries || [], code);
+      }
+      // 현지화 가격 갱신 (detail 페이지에서 등록한 콜백)
+      if (typeof window.shopifyRefreshLocalPrice === 'function') {
+        window.shopifyRefreshLocalPrice(code);
+      }
+    } catch (e) {
+      console.warn('[ShopifySelector] 국가 저장 실패:', e.message);
+    }
+  };
+})();
+</script>

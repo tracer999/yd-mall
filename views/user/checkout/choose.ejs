@@ -1,0 +1,20 @@
+<div class="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-center">
+        <h1 class="text-xl font-bold text-gray-900 mb-2">구매 방법 선택</h1>
+        <p class="text-sm text-gray-500 mb-8">로그인하여 구매하시면 배송지 정보가 자동으로 입력됩니다.</p>
+
+        <% const qs = typeof query === 'object' && query ? new URLSearchParams(query).toString() : ''; %>
+        <div class="space-y-3">
+            <a href="/auth/login<%= qs ? '?' + qs + '&redirect=' + encodeURIComponent('/checkout?' + qs) : '?redirect=' + encodeURIComponent('/checkout') %>"
+               class="block w-full py-4 rounded-xl bg-[var(--gh-primary)] text-white font-semibold hover:bg-[var(--gh-primary-dark)] transition-colors">
+                <i class="bi bi-person-fill mr-2"></i>회원으로 구매
+            </a>
+            <a href="/checkout?<%= qs ? qs + '&' : '' %>guest=1"
+               class="block w-full py-4 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors">
+                <i class="bi bi-person mr-2"></i>비회원으로 구매
+            </a>
+        </div>
+
+        <p class="mt-6 text-xs text-gray-400">비회원 주문 시 주문조회는 주문번호와 이메일로 가능합니다.</p>
+    </div>
+</div>

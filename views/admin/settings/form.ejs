@@ -1,0 +1,875 @@
+<% const _basePath = (typeof basePath !== 'undefined' && basePath) ? basePath : '/admin/settings'; %>
+<% const _showTabs = (typeof showTabs === 'undefined') ? true : !!showTabs; %>
+<% const _activeTab = (activeTab === 'system') ? 'system' : 'company'; %>
+
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
+    <p class="text-sm text-gray-500">
+        <% if (_activeTab === 'company') { %>
+            사이트 기본 정보 및 회사 정보를 관리합니다.
+        <% } else { %>
+            시스템 API 키, 결제, 인증 등의 설정을 관리합니다.
+        <% } %>
+    </p>
+</div>
+
+<% if (_showTabs) { %>
+    <div class="bg-white border-b border-gray-200 px-4 mb-6 rounded-t-lg">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <a href="<%= _basePath %>?tab=company" 
+               class="<%= _activeTab === 'company' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                기본 정보관리
+            </a>
+            <a href="<%= _basePath %>?tab=system" 
+               class="<%= _activeTab === 'system' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                시스템 설정
+            </a>
+        </nav>
+    </div>
+<% } %>
+
+        <% if (_activeTab === 'company') { %>
+        <form action="<%= _basePath %>" method="POST" enctype="multipart/form-data" class="space-y-6">
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">회사 정보</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">회사명</label>
+                        <input type="text"
+                            name="company_name" value="<%= settings.company_name %>" required
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">사업자 등록번호</label>
+                        <input type="text"
+                            name="business_number" value="<%= settings.business_number %>"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">주소</label>
+                        <input type="text"
+                            name="address" value="<%= settings.address %>"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">대표 이메일</label>
+                            <input type="email"
+                                name="contact_email" value="<%= settings.contact_email %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">대표 전화번호</label>
+                            <input type="text"
+                                name="contact_phone" value="<%= settings.contact_phone %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">회사 소개 & 푸터 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">헤더 슬로건</label>
+                        <p class="text-xs text-gray-500 mb-2">상단 헤더 바에 노출될 한 줄 문구입니다. (예: 건강한 하루의 시작 | 와이디몰)</p>
+                        <input
+                            type="text"
+                            name="header_slogan"
+                            value="<%= settings.header_slogan || '' %>"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">푸터 슬로건</label>
+                        <p class="text-xs text-gray-500 mb-2">푸터 영역에 짧게 노출될 한 줄 문구입니다. (예: 자연이 주는 건강한 선물)</p>
+                        <textarea
+                            name="slogan"
+                            id="slogan"
+                            rows="2"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+<%- settings.slogan || '' %></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">회사 소개 페이지 내용</label>
+                        <p class="text-xs text-gray-500 mb-2">별도의 회사 소개 페이지(/about)에 표시될 내용입니다. 이미지와 다양한 HTML 서식을 자유롭게 사용할 수 있습니다.</p>
+                        <textarea
+                            name="company_intro"
+                            id="company_intro"
+                            rows="10"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+<%- settings.company_intro || '' %></textarea>
+                    </div>
+
+                    <div>
+                        <h6 class="text-sm font-semibold text-gray-800 mb-3">SNS 링크</h6>
+                        <p class="text-xs text-gray-500 mb-4">사용할 SNS만 체크하고, 실제 이동할 URL을 입력하세요.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700 flex items-center gap-1">
+                                        <i class="bi bi-instagram text-pink-500"></i>
+                                        Instagram 사용
+                                    </label>
+                                    <input type="checkbox" name="instagram_enabled" value="1"
+                                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                           <%= settings.instagram_enabled ? 'checked' : '' %>>
+                                </div>
+                                <input type="text" name="instagram_url" placeholder="https://instagram.com/yourbrand"
+                                       value="<%= settings.instagram_url || '' %>">
+                            </div>
+
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700 flex items-center gap-1">
+                                        <i class="bi bi-facebook text-blue-600"></i>
+                                        Facebook 사용
+                                    </label>
+                                    <input type="checkbox" name="facebook_enabled" value="1"
+                                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                           <%= settings.facebook_enabled ? 'checked' : '' %>>
+                                </div>
+                                <input type="text" name="facebook_url" placeholder="https://facebook.com/yourbrand"
+                                       value="<%= settings.facebook_url || '' %>">
+                            </div>
+
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700 flex items-center gap-1">
+                                        <i class="bi bi-youtube text-red-600"></i>
+                                        YouTube 사용
+                                    </label>
+                                    <input type="checkbox" name="youtube_enabled" value="1"
+                                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                           <%= settings.youtube_enabled ? 'checked' : '' %>>
+                                </div>
+                                <input type="text" name="youtube_url" placeholder="https://youtube.com/@yourbrand"
+                                       value="<%= settings.youtube_url || '' %>">
+                            </div>
+
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700 flex items-center gap-1">
+                                        <i class="bi bi-chat-dots-fill text-yellow-500"></i>
+                                        KakaoChannel &#49324;&#50857;
+                                    </label>
+                                    <input type="checkbox" name="kakao_channel_enabled" value="1"
+                                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                           <%= settings.kakao_channel_enabled ? 'checked' : '' %>>
+                                </div>
+                                <input type="text" name="kakao_channel_url" placeholder="https://pf.kakao.com/_xxxxx"
+                                       value="<%= settings.kakao_channel_url || '' %>">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">분석 & 추적 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Google Analytics 4 측정 ID</label>
+                        <p class="text-xs text-gray-500 mb-2">GA4에서 발급된 측정 ID를 입력하면 사용자 사이트에 자동으로 적용됩니다. 예: G-XXXXXXXXXX</p>
+                        <input type="text"
+                               name="ga4_measurement_id"
+                               value="<%= settings.ga4_measurement_id || '' %>"
+                               placeholder="G-XXXXXXXXXX"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 uppercase">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg" id="brand-colors-section">
+                <div class="px-6 py-4 bg-white border-b border-gray-200 flex flex-col gap-2">
+                    <h5 class="text-lg font-bold text-gray-800">브랜드 키 컬러</h5>
+                    <p class="text-sm text-gray-500">브랜드의 기본/진한/연한 색상을 관리합니다. 컬러 코드를 직접 입력하거나 아래 팔레트에서 선택하면 자동으로 세 가지 톤이 설정됩니다.</p>
+                </div>
+                <div class="p-6 bg-white space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="space-y-2" data-color-field="brand_main_color">
+                            <label class="block text-sm font-medium text-gray-700">브랜드 기본색</label>
+                            <p class="text-xs text-gray-500">사이트의 주요 버튼, 강조 텍스트 등에 사용됩니다.</p>
+                            <div class="flex items-center gap-3">
+                                <input type="color" data-color-picker="brand_main_color" value="<%= settings.brand_main_color || '#76A764' %>"
+                                       class="h-12 w-12 border border-gray-200 rounded-md cursor-pointer" aria-label="브랜드 기본색 선택">
+                                <input type="text" name="brand_main_color" id="brand_main_color"
+                                       class="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                                       value="<%= settings.brand_main_color || '#76A764' %>" placeholder="#76A764">
+                            </div>
+                        </div>
+
+                        <div class="space-y-2" data-color-field="brand_dark_color">
+                            <label class="block text-sm font-medium text-gray-700">브랜드 진한색</label>
+                            <p class="text-xs text-gray-500">호버 상태, 텍스트, 강조 라인 등에 사용됩니다.</p>
+                            <div class="flex items-center gap-3">
+                                <input type="color" data-color-picker="brand_dark_color" value="<%= settings.brand_dark_color || '#5A824B' %>"
+                                       class="h-12 w-12 border border-gray-200 rounded-md cursor-pointer" aria-label="브랜드 진한색 선택">
+                                    <input type="text" name="brand_dark_color" id="brand_dark_color"
+                                        class="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                                       value="<%= settings.brand_dark_color || '#5A824B' %>" placeholder="#5A824B">
+                            </div>
+                        </div>
+
+                        <div class="space-y-2" data-color-field="brand_light_color">
+                            <label class="block text-sm font-medium text-gray-700">브랜드 연한색</label>
+                            <p class="text-xs text-gray-500">히어로 배경, 알림 박스 등 넓은 면적에 사용됩니다.</p>
+                            <div class="flex items-center gap-3">
+                                <input type="color" data-color-picker="brand_light_color" value="<%= settings.brand_light_color || '#F0F7EE' %>"
+                                       class="h-12 w-12 border border-gray-200 rounded-md cursor-pointer" aria-label="브랜드 연한색 선택">
+                                <input type="text" name="brand_light_color" id="brand_light_color"
+                                       class="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                                       value="<%= settings.brand_light_color || '#F0F7EE' %>" placeholder="#F0F7EE">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button type="button" id="brand-generate-btn"
+                                class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            <i class="bi bi-magic"></i>
+                            기본색 기준으로 진/연톤 자동 생성
+                        </button>
+                        <span class="text-xs text-gray-400">자주 쓰는 팔레트도 참고하세요</span>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2" id="brand-preset-list">
+                        <% const brandPresets = [
+                            // Primary requested color first (leftmost)
+                            { name: 'Mall Green', main: '#76A764', dark: '#5A824B', light: '#F0F7EE' },
+                            // Existing presets
+                            { name: 'Emerald', main: '#10B981', dark: '#047857', light: '#D1FAE5' },
+                            { name: 'Blue', main: '#3B82F6', dark: '#1D4ED8', light: '#DBEAFE' },
+                            { name: 'Purple', main: '#8B5CF6', dark: '#6D28D9', light: '#EDE9FE' },
+                            { name: 'Rose', main: '#F43F5E', dark: '#BE123C', light: '#FFE4E6' },
+                            { name: 'Amber', main: '#F59E0B', dark: '#B45309', light: '#FEF3C7' },
+                            { name: 'Teal', main: '#14B8A6', dark: '#0F766E', light: '#CCFBF1' },
+                            { name: 'Slate', main: '#64748B', dark: '#1E293B', light: '#E2E8F0' },
+                            // Additional 3 presets
+                            { name: 'Lime', main: '#84CC16', dark: '#4D7C0F', light: '#ECFCCB' },
+                            { name: 'Orange', main: '#F97316', dark: '#C2410C', light: '#FFEDD5' },
+                            { name: 'Indigo', main: '#6366F1', dark: '#4F46E5', light: '#E0E7FF' }
+                        ]; %>
+                        <% brandPresets.forEach(preset => { %>
+                            <button type="button" class="brand-preset-btn inline-flex flex-col items-start justify-center rounded-lg px-3 py-2 text-xs font-semibold text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    data-main="<%= preset.main %>"
+                                    data-dark="<%= preset.dark %>"
+                                    data-light="<%= preset.light %>"
+                                    <%- `style="background: linear-gradient(135deg, ${preset.dark}, ${preset.main}); min-width: 90px;"` %>>
+                                <span><%= preset.name %></span>
+                                <span class="text-[10px] font-normal opacity-70"><%= preset.main %></span>
+                            </button>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function () {
+                    const section = document.getElementById('brand-colors-section');
+                    if (!section) return;
+
+                    const colorKeys = ['brand_main_color', 'brand_dark_color', 'brand_light_color'];
+                    const textInputs = {};
+                    const colorInputs = {};
+
+                    const normalizeHex = (value, fallback) => {
+                        if (!value) return fallback;
+                        const trimmed = String(value).trim();
+                        const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+                        return /^#([0-9a-fA-F]{6})$/.test(normalized) ? normalized.toUpperCase() : fallback;
+                    };
+
+                    const hexToHsl = (hex) => {
+                        const normalized = normalizeHex(hex, '#76A764').replace('#', '');
+                        const bigint = parseInt(normalized, 16);
+                        let r = ((bigint >> 16) & 255) / 255;
+                        let g = ((bigint >> 8) & 255) / 255;
+                        let b = (bigint & 255) / 255;
+                        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                        let h, s;
+                        const l = (max + min) / 2;
+                        if (max === min) {
+                            h = s = 0;
+                        } else {
+                            const d = max - min;
+                            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                            switch (max) {
+                                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                                case g: h = (b - r) / d + 2; break;
+                                default: h = (r - g) / d + 4;
+                            }
+                            h /= 6;
+                        }
+                        return { h, s, l };
+                    };
+
+                    const hslToHex = (h, s, l) => {
+                        let r, g, b;
+                        if (s === 0) {
+                            r = g = b = l; // achromatic
+                        } else {
+                            const hue2rgb = (p, q, t) => {
+                                if (t < 0) t += 1;
+                                if (t > 1) t -= 1;
+                                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                                if (t < 1 / 2) return q;
+                                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                                return p;
+                            };
+                            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                            const p = 2 * l - q;
+                            r = hue2rgb(p, q, h + 1 / 3);
+                            g = hue2rgb(p, q, h);
+                            b = hue2rgb(p, q, h - 1 / 3);
+                        }
+                        const toHex = (x) => Math.round(x * 255).toString(16).padStart(2, '0');
+                        return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+                    };
+
+                    const adjustLightness = (hex, delta) => {
+                        const { h, s, l } = hexToHsl(hex);
+                        const nextL = Math.max(0, Math.min(1, l + delta));
+                        return hslToHex(h, s, nextL);
+                    };
+
+                    const syncValue = (key, value, fallback = '#76A764') => {
+                        const normalized = normalizeHex(value, fallback);
+                        if (textInputs[key]) textInputs[key].value = normalized;
+                        if (colorInputs[key]) colorInputs[key].value = normalized;
+                        return normalized;
+                    };
+
+                    const applyPalette = ({ main, dark, light }) => {
+                        const normalizedMain = syncValue('brand_main_color', main);
+                        syncValue('brand_dark_color', dark, adjustLightness(normalizedMain, -0.18));
+                        syncValue('brand_light_color', light, adjustLightness(normalizedMain, 0.28));
+                    };
+
+                    const applyAutoPaletteFromMain = () => {
+                        const normalizedMain = syncValue('brand_main_color', textInputs.brand_main_color?.value || '#76A764');
+                        syncValue('brand_dark_color', adjustLightness(normalizedMain, -0.18));
+                        syncValue('brand_light_color', adjustLightness(normalizedMain, 0.28));
+                    };
+
+                    colorKeys.forEach((key) => {
+                        textInputs[key] = document.getElementById(key);
+                        colorInputs[key] = document.querySelector(`[data-color-picker="${key}"]`);
+                        if (!textInputs[key] || !colorInputs[key]) return;
+                        const updateBoth = (value, triggerAuto = false) => {
+                            const normalized = syncValue(key, value, textInputs[key].value || '#76A764');
+                            if (triggerAuto && key === 'brand_main_color') {
+                                syncValue('brand_main_color', normalized);
+                                applyAutoPaletteFromMain();
+                            }
+                        };
+                        colorInputs[key].addEventListener('input', (event) => updateBoth(event.target.value, key === 'brand_main_color'));
+                        textInputs[key].addEventListener('change', (event) => updateBoth(event.target.value, key === 'brand_main_color'));
+                    });
+
+                    const generateBtn = document.getElementById('brand-generate-btn');
+                    if (generateBtn) {
+                        generateBtn.addEventListener('click', applyAutoPaletteFromMain);
+                    }
+
+                    document.querySelectorAll('.brand-preset-btn').forEach((btn) => {
+                        btn.addEventListener('click', () => {
+                            applyPalette({
+                                main: btn.dataset.main,
+                                dark: btn.dataset.dark,
+                                light: btn.dataset.light
+                            });
+                        });
+                    });
+                })();
+            </script>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">로고 설정</h5>
+                </div>
+                <div class="p-6 bg-white">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">현재 로고</label>
+                        <div class="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg inline-block">
+                            <img id="logoPreview" src="<%= settings.logo_url || '' %>" alt="Current Logo"
+                                class="max-h-[280px] max-w-full <%= settings.logo_url ? '' : 'hidden' %>">
+                            <div id="noLogoText" class="text-gray-500 text-sm <%= settings.logo_url ? 'hidden' : '' %>">
+                                등록된 로고가 없습니다.</div>
+                        </div>
+                            <input type="hidden" name="existing_logo_url" value="<%= settings.logo_url || '' %>">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">로고 변경</label>
+                        <input type="file" id="logoInput"
+                            class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            name="logo" accept="image/*">
+                        <div class="mt-1 text-xs text-gray-500">권장 사이즈: 800x280 px (투명 배경 PNG 권장)</div>
+                    </div>
+
+                    <script>
+                        const logoInput = document.getElementById('logoInput');
+                        const logoPreview = document.getElementById('logoPreview');
+                        const noLogoText = document.getElementById('noLogoText');
+
+                        logoInput.addEventListener('change', function (e) {
+                            const file = e.target.files[0];
+                            if (file) {
+                                const reader = new FileReader();
+                                reader.onload = function (e) {
+                                    logoPreview.src = e.target.result;
+                                    logoPreview.classList.remove('hidden');
+                                    noLogoText.classList.add('hidden');
+                                }
+                                reader.readAsDataURL(file);
+                            }
+                        });
+                    </script>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">카카오 공유 이미지 설정</h5>
+                </div>
+                <div class="p-6 bg-white">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">카카오톡 링크 공유 썸네일</label>
+                        <p class="text-xs text-gray-500 mb-3">비워두면 로고 이미지가 기본 OG 이미지로 사용됩니다. 권장 비율: 1200x630</p>
+                        <div class="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg inline-block">
+                            <img id="kakaoShareImagePreview" src="<%= settings.kakao_share_image_url || '' %>" alt="Kakao Share Image"
+                                 class="max-h-[280px] max-w-full <%= settings.kakao_share_image_url ? '' : 'hidden' %>">
+                            <div id="noKakaoShareImageText" class="text-gray-500 text-sm <%= settings.kakao_share_image_url ? 'hidden' : '' %>">
+                                등록된 공유 이미지가 없습니다.
+                            </div>
+                        </div>
+                        <input type="hidden" name="existing_kakao_share_image_url" value="<%= settings.kakao_share_image_url || '' %>">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">공유 이미지 변경</label>
+                        <input type="file" id="kakaoShareImageInput"
+                            class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            name="kakao_share_image" accept="image/*">
+                    </div>
+
+                    <script>
+                        const kakaoShareImageInput = document.getElementById('kakaoShareImageInput');
+                        const kakaoShareImagePreview = document.getElementById('kakaoShareImagePreview');
+                        const noKakaoShareImageText = document.getElementById('noKakaoShareImageText');
+
+                        kakaoShareImageInput.addEventListener('change', function (e) {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = function (event) {
+                                kakaoShareImagePreview.src = event.target.result;
+                                kakaoShareImagePreview.classList.remove('hidden');
+                                noKakaoShareImageText.classList.add('hidden');
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    </script>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">파비콘 설정</h5>
+                </div>
+                <div class="p-6 bg-white">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">브라우저 탭 아이콘 (Favicon)</label>
+                        <p class="text-xs text-gray-500 mb-3">권장 크기: 32x32 또는 48x48, PNG/ICO/SVG 가능</p>
+                        <div class="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg inline-block">
+                            <img id="faviconPreview" src="<%= settings.favicon_url || '' %>" alt="Favicon Preview"
+                                 class="h-16 w-16 object-contain <%= settings.favicon_url ? '' : 'hidden' %>">
+                            <div id="noFaviconText" class="text-gray-500 text-sm <%= settings.favicon_url ? 'hidden' : '' %>">
+                                등록된 파비콘이 없습니다.
+                            </div>
+                        </div>
+                        <input type="hidden" name="existing_favicon_url" value="<%= settings.favicon_url || '' %>">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">파비콘 변경</label>
+                        <input type="file" id="faviconInput"
+                            class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            name="favicon" accept=".ico,image/png,image/svg+xml,image/x-icon">
+                    </div>
+
+                    <script>
+                        const faviconInput = document.getElementById('faviconInput');
+                        const faviconPreview = document.getElementById('faviconPreview');
+                        const noFaviconText = document.getElementById('noFaviconText');
+
+                        faviconInput.addEventListener('change', function (e) {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = function (event) {
+                                faviconPreview.src = event.target.result;
+                                faviconPreview.classList.remove('hidden');
+                                noFaviconText.classList.add('hidden');
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    </script>
+                </div>
+            </div>
+
+
+
+            <div class="flex justify-end pt-4 pb-8">
+                <button type="submit"
+                    class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">저장하기</button>
+            </div>
+        </form>
+        <% } else { %>
+        <form action="<%= _basePath %>/system" method="POST" class="space-y-6">
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">에디터 / AI 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">사이트 기본 도메인</label>
+                        <p class="text-xs text-gray-500 mb-2">Canonical URL 및 OpenGraph, JSON-LD에 사용할 기본 도메인입니다. (예: https://mall.co.kr)</p>
+                        <input type="text" name="domain"
+                               value="<%= (systemSettings && systemSettings.domain) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">TinyMCE Key</label>
+                        <input type="text" name="tinymce_key"
+                               value="<%= (systemSettings && systemSettings.tinymce_key) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
+                        <input type="text" name="openai_api_key"
+                               value="<%= (systemSettings && systemSettings.openai_api_key) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI 모델</label>
+                            <input type="text" name="openai_model"
+                                value="<%= (systemSettings && systemSettings.openai_model) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI 타임아웃 (ms)</label>
+                            <input type="number" name="openai_timeout_ms"
+                                value="<%= (systemSettings && systemSettings.openai_timeout_ms) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">Google 로그인 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <div>
+                           <label class="block text-sm font-medium text-gray-700 mb-1">Google Client ID</label>
+                           <input type="text" name="google_client_id"
+                               value="<%= (systemSettings && systemSettings.google_client_id) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                           <label class="block text-sm font-medium text-gray-700 mb-1">Google Client Secret</label>
+                           <input type="text" name="google_client_secret"
+                               value="<%= (systemSettings && systemSettings.google_client_secret) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Dev Callback URL</label>
+                            <input type="text" name="google_callback_url_dev"
+                                value="<%= (systemSettings && systemSettings.google_callback_url_dev) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Prod Callback URL</label>
+                            <input type="text" name="google_callback_url_prod"
+                                value="<%= (systemSettings && systemSettings.google_callback_url_prod) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                           <label class="block text-sm font-medium text-gray-700 mb-1">공통 Callback URL</label>
+                           <input type="text" name="google_callback_url"
+                               value="<%= (systemSettings && systemSettings.google_callback_url) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">Kakao 로그인 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <div>
+                           <label class="block text-sm font-medium text-gray-700 mb-1">Kakao Client ID (REST API Key)</label>
+                           <input type="text" name="kakao_client_id"
+                               value="<%= (systemSettings && systemSettings.kakao_client_id) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                           <label class="block text-sm font-medium text-gray-700 mb-1">Kakao Client Secret</label>
+                           <input type="text" name="kakao_client_secret"
+                               value="<%= (systemSettings && systemSettings.kakao_client_secret) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Dev Callback URL</label>
+                            <input type="text" name="kakao_callback_url_dev"
+                                value="<%= (systemSettings && systemSettings.kakao_callback_url_dev) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Prod Callback URL</label>
+                            <input type="text" name="kakao_callback_url_prod"
+                                value="<%= (systemSettings && systemSettings.kakao_callback_url_prod) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">Kakao 공유 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Kakao JavaScript 키</label>
+                        <p class="text-xs text-gray-500 mb-2">카카오톡 공유 기능에 사용하는 JavaScript Key입니다. Kakao Developers에서 발급받은 JS 키를 입력하세요.</p>
+                           <input type="text" name="kakao_js_key"
+                               value="<%= (systemSettings && systemSettings.kakao_js_key) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">포인트 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <p class="text-xs text-gray-500 mb-4">주문 결제 시 포인트 적립 및 사용 규칙입니다.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">구매 적립률 (%)</label>
+                            <p class="text-xs text-gray-500 mb-2">결제 금액 대비 적립되는 포인트 비율 (예: 5 = 5%)</p>
+                            <input type="number" name="point_accumulate_rate" min="0" max="100"
+                                value="<%= (systemSettings && systemSettings.point_accumulate_rate) || '5' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">포인트 최소 사용 단위 (원)</label>
+                            <p class="text-xs text-gray-500 mb-2">결제 시 사용 가능한 최소 포인트 단위</p>
+                            <input type="number" name="point_min_use" min="0"
+                                value="<%= (systemSettings && systemSettings.point_min_use) || '1000' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">토스페이먼츠 결제 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <p class="text-xs text-gray-500 mb-4">상품 구매 시 결제에 사용됩니다. <a href="https://developers.tosspayments.com" target="_blank" rel="noopener" class="text-blue-600 hover:underline">토스페이먼츠 개발자센터</a>에서 API 키를 발급받으세요.</p>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">클라이언트 키 (테스트)</label>
+                        <p class="text-xs text-gray-500 mb-2">결제창 연동용. 테스트 키는 test_ 로 시작합니다.</p>
+                           <input type="text" name="tosspayments_client_key"
+                               placeholder="test_ck_..."
+                               value="<%= (systemSettings && systemSettings.tosspayments_client_key) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">시크릿 키 (테스트)</label>
+                        <p class="text-xs text-gray-500 mb-2">서버 결제 승인 API용. 절대 클라이언트에 노출하지 마세요.</p>
+                           <input type="password" name="tosspayments_secret_key"
+                               placeholder="test_sk_..."
+                               value="<%= (systemSettings && systemSettings.tosspayments_secret_key) || '' %>"
+                               autocomplete="off"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">SMTP 메일 설정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <p class="text-xs text-gray-500 mb-4">주문 알림, 배송 알림, 운영자 이중인증 등 공통 이메일 발송에 사용됩니다.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">메일 서버 주소</label>
+                            <input type="text" name="smtp_host"
+                                placeholder="smtp.gmail.com"
+                                value="<%= (systemSettings && systemSettings.smtp_host) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">포트</label>
+                            <input type="text" name="smtp_port"
+                                placeholder="587"
+                                value="<%= (systemSettings && systemSettings.smtp_port) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                           <label class="block text-sm font-medium text-gray-700 mb-1">발송자 이메일 주소</label>
+                           <input type="email" name="smtp_sender_email"
+                               placeholder="noreply@example.com"
+                               value="<%= (systemSettings && systemSettings.smtp_sender_email) || '' %>"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">메일 서비스 유형</label>
+                        <div class="flex gap-6">
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="smtp_is_gmail" value="1" <%= (systemSettings && systemSettings.smtp_is_gmail === '1') ? 'checked' : '' %>>
+                                <span class="text-sm">지메일 (Gmail) — 앱 비밀번호 사용</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="smtp_is_gmail" value="0" <%= (!systemSettings || systemSettings.smtp_is_gmail !== '1') ? 'checked' : '' %>>
+                                <span class="text-sm">기타 SMTP</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="smtpGmailField" class="<%= (systemSettings && systemSettings.smtp_is_gmail === '1') ? '' : 'hidden' %>">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">지메일 앱 비밀번호</label>
+                        <p class="text-xs text-gray-500 mb-2">Google 계정에서 2단계 인증 후 발급한 앱 비밀번호를 입력하세요. 공백 포함 가능합니다.</p>
+                           <input type="password" name="smtp_app_password"
+                               placeholder="xxxx xxxx xxxx xxxx"
+                               value="<%= (systemSettings && systemSettings.smtp_app_password) || '' %>"
+                               autocomplete="off"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div id="smtpOtherField" class="<%= (!systemSettings || systemSettings.smtp_is_gmail === '1') ? 'hidden' : '' %>">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">SMTP 비밀번호</label>
+                        <p class="text-xs text-gray-500 mb-2">지메일이 아닌 메일 서버의 SMTP 인증 비밀번호를 입력하세요.</p>
+                           <input type="password" name="smtp_password"
+                               value="<%= (systemSettings && systemSettings.smtp_password) || '' %>"
+                               autocomplete="off"
+                               class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="pt-4 border-t border-gray-100">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">테스트 발송</label>
+                        <p class="text-xs text-gray-500 mb-2">설정을 저장한 후, 아래에서 테스트 메일을 발송해 보세요.</p>
+                        <div class="flex gap-2">
+                            <input type="email" id="testEmailTo" placeholder="수신자 이메일"
+                                class="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <button type="button" id="sendTestEmailBtn"
+                                    class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">
+                                테스트 발송
+                            </button>
+                        </div>
+                        <p id="testEmailResult" class="mt-2 text-sm hidden"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-4 pb-8">
+                <button type="submit"
+                        class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">
+                    저장하기
+                </button>
+            </div>
+        </form>
+        <% } %>
+
+<% if (_activeTab === 'system') { %>
+<script>
+(function() {
+    const gmailRadios = document.querySelectorAll('input[name="smtp_is_gmail"]');
+    const gmailField = document.getElementById('smtpGmailField');
+    const otherField = document.getElementById('smtpOtherField');
+    gmailRadios.forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            const isGmail = this.value === '1';
+            gmailField.classList.toggle('hidden', !isGmail);
+            otherField.classList.toggle('hidden', isGmail);
+        });
+    });
+
+    // 테스트 이메일 발송
+    const sendTestBtn = document.getElementById('sendTestEmailBtn');
+    const testEmailInput = document.getElementById('testEmailTo');
+    const testEmailResult = document.getElementById('testEmailResult');
+    if (sendTestBtn && testEmailInput) {
+        sendTestBtn.addEventListener('click', async function() {
+            const to = testEmailInput.value.trim();
+            if (!to) {
+                testEmailResult.textContent = '수신자 이메일을 입력하세요.';
+                testEmailResult.className = 'mt-2 text-sm text-red-600';
+                testEmailResult.classList.remove('hidden');
+                return;
+            }
+            sendTestBtn.disabled = true;
+            testEmailResult.classList.add('hidden');
+            try {
+                const res = await fetch('<%= _basePath %>/send-test-email', {
+                    method: 'POST',
+                    body: new URLSearchParams({ test_email_to: to }),
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                testEmailResult.classList.remove('hidden');
+                if (data.success) {
+                    testEmailResult.textContent = data.message || '발송되었습니다.';
+                    testEmailResult.className = 'mt-2 text-sm text-green-600';
+                } else {
+                    testEmailResult.textContent = data.error || '발송 실패';
+                    testEmailResult.className = 'mt-2 text-sm text-red-600';
+                }
+            } catch (err) {
+                testEmailResult.classList.remove('hidden');
+                testEmailResult.textContent = '요청 중 오류가 발생했습니다.';
+                testEmailResult.className = 'mt-2 text-sm text-red-600';
+            }
+            sendTestBtn.disabled = false;
+        });
+    }
+
+})();
+</script>
+<% } %>
+<% if (_activeTab === 'company') { %>
+<script src="https://cdn.tiny.cloud/1/<%= (systemSettings && systemSettings.tinymce_key) || '' %>/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+    // 푸터 슬로건용 경량 에디터 (이미지 업로드 없음)
+    tinymce.init({
+        selector: '#slogan',
+        branding: false,
+        menubar: false,
+        plugins: 'link lists charmap code',
+        toolbar: 'undo redo | bold italic underline | bullist numlist | link removeformat code',
+        height: 160
+    });
+
+    // 회사 소개 페이지용 풀 기능 에디터
+    tinymce.init({
+        selector: '#company_intro',
+        branding: false,
+        plugins: 'anchor autolink charmap codesample code emoticons image link lists media searchreplace table visualblocks wordcount',
+        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | align lineheight | numlist bullist indent outdent | link image media table | forecolor backcolor removeformat | emoticons charmap | code',
+        images_upload_url: '/admin/uploads/tinymce',
+        automatic_uploads: true,
+        images_upload_credentials: true
+    });
+</script>
+<% } %>

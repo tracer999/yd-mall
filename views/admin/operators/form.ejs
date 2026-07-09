@@ -1,0 +1,132 @@
+<div class="max-w-2xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <a href="/admin/operators" class="text-gray-500 hover:text-gray-700">
+            <i class="bi bi-arrow-left mr-1"></i>목록으로
+        </a>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8">
+        <form action="<%= isEdit ? '/admin/operators/edit' : '/admin/operators/add' %>" method="POST">
+            <% if(isEdit) { %>
+                <input type="hidden" name="id" value="<%= operator.id %>">
+            <% } %>
+
+            <div class="mb-6">
+                <label for="username" class="block mb-2 text-sm font-medium text-gray-900">사용자명 (ID)</label>
+                <input type="text" id="username" name="username" value="<%= isEdit ? operator.username : '' %>" required
+                    <%= isEdit ? 'readonly' : '' %>>
+                <% if(isEdit) { %>
+                    <p class="mt-1 text-xs text-gray-500">사용자명은 수정할 수 없습니다.</p>
+                <% } %>
+            </div>
+
+            <div class="mb-6">
+                <label for="email" class="block mb-2 text-sm font-medium text-gray-900">이메일</label>
+                <input type="email" id="email" name="email" value="<%= isEdit && operator.email ? operator.email : '' %>"
+                    placeholder="이중인증용 이메일 (예: admin@example.com)">
+                <p class="mt-1 text-xs text-gray-500">이메일은 이중인증 시 사용됩니다.</p>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="use_2fa" name="use_2fa" value="1"
+                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                        <%= (isEdit ? (operator.use_2fa !== 0) : true) ? 'checked' : '' %>>
+                    <label for="use_2fa" class="text-sm font-medium text-gray-900">이중인증 사용</label>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">체크 시 로그인 시 이메일로 인증코드를 받아 입력해야 합니다. 이메일이 없으면 로그인이 거절됩니다.</p>
+            </div>
+
+            <div class="mb-6">
+                <label for="password" class="block mb-2 text-sm font-medium text-gray-900">비밀번호</label>
+                <input type="password" id="password" name="password" <%= isEdit ? '' : 'required' %>
+                    placeholder="<%= isEdit ? '변경하려면 입력하세요' : '비밀번호 입력' %>">
+                <p id="passwordError" class="mt-1 text-xs text-red-600 hidden"></p>
+            </div>
+
+            <div class="mb-6">
+                <label for="password_confirm" class="block mb-2 text-sm font-medium text-gray-900">비밀번호 확인</label>
+                <input type="password" id="password_confirm" name="password_confirm"
+                    placeholder="<%= isEdit ? '변경 시 위와 동일하게 입력' : '비밀번호 다시 입력' %>"
+                    <%= isEdit ? '' : 'required' %>>
+                <p id="passwordConfirmError" class="mt-1 text-xs text-red-600 hidden"></p>
+            </div>
+
+            <div class="mb-8">
+                <label for="role" class="block mb-2 text-sm font-medium text-gray-900">역할 권한</label>
+                <select id="role" name="role" required>
+                    <option value="">역할을 선택하세요</option>
+                    <option value="super_admin" <%= (isEdit && operator.role === 'super_admin') ? 'selected' : '' %>>최고 관리자 (Super Admin)</option>
+                    <option value="admin" <%= (isEdit && operator.role === 'admin') ? 'selected' : '' %>>관리자 (Admin)</option>
+                    <option value="content_admin" <%= (isEdit && operator.role === 'content_admin') ? 'selected' : '' %>>컨텐츠 관리자 (Content Admin)</option>
+                    <option value="customer_admin" <%= (isEdit && operator.role === 'customer_admin') ? 'selected' : '' %>>고객 관리자 (Customer Admin)</option>
+                </select>
+                <div class="mt-2 text-sm text-gray-500 space-y-1">
+                    <p><span class="font-semibold">최고 관리자:</span> 모든 권한 보유 (메뉴 관리 포함)</p>
+                    <p><span class="font-semibold">관리자:</span> 최고 관리자에 준하는 권한, 메뉴 관리 접근 가능</p>
+                    <p><span class="font-semibold">컨텐츠 관리자:</span> 메뉴별 접근 가능 (상품, 카테고리, 배너 등)</p>
+                    <p><span class="font-semibold">고객 관리자:</span> 메뉴별 접근 가능 (회원, 문의 등)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3">
+                <a href="/admin/operators" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+                <button type="submit" id="submitBtn" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">
+                    <%= isEdit ? '수정 저장' : '운영자 등록' %>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    const form = document.querySelector('form');
+    const password = document.getElementById('password');
+    const passwordConfirm = document.getElementById('password_confirm');
+    const passwordError = document.getElementById('passwordError');
+    const passwordConfirmError = document.getElementById('passwordConfirmError');
+    const isEdit = <%= isEdit ? 'true' : 'false' %>;
+
+    function clearErrors() {
+        passwordError.classList.add('hidden');
+        passwordConfirmError.classList.add('hidden');
+        password?.classList.remove('border-red-500');
+        passwordConfirm?.classList.remove('border-red-500');
+    }
+
+    function showError(el, msg) {
+        el.classList.remove('hidden');
+        el.textContent = msg;
+    }
+
+    form?.addEventListener('submit', function(e) {
+        clearErrors();
+        let valid = true;
+
+        if (isEdit) {
+            if (password.value.trim() !== '') {
+                if (password.value !== password_confirm.value) {
+                    showError(passwordConfirmError, '비밀번호가 일치하지 않습니다.');
+                    passwordConfirm?.classList.add('border-red-500');
+                    valid = false;
+                }
+            }
+        } else {
+            if (password.value.trim() === '') {
+                showError(passwordError, '비밀번호를 입력하세요.');
+                password?.classList.add('border-red-500');
+                valid = false;
+            } else if (password.value !== password_confirm.value) {
+                showError(passwordConfirmError, '비밀번호가 일치하지 않습니다.');
+                passwordConfirm?.classList.add('border-red-500');
+                valid = false;
+            }
+        }
+
+        if (!valid) {
+            e.preventDefault();
+        }
+    });
+})();
+</script>

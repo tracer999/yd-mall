@@ -1,0 +1,150 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
+  <!-- Page Title & Intro -->
+  <section>
+    <h1 class="text-3xl font-extrabold text-gray-900 mb-3">
+      사용자 디자인 가이드 예시
+    </h1>
+    <p class="text-sm text-gray-600 mb-4">
+      이 페이지는 사용자 화면 작업 시 참고용으로 사용할 수 있는 예시 레이아웃입니다.
+      브랜드 컬러, 공통 카드, 버튼, 섹션 배치 등을 한 눈에 확인할 수 있습니다.
+    </p>
+    <div class="inline-flex items-center px-3 py-1 rounded-full text-xs brand-chip">
+      /design-guide/user · views/user/design_guide.ejs
+    </div>
+  </section>
+
+  <!-- Brand Color Section -->
+  <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">브랜드 컬러 팔레트</h2>
+    <p class="text-sm text-gray-600 mb-4">
+      사이트설정(/admin/site-settings)의 키컬러/진한색/연한색 값을 기반으로 CSS 변수가 세팅되어 있습니다.
+      아래 팔레트는 현재 설정된 값을 시각적으로 보여줍니다.
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div class="flex flex-col items-start gap-2">
+        <div class="w-full h-20 rounded-xl border" style="background-color: var(--gh-primary);"></div>
+        <span class="text-xs font-medium text-gray-700">--gh-primary (키컬러)</span>
+      </div>
+      <div class="flex flex-col items-start gap-2">
+        <div class="w-full h-20 rounded-xl border" style="background-color: var(--gh-primary-dark);"></div>
+        <span class="text-xs font-medium text-gray-700">--gh-primary-dark (진한색)</span>
+      </div>
+      <div class="flex flex-col items-start gap-2">
+        <div class="w-full h-20 rounded-xl border" style="background-color: var(--gh-secondary);"></div>
+        <span class="text-xs font-medium text-gray-700">--gh-secondary (연한색)</span>
+      </div>
+      <div class="flex flex-col items-start gap-2">
+        <div class="w-full h-20 rounded-xl border" style="background-color: var(--gh-primary-soft);"></div>
+        <span class="text-xs font-medium text-gray-700">--gh-primary-soft (보조 배경)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Components Section -->
+  <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">기본 컴포넌트 예시</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Buttons -->
+      <div>
+        <h3 class="text-sm font-semibold text-gray-800 mb-2">버튼 스타일</h3>
+        <div class="flex flex-wrap gap-3 items-center">
+          <button class="brand-cta px-5 py-3 rounded-lg text-sm font-semibold">
+            기본 CTA 버튼
+          </button>
+          <button
+            class="px-5 py-3 rounded-lg text-sm font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+            서브 버튼
+          </button>
+          <button class="px-4 py-2 rounded-full text-xs font-semibold brand-pill--ghost">
+            Ghost Pill 버튼
+          </button>
+        </div>
+      </div>
+
+      <!-- Chips & Badges -->
+      <div>
+        <h3 class="text-sm font-semibold text-gray-800 mb-2">Chip / Badge</h3>
+        <div class="flex flex-wrap gap-3 items-center">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs brand-chip">
+            #브랜드칩 예시
+          </span>
+          <span class="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full brand-badge">
+            SALE 20%
+          </span>
+          <span class="text-sm brand-text-strong">텍스트 강조 예시</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Layout Patterns Section -->
+  <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">레이아웃 패턴</h2>
+    <p class="text-sm text-gray-600 mb-6">
+      실제 페이지에서는 아래 패턴들을 조합하여 화면을 구성합니다. `/`, `/products`, `/products/category/:id`, `/notices` 등에서 동일한 패턴을 확인할 수 있습니다.
+    </p>
+
+    <!-- 2-column layout example -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+      <div class="lg:col-span-1 bg-[var(--gh-secondary)] rounded-xl p-4 brand-border">
+        <p class="text-xs font-semibold text-gray-800 mb-2">사이드바 예시</p>
+        <ul class="space-y-1 text-sm">
+          <li class="font-semibold">· 카테고리</li>
+          <li class="text-gray-600">· 필터</li>
+          <li class="text-gray-600">· 정렬/태그</li>
+        </ul>
+      </div>
+      <div class="lg:col-span-3 bg-gray-50 rounded-xl p-4 border border-dashed border-gray-200">
+        <p class="text-xs font-semibold text-gray-800 mb-2">컨텐츠 영역 예시</p>
+        <p class="text-sm text-gray-600">
+          상품 리스트, 공지사항 리스트, 검색 결과 등 그리드/리스트형 컨텐츠가 들어가는 영역입니다.
+          실제 구현 시에는 `views/user/products/list.ejs` 의 카드 구조를 참고하여 적용합니다.
+        </p>
+      </div>
+    </div>
+
+    <!-- Cards grid example -->
+    <div>
+      <p class="text-xs font-semibold text-gray-800 mb-3">카드 그리드 예시</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <% for (let i = 1; i <= 4; i++) { %>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+            <div class="h-32 bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
+              이미지 영역
+            </div>
+            <div class="p-4 flex-1 flex flex-col">
+              <p class="text-xs text-gray-500 mb-1">브랜드명</p>
+              <h3 class="text-sm font-semibold text-gray-900 mb-2 truncate">
+                샘플 상품 제목 <%= i %>
+              </h3>
+              <div class="mt-auto flex items-baseline gap-2">
+                <span class="text-lg font-bold text-[var(--gh-text)]">12,900원</span>
+                <span class="text-xs text-gray-400 line-through">19,900원</span>
+              </div>
+            </div>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </section>
+
+  <!-- Notice / Text Content Example -->
+  <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">문서형 컨텐츠 예시</h2>
+    <div class="space-y-4 text-sm text-gray-700 leading-relaxed">
+      <p>
+        이 영역은 공지사항 상세, 약관/정책 페이지, 브랜드 소개 등 **텍스트 중심의 컨텐츠**를 위한 예시입니다.
+        배경은 `brand-page-surface` 와 자연스럽게 이어지도록 흰색 카드 안에 내용을 배치합니다.
+      </p>
+      <p>
+        실제 구현 시에는 `views/user/notices/detail.ejs` 나 `views/user/terms.ejs` 를 참고하여,
+        제목 · 날짜 · 본문 · 하단 버튼(목록으로 돌아가기 등)을 일관된 스타일로 구성합니다.
+      </p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>폰트 크기: `text-sm` ~ `text-base`</li>
+        <li>줄 간격: `leading-relaxed` 또는 상황에 따라 `leading-loose`</li>
+        <li>문단 간 간격: `space-y-3` 또는 `space-y-4`</li>
+      </ul>
+    </div>
+  </section>
+</div>

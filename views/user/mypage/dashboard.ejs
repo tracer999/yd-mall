@@ -1,0 +1,27 @@
+<%- include('./_shell_start') %>
+
+<div class="space-y-4">
+    <!-- 카드 UI: 한 줄 3칸 고정 -->
+    <section class="rounded-xl shadow-sm overflow-hidden"
+             style="background: var(--gh-primary);">
+        <div class="grid"
+             style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+            <a href="/mypage/likes" class="block px-4 py-5 text-center text-white transition hover:bg-white/10">
+                <p class="text-sm font-semibold">찜 상품</p>
+                <p class="mt-2 text-2xl font-bold"><%= likesCount || 0 %></p>
+                <p class="mt-1 text-xs text-white/70">관심 목록</p>
+            </a>
+            <a href="/mypage/recent-views" class="block px-4 py-5 text-center text-white border-l border-white/20 transition hover:bg-white/10">
+                <p class="text-sm font-semibold">최근 본 상품</p>
+                <p class="mt-2 text-2xl font-bold"><%= recentViewedCount || 0 %></p>
+                <p class="mt-1 text-xs text-white/70">히스토리</p>
+            </a>
+            <a href="/mypage/points" class="block px-4 py-5 text-center text-white border-l border-white/20 transition hover:bg-white/10">
+                <p class="text-sm font-semibold">보유 포인트</p>
+                <p class="mt-2 text-2xl font-bold"><%= (pointsBalance || 0).toLocaleString() %> P</p>
+                <p class="mt-1 text-xs text-white/70">포인트 내역</p>
+            </a>
+        </div>
+    </section>
+</div>
+<%- include('./_shell_end') %>

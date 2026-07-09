@@ -1,0 +1,91 @@
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Shopify 주문 관리</h1>
+        <span class="text-sm text-gray-500">총 <strong><%= totalCount %></strong>건</span>
+    </div>
+
+    <!-- 검색/필터 -->
+    <form method="GET" action="/admin/shopify-orders" class="flex gap-3 mb-6">
+        <select name="status" class="border border-gray-300 rounded px-3 py-2 text-sm">
+            <option value="">전체 상태</option>
+            <option value="paid"      <%= status === 'paid'      ? 'selected' : '' %>>결제완료</option>
+            <option value="pending"   <%= status === 'pending'   ? 'selected' : '' %>>대기중</option>
+            <option value="refunded"  <%= status === 'refunded'  ? 'selected' : '' %>>환불</option>
+            <option value="cancelled" <%= status === 'cancelled' ? 'selected' : '' %>>취소</option>
+        </select>
+        <input type="text" name="keyword" value="<%= keyword || '' %>"
+               placeholder="주문번호 또는 이메일"
+               class="border border-gray-300 rounded px-3 py-2 text-sm w-64">
+        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">검색</button>
+        <a href="/admin/shopify-orders" class="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">초기화</a>
+    </form>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="w-full text-sm text-left">
+            <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                <tr>
+                    <th class="px-4 py-3">주문번호</th>
+                    <th class="px-4 py-3">고객 이메일</th>
+                    <th class="px-4 py-3">결제금액</th>
+                    <th class="px-4 py-3">통화</th>
+                    <th class="px-4 py-3">결제상태</th>
+                    <th class="px-4 py-3">배송상태</th>
+                    <th class="px-4 py-3">주문일시</th>
+                    <th class="px-4 py-3">상세</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <% if (orders.length === 0) { %>
+                    <tr>
+                        <td colspan="8" class="px-6 py-10 text-center text-gray-400">주문 내역이 없습니다.</td>
+                    </tr>
+                <% } %>
+                <% orders.forEach(order => { %>
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-4 py-3 font-medium text-gray-900"><%= order.shopify_order_number || order.shopify_order_id %></td>
+                        <td class="px-4 py-3 text-gray-600"><%= order.customer_email || '-' %></td>
+                        <td class="px-4 py-3 font-semibold">
+                            <%= Number(order.total_price).toLocaleString() %>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500"><%= order.currency %></td>
+                        <td class="px-4 py-3">
+                            <% const fs = order.financial_status; %>
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full
+                                <%= fs === 'paid'     ? 'bg-green-100 text-green-800'  :
+                                    fs === 'pending'  ? 'bg-yellow-100 text-yellow-800':
+                                    fs === 'refunded' ? 'bg-purple-100 text-purple-800':
+                                    fs === 'cancelled'? 'bg-red-100 text-red-800'      :
+                                                        'bg-gray-100 text-gray-700'    %>">
+                                <%= fs === 'paid'      ? '결제완료' :
+                                    fs === 'pending'   ? '대기중'   :
+                                    fs === 'refunded'  ? '환불'     :
+                                    fs === 'cancelled' ? '취소'     : fs %>
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500">
+                            <%= order.fulfillment_status || '미처리' %>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500">
+                            <%= new Date(order.created_at).toLocaleString('ko-KR') %>
+                        </td>
+                        <td class="px-4 py-3">
+                            <a href="/admin/shopify-orders/<%= order.id %>" class="text-blue-600 hover:underline text-xs">상세보기</a>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 페이지네이션 -->
+    <% if (totalPages > 1) { %>
+    <div class="flex justify-center mt-6 gap-1">
+        <% for (let i = 1; i <= totalPages; i++) { %>
+            <a href="?page=<%= i %><%= status ? '&status=' + status : '' %><%= keyword ? '&keyword=' + keyword : '' %>"
+               class="px-3 py-1 rounded text-sm <%= i === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' %>">
+                <%= i %>
+            </a>
+        <% } %>
+    </div>
+    <% } %>
+</div>

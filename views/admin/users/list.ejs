@@ -1,0 +1,143 @@
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+    <p class="text-sm text-gray-500">회원 정보를 조회하고 검색·관리를 진행합니다.</p>
+    <form action="/admin/users" method="GET"
+        class="flex w-full sm:w-auto items-center gap-2 justify-start sm:justify-end">
+        <select name="status" class="min-w-[100px] rounded-md border-gray-300 py-2 pl-3 pr-10 text-sm">
+            <option value="">전체 상태</option>
+            <option value="active" <%=locals.searchStatus==='active' ? 'selected' : '' %>>활성</option>
+            <option value="withdrawn" <%=locals.searchStatus==='withdrawn' ? 'selected' : '' %>>탈퇴</option>
+        </select>
+        <input type="text" name="q" value="<%= searchQuery || '' %>" placeholder="이름 / 이메일 / 전화번호 검색"
+            class="min-w-[232px] rounded-md border-gray-300 py-2">
+        <button type="submit"
+            class="inline-flex items-center justify-center h-[38px] min-w-[90px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">검색</button>
+    </form>
+</div>
+
+<div class="bg-white overflow-hidden shadow-sm rounded-lg">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">생년월일</th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입일</th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">최근 접속
+                    </th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">약관 버전
+                    </th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">마케팅 동의
+                    </th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">로그인</th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                <% users.forEach(user=> { %>
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <%= user.id %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <img src="<%= user.picture || 'https://via.placeholder.com/32' %>"
+                                    class="rounded-full mr-2 h-8 w-8" alt="">
+                                <a href="/admin/users/<%= user.id %>"
+                                    class="text-sm font-medium text-blue-600 hover:underline">
+                                    <%= user.name %>
+                                </a>
+                                <% if (!user.is_active && user.withdrawn_at) { %>
+                                    <span class="ml-1.5 px-1.5 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-red-100 text-red-700 border border-red-200">탈퇴</span>
+                                <% } else if (!user.is_active) { %>
+                                    <span class="ml-1.5 px-1.5 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-gray-100 text-gray-500 border border-gray-200">비활성</span>
+                                <% } %>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <%= user.birthdate ? user.birthdate.toISOString().split('T')[0] : '-' %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <%= user.created_at.toISOString().split('T')[0] %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <%= user.last_login ? user.last_login.toISOString().split('T')[0] : '-' %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <% if (user.terms_version || user.privacy_version) { %>
+                                <div class="space-x-1">
+                                    <% if (user.terms_version) { %>
+                                        <span
+                                            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700">
+                                            이용약관 <%= user.terms_version %>
+                                        </span>
+                                        <% } %>
+                                            <% if (user.privacy_version) { %>
+                                                <span
+                                                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700">
+                                                    개인정보 <%= user.privacy_version %>
+                                                </span>
+                                                <% } %>
+                                </div>
+                                <% } else { %>
+                                    <span class="text-sm text-gray-400">-</span>
+                                    <% } %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <% if (user.marketing_agreed) { %>
+                                <span
+                                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">동의</span>
+                                <% } else { %>
+                                    <span
+                                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">미동의</span>
+                                    <% } %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <% if(user.kakao_id) { %>
+                                <span
+                                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Kakao</span>
+                                <% } else if(user.google_id) { %>
+                                    <span
+                                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Google</span>
+                                    <% } else { %>
+                                        <span
+                                            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Email</span>
+                                        <% } %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div class="flex justify-end gap-2">
+                                <% const confirmMsg=user.is_active ? '이 회원을 비활성화하시겠습니까?' : '이 회원을 활성화하시겠습니까?' ; %>
+                                    <form action="/admin/users/toggle-active/<%= user.id %>" method="POST"
+                                        class="inline" onsubmit="return confirm('<%= confirmMsg %>');">
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 no-underline">
+                                            <%= user.is_active ? '비활성' : '활성' %>
+                                        </button>
+                                    </form>
+                                    <form action="/admin/users/delete/<%= user.id %>" method="POST" class="inline"
+                                        onsubmit="return confirm('정말 삭제하시겠습니까?');">
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
+                                    </form>
+                            </div>
+                        </td>
+                    </tr>
+                    <% }) %>
+                        <% if(users.length===0) { %>
+                            <tr>
+                                <td colspan="9" class="px-6 py-10 text-center text-gray-500">가입된 회원이 없습니다.</td>
+                            </tr>
+                            <% } %>
+            </tbody>
+        </table>
+    </div>
+</div>

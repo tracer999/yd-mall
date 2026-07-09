@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta name="naver-site-verification" content="5faf6c30eec6bac5f338727293d2ad93d71153d6" />
+    <% const fallbackMain='#76A764' ; const fallbackDark='#5A824B' ; const fallbackLight='#F0F7EE' ; const
+        ensureHex=(value, fallback)=> {
+        if (!value || typeof value !== 'string') return fallback;
+        const trimmed = value.trim();
+        if (!trimmed) return fallback;
+        return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+        };
+
+        const hexToRgb = (hex) => {
+        const normalized = ensureHex(hex, fallbackMain).replace('#', '');
+        const parsed = parseInt(normalized, 16);
+        return {
+        r: (parsed >> 16) & 255,
+        g: (parsed >> 8) & 255,
+        b: parsed & 255
+        };
+        };
+
+        const getContrastColor = (hex) => {
+        const { r, g, b } = hexToRgb(hex);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luminance > 0.6 ? '#1F2937' : '#FFFFFF';
+        };
+
+        const buildKakaoChannelUrl = (rawValue) => {
+        if (!rawValue) return '';
+        const raw = String(rawValue).trim();
+        if (!raw) return '';
+        if (/^https?:\/\//i.test(raw)) return raw;
+        if (raw.startsWith('/')) return `https://pf.kakao.com${raw}`;
+        if (raw.startsWith('@')) return `https://pf.kakao.com/${raw}`;
+        if (raw.startsWith('_')) return `https://pf.kakao.com/${raw}`;
+        return `https://pf.kakao.com/_${raw}`;
+        };
+
+        const brandMain = ensureHex(siteSettings && siteSettings.brand_main_color, fallbackMain);
+        const brandDark = ensureHex(siteSettings && siteSettings.brand_dark_color, fallbackDark);
+        const brandLight = ensureHex(siteSettings && siteSettings.brand_light_color, fallbackLight);
+        const brandContrast = getContrastColor(brandMain);
+        const kakaoChannelUrl = (siteSettings && siteSettings.kakao_channel_enabled)
+        ? buildKakaoChannelUrl(siteSettings.kakao_channel_url)
+        : '';
+        const faviconUrl = (siteSettings && (siteSettings.favicon_url || siteSettings.logo_url))
+        ? String(siteSettings.favicon_url || siteSettings.logo_url).trim()
+        : '';
+        const resolveOgImage = () => {
+        const explicitImage = (typeof seo !== 'undefined' && seo && seo.image) ? String(seo.image).trim() : '';
+        if (explicitImage) return explicitImage;
+
+        const imageRaw = (siteSettings && (siteSettings.kakao_share_image_url || siteSettings.logo_url))
+        ? String(siteSettings.kakao_share_image_url || siteSettings.logo_url).trim()
+        : '';
+        if (!imageRaw) return '';
+        if (/^https?:\/\//i.test(imageRaw)) return imageRaw;
+
+        const canonical = (typeof seo !== 'undefined' && seo && seo.url) ? String(seo.url) : '';
+        const originMatch = canonical.match(/^https?:\/\/[^/]+/i);
+        return originMatch ? `${originMatch[0]}${imageRaw}` : imageRaw;
+        };
+        const ogImage = resolveOgImage();
+        %>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="theme-color" content="<%= brandMain %>">
+        <% if (faviconUrl) { %>
+            <link rel="icon" href="<%= faviconUrl %>">
+            <link rel="apple-touch-icon" href="<%= faviconUrl %>">
+            <% } %>
+                <title>
+                    <% if (typeof seo !=='undefined' && seo && seo.title) { %>
+                        <%= seo.title %>
+                            <% } else { %>
+                                <%= siteSettings.header_slogan || `${siteSettings.company_name || '와이디몰'} | 건강식품 전문 쇼핑몰` %><% } %>
+                </title>
+
+                <% if (siteSettings && siteSettings.ga4_measurement_id) { %>
+                    <script async
+                        src="https://www.googletagmanager.com/gtag/js?id=<%= siteSettings.ga4_measurement_id %>"></script>
+                    <script>
+                        window.dataLayer = window.dataLayer || [];
+                        function gtag() { dataLayer.push(arguments); }
+                        gtag('js', new Date());
+                        gtag('config', '<%= siteSettings.ga4_measurement_id %>');
+                    </script>
+                    <% } %>
+
+                        <meta name="robots"
+                            content="<%= (typeof seo !== 'undefined' && seo && seo.robots) ? seo.robots : 'index,follow' %>">
+                        <% if (typeof seo !=='undefined' && seo) { %>
+                            <% if (seo.description) { %>
+                                <meta name="description" content="<%= seo.description %>">
+                                <% } %>
+                                    <% if (seo.url) { %>
+                                        <link rel="canonical" href="<%= seo.url %>">
+                                        <% } %>
+                                            <!-- Open Graph Meta -->
+                                            <meta property="og:type" content="<%= seo.type || 'website' %>">
+                                            <% if (seo.title) { %>
+                                                <meta property="og:title" content="<%= seo.title %>">
+                                                <% } %>
+                                                    <% if (seo.description) { %>
+                                                        <meta property="og:description"
+                                                            content="<%= seo.description %>">
+                                                        <% } %>
+                                                            <% if (ogImage) { %>
+                                                                <meta property="og:image" content="<%= ogImage %>">
+                                                                <meta property="og:image:width" content="1200">
+                                                                <meta property="og:image:height" content="630">
+                                                                <% } %>
+                                                                    <% if (seo.url) { %>
+                                                                        <meta property="og:url"
+                                                                            content="<%= seo.url %>">
+                                                                        <% } %>
+                                                                            <% if (seo.siteName) { %>
+                                                                                <meta property="og:site_name"
+                                                                                    content="<%= seo.siteName %>">
+                                                                                <% } %>
+                                                                                    <% if (seo.jsonLd) { %>
+                                                                                        <script
+                                                                                            type="application/ld+json">
+    <%- seo.jsonLd %>
+        </script>
+                                                                                        <% } %>
+                                                                                            <% } %>
+
+                                                                                                <!-- Tailwind CSS (CDN for now, or local build if configured) -->
+                                                                                                <link
+                                                                                                    href="/css/style.css"
+                                                                                                    rel="stylesheet">
+                                                                                                <link rel="stylesheet"
+                                                                                                    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+                                                                                                <!-- Pretendard Font (loaded via CSS @import) -->
+
+                                                                                                <style>
+                                                                                                    :root {
+                                                                                                        --gh-primary: <%=brandMain %>;
+                                                                                                        --gh-primary-dark: <%=brandDark %>;
+                                                                                                        --gh-secondary: <%=brandLight %>;
+                                                                                                        --gh-primary-contrast: <%=brandContrast %>;
+                                                                                                        --gh-accent: color-mix(in srgb, var(--gh-primary) 60%, var(--gh-primary-dark));
+                                                                                                        --gh-text: #2C3E50;
+                                                                                                        --gh-muted: #7F8C8D;
+                                                                                                        --gh-border: #E2E8F0;
+                                                                                                        --gh-primary-soft: color-mix(in srgb, var(--gh-primary) 15%, white);
+                                                                                                        --gh-primary-soft-strong: color-mix(in srgb, var(--gh-primary) 28%, white);
+                                                                                                        --gh-primary-ring: color-mix(in srgb, var(--gh-primary) 40%, transparent);
+                                                                                                        --gh-primary-shadow: color-mix(in srgb, var(--gh-primary) 22%, transparent);
+                                                                                                    }
+
+                                                                                                    body {
+                                                                                                        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+                                                                                                        color: var(--gh-text);
+                                                                                                        background-color: #FFFFFF;
+                                                                                                    }
+
+                                                                                                    .gh-serif {
+                                                                                                        font-family: 'Pretendard', serif;
+                                                                                                        font-weight: 700;
+                                                                                                    }
+
+                                                                                                    .gh-btn-primary {
+                                                                                                        background-color: var(--gh-primary);
+                                                                                                        color: var(--gh-primary-contrast);
+                                                                                                        transition: background-color 0.2s ease, transform 0.2s ease;
+                                                                                                    }
+
+                                                                                                    .gh-btn-primary:hover {
+                                                                                                        background-color: var(--gh-primary-dark);
+                                                                                                    }
+
+                                                                                                    .brand-text {
+                                                                                                        color: var(--gh-primary);
+                                                                                                    }
+
+                                                                                                    .brand-text-strong {
+                                                                                                        color: var(--gh-primary-dark);
+                                                                                                    }
+
+                                                                                                    .brand-chip {
+                                                                                                        background-color: var(--gh-primary-soft);
+                                                                                                        color: var(--gh-primary-dark);
+                                                                                                    }
+
+                                                                                                    .brand-border {
+                                                                                                        border-color: var(--gh-primary-soft-strong) !important;
+                                                                                                    }
+
+                                                                                                    .brand-badge {
+                                                                                                        background-color: var(--gh-primary);
+                                                                                                        color: var(--gh-primary-contrast);
+                                                                                                    }
+
+                                                                                                    .brand-cta {
+                                                                                                        background-image: linear-gradient(120deg, var(--gh-primary), var(--gh-primary-dark));
+                                                                                                        color: var(--gh-primary-contrast);
+                                                                                                        box-shadow: 0 18px 40px var(--gh-primary-shadow);
+                                                                                                        transition: transform 0.2s ease, box-shadow 0.2s ease;
+                                                                                                    }
+
+                                                                                                    .brand-cta:hover {
+                                                                                                        transform: translateY(-1px);
+                                                                                                        box-shadow: 0 24px 55px color-mix(in srgb, var(--gh-primary) 32%, transparent);
+                                                                                                    }
+
+                                                                                                    .brand-pill--ghost {
+                                                                                                        border: 2px solid var(--gh-primary);
+                                                                                                        color: var(--gh-primary);
+                                                                                                        transition: background-color 0.2s ease, color 0.2s ease;
+                                                                                                    }
+
+                                                                                                    .brand-pill--ghost:hover {
+                                                                                                        background-color: var(--gh-primary-soft);
+                                                                                                        color: var(--gh-primary-dark);
+                                                                                                    }
+
+                                                                                                    .brand-focus:focus {
+                                                                                                        border-color: var(--gh-primary) !important;
+                                                                                                        box-shadow: 0 0 0 3px var(--gh-primary-ring);
+                                                                                                    }
+
+                                                                                                    .brand-tab {
+                                                                                                        border-bottom-width: 2px;
+                                                                                                        border-color: transparent;
+                                                                                                        color: #6B7280;
+                                                                                                        transition: color 0.2s ease, border-color 0.2s ease;
+                                                                                                    }
+
+                                                                                                    .brand-tab.is-active {
+                                                                                                        border-color: var(--gh-primary);
+                                                                                                        color: var(--gh-primary);
+                                                                                                        font-weight: 700;
+                                                                                                    }
+
+                                                                                                    .brand-tab:not(.is-active):hover {
+                                                                                                        border-color: var(--gh-primary-soft-strong);
+                                                                                                        color: var(--gh-primary-dark);
+                                                                                                    }
+
+                                                                                                    .brand-page-surface {
+                                                                                                        background-color: #F7F8FB;
+                                                                                                    }
+
+                                                                                                    .gh-link {
+                                                                                                        color: var(--gh-text);
+                                                                                                        transition: color 0.2s;
+                                                                                                    }
+
+                                                                                                    .gh-link:hover {
+                                                                                                        color: var(--gh-primary);
+                                                                                                    }
+
+                                                                                                    /* Custom Scrollbar for nicer feel */
+                                                                                                    ::-webkit-scrollbar {
+                                                                                                        width: 8px;
+                                                                                                    }
+
+                                                                                                    ::-webkit-scrollbar-track {
+                                                                                                        background: #f1f1f1;
+                                                                                                    }
+
+                                                                                                    ::-webkit-scrollbar-thumb {
+                                                                                                        background: #c1c1c1;
+                                                                                                        border-radius: 4px;
+                                                                                                    }
+
+                                                                                                    ::-webkit-scrollbar-thumb:hover {
+                                                                                                        background: #a8a8a8;
+                                                                                                    }
+
+                                                                                                    .kakao-floating-btn {
+                                                                                                        position: fixed;
+                                                                                                        right: 1rem;
+                                                                                                        bottom: 1rem;
+                                                                                                        width: 64px;
+                                                                                                        height: 64px;
+                                                                                                        border-radius: 9999px;
+                                                                                                        background: #FEE500;
+                                                                                                        color: #191919;
+                                                                                                        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+                                                                                                        display: inline-flex;
+                                                                                                        align-items: center;
+                                                                                                        justify-content: center;
+                                                                                                        gap: 0;
+                                                                                                        overflow: hidden;
+                                                                                                        white-space: nowrap;
+                                                                                                        padding: 0;
+                                                                                                        z-index: 60;
+                                                                                                        transition: width 0.22s ease, transform 0.2s ease, box-shadow 0.2s ease;
+                                                                                                    }
+
+                                                                                                    .kakao-floating-btn__icon {
+                                                                                                        flex: 0 0 auto;
+                                                                                                        width: 36px;
+                                                                                                        height: 36px;
+                                                                                                        display: inline-flex;
+                                                                                                        align-items: center;
+                                                                                                        justify-content: center;
+                                                                                                    }
+
+                                                                                                    .kakao-floating-btn__label {
+                                                                                                        font-size: 14px;
+                                                                                                        font-weight: 700;
+                                                                                                        color: #191919;
+                                                                                                        opacity: 0;
+                                                                                                        max-width: 0;
+                                                                                                        overflow: hidden;
+                                                                                                        margin-left: 0;
+                                                                                                        transform: translateX(8px);
+                                                                                                        transition: opacity 0.18s ease, transform 0.2s ease, max-width 0.2s ease, margin-left 0.2s ease;
+                                                                                                    }
+
+                                                                                                    .kakao-floating-btn:hover {
+                                                                                                        width: 236px;
+                                                                                                        justify-content: flex-start;
+                                                                                                        gap: 10px;
+                                                                                                        padding: 0 14px;
+                                                                                                        transform: translateY(-4px);
+                                                                                                        box-shadow: 0 18px 34px rgba(0, 0, 0, 0.24);
+                                                                                                    }
+
+                                                                                                    .kakao-floating-btn:hover .kakao-floating-btn__label {
+                                                                                                        opacity: 1;
+                                                                                                        max-width: 180px;
+                                                                                                        margin-left: 2px;
+                                                                                                        transform: translateX(0);
+                                                                                                    }
+
+                                                                                                    .kakao-floating-btn:focus-visible {
+                                                                                                        outline: 3px solid rgba(25, 25, 25, 0.25);
+                                                                                                        outline-offset: 2px;
+                                                                                                    }
+
+                                                                                                    @media (max-width: 640px) {
+                                                                                                        .kakao-floating-btn {
+                                                                                                            width: 58px;
+                                                                                                            height: 58px;
+                                                                                                            right: 0.75rem;
+                                                                                                            bottom: 0.75rem;
+                                                                                                            padding: 0;
+                                                                                                        }
+
+                                                                                                        .kakao-floating-btn__icon {
+                                                                                                            width: 34px;
+                                                                                                            height: 34px;
+                                                                                                        }
+
+                                                                                                        .kakao-floating-btn:hover {
+                                                                                                            width: 58px;
+                                                                                                            justify-content: center;
+                                                                                                            gap: 0;
+                                                                                                            padding: 0;
+                                                                                                            transform: none;
+                                                                                                        }
+
+                                                                                                        .kakao-floating-btn:hover .kakao-floating-btn__label {
+                                                                                                            opacity: 0;
+                                                                                                            transform: translateX(8px);
+                                                                                                        }
+                                                                                                    }
+                                                                                                </style>
+</head>
+
+<body class="flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
+        <!-- Top Bar -->
+        <div class="bg-[var(--gh-secondary)] text-sm h-12 flex items-center px-4 border-b border-green-50">
+            <div class="max-w-7xl mx-auto flex justify-between items-center w-full">
+                <span class="hidden sm:inline text-gray-700 font-normal">
+                    <%= siteSettings.header_slogan || '건강한 하루의 시작 | 와이디몰' %>
+                </span>
+                <div class="flex items-center gap-4">
+                    <%- include('../partials/shopify-market-selector') %>
+                    <div class="h-4 w-px bg-gray-300 mx-1"></div>
+                    <% if (user) { %>
+                        <div class="flex items-center gap-2">
+                            <% if (user.picture) { %>
+                                <img src="<%= user.picture %>" alt="<%= user.name %>"
+                                    class="w-8 h-8 rounded-full border border-gray-200 object-cover">
+                                <% } %>
+                                    <span class="text-gray-700">
+                                        환영합니다,
+                                        <strong class="text-gray-900">
+                                            <%= user.name %>
+                                        </strong>님
+                                    </span>
+                        </div>
+                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
+                        <a href="/mypage"
+                            class="text-gray-700 hover:text-[var(--gh-primary)] transition-colors">마이페이지</a>
+                        <a href="/auth/logout"
+                            class="text-gray-700 hover:text-[var(--gh-primary)] transition-colors">로그아웃</a>
+                        <% } else { %>
+                            <a href="/auth/login"
+                                class="text-gray-700 hover:text-[var(--gh-primary)] transition-colors">로그인</a>
+                            <a href="/auth/signup"
+                                class="text-gray-700 hover:text-[var(--gh-primary)] transition-colors">회원가입</a>
+                            <% } %>
+                                <% if (isAdmin) { %>
+                                    <div class="h-4 w-px bg-gray-300 mx-1"></div>
+                                    <a href="/admin"
+                                        class="text-[var(--gh-accent)] font-bold hover:text-red-500 transition-colors">관리자모드</a>
+                                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header Row 1: 로고 + 검색바 + 유저 액션 (신세계TV쇼핑형) -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-4 sm:gap-6 h-20">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center">
+                    <a href="/" class="flex items-center gap-2">
+                        <% if (siteSettings.logo_url) { %>
+                            <img class="h-10 w-auto" src="<%= siteSettings.logo_url %>"
+                                alt="<%= siteSettings.company_name || '와이디몰' %>">
+                            <% } else { %>
+                                <div
+                                    class="h-10 w-10 bg-[var(--gh-primary)] text-white rounded-full flex items-center justify-center font-bold text-xl">
+                                    G</div>
+                                <span class="gh-serif text-2xl font-bold text-[var(--gh-primary-dark)] tracking-tight">
+                                    <%= siteSettings.company_name || '와이디몰' %>
+                                </span>
+                                <% } %>
+                    </a>
+                </div>
+
+                <!-- Search (center) -->
+                <form action="/search" method="get" class="hidden md:flex flex-1 max-w-2xl mx-auto" role="search">
+                    <div class="relative w-full">
+                        <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
+                            class="w-full h-12 rounded-full border-2 border-[var(--gh-primary)] pl-5 pr-14 text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20 bg-white">
+                        <button type="submit" aria-label="검색"
+                            class="absolute right-1.5 top-1.5 h-9 w-9 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--gh-primary)]">
+                            <i class="bi bi-search text-xl"></i>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- User Actions -->
+                <div class="flex items-center gap-4 sm:gap-5 flex-shrink-0">
+                    <% if (user) { %>
+                        <a href="/auth/logout" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-box-arrow-right text-xl"></i><span class="text-xs">로그아웃</span>
+                        </a>
+                    <% } else { %>
+                        <a href="/auth/login" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-power text-xl"></i><span class="text-xs">로그인</span>
+                        </a>
+                    <% } %>
+                    <a href="/mypage" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                        <i class="bi bi-person text-xl"></i><span class="text-xs">마이쇼핑</span>
+                    </a>
+                    <a href="/cart" class="flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors relative">
+                        <i class="bi bi-bag text-xl"></i><span class="hidden sm:inline text-xs">장바구니</span>
+                        <% if (typeof cartCount !=='undefined' && cartCount> 0) { %>
+                            <span class="absolute -top-1.5 right-1 sm:right-3 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                                <%= cartCount %>
+                            </span>
+                        <% } %>
+                    </a>
+                    <a href="/boards/notice" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                        <i class="bi bi-headset text-xl"></i><span class="text-xs">고객센터</span>
+                    </a>
+
+                    <!-- Mobile menu button -->
+                    <button type="button" id="mobile-menu-btn"
+                        class="md:hidden text-gray-500 hover:text-[var(--gh-primary)] p-2">
+                        <i class="bi bi-list text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header Row 2: GNB (카테고리 드롭다운 + 몰별 가변 메뉴) -->
+        <div class="hidden md:block border-t border-gray-100">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <nav class="flex items-stretch gap-1" aria-label="주 메뉴">
+                    <!-- 카테고리 (클릭 토글 드롭다운 패널, 전체 뎁스) -->
+                    <div class="relative" id="gnb-cat-wrap">
+                        <button type="button" id="gnb-cat-btn" aria-expanded="false"
+                            class="flex items-center gap-2 px-3 py-3 text-base font-bold text-gray-900 hover:text-[var(--gh-primary)]">
+                            <i class="bi bi-list text-xl"></i><span>카테고리</span>
+                        </button>
+                        <div id="gnb-cat-panel"
+                            class="hidden absolute left-0 top-full z-50 w-[860px] max-w-[92vw] bg-white border border-gray-200 shadow-xl rounded-b-lg p-5">
+                            <% if (typeof categoryTree !== 'undefined' && categoryTree.length > 0) { %>
+                                <ul class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5">
+                                    <% categoryTree.forEach(function (node) { %>
+                                        <%- include('../partials/storefront/category_node', { node: node }) %>
+                                    <% }); %>
+                                </ul>
+                            <% } else { %>
+                                <p class="text-sm text-gray-400">등록된 카테고리가 없습니다.</p>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <div class="w-px bg-gray-200 my-2"></div>
+
+                    <!-- 몰별 가변 메뉴(storefront_menu, 카테고리 제외) -->
+                    <% (typeof gnbMenus !== 'undefined' ? gnbMenus : []).filter(function(m){ return !m.is_fixed; }).forEach(function (m) {
+                         var active = m.href && m.href !== '#' && currentPath === m.href; %>
+                        <a href="<%= m.href %>"
+                            class="px-4 py-3 text-base font-medium border-b-2 transition-colors <%= active ? 'text-[var(--gh-primary)] border-[var(--gh-primary)]' : 'text-gray-700 border-transparent hover:text-[var(--gh-primary)]' %>">
+                            <%= m.name %>
+                        </a>
+                    <% }); %>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Mobile Menu Panel -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-100 absolute w-full shadow-lg">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <!-- 모바일 검색 -->
+                <form action="/search" method="get" class="px-2 py-2" role="search">
+                    <div class="relative">
+                        <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
+                            class="w-full h-11 rounded-full border-2 border-[var(--gh-primary)] pl-4 pr-11 text-base focus:outline-none">
+                        <button type="submit" aria-label="검색" class="absolute right-1.5 top-1.5 h-8 w-8 flex items-center justify-center text-gray-500">
+                            <i class="bi bi-search text-lg"></i>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- 몰별 가변 메뉴 -->
+                <% if (typeof gnbMenus !== 'undefined' && gnbMenus && gnbMenus.length > 0) { %>
+                    <p class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider py-1">메뉴</p>
+                    <% gnbMenus.filter(function(m){ return !m.is_fixed; }).forEach(function (m) { %>
+                        <a href="<%= m.href %>"
+                            class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">
+                            <%= m.name %>
+                        </a>
+                    <% }); %>
+                <% } %>
+
+                <!-- 카테고리(전체 뎁스) -->
+                <% if (typeof categoryTree !== 'undefined' && categoryTree.length > 0) { %>
+                    <div class="border-t border-gray-100 my-2"></div>
+                    <p class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider py-1"><i class="bi bi-list mr-1"></i>카테고리</p>
+                    <ul>
+                        <% categoryTree.forEach(function (node) { %>
+                            <%- include('../partials/storefront/category_node', { node: node }) %>
+                        <% }); %>
+                    </ul>
+                <% } %>
+
+                                <div class="border-t border-gray-100 my-2"></div>
+                                <!-- <a href="/guide"
+                                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">이용가이드</a> -->
+                                <a href="/boards/notice"
+                                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">게시판</a>
+                                <a href="/inquiries"
+                                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">1:1
+                                    문의</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow brand-page-surface">
+        <%- body %>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 text-gray-600 mt-auto">
+
+        <!-- 상단 링크바 -->
+        <div class="border-b border-gray-100">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4 text-xs text-gray-500">
+                <a href="/terms" class="hover:text-[var(--gh-primary)] transition-colors">이용약관</a>
+                <span class="text-gray-300">|</span>
+                <a href="/privacy" class="font-semibold text-gray-700 hover:text-[var(--gh-primary)] transition-colors">개인정보처리방침</a>
+            </div>
+        </div>
+
+        <!-- 본문 영역 -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-8">
+
+                <!-- 좌측: 로고 + 브랜드 문구 + SNS -->
+                <div class="flex-1">
+                    <!-- 로고 -->
+                    <div class="mb-4">
+                        <% if (siteSettings.logo_url) { %>
+                            <a href="/">
+                                <img src="<%= siteSettings.logo_url %>" alt="<%= siteSettings.company_name || '와이디몰' %>"
+                                    class="h-10 w-auto object-contain">
+                            </a>
+                        <% } else { %>
+                            <a href="/" class="gh-serif text-xl font-bold text-[var(--gh-primary)] flex items-center gap-2">
+                                <i class="bi bi-flower1"></i>
+                                <%= siteSettings.company_name || '와이디몰' %>
+                            </a>
+                        <% } %>
+                    </div>
+
+                    <!-- 브랜드 문구 -->
+                    <p class="text-sm text-gray-500 leading-relaxed max-w-sm">
+                        <% if (siteSettings.slogan) { %>
+                            <%- siteSettings.slogan %>
+                        <% } else { %>
+                            자연에서 온 순수한 재료로 만드는 건강한 식탁.<br>
+                            와이디몰은 당신의 건강한 라이프스타일을 응원합니다.
+                        <% } %>
+                    </p>
+
+                    <!-- SNS 아이콘 -->
+                    <% if ((siteSettings.instagram_enabled && siteSettings.instagram_url) ||
+                           (siteSettings.facebook_enabled && siteSettings.facebook_url) ||
+                           (siteSettings.youtube_enabled && siteSettings.youtube_url)) { %>
+                        <div class="mt-5 flex items-center gap-4">
+                            <% if (siteSettings.instagram_enabled && siteSettings.instagram_url) { %>
+                                <a href="<%= siteSettings.instagram_url %>" target="_blank" rel="noopener noreferrer"
+                                    class="text-gray-400 hover:text-[var(--gh-primary)] transition-colors">
+                                    <i class="bi bi-instagram text-xl"></i>
+                                </a>
+                            <% } %>
+                            <% if (siteSettings.facebook_enabled && siteSettings.facebook_url) { %>
+                                <a href="<%= siteSettings.facebook_url %>" target="_blank" rel="noopener noreferrer"
+                                    class="text-gray-400 hover:text-[var(--gh-primary)] transition-colors">
+                                    <i class="bi bi-facebook text-xl"></i>
+                                </a>
+                            <% } %>
+                            <% if (siteSettings.youtube_enabled && siteSettings.youtube_url) { %>
+                                <a href="<%= siteSettings.youtube_url %>" target="_blank" rel="noopener noreferrer"
+                                    class="text-gray-400 hover:text-[var(--gh-primary)] transition-colors">
+                                    <i class="bi bi-youtube text-xl"></i>
+                                </a>
+                            <% } %>
+                        </div>
+                    <% } %>
+                </div>
+
+                <!-- 우측: 회사 정보 -->
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-800 mb-3">회사 정보</h3>
+                    <dl class="text-sm text-gray-500 space-y-1.5">
+                        <div class="flex gap-2">
+                            <dt class="font-medium text-gray-600 shrink-0">상호명</dt>
+                            <dd><%= siteSettings.company_name || '와이디몰' %></dd>
+                        </div>
+                        <div class="flex gap-2">
+                            <dt class="font-medium text-gray-600 shrink-0">대표전화</dt>
+                            <dd><%= siteSettings.contact_phone || '-' %></dd>
+                        </div>
+                        <div class="flex gap-2">
+                            <dt class="font-medium text-gray-600 shrink-0">이메일</dt>
+                            <dd><%= siteSettings.contact_email || '-' %></dd>
+                        </div>
+                        <div class="flex gap-2">
+                            <dt class="font-medium text-gray-600 shrink-0">주소</dt>
+                            <dd><%= siteSettings.address || '-' %></dd>
+                        </div>
+                    </dl>
+                </div>
+
+            </div>
+
+            <!-- 하단 카피라이트 -->
+            <div class="mt-8 pt-6 border-t border-gray-100 text-center text-xs text-gray-400">
+                &copy; <%= new Date().getFullYear() %> <%= siteSettings.company_name || '와이디몰' %>. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <% if (kakaoChannelUrl) { %>
+        <a href="<%= kakaoChannelUrl %>" target="_blank" rel="noopener noreferrer" class="kakao-floating-btn"
+            data-kakao-source="floating_btn" data-kakao-label="플로팅 문의 버튼"
+            aria-label="카카오톡 채널 채팅 열기" title="카카오톡 채널 채팅">
+            <span class="kakao-floating-btn__icon" aria-hidden="true">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                    <g transform="translate(0.2,0)">
+                        <circle cx="20" cy="18.4" r="12.8" fill="#191919" />
+                        <path d="M14.2 26.2L14.2 33.4L20 28.9" fill="#191919" />
+                        <text x="20" y="18.8" text-anchor="middle" dominant-baseline="middle" font-size="16.4"
+                            font-family="Arial, sans-serif" font-weight="700" fill="#FEE500">Ch</text>
+                    </g>
+                </svg>
+            </span>
+            <span class="kakao-floating-btn__label">카카오톡으로 문의하세요.</span>
+        </a>
+        <% } %>
+
+        <button type="button" id="scrollTopBtn" aria-label="맨 위로" title="맨 위로"
+            style="position:fixed;right:20px;bottom:88px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);color:#fff;border:none;display:none;align-items:center;justify-content:center;z-index:999;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2);transition:opacity 0.2s,transform 0.2s;backdrop-filter:blur(4px);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+        </button>
+        <script>
+        (function() {
+            const btn = document.getElementById('scrollTopBtn');
+            if (!btn) return;
+            let ticking = false;
+            function onScroll() {
+                if (ticking) return;
+                ticking = true;
+                requestAnimationFrame(() => {
+                    if (window.scrollY > 300) btn.style.display = 'flex';
+                    else btn.style.display = 'none';
+                    ticking = false;
+                });
+            }
+            window.addEventListener('scroll', onScroll, { passive: true });
+            btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        })();
+        </script>
+
+            <script>
+                // Mobile Menu Toggle
+                const menuBtn = document.getElementById('mobile-menu-btn');
+                const mobileMenu = document.getElementById('mobile-menu');
+                if (menuBtn && mobileMenu) {
+                    menuBtn.addEventListener('click', () => {
+                        mobileMenu.classList.toggle('hidden');
+                    });
+                }
+
+                // 카테고리 드롭다운 토글 (클릭 시 하위 카테고리 패널 표시)
+                (function () {
+                    var catBtn = document.getElementById('gnb-cat-btn');
+                    var catPanel = document.getElementById('gnb-cat-panel');
+                    var catWrap = document.getElementById('gnb-cat-wrap');
+                    if (!catBtn || !catPanel || !catWrap) return;
+                    function close() { catPanel.classList.add('hidden'); catBtn.setAttribute('aria-expanded', 'false'); }
+                    catBtn.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        var willOpen = catPanel.classList.contains('hidden');
+                        catPanel.classList.toggle('hidden');
+                        catBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                    });
+                    document.addEventListener('click', function (e) { if (!catWrap.contains(e.target)) close(); });
+                    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+                })();
+            </script>
+
+<% if (typeof _pvId !== 'undefined' && _pvId) { %>
+<script>
+(function(){
+    var s=Date.now(), id=<%= _pvId %>;
+    function send(){
+        var d=Math.round((Date.now()-s)/1000);
+        if(d<1)return;
+        navigator.sendBeacon('/api/pv-duration',
+            new Blob([JSON.stringify({pvId:id,duration:d})],{type:'application/json'}));
+    }
+    document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')send();});
+    window.addEventListener('pagehide',send);
+})();
+</script>
+<% } %>
+<script>
+function trackKakaoInquiry(source, sourceLabel, productId) {
+    try {
+        var data = JSON.stringify({ source: source, sourceLabel: sourceLabel || '', productId: productId || null });
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/kakao-inquiry', new Blob([data], { type: 'application/json' }));
+        }
+    } catch(e) {}
+}
+document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-kakao-source]');
+    if (el) {
+        trackKakaoInquiry(el.dataset.kakaoSource, el.dataset.kakaoLabel || '', el.dataset.kakaoProductId || null);
+    }
+});
+</script>
+</body>
+
+</html>

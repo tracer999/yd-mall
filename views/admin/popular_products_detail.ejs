@@ -1,0 +1,174 @@
+<%
+  const _baseQ = (overrides) => {
+    const p = { period: filters.period, start: filters.start, end: filters.end, category: filters.category, inquiryFilter: filters.inquiryFilter, sort: filters.sort, ...overrides };
+    return '?' + Object.entries(p).filter(([,v]) => v).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  };
+  const _periodLabels = { today: '오늘', '7d': '7일', '30d': '30일', '3m': '3개월' };
+%>
+
+<!-- 네비게이션 -->
+<div class="mb-4 flex items-center gap-2 text-sm">
+    <a href="/admin" class="text-gray-400 hover:text-gray-600 transition">← 대시보드</a>
+    <span class="text-gray-300">/</span>
+    <span class="font-medium text-gray-700">인기 상품 TOP 10 상세</span>
+    <span class="text-xs text-gray-400 ml-auto"><%= new Date().toISOString().split('T')[0] %> 기준</span>
+</div>
+
+<!-- 필터 바 -->
+<div class="bg-white rounded-lg border border-gray-200 px-4 py-3 mb-4 text-xs space-y-3">
+    <div class="flex flex-wrap items-center gap-3">
+        <span class="text-gray-500 font-medium">기간</span>
+        <div class="inline-flex border border-gray-300 rounded-md overflow-hidden">
+            <% Object.entries(_periodLabels).forEach(([k, v]) => { %>
+                <a href="<%= _baseQ({ period: k, start: '', end: '' }) %>"
+                   class="px-3 py-1.5 <%= filters.period === k ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' %> transition no-underline"><%= v %></a>
+            <% }) %>
+        </div>
+        <form class="inline-flex items-center gap-1" method="GET" action="/admin/popular-products">
+            <input type="hidden" name="period" value="custom">
+            <input type="hidden" name="category" value="<%= filters.category %>">
+            <input type="hidden" name="inquiryFilter" value="<%= filters.inquiryFilter %>">
+            <input type="hidden" name="sort" value="<%= filters.sort %>">
+            <input type="date" name="start" value="<%= filters.start %>" class="border border-gray-300 rounded px-2 py-1 text-xs w-28">
+            <span class="text-gray-400">~</span>
+            <input type="date" name="end" value="<%= filters.end %>" class="border border-gray-300 rounded px-2 py-1 text-xs w-28">
+            <button type="submit" class="px-2 py-1 bg-gray-700 text-white rounded text-xs hover:bg-gray-800 transition">적용</button>
+        </form>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <span class="text-gray-500 font-medium">카테고리</span>
+        <select onchange="location.href=_baseQ({category:this.value})" class="border border-gray-300 rounded-md px-2 py-1 text-xs bg-white">
+            <option value="" <%= !filters.category ? 'selected' : '' %>>전체</option>
+            <% categories.forEach(c => { %>
+                <option value="<%= c.id %>" <%= String(filters.category) === String(c.id) ? 'selected' : '' %>><%= c.name %></option>
+            <% }) %>
+        </select>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <span class="text-gray-500 font-medium">문의 상태</span>
+        <div class="inline-flex border border-gray-300 rounded-md overflow-hidden">
+            <a href="<%= _baseQ({ inquiryFilter: 'all' }) %>" class="px-3 py-1.5 <%= filters.inquiryFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' %> transition no-underline">전체</a>
+            <a href="<%= _baseQ({ inquiryFilter: 'zero' }) %>" class="px-3 py-1.5 <%= filters.inquiryFilter === 'zero' ? 'bg-gray-800 text-white' : 'bg-white text-amber-600 hover:bg-gray-50' %> transition no-underline">0건</a>
+            <a href="<%= _baseQ({ inquiryFilter: 'nonzero' }) %>" class="px-3 py-1.5 <%= filters.inquiryFilter === 'nonzero' ? 'bg-gray-800 text-white' : 'bg-white text-green-600 hover:bg-gray-50' %> transition no-underline">1건 이상</a>
+        </div>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <span class="text-gray-500 font-medium">정렬</span>
+        <div class="inline-flex border border-gray-300 rounded-md overflow-hidden">
+            <% [['pv','PV'],['inquiry','문의수'],['duration','체류시간'],['bounce','이탈률']].forEach(([k,v]) => { %>
+                <a href="<%= _baseQ({ sort: k }) %>" class="px-3 py-1.5 <%= filters.sort === k ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' %> transition no-underline"><%= v %></a>
+            <% }) %>
+        </div>
+    </div>
+</div>
+
+<!-- 요약 카드 -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <div class="text-xs text-gray-500 mb-1">TOP 10 총 PV</div>
+        <div class="text-2xl font-semibold text-gray-900"><%= summary.totalPv.toLocaleString() %></div>
+        <div class="text-xs text-gray-500 mt-1">상품별 평균 <span class="font-medium text-gray-800"><%= summary.avgPvPerProduct %></span></div>
+    </div>
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <div class="text-xs text-gray-500 mb-1">TOP 10 총 카카오 문의</div>
+        <div class="text-2xl font-semibold text-gray-900"><%= summary.totalInquiries %><span class="text-sm font-normal text-gray-500">건</span></div>
+        <div class="text-xs text-gray-500 mt-1">전체 PV 대비 문의 전환율 <span class="font-medium"><%= summary.conversionRate %>%</span></div>
+    </div>
+    <div class="bg-white rounded-lg border <%= summary.zeroInquiryCount > 0 ? 'border-amber-300' : 'border-gray-200' %> p-4">
+        <div class="text-xs text-gray-500 mb-1">문의 0건 상품 <% if (summary.zeroInquiryCount > 0) { %><span class="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-amber-100 text-amber-700">주의</span><% } %></div>
+        <div class="text-2xl font-semibold <%= summary.zeroInquiryCount > 0 ? 'text-amber-600' : 'text-gray-900' %>"><%= summary.zeroInquiryCount %></div>
+        <div class="text-xs text-gray-500 mt-1">PV 대비 문의 미발생</div>
+    </div>
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <div class="text-xs text-gray-500 mb-1">1위 상품 PV</div>
+        <div class="text-2xl font-semibold text-gray-900"><%= summary.topProduct ? summary.topProduct.pv.toLocaleString() : '-' %></div>
+        <div class="text-xs text-gray-500 mt-1 truncate"><%= summary.topProduct ? summary.topProduct.name : '-' %></div>
+    </div>
+</div>
+
+<!-- 경고 배너 -->
+<% if (zeroInquiryProducts.length > 0) { %>
+<div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 text-xs text-amber-900 leading-relaxed">
+    <strong>PV 높고 문의 0건 상품 (<%= zeroInquiryProducts.length %>개)</strong> —
+    <%= zeroInquiryProducts.map(p => p.name).join(', ') %>
+    <br>상세 페이지 개선 또는 카카오 문의 버튼 CTA 점검을 우선 권장합니다. <strong>상품명 클릭 시 상품 편집 페이지로 이동합니다.</strong>
+</div>
+<% } %>
+
+<!-- 테이블 -->
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 flex-wrap gap-2">
+        <span class="text-sm font-medium text-gray-800">상품별 성과 (PV × 카카오 문의) <span class="text-xs font-normal px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500"><%= filters.days %>일</span></span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+            <thead>
+                <tr class="bg-gray-50 border-b border-gray-200">
+                    <th class="px-3 py-2 text-left text-gray-500 font-medium w-8">#</th>
+                    <th class="px-3 py-2 text-left text-gray-500 font-medium">상품명 <span class="font-normal text-gray-400">클릭 시 편집 이동</span></th>
+                    <th class="px-3 py-2 text-left text-gray-500 font-medium w-20">카테고리</th>
+                    <th class="px-3 py-2 text-right text-gray-500 font-medium w-24 <%= filters.sort === 'pv' ? 'text-gray-800' : '' %>">PV <%= filters.sort === 'pv' ? '↓' : '' %></th>
+                    <th class="px-3 py-2 text-right text-gray-500 font-medium w-20 <%= filters.sort === 'duration' ? 'text-gray-800' : '' %>">체류시간</th>
+                    <th class="px-3 py-2 text-right text-gray-500 font-medium w-16 <%= filters.sort === 'bounce' ? 'text-gray-800' : '' %>">이탈률</th>
+                    <th class="px-3 py-2 text-right text-gray-500 font-medium w-24 <%= filters.sort === 'inquiry' ? 'text-gray-800' : '' %>">카카오 문의</th>
+                    <th class="px-3 py-2 text-right text-gray-500 font-medium w-20">추이</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (products.length === 0) { %>
+                    <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">데이터가 없습니다.</td></tr>
+                <% } else { %>
+                    <% products.forEach((p, i) => { %>
+                        <tr class="border-b border-gray-100 hover:bg-gray-50 <%= p.inquiries === 0 ? 'bg-amber-50/50' : '' %>">
+                            <td class="px-3 py-2.5 text-gray-400 font-medium"><%= i + 1 %></td>
+                            <td class="px-3 py-2.5">
+                                <a href="/admin/products/edit/<%= p.id %>" class="text-xs font-medium <%= p.inquiries === 0 ? 'text-red-700 hover:text-red-900' : 'text-blue-600 hover:text-blue-800' %> hover:underline">
+                                    <%= p.name %>
+                                </a>
+                                <% if (i === 0) { %><span class="ml-1 text-[9px] text-gray-400">PV 1위</span><% } %>
+                            </td>
+                            <td class="px-3 py-2.5 text-gray-500 text-[10px]"><%= p.categoryName %></td>
+                            <td class="px-3 py-2.5 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <div class="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-blue-500 rounded-full" style="width:<%= Math.round(p.pv / maxPv * 100) %>%"></div>
+                                    </div>
+                                    <strong><%= p.pv.toLocaleString() %></strong>
+                                </div>
+                            </td>
+                            <td class="px-3 py-2.5 text-right text-gray-500"><%= p.durationStr %></td>
+                            <td class="px-3 py-2.5 text-right <%= p.bounceRate > 60 ? 'text-red-500' : p.bounceRate > 40 ? 'text-amber-600' : 'text-green-600' %>"><%= p.bounceRate %>%</td>
+                            <td class="px-3 py-2.5 text-right">
+                                <% if (p.inquiries === 0) { %>
+                                    <span class="font-medium text-amber-600">0건</span>
+                                <% } else { %>
+                                    <span class="font-medium text-green-600"><%= p.inquiries %>건</span>
+                                <% } %>
+                            </td>
+                            <td class="px-3 py-2.5 text-right">
+                                <div class="flex items-end justify-end gap-px h-4">
+                                    <% if (p.trend.length > 0) { %>
+                                        <% p.trend.forEach(v => { %>
+                                            <div class="w-1 rounded-t <%= p.inquiries === 0 ? 'bg-amber-400 opacity-60' : 'bg-blue-500 opacity-65' %>" style="height:<%= Math.max(v / p.trendMax * 100, 10) %>%"></div>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <span class="text-[9px] text-gray-300">-</span>
+                                    <% } %>
+                                </div>
+                            </td>
+                        </tr>
+                    <% }) %>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="text-[9px] text-gray-400 text-right mt-2">※ 체류시간·이탈률은 page_views 로그 기준. PV·문의 수는 자체 로그 기준.</div>
+
+<script>
+// 카테고리 셀렉트 URL 빌더
+document.querySelector('select')?.addEventListener('change', function() {
+    const params = new URLSearchParams(location.search);
+    params.set('category', this.value);
+    if (!this.value) params.delete('category');
+    location.href = '/admin/popular-products?' + params.toString();
+});
+</script>

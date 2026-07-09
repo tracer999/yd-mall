@@ -1,0 +1,20 @@
+<div class="max-w-4xl mx-auto px-4 py-10">
+    <div class="mb-6 flex items-center justify-between gap-3">
+        <a href="/boards/<%= type %>" class="text-gray-500 hover:text-gray-900 transition">&larr; 목록으로</a>
+        <div class="flex gap-2">
+            <a href="/boards/notice" class="px-3 py-1.5 rounded-lg text-xs font-semibold <%= type === 'notice' ? 'bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' %>">공지사항</a>
+            <a href="/boards/guide" class="px-3 py-1.5 rounded-lg text-xs font-semibold <%= type === 'guide' ? 'bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' %>">상품안내</a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-8 border border-gray-100">
+        <h1 class="text-2xl font-bold text-gray-900 mb-4"><%= post.title %></h1>
+        <div class="flex justify-between text-sm text-gray-500 border-b border-gray-100 pb-4 mb-6">
+            <span><%= new Date(post.created_at).toLocaleString() %></span>
+            <span>조회 <%= post.view_count %></span>
+        </div>
+        <div class="prose max-w-none text-gray-700 leading-relaxed">
+            <%- post.content %>
+        </div>
+    </div>
+</div>

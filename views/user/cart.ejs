@@ -1,0 +1,133 @@
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div class="flex items-center gap-3 mb-6">
+        <button onclick="history.back()" class="sm:hidden flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition">
+            <i class="bi bi-chevron-left text-lg"></i>
+        </button>
+        <h1 class="text-2xl font-bold text-gray-900">장바구니</h1>
+    </div>
+
+    <% if (typeof stockError !== 'undefined' && stockError) { %>
+        <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+            <i class="bi bi-exclamation-circle mr-2"></i>재고가 부족합니다. (최대 <%= stockError %>개)
+        </div>
+    <% } %>
+
+    <% if (!items || items.length === 0) { %>
+        <div class="bg-white rounded-2xl border border-gray-200 p-10 text-center text-gray-500">
+            <i class="bi bi-bag text-4xl mb-3 text-gray-300"></i>
+            <p class="mb-4">장바구니에 담긴 상품이 없습니다.</p>
+            <a href="/products" class="inline-flex items-center px-5 py-2.5 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-medium hover:bg-[var(--gh-primary-dark)]">상품 보러가기</a>
+        </div>
+    <% } else { %>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Cart Items -->
+            <div class="lg:col-span-2 space-y-3">
+                <% items.forEach(item => { %>
+                    <% const detailPath = (item.slug && item.slug.trim()) ? `/products/${encodeURIComponent(item.slug)}` : `/products/view/${item.product_id}`; %>
+                    <div class="bg-white border border-gray-200 rounded-2xl p-4 flex gap-4 items-center">
+                        <a href="<%= detailPath %>" class="flex-shrink-0">
+                            <img src="<%= item.thumbnail_image || item.main_image || 'https://via.placeholder.com/80x80?text=No+Image' %>" alt="" class="w-20 h-20 rounded-xl object-cover bg-gray-100">
+                        </a>
+                        <div class="flex-1 min-w-0">
+                            <a href="<%= detailPath %>" class="block text-sm font-medium text-gray-900 truncate hover:text-[var(--gh-primary)]">
+                                <%= item.name %>
+                            </a>
+                            <p class="text-xs text-gray-500 mt-0.5 truncate"><%= item.provider || '' %></p>
+                            <div class="mt-1 flex items-center gap-2 text-xs text-gray-600">
+                                <span class="text-gray-500">수량</span>
+                                <form action="/cart/update/<%= item.cart_id %>" method="POST" class="inline-flex items-center gap-1">
+                                    <button type="submit" name="quantity" value="<%= Math.max(0, item.quantity - 1) %>"
+                                        class="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-500 hover:bg-gray-50">
+                                        <i class="bi bi-dash"></i>
+                                    </button>
+                                    <span class="px-3 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-800"><%= item.quantity %></span>
+                                    <button type="submit" name="quantity" value="<%= item.quantity + 1 %>"
+                                        class="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-500 hover:bg-gray-50">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                            <p class="text-sm font-semibold text-gray-900"><%= Number(item.price || 0).toLocaleString() %>원</p>
+                            <form action="/cart/remove/<%= item.cart_id %>" method="POST">
+                                <button type="submit" class="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1">
+                                    <i class="bi bi-x-circle"></i>
+                                    <span>삭제</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-white border border-gray-200 rounded-2xl p-5 h-fit">
+                <h2 class="text-base font-semibold text-gray-900 mb-4">주문 요약</h2>
+                <dl class="space-y-2 text-sm text-gray-700 mb-4">
+                    <div class="flex justify-between">
+                        <dt>상품 수</dt>
+                        <dd><%= totalQuantity %>개</dd>
+                    </div>
+                    <div class="flex justify-between font-semibold text-gray-900">
+                        <dt>총 결제 예상 금액</dt>
+                        <dd><%= Number(totalAmount || 0).toLocaleString() %>원</dd>
+                    </div>
+                </dl>
+                <form action="/checkout" method="GET" class="space-y-2">
+                    <input type="hidden" name="cart" value="1">
+                    <button type="submit" class="w-full py-3 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
+                        전체 상품 구매하기
+                    </button>
+                    <%- include('../partials/shopify-country-selector') %>
+                    <button type="button" id="shopifyCartBtn" onclick="shopifyGlobalCartCheckout()"
+                        class="w-full py-3 rounded-xl bg-[#5C6AC4] text-white text-sm font-semibold hover:bg-[#4959BD] flex items-center justify-center gap-2 mt-2">
+                        <i class="bi bi-globe2"></i>
+                        해외 구매하기 (Global)
+                    </button>
+                    <a href="/products" class="block w-full text-center py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+                        계속 쇼핑하기
+                    </a>
+                </form>
+
+                <script>
+                const _cartItems = [];
+                <% items.forEach(item => { %>
+                _cartItems.push({ productId: <%= item.product_id %>, quantity: <%= item.quantity %> });
+                <% }); %>
+
+                async function shopifyGlobalCartCheckout() {
+                    const btn = document.getElementById('shopifyCartBtn');
+                    if (!btn) return;
+                    const origHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 연결 중...';
+                    try {
+                        const selectEl = document.getElementById('shopify-country-select');
+                        const countryCode = (selectEl && selectEl.value) || null;
+
+                        const body = { items: _cartItems };
+                        if (countryCode) body.countryCode = countryCode;
+
+                        const resp = await fetch('/shopify/cart-from-local', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+                        const data = await resp.json();
+                        if (data.checkoutUrl) {
+                            window.location.href = data.checkoutUrl;
+                        } else {
+                            throw new Error(data.error || '알 수 없는 오류');
+                        }
+                    } catch (e) {
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
+                        alert('글로벌 체크아웃 연결 실패: ' + (e.message || '알 수 없는 오류'));
+                    }
+                }
+                </script>
+            </div>
+        </div>
+    <% } %>
+</div>

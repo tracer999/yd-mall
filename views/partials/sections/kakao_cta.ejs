@@ -1,0 +1,28 @@
+<%
+  /* 카카오채널 상담 CTA. locals: kakaoUrl (displayService가 '#'이면 섹션 자체를 제외) */
+  var _kakaoUrl = (typeof kakaoUrl !== 'undefined' && kakaoUrl) ? kakaoUrl : '#';
+%>
+<% if (_kakaoUrl !== '#') { %>
+<section class="py-12 bg-[var(--gh-secondary)]">
+  <div class="max-w-2xl mx-auto px-4 text-center">
+    <p class="text-[var(--gh-primary)] font-semibold text-sm mb-2">고객 문의</p>
+    <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-4">
+      상품 문의 & 1:1 상담
+    </h2>
+    <p class="text-gray-500 mb-8 text-sm leading-relaxed">
+      상품, 주문, 배송 등<br>무엇이든 카카오채널로 편하게 문의해 주세요.
+    </p>
+    <a href="<%= _kakaoUrl %>" target="_blank"
+       data-kakao-source="main_cta" data-kakao-label="메인 파트너십 문의"
+       class="inline-flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-[#3C1E1E] shadow-md hover:shadow-lg transition-shadow"
+       style="background-color: #FEE500;">
+      <svg width="22" height="22" viewBox="0 0 18 18" fill="none">
+        <path fill-rule="evenodd" clip-rule="evenodd"
+              d="M9 1.5C4.86 1.5 1.5 4.19 1.5 7.5c0 2.11 1.27 3.96 3.18 5.04l-.81 3.03a.3.3 0 0 0 .44.33L7.9 13.7c.36.05.72.08 1.1.08 4.14 0 7.5-2.69 7.5-6S13.14 1.5 9 1.5z"
+              fill="#3C1E1E"/>
+      </svg>
+      카카오채널로 문의하기
+    </a>
+  </div>
+</section>
+<% } %>

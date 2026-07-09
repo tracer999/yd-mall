@@ -1,0 +1,119 @@
+<%- include('./_shell_start') %>
+
+    <div class="bg-white rounded-lg shadow border border-gray-100">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            <h3 class="text-lg font-bold text-gray-800">나의 활동</h3>
+        </div>
+
+        <!-- 탭 메뉴 -->
+        <div class="flex border-b border-gray-200">
+            <button onclick="switchTab('reviews')" id="tab-btn-reviews"
+                class="flex-1 py-3 text-sm font-medium text-[var(--gh-primary)] border-b-2 border-[var(--gh-primary)] focus:outline-none transition-colors">
+                상품 리뷰 (<%= reviews.length %>)
+            </button>
+            <button onclick="switchTab('inquiries')" id="tab-btn-inquiries"
+                class="flex-1 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent focus:outline-none transition-colors">
+                1:1 문의 (<%= inquiries.length %>)
+            </button>
+        </div>
+
+        <!-- 상품 리뷰 탭 -->
+        <div id="tab-content-reviews">
+            <% if (reviews.length===0) { %>
+                <div class="p-12 text-center text-gray-500">
+                    작성한 리뷰가 없습니다.
+                </div>
+                <% } else { %>
+                    <div class="divide-y divide-gray-100">
+                        <% reviews.forEach(review=> { %>
+                            <div class="p-6 flex gap-4">
+                                <div class="w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
+                                    <% if (review.thumbnail_image) { %>
+                                        <img src="<%= review.thumbnail_image %>" alt="<%= review.product_name %>"
+                                            class="w-full h-full object-cover">
+                                        <% } else { %>
+                                            <div
+                                                class="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                                                No Image</div>
+                                            <% } %>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <h4 class="font-medium text-gray-900">
+                                            <a href="/products/<%= review.slug || review.product_id %>"
+                                                class="hover:text-[var(--gh-primary)]">
+                                                <%= review.product_name %>
+                                            </a>
+                                        </h4>
+                                        <span class="text-xs text-gray-400">
+                                            <%= new Date(review.created_at).toLocaleDateString() %>
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center mb-2">
+                                        <span class="text-yellow-400 text-sm mr-1">
+                                            <%= '★' .repeat(review.rating) %>
+                                                <%= '☆' .repeat(5 - review.rating) %>
+                                        </span>
+                                    </div>
+                                    <p class="text-gray-600 text-sm whitespace-pre-line">
+                                        <%= review.content %>
+                                    </p>
+                                </div>
+                            </div>
+                            <% }) %>
+                    </div>
+                    <% } %>
+        </div>
+
+        <!-- 1:1 문의 탭 -->
+        <div id="tab-content-inquiries" class="hidden">
+            <% if (inquiries.length===0) { %>
+                <div class="p-12 text-center text-gray-500">
+                    작성한 문의가 없습니다.
+                </div>
+                <% } else { %>
+                    <div class="divide-y divide-gray-100">
+                        <% inquiries.forEach(inquiry=> { %>
+                            <div class="p-6 hover:bg-gray-50 transition cursor-pointer"
+                                onclick="location.href='/inquiries/<%= inquiry.id %>'">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span
+                                        class="text-xs font-semibold px-2 py-1 rounded <%= inquiry.answer ? 'bg-[var(--gh-primary-soft)] text-[var(--gh-primary-dark)]' : 'bg-gray-100 text-gray-600' %>">
+                                        <%= inquiry.answer ? '답변완료' : '답변대기' %>
+                                    </span>
+                                    <span class="text-xs text-gray-400">
+                                        <%= new Date(inquiry.created_at).toLocaleDateString() %>
+                                    </span>
+                                </div>
+                                <h4 class="font-medium text-gray-900 mb-1">
+                                    <%= inquiry.title %>
+                                </h4>
+                                <p class="text-gray-600 text-sm truncate">
+                                    <%= inquiry.content %>
+                                </p>
+                            </div>
+                            <% }) %>
+                    </div>
+                    <% } %>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            // 모든 탭 컨텐츠 숨기기
+            document.getElementById('tab-content-reviews').classList.add('hidden');
+            document.getElementById('tab-content-inquiries').classList.add('hidden');
+
+            // 모든 탭 버튼 스타일 초기화 (비활성 상태)
+            const inactiveClass = 'text-gray-500 hover:text-gray-700 border-transparent';
+            const activeClass = 'text-[var(--gh-primary)] border-[var(--gh-primary)]';
+
+            document.getElementById('tab-btn-reviews').className = `flex-1 py-3 text-sm font-medium border-b-2 focus:outline-none transition-colors ${inactiveClass}`;
+            document.getElementById('tab-btn-inquiries').className = `flex-1 py-3 text-sm font-medium border-b-2 focus:outline-none transition-colors ${inactiveClass}`;
+
+            // 선택된 탭 보이기 및 버튼 스타일 활성화
+            document.getElementById('tab-content-' + tabName).classList.remove('hidden');
+            document.getElementById('tab-btn-' + tabName).className = `flex-1 py-3 text-sm font-medium border-b-2 focus:outline-none transition-colors ${activeClass}`;
+        }
+    </script>
+    <%- include('./_shell_end') %>

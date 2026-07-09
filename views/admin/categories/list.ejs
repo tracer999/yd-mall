@@ -1,0 +1,394 @@
+﻿<div class="mb-6 flex justify-between items-center">
+    <div>
+        <p class="text-sm text-gray-500">상품, 테마, 브랜드 카테고리를 관리합니다.</p>
+    </div>
+    <button onclick="openModal()"
+        class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 gap-2 whitespace-nowrap">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd"
+                d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                clip-rule="evenodd" />
+        </svg>
+        카테고리 등록
+    </button>
+</div>
+
+<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">
+    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <button onclick="switchTab('product')" id="tab-product" type="button"
+            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500">
+            상품 카테고리
+        </button>
+        <button onclick="switchTab('theme')" id="tab-theme" type="button"
+            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500">
+            테마 카테고리
+        </button>
+        <button onclick="switchTab('brand')" id="tab-brand" type="button"
+            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500">
+            브랜드 카테고리
+        </button>
+    </nav>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div id="content-product" class="p-6">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                            순서</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">카테고리명
+                        </th>
+                        <th
+                            class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                            관리</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <% (productCategories || []).forEach(category=> { %>
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <form action="/admin/categories/edit" method="POST" class="flex items-center gap-2">
+                                    <input type="hidden" name="id" value="<%= category.id %>">
+                                    <input type="hidden" name="type" value="NORMAL">
+                                    <input type="hidden" name="active_tab" value="product">
+                                    <input type="number" name="display_order" class="w-20"
+                                        value="<%= category.display_order %>">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <input type="text" name="name" value="<%= category.name %>">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex justify-end gap-2">
+                                    <button type="submit"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</button>
+                                    <button type="button"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                                        onclick="deleteCategory('<%= category.id %>')">삭제</button>
+                                </div>
+                                </form>
+                            </td>
+                        </tr>
+                        <% }) %>
+                            <% if(!productCategories || productCategories.length===0) { %>
+                                <tr>
+                                    <td colspan="3" class="px-6 py-10 text-center text-gray-500">등록된 상품 카테고리가 없습니다.</td>
+                                </tr>
+                                <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="content-theme" class="p-6 hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                            순서</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">테마명
+                        </th>
+                        <th
+                            class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                            관리</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <% (themeCategories || []).forEach(category=> { %>
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <form action="/admin/categories/edit" method="POST" class="flex items-center gap-2">
+                                    <input type="hidden" name="id" value="<%= category.id %>">
+                                    <input type="hidden" name="type" value="THEME">
+                                    <input type="hidden" name="active_tab" value="theme">
+                                    <input type="number" name="display_order" class="w-20"
+                                        value="<%= category.display_order %>">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <input type="text" name="name" value="<%= category.name %>">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex justify-end gap-2">
+                                    <button type="submit"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</button>
+                                    <button type="button"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                                        onclick="deleteCategory('<%= category.id %>')">삭제</button>
+                                </div>
+                                </form>
+                            </td>
+                        </tr>
+                        <% }) %>
+                            <% if(!themeCategories || themeCategories.length===0) { %>
+                                <tr>
+                                    <td colspan="3" class="px-6 py-10 text-center text-gray-500">등록된 테마 카테고리가 없습니다.</td>
+                                </tr>
+                                <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="content-brand" class="p-6 hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                            순서</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                            로고</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">브랜드명
+                        </th>
+                        <th
+                            class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                            관리</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <% (brandCategories || []).forEach(category=> { %>
+                        <tr class="align-middle">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <form id="brand-form-<%= category.id %>" action="/admin/categories/edit" method="POST"
+                                    enctype="multipart/form-data">
+                                    <input type="hidden" name="id" value="<%= category.id %>">
+                                    <input type="hidden" name="type" value="BRAND">
+                                    <input type="hidden" name="active_tab" value="brand">
+                                    <input type="hidden" name="existing_logo"
+                                        value="<%= category.logo_image_path || '' %>">
+                                </form>
+                                <input form="brand-form-<%= category.id %>" type="number" name="display_order"
+                                    class="w-20" value="<%= category.display_order %>">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center gap-2">
+                                    <div id="preview-container-<%= category.id %>"
+                                        class="h-10 w-20 flex-shrink-0 relative overflow-hidden rounded border bg-gray-50 flex items-center justify-center">
+                                        <% if (category.logo_image_path) { %>
+                                            <img src="<%= category.logo_image_path %>" alt="Logo"
+                                                class="max-h-full max-w-full object-contain">
+                                            <% } else { %>
+                                                <div
+                                                    class="text-gray-400 text-[10px] bg-gray-100 text-center w-full h-full flex items-center justify-center border-dashed border border-gray-300">
+                                                    NO LOGO</div>
+                                                <% } %>
+                                    </div>
+                                    <input form="brand-form-<%= category.id %>" type="file" name="logo_image"
+                                        accept="image/jpeg, image/png, image/webp"
+                                        class="brand-logo-upload-btn block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                                        data-id="<%= category.id %>">
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <input form="brand-form-<%= category.id %>" type="text" name="name"
+                                    value="<%= category.name %>">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex justify-end gap-2">
+                                    <button form="brand-form-<%= category.id %>" type="submit"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</button>
+                                    <button type="button"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                                        onclick="deleteCategory('<%= category.id %>')">삭제</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <% }) %>
+                            <% if(!brandCategories || brandCategories.length===0) { %>
+                                <tr>
+                                    <td colspan="4" class="px-6 py-10 text-center text-gray-500">등록된 브랜드 카테고리가 없습니다.
+                                    </td>
+                                </tr>
+                                <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="addModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog"
+    aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-black/35 backdrop-blur-[1px] transition-opacity z-40" aria-hidden="true"
+            onclick="closeModal()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div
+            class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-50">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">카테고리 등록</h3>
+                        <div class="mt-2">
+                            <form id="addForm" action="/admin/categories/add" method="POST"
+                                enctype="multipart/form-data">
+                                <input type="hidden" name="type" id="modal-type-input" value="NORMAL">
+                                <input type="hidden" name="active_tab" id="modal-active-tab-input" value="product">
+                                <div class="mb-4">
+                                    <label class="block mb-2 text-sm font-medium text-gray-900">카테고리명</label>
+                                    <input type="text" name="name" required class="w-full">
+                                </div>
+                                <div class="mb-4 hidden" id="logoUploadField">
+                                    <label class="block mb-2 text-sm font-medium text-gray-900">브랜드 로고 파일 업로드</label>
+                                    <p class="text-xs text-gray-500 mb-2">가로형 권장, 배경 투명 PNG 권장, 최대 2MB 등록 가능</p>
+                                    <div id="modal-preview-container"
+                                        class="h-16 w-32 mb-2 hidden overflow-hidden rounded border bg-gray-50 items-center justify-center">
+                                        <img id="modal-preview-image" src="" alt="Preview"
+                                            class="max-h-full max-w-full object-contain">
+                                    </div>
+                                    <input type="file" name="logo_image" id="modal-logo-upload"
+                                        accept="image/jpeg, image/png, image/webp"
+                                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block mb-2 text-sm font-medium text-gray-900">출력 순서</label>
+                                    <input type="number" name="display_order" id="modal-display-order"
+                                        value="<%= nextDisplayOrder ? nextDisplayOrder.NORMAL : 0 %>" class="w-full">
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="document.getElementById('addForm').submit()"
+                    class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 sm:ml-3 sm:w-auto w-full sm:min-w-0">등록</button>
+                <button type="button" onclick="closeModal()"
+                    class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 mt-3 sm:mt-0 sm:ml-3 w-full sm:w-auto sm:min-w-0">취소</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="deleteForm" action="/admin/categories/delete" method="POST" style="display:none;">
+    <input type="hidden" name="id" id="deleteId">
+    <input type="hidden" name="active_tab" id="deleteActiveTab">
+</form>
+
+<script>
+    let currentTab = '<%- activeTab || "product" %>';
+    const nextDisplayOrderByType = JSON.parse('<%- JSON.stringify(nextDisplayOrder || { NORMAL: 0, THEME: 0, BRAND: 0 }) %>');
+
+    const tabActiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
+    const tabInactiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
+
+    function updateModalDisplayOrder() {
+        const displayOrderInput = document.getElementById('modal-display-order');
+        if (!displayOrderInput) return;
+        const typeMap = { product: 'NORMAL', theme: 'THEME', brand: 'BRAND' };
+        const selectedType = typeMap[currentTab] || 'NORMAL';
+        displayOrderInput.value = nextDisplayOrderByType[selectedType] ?? 0;
+    }
+
+    function switchTab(tab) {
+        currentTab = tab;
+        const productBtn = document.getElementById('tab-product');
+        const themeBtn = document.getElementById('tab-theme');
+        const brandBtn = document.getElementById('tab-brand');
+        const productContent = document.getElementById('content-product');
+        const themeContent = document.getElementById('content-theme');
+        const brandContent = document.getElementById('content-brand');
+
+        productContent.classList.add('hidden');
+        themeContent.classList.add('hidden');
+        brandContent.classList.add('hidden');
+
+        if (tab === 'product') {
+            productBtn.className = tabActiveClass;
+            themeBtn.className = tabInactiveClass;
+            brandBtn.className = tabInactiveClass;
+            productContent.classList.remove('hidden');
+        } else if (tab === 'theme') {
+            themeBtn.className = tabActiveClass;
+            productBtn.className = tabInactiveClass;
+            brandBtn.className = tabInactiveClass;
+            themeContent.classList.remove('hidden');
+        } else {
+            brandBtn.className = tabActiveClass;
+            productBtn.className = tabInactiveClass;
+            themeBtn.className = tabInactiveClass;
+            brandContent.classList.remove('hidden');
+        }
+    }
+
+    function openModal() {
+        const typeMap = { product: 'NORMAL', theme: 'THEME', brand: 'BRAND' };
+        document.getElementById('modal-type-input').value = typeMap[currentTab] || 'NORMAL';
+        document.getElementById('modal-active-tab-input').value = currentTab;
+
+        // 브래드 탭일 때만 로고 업로드 필드 표시
+        const logoUploadField = document.getElementById('logoUploadField');
+        if (currentTab === 'brand') {
+            logoUploadField.classList.remove('hidden');
+        } else {
+            logoUploadField.classList.add('hidden');
+        }
+
+        updateModalDisplayOrder();
+        document.getElementById('addModal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        document.getElementById('addModal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    function deleteCategory(id) {
+        if (confirm('정말 삭제하시겠습니까?')) {
+            document.getElementById('deleteId').value = id;
+            document.getElementById('deleteActiveTab').value = currentTab;
+            document.getElementById('deleteForm').submit();
+        }
+    }
+
+    switchTab(currentTab);
+
+    // 브랜드 로고 리스트 내 미리보기 처리
+    document.querySelectorAll('.brand-logo-upload-btn').forEach(input => {
+        input.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            const categoryId = this.getAttribute('data-id');
+            const previewContainer = document.getElementById('preview-container-' + categoryId);
+
+            if (file) {
+                // 용량 체크 추가 가능 (ex: file.size > 2 * 1024 * 1024)
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    previewContainer.innerHTML = '<img src="' + e.target.result + '" class="max-h-full max-w-full object-contain">';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // 사용자가 파일 선택을 취소한 경우, 기존 요소가 어땠는지 기록해둘 순 없으나 기본 NO LOGO로 덮어쓰거나 냅두는 방향
+                // 리로드가 편하므로 여기선 기본 NO LOGO 노출
+                previewContainer.innerHTML = '<div class="text-gray-400 text-[10px] bg-gray-100 text-center w-full h-full flex items-center justify-center border-dashed border border-gray-300">NO LOGO</div>';
+            }
+        });
+    });
+
+    // 등록 모달 내 미리보기 처리
+    const modalLogoUpload = document.getElementById('modal-logo-upload');
+    const modalPreviewContainer = document.getElementById('modal-preview-container');
+    const modalPreviewImage = document.getElementById('modal-preview-image');
+
+    if (modalLogoUpload) {
+        modalLogoUpload.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    modalPreviewImage.src = e.target.result;
+                    modalPreviewContainer.classList.remove('hidden');
+                    modalPreviewContainer.classList.add('flex');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                modalPreviewImage.src = '';
+                modalPreviewContainer.classList.add('hidden');
+                modalPreviewContainer.classList.remove('flex');
+            }
+        });
+    }
+
+</script>

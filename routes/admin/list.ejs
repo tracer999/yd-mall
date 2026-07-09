@@ -1,0 +1,170 @@
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">주문 관리</h1>
+    </div>
+
+    <!-- 검색 필터 -->
+    <div class="bg-white rounded-xl shadow p-4 mb-6">
+        <form action="/admin/orders" method="GET" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-1">주문 상태</label>
+                <select name="status" class="border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">전체</option>
+                    <% const filterStatuses = ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED']; %>
+                    <% const filterLabels = { 'PENDING': '입금대기', 'PAID': '결제완료', 'PREPARING': '배송준비', 'SHIPPED': '배송중', 'DELIVERED': '배송완료', 'CANCELLED': '취소', 'REFUNDED': '환불' }; %>
+                    <% filterStatuses.forEach(st => { %>
+                        <option value="<%= st %>" <%= (typeof status !== 'undefined' && status === st) ? 'selected' : '' %>><%= filterLabels[st] %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="block text-xs font-bold text-gray-700 mb-1">검색어 (주문번호/주문자/수령인)</label>
+                <input type="text" name="keyword" value="<%= typeof keyword !== 'undefined' ? keyword : '' %>" class="w-full border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="검색어를 입력하세요">
+            </div>
+            <button type="submit" class="bg-gray-800 text-white px-4 py-2 rounded text-sm hover:bg-gray-900 transition">검색</button>
+            <a href="/admin/orders" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300 transition">초기화</a>
+            <%
+                let downloadParams = [];
+                if (typeof status !== 'undefined' && status) downloadParams.push(`status=${status}`);
+                if (typeof keyword !== 'undefined' && keyword) downloadParams.push(`keyword=${encodeURIComponent(keyword)}`);
+                if (typeof user_id !== 'undefined' && user_id) downloadParams.push(`user_id=${user_id}`);
+                const downloadQuery = downloadParams.length > 0 ? '?' + downloadParams.join('&') : '';
+            %>
+            <a href="/admin/orders/download<%= downloadQuery %>" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition ml-auto">엑셀 다운로드</a>
+        </form>
+    </div>
+
+    <!-- 일괄 처리 툴바 -->
+    <div class="flex items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <span class="text-sm font-bold text-gray-700">선택한 주문:</span>
+        <select id="bulkStatusSelect" class="border-gray-300 rounded text-sm py-1 px-2 focus:ring-blue-500 focus:border-blue-500">
+            <option value="SHIPPED">배송중</option>
+            <option value="DELIVERED">배송완료</option>
+            <option value="PREPARING">배송준비</option>
+            <option value="PAID">결제완료</option>
+        </select>
+        <button type="button" onclick="submitBulkUpdate()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition">일괄 변경</button>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="w-full text-sm text-left">
+            <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                <tr>
+                    <th class="px-6 py-3 w-4"><input type="checkbox" id="selectAll" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"></th>
+                    <th class="px-6 py-3">주문번호 / 일시</th>
+                    <th class="px-6 py-3">주문자 정보</th>
+                    <th class="px-6 py-3">결제금액</th>
+                    <th class="px-6 py-3">상태 변경</th>
+                    <th class="px-6 py-3">관리</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <% if (orders.length === 0) { %>
+                    <tr>
+                        <td colspan="4" class="px-6 py-8 text-center text-gray-500">주문 내역이 없습니다.</td>
+                    </tr>
+                <% } %>
+                <% orders.forEach(order => { %>
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4">
+                            <input type="checkbox" name="order_ids" value="<%= order.id %>" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="font-bold text-gray-800"><%= order.order_number %></div>
+                            <div class="text-xs text-gray-500"><%= new Date(order.created_at).toLocaleString() %></div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="font-medium"><%= order.buyer_name || order.receiver_name %></div>
+                            <div class="text-xs text-gray-500"><%= order.buyer_email || order.user_email || '-' %></div>
+                            <div class="text-xs text-gray-500"><%= order.buyer_phone || order.receiver_phone %></div>
+                        </td>
+                        <td class="px-6 py-4 font-bold text-gray-800">
+                            <%= Number(order.total_amount).toLocaleString() %>원
+                        </td>
+                        <td class="px-6 py-4">
+                            <form action="/admin/orders/<%= order.id %>/status" method="POST" class="flex items-center gap-2">
+                                <select name="status" class="border-gray-300 rounded text-xs py-1 px-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <% const statuses = ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED']; %>
+                                    <% const statusLabels = { 'PENDING': '입금대기', 'PAID': '결제완료', 'PREPARING': '배송준비', 'SHIPPED': '배송중', 'DELIVERED': '배송완료', 'CANCELLED': '취소', 'REFUNDED': '환불' }; %>
+                                    <% statuses.forEach(st => { %>
+                                        <option value="<%= st %>" <%= order.status === st ? 'selected' : '' %>>
+                                            <%= statusLabels[st] || st %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                                <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 transition">
+                                    변경
+                                </button>
+                            </form>
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="/admin/orders/<%= order.id %>" class="text-blue-600 hover:underline text-xs font-medium">상세보기</a>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <% if (totalPages > 1) { %>
+        <%
+            let queryParams = [];
+            if (typeof status !== 'undefined' && status) queryParams.push(`status=${status}`);
+            if (typeof keyword !== 'undefined' && keyword) queryParams.push(`keyword=${encodeURIComponent(keyword)}`);
+            if (typeof user_id !== 'undefined' && user_id) queryParams.push(`user_id=${user_id}`);
+            const queryString = queryParams.length > 0 ? '&' + queryParams.join('&') : '';
+        %>
+        <div class="flex justify-center mt-6 gap-1">
+            <% for(let i = 1; i <= totalPages; i++) { %>
+                <a href="?page=<%= i %><%= queryString %>" 
+                   class="px-3 py-1 rounded text-sm <%= currentPage === i ? 'bg-blue-600 text-white' : 'bg-white border text-gray-600 hover:bg-gray-50' %>">
+                    <%= i %>
+                </a>
+            <% } %>
+        </div>
+    <% } %>
+</div>
+
+<script>
+    // 전체 선택/해제
+    document.getElementById('selectAll').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('input[name="order_ids"]');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+    });
+
+    // 일괄 변경 제출
+    function submitBulkUpdate() {
+        const selected = Array.from(document.querySelectorAll('input[name="order_ids"]:checked')).map(cb => cb.value);
+        if (selected.length === 0) {
+            alert('선택된 주문이 없습니다.');
+            return;
+        }
+
+        const status = document.getElementById('bulkStatusSelect').value;
+        if (!confirm(`선택한 ${selected.length}건의 주문 상태를 변경하시겠습니까?`)) {
+            return;
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/orders/bulk-status';
+
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'status';
+        statusInput.value = status;
+        form.appendChild(statusInput);
+
+        selected.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'order_ids';
+            input.value = id;
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+</script>

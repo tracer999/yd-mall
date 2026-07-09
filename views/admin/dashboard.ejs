@@ -1,0 +1,674 @@
+<%
+    const bm = businessMetrics;
+    const tm = trafficMetrics;
+    const tc = trendChart;
+    const db = deviceBreakdown;
+
+    // 체류시간 포맷 (초 → m:ss)
+    function fmtDur(sec) {
+        if (!sec || sec <= 0) return '0:00';
+        const m = Math.floor(sec / 60);
+        const s = Math.round(sec % 60);
+        return m + ':' + String(s).padStart(2, '0');
+    }
+    // 퍼센트 계산
+    function pct(part, total) {
+        if (!total) return 0;
+        return Math.round((part / total) * 100);
+    }
+%>
+
+<!-- ① 운영 현황 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">① 운영 현황 — 비즈니스 지표</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- 회원 수 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1">회원 수</div>
+            <div class="text-2xl font-semibold text-gray-900"><%= bm.userTotal.toLocaleString() %></div>
+            <div class="text-xs text-gray-500 mt-1">
+                총 누적
+                <% if (bm.userTodayNew > 0) { %>
+                    <span class="text-blue-600 font-medium ml-1">당일 신규 +<%= bm.userTodayNew %></span>
+                <% } %>
+            </div>
+        </div>
+        <!-- 총 상품 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1">총 상품</div>
+            <div class="text-2xl font-semibold text-gray-900"><%= bm.productTotal.toLocaleString() %></div>
+            <div class="text-xs text-gray-500 mt-1">
+                총 등록
+                <% if (bm.productTodayNew > 0) { %>
+                    <span class="text-green-600 font-medium ml-1">신규 +<%= bm.productTodayNew %></span>
+                <% } %>
+            </div>
+        </div>
+        <!-- 새 문의 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1 flex items-center gap-2">
+                새 문의
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700">미답변 <%= bm.inquiryUnanswered %></span>
+            </div>
+            <div class="text-2xl font-semibold <%= bm.inquiryTodayNew > 0 ? 'text-gray-900' : 'text-gray-400' %>"><%= bm.inquiryTodayNew %></div>
+            <div class="text-xs text-gray-500 mt-1">오늘 접수</div>
+        </div>
+        <!-- 당일 신규 가입 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1">당일 신규 가입</div>
+            <div class="text-2xl font-semibold text-blue-600"><%= bm.todaySignups %></div>
+            <div class="text-xs text-gray-500 mt-1">
+                방문 대비
+                <span class="text-blue-600 font-medium ml-1">전환율 <%= bm.conversionRate %>%</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ② 트래픽 지표 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">② 방문 & 행동 — 트래픽 지표</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- UV -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1">UV (총 방문자)</div>
+            <div class="text-2xl font-semibold text-gray-900"><%= tm.uv.toLocaleString() %></div>
+            <div class="flex gap-2 text-xs mt-1">
+                <span class="text-blue-600">신규 <%= tm.uv > 0 ? pct(tm.newVisitors, tm.uv) : 0 %>%</span>
+                <span class="text-green-600">재방문 <%= tm.uv > 0 ? pct(tm.returningVisitors, tm.uv) : 0 %>%</span>
+            </div>
+        </div>
+        <!-- PV -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1">PV (페이지뷰)</div>
+            <div class="text-2xl font-semibold text-gray-900"><%= tm.pv.toLocaleString() %></div>
+            <div class="text-xs text-gray-500 mt-1">UV당 <span class="font-medium text-gray-900"><%= tm.pvPerUv %> 페이지</span></div>
+        </div>
+        <!-- 평균 체류 시간 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1">평균 체류 시간</div>
+            <div class="text-2xl font-semibold text-gray-900"><%= fmtDur(tm.avgDuration) %></div>
+            <div class="text-xs text-gray-500 mt-1">
+                어제 대비
+                <% if (tm.avgDurationDelta > 0) { %>
+                    <span class="text-green-600 font-medium ml-1">▲ <%= fmtDur(Math.abs(tm.avgDurationDelta)) %></span>
+                <% } else if (tm.avgDurationDelta < 0) { %>
+                    <span class="text-red-500 font-medium ml-1">▼ <%= fmtDur(Math.abs(tm.avgDurationDelta)) %></span>
+                <% } else { %>
+                    <span class="text-gray-400 ml-1">변동 없음</span>
+                <% } %>
+            </div>
+        </div>
+        <!-- 이탈률 -->
+        <% const bounceOver = tm.bounceRate > 50; %>
+        <div class="bg-white rounded-xl border p-4 <%= bounceOver ? 'border-yellow-400' : 'border-gray-200' %>">
+            <div class="text-xs text-gray-500 mb-1 flex items-center gap-2">
+                이탈률
+                <% if (bounceOver) { %>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-yellow-50 text-yellow-700">높음</span>
+                <% } %>
+            </div>
+            <div class="text-2xl font-semibold <%= bounceOver ? 'text-yellow-600' : 'text-gray-900' %>"><%= tm.bounceRate %>%</div>
+            <div class="text-xs text-gray-500 mt-1">
+                <% if (tm.bounceRate <= 35) { %>
+                    <span class="text-green-600">양호</span>
+                <% } else if (tm.bounceRate <= 50) { %>
+                    <span class="text-gray-500">보통</span>
+                <% } else { %>
+                    <span class="text-red-500">개선 필요</span>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ③ 주문 현황 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">③ 주문 현황</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <% orderStats.forEach(stat => { %>
+            <a href="/admin/sales?status=<%= stat.status %>"
+                class="flex flex-col items-center rounded-xl border border-gray-200 bg-white p-4 hover:border-blue-300 hover:shadow-md transition-colors">
+                <span class="text-xl font-semibold
+                    <%= stat.status === 'PAID' ? 'text-blue-600' :
+                        stat.status === 'PREPARING' ? 'text-green-600' :
+                        stat.status === 'SHIPPED' ? 'text-yellow-500' :
+                        stat.status === 'CANCELLED' ? 'text-gray-400' : 'text-gray-900' %>
+                "><%= stat.count %></span>
+                <span class="text-xs text-gray-500 mt-1"><%= stat.label %></span>
+            </a>
+        <% }); %>
+    </div>
+</div>
+
+<!-- ④ 방문·가입 추이 + 디바이스 비중 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">④ 방문 & 가입 추이 / 디바이스 비중</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- 추이 차트 -->
+        <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <span class="text-sm font-medium text-gray-800">방문 · 가입 추이</span>
+                <div class="inline-flex items-center border border-gray-300 rounded-lg overflow-hidden text-xs">
+                    <a href="?chart_period=7d&search_range=<%= searchStatsRange.value %>"
+                       class="px-3 py-1 <%= chartPeriod === '7d' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50' %>">7일</a>
+                    <a href="?chart_period=30d&search_range=<%= searchStatsRange.value %>"
+                       class="px-3 py-1 <%= chartPeriod === '30d' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50' %>">30일</a>
+                    <a href="?chart_period=90d&search_range=<%= searchStatsRange.value %>"
+                       class="px-3 py-1 <%= chartPeriod === '90d' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50' %>">90일</a>
+                </div>
+            </div>
+            <div style="height:200px;">
+                <canvas id="trendChart"></canvas>
+            </div>
+            <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span>PV</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>UV</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-yellow-500"></span>신규가입 (×10)</span>
+            </div>
+        </div>
+        <!-- 디바이스 도넛 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
+                디바이스 비중
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700">오늘</span>
+            </div>
+            <div class="flex justify-center mb-3" style="height:120px;">
+                <canvas id="deviceChart"></canvas>
+            </div>
+            <hr class="border-gray-100 mb-3">
+            <div class="flex flex-col gap-2 text-xs">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    PC <strong class="text-gray-900 ml-auto text-sm"><%= db.total > 0 ? pct(db.desktop, db.total) : 0 %>%</strong>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    모바일 <strong class="text-gray-900 ml-auto text-sm"><%= db.total > 0 ? pct(db.mobile, db.total) : 0 %>%</strong>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    태블릿 <strong class="text-gray-900 ml-auto text-sm"><%= db.total > 0 ? pct(db.tablet, db.total) : 0 %>%</strong>
+                </div>
+            </div>
+            <% if (db.total > 0) { %>
+                <div class="mt-3 bg-gray-50 rounded-lg p-2 text-[10px] text-gray-500 border-l-2 border-blue-400">
+                    <% if (pct(db.desktop, db.total) >= 60) { %>
+                        PC 60%+ 정상. 모바일 급증 시 UX 점검.
+                    <% } else if (pct(db.mobile, db.total) >= 60) { %>
+                        모바일 트래픽 높음. 모바일 UX 최적화 필수.
+                    <% } else { %>
+                        PC/모바일 균등 분포.
+                    <% } %>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<!-- ⑤ 유입 매체 & 외부 검색 키워드 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">⑤ 유입 매체 & 외부 검색 키워드</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- 유입 매체 TOP 10 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-sm font-medium text-gray-800 mb-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    유입 매체 TOP 10
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-yellow-50 text-yellow-700">30일</span>
+                </div>
+                <a href="/admin/traffic-sources" class="text-xs text-gray-500 hover:text-gray-800 border-b border-gray-300 no-underline">상세보기 →</a>
+            </div>
+            <% if (topReferers.length > 0) { %>
+                <% const maxRef = topReferers[0].count; %>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                    <% topReferers.forEach((ref, idx) => { %>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-medium text-gray-400 w-3 text-right"><%= idx + 1 %></span>
+                            <span class="text-xs text-gray-600 w-20 truncate" title="<%= ref.host %>"><%= ref.label %></span>
+                            <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full <%= idx < 3 ? 'bg-blue-500' : idx < 6 ? 'bg-yellow-500' : 'bg-gray-400' %>"
+                                     style="width:<%= Math.max(3, Math.round(ref.count / maxRef * 100)) %>%"></div>
+                            </div>
+                            <span class="text-[10px] text-gray-500 w-8 text-right"><%= ref.count %></span>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <p class="text-sm text-gray-400 py-4 text-center">아직 유입 데이터가 없습니다.</p>
+            <% } %>
+        </div>
+        <!-- 외부 유입 키워드 TOP 10 -->
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
+                외부 유입 검색 키워드 TOP 10
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700">검색엔진 기준</span>
+            </div>
+            <% if (externalKeywords.length > 0) { %>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                    <% externalKeywords.forEach((kw, idx) => { %>
+                        <div class="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-b-0">
+                            <span class="text-[10px] font-medium text-gray-400 w-3 text-right"><%= idx + 1 %></span>
+                            <span class="flex-1 text-xs text-gray-800 truncate"><%= kw.keyword %></span>
+                            <span class="text-[10px] text-gray-500"><%= kw.count %>회</span>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <p class="text-sm text-gray-400 py-4 text-center">검색엔진 유입 키워드가 없습니다.</p>
+            <% } %>
+            <div class="mt-3 bg-gray-50 rounded-lg p-2 text-[10px] text-gray-500 border-l-2 border-blue-400">
+                0건 표시 = 유입은 됐으나 관련 상품 없음 → 상품 등록 또는 SEO 보완 우선 검토
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ⑥ 사이트 내 검색통계 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">⑥ 사이트 내 검색통계 — 고객이 검색창에 입력한 키워드</h3>
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center flex-wrap gap-2">
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-medium text-gray-700">사이트 내 검색통계</span>
+                <span class="text-xs text-gray-500">기간</span>
+                <div class="inline-flex items-center border border-gray-300 rounded-lg overflow-hidden text-xs">
+                    <a href="?search_range=24h&chart_period=<%= chartPeriod %>"
+                       class="px-2.5 py-1 <%= searchStatsRange.value === '24h' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50' %>">24시간</a>
+                    <a href="?search_range=7d&chart_period=<%= chartPeriod %>"
+                       class="px-2.5 py-1 <%= searchStatsRange.value === '7d' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50' %>">7일</a>
+                    <a href="?search_range=30d&chart_period=<%= chartPeriod %>"
+                       class="px-2.5 py-1 <%= searchStatsRange.value === '30d' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50' %>">30일</a>
+                </div>
+            </div>
+            <a href="/admin/search-logs"
+               class="text-xs text-gray-500 hover:text-gray-800 border-b border-gray-300">상세 이력 보기 →</a>
+        </div>
+        <div class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 인기 검색어 TOP 10 -->
+            <div>
+                <h4 class="text-xs font-medium text-gray-600 mb-2"><%= searchStatsRange.label %> 인기 검색어 TOP 10</h4>
+                <% if (topSearchKeywords && topSearchKeywords.length > 0) { %>
+                    <% topSearchKeywords.forEach((item, idx) => { %>
+                        <div class="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-b-0">
+                            <span class="text-[10px] font-medium text-gray-400 w-3 text-right"><%= idx + 1 %></span>
+                            <span class="flex-1 text-xs text-gray-800 truncate" title="<%= item.keyword %>"><%= item.keyword %></span>
+                            <span class="text-[10px] text-gray-500"><%= item.search_count %>회</span>
+                            <% if (item.zero_result_count > 0) { %>
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-yellow-50 text-yellow-700">0건</span>
+                            <% } %>
+                        </div>
+                    <% }); %>
+                <% } else { %>
+                    <p class="text-sm text-gray-400 py-4"><%= searchStatsRange.label %> 내 검색 로그가 없습니다.</p>
+                <% } %>
+            </div>
+            <!-- 결과 0건 검색어 + 조치 필요 -->
+            <div>
+                <h4 class="text-xs font-medium text-gray-600 mb-2">결과 0건 검색어</h4>
+                <% if (zeroResultKeywords && zeroResultKeywords.length > 0) { %>
+                    <% zeroResultKeywords.forEach((item, idx) => { %>
+                        <div class="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-b-0">
+                            <span class="text-[10px] font-medium text-gray-400 w-3 text-right"><%= idx + 1 %></span>
+                            <span class="flex-1 text-xs text-gray-800 truncate" title="<%= item.keyword %>"><%= item.keyword %></span>
+                            <span class="text-[10px] text-gray-500"><%= item.search_count %>회</span>
+                        </div>
+                    <% }); %>
+                <% } else { %>
+                    <p class="text-sm text-gray-400 py-4">결과 0건 검색어가 없습니다.</p>
+                <% } %>
+                <% if (zeroResultKeywords && zeroResultKeywords.length > 0) { %>
+                    <div class="mt-3 bg-gray-50 rounded-lg p-3">
+                        <div class="text-xs font-medium text-gray-800 mb-2">조치 필요 항목</div>
+                        <div class="text-[10px] text-gray-500 leading-relaxed space-y-1">
+                            <% zeroResultKeywords.slice(0, 3).forEach(item => { %>
+                                <div>🔸 <strong class="text-gray-800"><%= item.keyword %></strong> — 검색 <%= item.search_count %>회, 결과 0건. 상품 등록 또는 유사 상품 연결 검토</div>
+                            <% }); %>
+                        </div>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ⑦ 인기 상품 TOP 10 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">⑦ 인기 상품 TOP 10 — 상품 상세 PV 기준</h3>
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <div class="text-sm font-medium text-gray-800 mb-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                인기 상품 TOP 10
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700">PV × 카톡문의 병기</span>
+            </div>
+            <a href="/admin/popular-products" class="text-xs text-gray-500 hover:text-gray-800 border-b border-gray-300 no-underline">상세보기 →</a>
+        </div>
+        <% if (popularProducts.length > 0) { %>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6">
+                <% [0, 5].forEach(startIdx => { %>
+                    <div>
+                        <!-- 헤더 -->
+                        <div class="flex items-center gap-2 py-1 text-[10px] text-gray-400">
+                            <span class="w-3 text-right">#</span>
+                            <span class="flex-1">상품명</span>
+                            <span class="w-10 text-right">PV</span>
+                            <span class="w-10 text-right">문의</span>
+                        </div>
+                        <% popularProducts.slice(startIdx, startIdx + 5).forEach((p, i) => { %>
+                            <div class="flex items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
+                                <span class="text-[10px] font-medium text-gray-400 w-3 text-right"><%= startIdx + i + 1 %></span>
+                                <a href="/admin/products/<%= p.id %>/edit" class="flex-1 text-xs text-gray-800 truncate hover:text-blue-600" title="<%= p.name %>"><%= p.name %></a>
+                                <span class="text-xs text-gray-500 w-10 text-right"><%= p.viewCount.toLocaleString() %></span>
+                                <span class="text-xs w-10 text-right
+                                    <%= p.kakaoClicks > 0 ? 'text-green-600' :
+                                       p.viewCount > 30 ? 'text-yellow-500' : 'text-gray-400' %>
+                                "><%= p.kakaoClicks %>건</span>
+                            </div>
+                        <% }); %>
+                    </div>
+                <% }); %>
+            </div>
+            <%
+                const highPvNoConvert = popularProducts.filter(p => p.viewCount > 30 && p.kakaoClicks === 0);
+            %>
+            <% if (highPvNoConvert.length > 0) { %>
+                <div class="mt-3 bg-gray-50 rounded-lg p-2 text-[10px] text-gray-500 border-l-2 border-blue-400">
+                    PV 높고 문의 0건 상품(<%= highPvNoConvert.map(p => p.name).join(', ') %>)은 상세 페이지 개선 또는 상품 매력도 재검토 우선 대상.
+                </div>
+            <% } %>
+        <% } else { %>
+            <p class="text-sm text-gray-400 py-4 text-center">상품 데이터가 없습니다.</p>
+        <% } %>
+    </div>
+</div>
+
+<!-- ⑧ 카카오톡 문의 접수 경로 통계 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">⑧ 카카오톡 문의 접수 경로 통계</h3>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-800">카카오톡 문의 접수 경로</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">30일 · 총 <%= kakaoInquiryStats.total %>건</span>
+            </div>
+        </div>
+
+        <!-- 요약 카드 -->
+        <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="bg-gray-50 rounded-lg p-3">
+                <div class="text-xs text-gray-500 mb-1">총 문의 수</div>
+                <div class="text-2xl font-semibold text-gray-900"><%= kakaoInquiryStats.total %></div>
+                <div class="text-xs text-gray-500 mt-1">전월 대비
+                    <% if (kakaoInquiryStats.delta > 0) { %>
+                        <span class="text-green-600">&#9650; <%= kakaoInquiryStats.delta %>건</span>
+                    <% } else if (kakaoInquiryStats.delta < 0) { %>
+                        <span class="text-red-600">&#9660; <%= Math.abs(kakaoInquiryStats.delta) %>건</span>
+                    <% } else { %>
+                        <span>변동 없음</span>
+                    <% } %>
+                </div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+                <div class="text-xs text-gray-500 mb-1">일 평균 문의</div>
+                <div class="text-2xl font-semibold text-gray-900"><%= kakaoInquiryStats.dailyAvg %></div>
+                <div class="text-xs text-gray-500 mt-1">최다 경로: <%= kakaoInquiryStats.sources.length > 0 ? kakaoInquiryStats.sources[0].label : '-' %></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+                <div class="text-xs text-gray-500 mb-1">경로 수</div>
+                <div class="text-2xl font-semibold text-gray-900"><%= kakaoInquiryStats.sources.length %></div>
+                <div class="text-xs text-gray-500 mt-1">활성 경로</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+            <!-- 좌측: 경로별 문의 수 -->
+            <div class="lg:col-span-3">
+                <div class="text-xs font-medium text-gray-500 mb-3">경로별 문의 수 (30일)</div>
+                <% if (kakaoInquiryStats.sources.length === 0) { %>
+                    <p class="text-sm text-gray-400 py-6 text-center">아직 데이터가 없습니다.</p>
+                <% } else { %>
+                    <% const maxCnt = kakaoInquiryStats.sources[0].count || 1; %>
+                    <% kakaoInquiryStats.sources.forEach((s, i) => { %>
+                        <div class="flex items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
+                            <span class="text-[10px] font-medium text-gray-400 w-4 text-right"><%= i + 1 %></span>
+                            <div class="w-6 h-6 rounded-md bg-[#FEE500] flex items-center justify-center flex-shrink-0">
+                                <span class="text-[10px] text-[#3A1D1D] font-bold">K</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-xs font-medium text-gray-800 truncate"><%= s.label %></div>
+                            </div>
+                            <div class="w-28 flex-shrink-0">
+                                <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-1">
+                                    <div class="h-full bg-[#FEE500] rounded-full" style="width:<%= Math.round(s.count / maxCnt * 100) %>%"></div>
+                                </div>
+                                <div class="flex justify-between text-[10px]">
+                                    <span class="font-medium text-gray-800"><%= s.count %>건</span>
+                                    <span class="text-gray-400"><%= kakaoInquiryStats.total > 0 ? (s.count / kakaoInquiryStats.total * 100).toFixed(1) : 0 %>%</span>
+                                </div>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } %>
+            </div>
+
+            <!-- 우측: 경로유형별 비중 + 시간대/요일별 -->
+            <div class="lg:col-span-2 space-y-4">
+                <!-- 경로 유형별 비중 (도넛) -->
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <div class="text-xs font-medium text-gray-500 mb-3">경로 유형별 비중</div>
+                    <%
+                      // 경로를 유형으로 그룹핑
+                      const _typeMap = {
+                        floating_btn: '플로팅',
+                        product_detail: '상품 상세',
+                        main_feature: '메인 페이지',
+                        main_cta: '메인 페이지',
+                        new_product_banner: '메인 페이지',
+                        search_no_result: '결과 없음 등',
+                        no_result: '결과 없음 등',
+                        guide: '결과 없음 등'
+                      };
+                      const _typeColors = { '플로팅': '#FEE500', '상품 상세': '#BA7517', '메인 페이지': '#EF9F27', '결과 없음 등': '#9CA3AF' };
+                      const _typeTotals = {};
+                      kakaoInquiryStats.sources.forEach(s => {
+                        const t = _typeMap[s.source] || '기타';
+                        _typeTotals[t] = (_typeTotals[t] || 0) + s.count;
+                      });
+                      const _typeEntries = Object.entries(_typeTotals).sort((a,b) => b[1] - a[1]);
+                      const _typeTotal = kakaoInquiryStats.total || 1;
+                      // SVG 도넛 계산
+                      const _circumference = 2 * Math.PI * 24; // r=24
+                      let _offset = 0;
+                    %>
+                    <div class="flex items-center gap-3">
+                        <svg width="64" height="64" viewBox="0 0 64 64" class="flex-shrink-0">
+                            <circle cx="32" cy="32" r="24" fill="none" stroke="#E5E7EB" stroke-width="9"/>
+                            <% _typeEntries.forEach(([name, cnt]) => {
+                                const pct = cnt / _typeTotal;
+                                const dashLen = pct * _circumference;
+                                const color = _typeColors[name] || '#D1D5DB';
+                            %>
+                                <circle cx="32" cy="32" r="24" fill="none" stroke="<%= color %>" stroke-width="9"
+                                    stroke-dasharray="<%= dashLen.toFixed(1) %> <%= (_circumference - dashLen).toFixed(1) %>"
+                                    stroke-dashoffset="<%= (-_offset).toFixed(1) %>" transform="rotate(-90 32 32)"/>
+                            <% _offset += dashLen; }) %>
+                        </svg>
+                        <div class="flex flex-col gap-1 flex-1">
+                            <% _typeEntries.forEach(([name, cnt]) => { %>
+                                <div class="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                    <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:<%= _typeColors[name] || '#D1D5DB' %>"></span>
+                                    <span><%= name %></span>
+                                    <strong class="text-gray-800 ml-auto"><%= _typeTotal > 0 ? Math.round(cnt / _typeTotal * 100) : 0 %>%</strong>
+                                </div>
+                            <% }) %>
+                            <% if (_typeEntries.length === 0) { %>
+                                <span class="text-[10px] text-gray-400">데이터 없음</span>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 시간대별 분포 -->
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <div class="text-xs font-medium text-gray-500 mb-2">시간대별 문의 분포</div>
+                    <div class="flex items-end gap-px h-10">
+                        <% for (let h = 0; h < 24; h++) { %>
+                            <div class="flex-1 rounded-t" style="height:<%= Math.max(kakaoInquiryStats.hourly[h] / kakaoInquiryStats.hourlyMax * 100, 4) %>%;background:#FEE500;opacity:<%= kakaoInquiryStats.hourly[h] > 0 ? 0.5 + (kakaoInquiryStats.hourly[h] / kakaoInquiryStats.hourlyMax * 0.5) : 0.15 %>"></div>
+                        <% } %>
+                    </div>
+                    <div class="flex justify-between mt-1">
+                        <span class="text-[9px] text-gray-400">0시</span>
+                        <span class="text-[9px] text-gray-400">6시</span>
+                        <span class="text-[9px] text-gray-400">12시</span>
+                        <span class="text-[9px] text-gray-400">18시</span>
+                        <span class="text-[9px] text-gray-400">23시</span>
+                    </div>
+                </div>
+
+                <!-- 요일별 분포 -->
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <div class="text-xs font-medium text-gray-500 mb-2">요일별 문의 수</div>
+                    <% for (let d = 1; d <= 7; d++) { const idx = d % 7; %>
+                        <div class="flex items-center gap-2 mb-1.5 last:mb-0">
+                            <span class="text-[10px] text-gray-400 w-4"><%= kakaoInquiryStats.dowLabels[idx] %></span>
+                            <div class="flex-1">
+                                <div class="h-1 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-[#FEE500] rounded-full" style="width:<%= kakaoInquiryStats.dowMax > 0 ? Math.round(kakaoInquiryStats.dow[idx] / kakaoInquiryStats.dowMax * 100) : 0 %>%"></div>
+                                </div>
+                            </div>
+                            <span class="text-[10px] text-gray-500 w-6 text-right"><%= kakaoInquiryStats.dow[idx] %>건</span>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    // ── 추이 라인차트 ──────────────────────────────
+    const trendCtx = document.getElementById('trendChart');
+    if (trendCtx) {
+        const labels = <%- JSON.stringify(tc.labels) %>;
+        const pvData = <%- JSON.stringify(tc.pvData) %>;
+        const uvData = <%- JSON.stringify(tc.uvData) %>;
+        const signupData = <%- JSON.stringify(tc.signupData) %>;
+
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'PV',
+                        data: pvData,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,.08)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    },
+                    {
+                        label: 'UV',
+                        data: uvData,
+                        borderColor: '#22c55e',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    },
+                    {
+                        label: '신규가입 (×10)',
+                        data: signupData.map(v => v * 10),
+                        borderColor: '#eab308',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2,
+                        borderDash: [4, 4],
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                if (ctx.datasetIndex === 2) {
+                                    return '신규가입: ' + (ctx.raw / 10);
+                                }
+                                return ctx.dataset.label + ': ' + ctx.raw;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } },
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.06)' }, ticks: { font: { size: 10 }, stepSize: 1, precision: 0 } }
+                }
+            }
+        });
+    }
+
+    // ── 디바이스 도넛차트 ────────────────────────────
+    const deviceCtx = document.getElementById('deviceChart');
+    if (deviceCtx) {
+        const desktop = <%= db.desktop %>;
+        const mobile = <%= db.mobile %>;
+        const tablet = <%= db.tablet %>;
+        const total = desktop + mobile + tablet;
+
+        new Chart(deviceCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['PC', '모바일', '태블릿'],
+                datasets: [{
+                    data: total > 0 ? [desktop, mobile, tablet] : [1, 0, 0],
+                    backgroundColor: ['#3b82f6', '#eab308', '#22c55e'],
+                    borderWidth: 0,
+                    cutout: '65%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const pct = total > 0 ? Math.round(ctx.raw / total * 100) : 0;
+                                return ctx.label + ': ' + ctx.raw + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            },
+            plugins: [{
+                id: 'centerText',
+                afterDraw: function(chart) {
+                    const {ctx: c, chartArea: {width, height, top, left}} = chart;
+                    c.save();
+                    c.font = '500 14px -apple-system, BlinkMacSystemFont, sans-serif';
+                    c.fillStyle = '#1f2937';
+                    c.textAlign = 'center';
+                    c.textBaseline = 'middle';
+                    c.fillText(total.toLocaleString(), left + width / 2, top + height / 2);
+                    c.restore();
+                }
+            }]
+        });
+    }
+})();
+</script>

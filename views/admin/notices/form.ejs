@@ -1,0 +1,50 @@
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-800"><%= title %></h1>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6">
+        <form action="<%= notice ? '/admin/notices/edit/' + notice.id : '/admin/notices/create' %>" method="POST">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">구분</label>
+                <select name="type" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="NOTICE" <%= (notice && notice.type === 'NOTICE') ? 'selected' : '' %>>공지사항</option>
+                    <option value="GUIDE" <%= (notice && notice.type === 'GUIDE') ? 'selected' : '' %>>상품안내</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">제목</label>
+                <input type="text" name="title" value="<%= notice ? notice.title : '' %>" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+            </div>
+
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" name="importance" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" <%= (notice && notice.importance) ? 'checked' : '' %>>
+                    <span class="ml-2 text-sm text-gray-700">중요 공지 (상단 고정)</span>
+                </label>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-1">내용</label>
+                <textarea id="editor" name="content"><%= notice ? notice.content : '' %></textarea>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <a href="/admin/notices" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">취소</a>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">저장</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.tiny.cloud/1/<%= tinymceKey %>/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+    tinymce.init({
+        selector: '#editor',
+        plugins: 'image link lists table code',
+        toolbar: 'undo redo | blocks | bold italic | alignleft aligncenter alignright | bullist numlist | link image | code',
+        images_upload_url: '/admin/notices/image-upload',
+        automatic_uploads: true
+    });
+</script>

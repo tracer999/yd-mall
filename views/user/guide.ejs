@@ -1,0 +1,122 @@
+<section class="py-10 sm:py-14">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div class="bg-gradient-to-r from-[var(--gh-primary-soft)] to-white border border-[var(--gh-primary-soft-strong)] rounded-2xl p-6 sm:p-8">
+      <p class="text-sm font-semibold brand-text mb-2">Guide</p>
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">이용안내</h1>
+      <p class="text-gray-600 mt-2">주문부터 결제, 배송, 교환·반품까지 한 번에 확인하세요.</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <article class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <p class="text-sm text-gray-500">상담 및 주문 시간</p>
+        <p class="text-lg font-bold text-gray-900 mt-2">평일 09:00~18:00</p>
+        <p class="text-sm text-gray-600 mt-1">점심 12:00~13:00</p>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <p class="text-sm text-gray-500">배송 마감</p>
+        <p class="text-lg font-bold text-gray-900 mt-2">평일 17:00</p>
+        <p class="text-sm text-gray-600 mt-1">토요일 12:00 입금 시 당일 출고</p>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <p class="text-sm text-gray-500">고객센터</p>
+        <p class="text-lg font-bold text-gray-900 mt-2">010-9998-0449</p>
+        <p class="text-sm text-gray-600 mt-1">상품/주문/배송 문의</p>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <p class="text-sm text-gray-500">간편 문의</p>
+        <a
+          href="<%= (siteSettings && siteSettings.kakao_channel_enabled && siteSettings.kakao_channel_url) ? siteSettings.kakao_channel_url : '#' %>"
+          class="inline-flex mt-2 items-center gap-2 px-4 py-2 rounded-lg brand-cta text-sm font-semibold"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-kakao-source="guide" data-kakao-label="이용가이드 채널"
+        >
+          <i class="bi bi-chat-dots-fill"></i>
+          카카오톡 채널 바로가기
+        </a>
+      </article>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+      <div class="border-b border-gray-200 p-3 sm:p-4">
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" class="guide-tab-btn brand-tab is-active py-3 px-3 text-sm sm:text-base font-semibold rounded-lg" data-tab="order">주문 및 결제 안내</button>
+          <button type="button" class="guide-tab-btn brand-tab py-3 px-3 text-sm sm:text-base font-semibold rounded-lg" data-tab="shipping">배송 안내</button>
+          <button type="button" class="guide-tab-btn brand-tab py-3 px-3 text-sm sm:text-base font-semibold rounded-lg" data-tab="cs">교환/반품 및 CS</button>
+        </div>
+      </div>
+
+      <div class="p-5 sm:p-7">
+        <div class="guide-tab-panel space-y-4" data-panel="order">
+          <h2 class="text-xl font-bold text-gray-900">TAB 1. 주문 및 결제 안내</h2>
+          <ul class="space-y-3 text-gray-700 leading-relaxed">
+            <li>주문 방법: 원하는 상품을 장바구니에 담고 주문서 작성 후 결제하면 주문이 완료됩니다.</li>
+            <li>회원/비회원: 회원가입 없이 비회원으로도 주문할 수 있으며, 회원가입 시 포인트 적립·쿠폰 등 혜택을 받을 수 있습니다.</li>
+            <li>결제 수단: 신용/체크카드 등 간편결제를 지원합니다(토스페이먼츠).</li>
+            <li>할인 혜택: 보유하신 쿠폰과 포인트를 주문서에서 함께 사용할 수 있습니다.</li>
+            <li>주문 확인: 주문 완료 후 마이페이지 &gt; 주문내역에서 진행 상태를 확인할 수 있습니다.</li>
+          </ul>
+        </div>
+
+        <div class="guide-tab-panel hidden space-y-4" data-panel="shipping">
+          <h2 class="text-xl font-bold text-gray-900">TAB 2. 배송 및 물류 정책</h2>
+          <div class="overflow-x-auto">
+            <table class="min-w-full border border-gray-200 text-sm">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">항목</th>
+                  <th class="px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">상세 내용</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700">
+                <tr>
+                  <td class="px-4 py-3 border-b border-gray-200 font-medium">일반 택배</td>
+                  <td class="px-4 py-3 border-b border-gray-200">5만원 이상 무료, 미만 시 3,000원</td>
+                </tr>
+                <tr>
+                  <td class="px-4 py-3 border-b border-gray-200 font-medium">추가 배송비</td>
+                  <td class="px-4 py-3 border-b border-gray-200">제주 +3,000원 / 도서산간 +5,000원</td>
+                </tr>
+                <tr>
+                  <td class="px-4 py-3 font-medium">배송 기간</td>
+                  <td class="px-4 py-3">출고 후 수도권 1~2일, 비수도권 2~3일 소요</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="guide-tab-panel hidden space-y-4" data-panel="cs">
+          <h2 class="text-xl font-bold text-gray-900">TAB 3. 교환/반품 및 CS</h2>
+          <ul class="space-y-3 text-gray-700 leading-relaxed">
+            <li>접수 기한: 수령 후 7일 이내 카카오톡 접수</li>
+            <li>불량/오배송: 수령 24시간 이내 사진(송장, 제품 전체, 파손 상세) 첨부 시 100% 무상 처리</li>
+            <li>반품 불가: 단순 변심, 씰 제거 등 포장 훼손, 유통기한 임박 제품은 반품 불가</li>
+            <li>배송비 부담: 제품 불량·오배송은 본사 부담, 단순 변심은 고객 부담(왕복 배송비)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  (() => {
+    const tabButtons = document.querySelectorAll('.guide-tab-btn');
+    const tabPanels = document.querySelectorAll('.guide-tab-panel');
+
+    const activateTab = (tabName) => {
+      tabButtons.forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.tab === tabName);
+      });
+
+      tabPanels.forEach((panel) => {
+        panel.classList.toggle('hidden', panel.dataset.panel !== tabName);
+      });
+    };
+
+    tabButtons.forEach((button) => {
+      button.addEventListener('click', () => activateTab(button.dataset.tab));
+    });
+  })();
+</script>

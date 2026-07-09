@@ -1,0 +1,88 @@
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+    <p class="text-sm text-gray-500">배너 이미지를 등록하고 노출 영역을 관리합니다.</p>
+    <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
+        <a href="/admin/banners/add?type=<%= currentType %>"
+            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline uppercase tracking-widest">배너
+            등록</a>
+    </div>
+</div>
+
+<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">
+    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <a href="/admin/banners?type=MAIN"
+            class="<%= currentType === 'MAIN' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            메인 배너
+        </a>
+        <a href="/admin/banners?type=CATEGORY"
+            class="<%= currentType === 'CATEGORY' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            카테고리 배너
+        </a>
+        <a href="/admin/banners?type=POPUP"
+            class="<%= currentType === 'POPUP' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            팝업 배너
+        </a>
+        <a href="/admin/banners?type=BRAND"
+            class="<%= currentType === 'BRAND' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            브랜드 배너
+        </a>
+    </nav>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <% banners.forEach(banner=> { %>
+        <div class="bg-white overflow-hidden shadow-sm rounded-lg flex flex-col h-full">
+            <img src="<%= banner.image_url %>" class="w-full h-40 object-cover" alt="<%= banner.title %>">
+            <div class="p-6 flex-1 flex flex-col">
+                <div class="flex items-center justify-between mb-2">
+                    <h5 class="text-lg font-bold text-gray-900 truncate mr-2">
+                        <%= banner.title %>
+                    </h5>
+                    <span
+                        class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full
+                                        <%= banner.banner_type === 'CATEGORY' ? 'bg-indigo-100 text-indigo-800' : banner.banner_type === 'BRAND' ? 'bg-purple-100 text-purple-800' : banner.banner_type === 'POPUP' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800' %>">
+                        <%= banner.banner_type==='CATEGORY' ? '카테고리 배너' : banner.banner_type==='BRAND' ? '브랜드 배너' :
+                            banner.banner_type==='POPUP' ? '팝업 배너' : '메인 배너' %>
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 mb-1">
+                    <% if ((banner.banner_type==='CATEGORY' || banner.banner_type==='BRAND' ) && banner.category_name) {
+                        %>
+                        대상 <%= banner.banner_type==='BRAND' ? '브랜드' : '카테고리' %>: <span class="font-medium">
+                                <%= banner.category_name %>
+                            </span>
+                            <% } else if (banner.banner_type==='POPUP' ) { %>
+                                메인 팝업 레이어
+                                <% } else { %>
+                                    전체 메인 영역 노출
+                                    <% } %>
+                </p>
+                <p class="text-sm text-gray-500 text-truncate mb-2">
+                    <span class="font-semibold text-gray-700">링크:</span>
+                    <%= banner.link_url || '없음' %>
+                </p>
+                <p class="text-xs text-gray-500 mb-4">
+                    <span class="font-semibold text-gray-700">게시 기간:</span>
+                    <%= banner.start_date ? new Date(banner.start_date).toLocaleDateString() : '설정 안됨' %> ~
+                        <%= banner.end_date ? new Date(banner.end_date).toLocaleDateString() : '설정 안됨' %>
+                </p>
+                <div class="mt-auto flex justify-between items-center">
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= banner.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' %>">
+                        <%= banner.is_active ? '사용중' : '중지' %>
+                    </span>
+                    <form action="/admin/banners/delete" method="POST" onsubmit="return confirm('삭제하시겠습니까?');"
+                        class="flex gap-2">
+                        <a href="/admin/banners/edit/<%= banner.id %>"
+                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
+                        <input type="hidden" name="id" value="<%= banner.id %>">
+                        <button type="submit"
+                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <% }) %>
+            <% if(banners.length===0) { %>
+                <div class="col-span-full text-center py-12 bg-gray-50 rounded-lg text-gray-500">등록된 배너가 없습니다.</div>
+                <% } %>
+</div>

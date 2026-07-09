@@ -1,0 +1,45 @@
+<div class="max-w-lg mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+    <h1 class="text-xl font-bold text-gray-900 mb-4">결제하기</h1>
+    <p class="text-gray-600 mb-6">총 <strong><%= Number(order.total_amount).toLocaleString() %>원</strong></p>
+
+    <% if (clientKey) { %>
+        <button type="button" id="paymentBtn" class="w-full max-w-xs mx-auto py-4 rounded-xl bg-[var(--gh-primary)] text-white font-semibold hover:bg-[var(--gh-primary-dark)]">
+            결제 진행
+        </button>
+        <script src="https://js.tosspayments.com/v2/payment"></script>
+        <script>
+            document.getElementById('paymentBtn').addEventListener('click', function() {
+                const clientKey = '<%= clientKey %>';
+                const orderId = '<%= order.order_number %>';
+                const amount = <%= order.total_amount %>;
+                const successUrl = '<%= successUrl %>?paymentKey={paymentKey}&orderId={orderId}&amount={amount}';
+                const failUrl = '<%= failUrl %>?reason=cancel';
+
+                const payment = new TossPayments(clientKey);
+                payment.requestPayment('CARD', {
+                    amount: { value: amount, currency: 'KRW' },
+                    orderId: orderId,
+                    orderName: '주문 결제',
+                    successUrl: successUrl,
+                    failUrl: failUrl
+                }).catch(function(err) {
+                    if (err.code === 'USER_CANCEL') {
+                        window.location.href = '<%= failUrl %>?reason=cancel';
+                    } else {
+                        alert('결제 요청 중 오류가 발생했습니다.');
+                    }
+                });
+            });
+        </script>
+    <% } else { %>
+        <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+            토스페이먼츠 클라이언트 키가 설정되지 않았습니다. 관리자 > 환경 설정 > 토스페이먼츠에서 키를 입력해 주세요.
+        </div>
+        <a href="/checkout/complete?orderId=<%= order.order_number %>&test=1<%= order.coupon_discount && order.coupon_discount > 0 ? '&coupon_discount=' + order.coupon_discount + (order.user_coupon_id ? '&user_coupon_id=' + order.user_coupon_id : '') : '' %><%= order.point_used && order.point_used > 0 ? '&point_use_amount=' + order.point_used : '' %>" class="inline-block mt-4 text-blue-600 hover:underline">테스트용 완료 링크</a>
+    <% } %>
+    <% if (clientKey) { %>
+    <p class="mt-4">
+        <a href="/checkout/complete?orderId=<%= order.order_number %>&test=1<%= order.coupon_discount && order.coupon_discount > 0 ? '&coupon_discount=' + order.coupon_discount + (order.user_coupon_id ? '&user_coupon_id=' + order.user_coupon_id : '') : '' %><%= order.point_used && order.point_used > 0 ? '&point_use_amount=' + order.point_used : '' %>" class="text-sm text-gray-400 hover:text-gray-600">(테스트: 결제 없이 완료)</a>
+    </p>
+    <% } %>
+</div>

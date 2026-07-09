@@ -1,0 +1,1 @@
+sshpass -p 'NEWtec4075@@' ssh -p 2022 ydatasvc@office.ydata.co.kr

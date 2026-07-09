@@ -1,0 +1,185 @@
+const pool = require('../../config/db');
+
+function decodeHtmlEntities(value) {
+    if (!value || typeof value !== 'string') return value;
+
+    const decodeOnce = (input) => {
+        let out = input
+            .replace(/&(#x[0-9a-fA-F]+|#\d+);/g, (m, code) => {
+                if (code.startsWith('#x') || code.startsWith('#X')) {
+                    const num = parseInt(code.slice(2), 16);
+                    return Number.isFinite(num) ? String.fromCharCode(num) : m;
+                }
+                const num = parseInt(code.slice(1), 10);
+                return Number.isFinite(num) ? String.fromCharCode(num) : m;
+            })
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&');
+        return out;
+    };
+
+    let prev = null;
+    let cur = value;
+    for (let i = 0; i < 3 && cur !== prev; i++) {
+        prev = cur;
+        cur = decodeOnce(cur);
+    }
+    return cur;
+}
+
+exports.getList = async (req, res) => {
+    try {
+        const type = req.query.type;
+        let query = 'SELECT * FROM notices';
+        let queryParams = [];
+
+        if (type && (type === 'NOTICE' || type === 'GUIDE')) {
+            query += ' WHERE type = ?';
+            queryParams.push(type);
+        }
+
+        query += ' ORDER BY importance DESC, created_at DESC';
+
+        const [notices] = await pool.query(query, queryParams);
+
+        res.render('admin/notices/list', {
+            layout: 'layouts/admin_layout',
+            title: '게시판 관리',
+            notices,
+            currentType: type || 'ALL'
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.getCreate = (req, res) => {
+    res.render('admin/notices/form', {
+        layout: 'layouts/admin_layout',
+        title: '공지사항 등록',
+        notice: null,
+        tinymceKey: process.env.TINYMCE_KEY
+    });
+};
+
+exports.postCreate = async (req, res) => {
+    const { title, content, importance, type } = req.body;
+    const normalizedContent = decodeHtmlEntities(content);
+
+    try {
+        if (importance) {
+            // 상단 고정 개수 제한 (3개)
+            const [[{ count }]] = await pool.query('SELECT COUNT(*) as count FROM notices WHERE importance = 1');
+            if (count >= 3) {
+                return res.send('<script>alert("상단 고정은 최대 3개까지만 가능합니다.");history.back();</script>');
+            }
+        }
+
+        await pool.query(
+            'INSERT INTO notices (title, content, importance, type) VALUES (?, ?, ?, ?)',
+            [title, normalizedContent, importance ? 1 : 0, type || 'NOTICE']
+        );
+        res.redirect('/admin/notices');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.getDetail = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ?', [id]);
+        if (rows.length === 0) return res.redirect('/admin/notices');
+
+        const notice = rows[0];
+        notice.content = decodeHtmlEntities(notice.content);
+
+        res.render('admin/notices/detail', {
+            layout: 'layouts/admin_layout',
+            title: '공지사항 상세',
+            notice
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.getEdit = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ?', [id]);
+        if (rows.length === 0) return res.redirect('/admin/notices');
+
+        const notice = rows[0];
+        notice.content = decodeHtmlEntities(notice.content);
+
+        res.render('admin/notices/form', {
+            layout: 'layouts/admin_layout',
+            title: '공지사항 수정',
+            notice,
+            tinymceKey: process.env.TINYMCE_KEY
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.postEdit = async (req, res) => {
+    const { id } = req.params;
+    const { title, content, importance, type } = req.body;
+    const normalizedContent = decodeHtmlEntities(content);
+
+    try {
+        if (importance) {
+            // 상단 고정 개수 제한 (3개) - 현재 글 제외
+            const [[{ count }]] = await pool.query('SELECT COUNT(*) as count FROM notices WHERE importance = 1 AND id != ?', [id]);
+            if (count >= 3) {
+                return res.send('<script>alert("상단 고정은 최대 3개까지만 가능합니다.");history.back();</script>');
+            }
+        }
+
+        await pool.query(
+            'UPDATE notices SET title = ?, content = ?, importance = ?, type = ? WHERE id = ?',
+            [title, normalizedContent, importance ? 1 : 0, type || 'NOTICE', id]
+        );
+        res.redirect('/admin/notices');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.postDelete = async (req, res) => {
+    const { id } = req.body;
+
+    try {
+        await pool.query('DELETE FROM notices WHERE id = ?', [id]);
+        res.redirect('/admin/notices');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.postUploadImage = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: '파일이 업로드되지 않았습니다.' });
+        }
+        return res.json({ location: '/uploads/products/' + req.file.filename });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: '이미지 업로드 중 오류가 발생했습니다.' });
+    }
+};

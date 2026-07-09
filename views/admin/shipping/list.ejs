@@ -1,0 +1,136 @@
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
+    <p class="text-sm text-gray-500">결제 완료 및 배송 준비 중인 주문을 관리합니다.</p>
+</div>
+
+<div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-100">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">주문번호
+                    </th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">받는 분 / 주문자 / 주소
+                    </th>
+                    <th scope="col"
+                        class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">현재
+                        상태</th>
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-80">배송
+                        정보 입력</th>
+                    <th scope="col"
+                        class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">관리
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                <% if (orders && orders.length> 0) { %>
+                    <% orders.forEach(order=> { %>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                                <a href="/admin/sales/<%= order.id %>">
+                                    <%= order.order_number %>
+                                </a>
+                                <div class="text-xs text-gray-400 mt-1">
+                                    <%= new Date(order.created_at).toLocaleDateString('ko-KR') %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-start gap-3">
+                                    <div class="flex-shrink-0 mt-0.5">
+                                        <% if (order.customer_picture) { %>
+                                            <img src="<%= order.customer_picture %>" alt="프로필"
+                                                class="h-8 w-8 rounded-full object-cover border border-gray-200">
+                                        <% } else { %>
+                                            <div
+                                                class="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">
+                                                <i class="bi bi-person-fill"></i>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <div class="text-sm font-bold text-gray-900">
+                                                <%= order.receiver_name %>
+                                            </div>
+                                            <% if (order.customer_google_id) { %>
+                                                <span
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 text-[10px] font-semibold text-red-600 border border-red-100">Google</span>
+                                            <% } else if (order.customer_kakao_id) { %>
+                                                <span
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-yellow-100 text-[10px] font-semibold text-yellow-800 border border-yellow-200">Kakao</span>
+                                            <% } %>
+                                        </div>
+                                        <div class="text-xs text-gray-500 truncate max-w-xs">
+                                            <% if (order.customer_name || order.customer_email) { %>
+                                                <span class="font-medium">주문자:</span>
+                                                <%= order.customer_name || '비회원' %>
+                                                <% if (order.customer_email) { %>
+                                                    <span class="text-gray-400 ml-1">(<%= order.customer_email %>)</span>
+                                                <% } %>
+                                            <% } %>
+                                        </div>
+                                        <div class="text-xs text-gray-500 truncate max-w-xs mt-0.5"
+                                            title="<%= order.shipping_address %>">
+                                            <%= order.shipping_address %>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center">
+                                <% const orderStatusLabels = { PENDING: '대기', PAID: '결제완료', PREPARING: '배송준비', SHIPPED: '배송중', DELIVERED: '배송완료', CANCELLED: '취소', REFUNDED: '환불' }; %>
+                                <% let statusClass='bg-gray-100 text-gray-800' ; if(order.status==='PAID' )
+                                    statusClass='bg-green-100 text-green-800' ; else if(order.status==='PREPARING' )
+                                    statusClass='bg-blue-100 text-blue-800' ; else if(order.status==='SHIPPED' )
+                                    statusClass='bg-purple-100 text-purple-800' ; else if(order.status==='DELIVERED' )
+                                    statusClass='bg-gray-800 text-white' ; %>
+                                    <span
+                                        class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full <%= statusClass %>">
+                                        <%= orderStatusLabels[order.status] || order.status %>
+                                    </span>
+                                    <% if(order.shipping_status==='IN_TRANSIT' ) { %>
+                                        <div class="mt-1 text-xs text-purple-600 font-bold">배송중</div>
+                                        <% } %>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <form action="/admin/shipping/tracking" method="POST" class="flex gap-2">
+                                    <input type="hidden" name="order_id" value="<%= order.id %>">
+                                    <div class="flex-1">
+                                        <select name="courier_company"
+                                            class="mb-1">
+                                            <option value="">택배사 선택</option>
+                                            <option value="CJ대한통운" <%=order.courier_company==='CJ대한통운' ? 'selected' : ''
+                                                %>>CJ대한통운</option>
+                                            <option value="우체국택배" <%=order.courier_company==='우체국택배' ? 'selected' : ''
+                                                %>>우체국택배</option>
+                                            <option value="한진택배" <%=order.courier_company==='한진택배' ? 'selected' : '' %>
+                                                >한진택배</option>
+                                            <option value="롯데택배" <%=order.courier_company==='롯데택배' ? 'selected' : '' %>
+                                                >롯데택배</option>
+                                            <option value="로젠택배" <%=order.courier_company==='로젠택배' ? 'selected' : '' %>
+                                                >로젠택배</option>
+                                        </select>
+                                        <input type="text" name="tracking_number" placeholder="운송장 번호"
+                                            value="<%= order.tracking_number || '' %>"
+                                            class="min-w-[180px]">
+                                    </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center align-middle">
+                                <button type="submit"
+                                    class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
+                                    저장
+                                </button>
+                                </form>
+                            </td>
+                        </tr>
+                        <% }) %>
+                            <% } else { %>
+                                <tr>
+                                    <td colspan="5" class="px-6 py-10 text-center text-gray-500">배송 대상 주문이 없습니다.</td>
+                                </tr>
+                                <% } %>
+            </tbody>
+        </table>
+    </div>
+</div>

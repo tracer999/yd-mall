@@ -1,0 +1,71 @@
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">게시판 관리</h1>
+        <a href="/admin/notices/create" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">글쓰기</a>
+    </div>
+
+    <!-- 탭 메뉴 -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+            <a href="/admin/notices?type=ALL"
+               class="<%= currentType === 'ALL' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors">
+                전체
+            </a>
+            <a href="/admin/notices?type=NOTICE"
+               class="<%= currentType === 'NOTICE' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors">
+                공지사항
+            </a>
+            <a href="/admin/notices?type=GUIDE"
+               class="<%= currentType === 'GUIDE' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors">
+                상품안내
+            </a>
+        </nav>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="w-full text-sm text-left">
+            <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                <tr>
+                    <th class="px-6 py-3">구분</th>
+                    <th class="px-6 py-3">제목</th>
+                    <th class="px-6 py-3">조회수</th>
+                    <th class="px-6 py-3">등록일</th>
+                    <th class="px-6 py-3">관리</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <% if (notices.length === 0) { %>
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-gray-500">등록된 게시물이 없습니다.</td>
+                    </tr>
+                <% } %>
+                <% notices.forEach(notice => { %>
+                    <tr class="hover:bg-gray-50 transition <%= notice.importance ? 'bg-red-50' : '' %>">
+                        <td class="px-6 py-4">
+                            <% if (notice.type === 'GUIDE') { %>
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">상품안내</span>
+                            <% } else { %>
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">공지사항</span>
+                            <% } %>
+                        </td>
+                        <td class="px-6 py-4">
+                            <% if (notice.importance) { %>
+                                <span class="text-red-500 font-bold mr-1">[중요]</span>
+                            <% } %>
+                            <a href="/admin/notices/detail/<%= notice.id %>" class="text-gray-900 hover:text-blue-600 font-medium"><%= notice.title %></a>
+                        </td>
+                        <td class="px-6 py-4 text-gray-500"><%= notice.view_count %></td>
+                        <td class="px-6 py-4 text-gray-500"><%= new Date(notice.created_at).toLocaleDateString() %></td>
+                        <td class="px-6 py-4 flex gap-2">
+                            <a href="/admin/notices/edit/<%= notice.id %>" class="text-blue-600 hover:underline">수정</a>
+                            <form action="/admin/notices/delete" method="POST" onsubmit="return confirm('정말 삭제하시겠습니까?');">
+                                <input type="hidden" name="id" value="<%= notice.id %>">
+                                <button type="submit" class="text-red-600 hover:underline">삭제</button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+</div>

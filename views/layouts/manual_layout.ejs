@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= typeof docTitle !== 'undefined' && docTitle ? docTitle + ' | ' : '' %><%= typeof sectionTitle !== 'undefined' && sectionTitle ? sectionTitle : '매뉴얼 & 가이드' %></title>
+    <link href="/css/style.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; color: #1f2937; background: #f8fafc; margin: 0; }
+        .manual-root { display: flex; flex-direction: column; min-height: 100vh; }
+        .manual-header {
+            background: #1e3a5f; color: #fff; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;
+        }
+        .manual-header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+        .manual-header a { color: #93c5fd; text-decoration: none; margin-left: 1rem; }
+        .manual-header a:hover { text-decoration: underline; }
+        .manual-header .active { color: #fff; font-weight: 600; }
+        .manual-body { display: flex; flex: 1; max-width: 1400px; width: 100%; margin: 0 auto; }
+        .manual-sidebar {
+            width: 260px; min-width: 260px; background: #fff; border-right: 1px solid #e2e8f0; padding: 1.25rem; overflow-y: auto;
+        }
+        .manual-sidebar h2 { font-size: 0.875rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.75rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid #e2e8f0; }
+        .manual-sidebar ul { list-style: none; padding: 0; margin: 0; }
+        .manual-sidebar li { margin: 0; }
+        .manual-sidebar a {
+            display: block; padding: 0.5rem 0.75rem; color: #475569; text-decoration: none; border-radius: 0.375rem; font-size: 0.9375rem;
+        }
+        .manual-sidebar a:hover { background: #f1f5f9; color: #1e3a5f; }
+        .manual-sidebar a.active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+        .manual-main { flex: 1; padding: 2rem; overflow-y: auto; background: #fff; margin: 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .manual-main .manual-welcome { color: #64748b; line-height: 1.7; }
+        .manual-main .manual-welcome h2 { color: #1e3a5f; margin-top: 0; }
+        .manual-main .manual-doc { line-height: 1.75; }
+        .manual-main .manual-doc h1 { font-size: 1.75rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; margin-top: 0; color: #1e3a5f; }
+        .manual-main .manual-doc h2 { font-size: 1.35rem; margin-top: 2rem; color: #334155; }
+        .manual-main .manual-doc h3 { font-size: 1.1rem; margin-top: 1.5rem; color: #475569; }
+        .manual-main .manual-doc table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9375rem; }
+        .manual-main .manual-doc th, .manual-main .manual-doc td { border: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; text-align: left; }
+        .manual-main .manual-doc th { background: #f8fafc; font-weight: 600; color: #475569; }
+        .manual-main .manual-doc code { background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.875em; }
+        .manual-main .manual-doc pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.875rem; }
+        .manual-main .manual-doc pre code { background: none; padding: 0; color: inherit; }
+        .manual-main .manual-doc hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.5rem 0; }
+        .manual-main .manual-doc ul, .manual-main .manual-doc ol { margin: 0.75rem 0; padding-left: 1.5rem; }
+        .manual-main .manual-doc p { margin: 0.75rem 0; }
+        .manual-main .manual-doc blockquote { border-left: 4px solid #cbd5e1; margin: 1rem 0; padding-left: 1rem; color: #64748b; }
+        @media (max-width: 768px) {
+            .manual-body { flex-direction: column; }
+            .manual-sidebar { width: 100%; min-width: 100%; border-right: none; border-bottom: 1px solid #e2e8f0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="manual-root">
+        <header class="manual-header">
+            <h1>
+                <a href="/manual" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <i class="bi bi-book"></i>
+                    <span>매뉴얼 & 코딩 가이드</span>
+                </a>
+            </h1>
+            <nav>
+                <a href="/manual/admin" class="<%= section === 'admin' ? 'active' : '' %>">관리자 매뉴얼</a>
+                <a href="/manual/user" class="<%= section === 'user' ? 'active' : '' %>">쇼핑몰 매뉴얼</a>
+                <a href="/manual/coding_guide" class="<%= section === 'coding_guide' ? 'active' : '' %>">코딩 가이드</a>
+                <a href="/" style="margin-left: 0.5rem;">쇼핑몰 바로가기</a>
+            </nav>
+        </header>
+        <div class="manual-body">
+            <aside class="manual-sidebar">
+                <h2><%= sectionTitle %></h2>
+                <ul>
+                    <% docList.forEach(function(item) { %>
+                        <li>
+                            <a href="/manual/<%= section %><%= item.key === 'index' ? '' : '/' + item.key %>" class="<%= currentDoc === item.key || (currentDoc === null && item.key === 'index') ? 'active' : '' %>">
+                                <%= item.title %>
+                            </a>
+                        </li>
+                    <% }); %>
+                </ul>
+            </aside>
+            <main class="manual-main">
+                <%- body %>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,610 @@
+<style>
+    .status-banner {
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    }
+
+    @keyframes badge-blink {
+
+        0%,
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.6;
+            transform: scale(1.06);
+        }
+    }
+
+    .status-banner-blink {
+        animation: badge-blink 1.4s infinite ease-in-out;
+    }
+
+    .status-image-dim {
+        filter: grayscale(0.6);
+        opacity: 0.7;
+    }
+
+    .status-image-overlay {
+        background: radial-gradient(circle at center, rgba(0, 0, 0, 0.25) 0, rgba(0, 0, 0, 0.4) 55%, rgba(0, 0, 0, 0.55) 100%);
+    }
+
+    .product-pill-badge {
+        border-radius: 9999px;
+        padding: 0.25rem 0.6rem;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        white-space: nowrap;
+    }
+
+    .badge-channel {
+        background: var(--gh-primary);
+        color: #fff;
+    }
+
+    .badge-best {
+        background: #ef4444;
+        color: #fff;
+    }
+
+    .badge-new {
+        background: #10b981;
+        color: #fff;
+    }
+
+    .badge-recommend {
+        background: #f59e0b;
+        color: #fff;
+    }
+</style>
+
+<%
+const _cpBadge = typeof currentProductBadge !== 'undefined' ? currentProductBadge : '';
+const baseParams = [];
+if (currentCategory) baseParams.push(`categoryId=${encodeURIComponent(currentCategory)}`);
+if (currentBrand) baseParams.push(`brandId=${encodeURIComponent(currentBrand)}`);
+
+const distParams = [...baseParams];
+if (currentSort && currentSort !== 'new') distParams.push(`sort=${encodeURIComponent(currentSort)}`);
+if (_cpBadge) distParams.push(`badge=${encodeURIComponent(_cpBadge)}`);
+const distQuery = distParams.join('&');
+const distPrefix = distQuery ? `${distQuery}&` : '';
+
+const sortParams = [...baseParams];
+if (currentDistributionBadge) sortParams.push(`distributionBadge=${encodeURIComponent(currentDistributionBadge)}`);
+if (_cpBadge) sortParams.push(`badge=${encodeURIComponent(_cpBadge)}`);
+const sortQuery = sortParams.join('&');
+const sortPrefix = sortQuery ? `${sortQuery}&` : '';
+
+// 뱃지 필터 URL 빌더 (distributionBadge/badge 제외한 base)
+const badgeBaseParams = [...baseParams];
+if (currentSort && currentSort !== 'new') badgeBaseParams.push(`sort=${encodeURIComponent(currentSort)}`);
+const badgeBaseQuery = badgeBaseParams.join('&');
+const badgePrefix = badgeBaseQuery ? `${badgeBaseQuery}&` : '';
+
+// 페이지네이션 URL 빌더
+const _pg = pagination || { page: 1, perPage: 30, total: 0, totalPages: 1 };
+const _buildPageUrl = (pageNum, pp) => {
+  const p = [...baseParams];
+  if (currentSort && currentSort !== 'new') p.push(`sort=${encodeURIComponent(currentSort)}`);
+  if (currentDistributionBadge) p.push(`distributionBadge=${encodeURIComponent(currentDistributionBadge)}`);
+  if (_cpBadge) p.push(`badge=${encodeURIComponent(_cpBadge)}`);
+  p.push(`perPage=${pp || _pg.perPage}`);
+  if (pageNum > 1) p.push(`page=${pageNum}`);
+  const basePath = currentCategory ? `/products/category/${currentCategory}` : (currentBrand ? `/products/brand/${currentBrand}` : '/products');
+  return basePath + (p.length ? '?' + p.join('&') : '');
+};
+%>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Mobile Back Button -->
+        <div class="sm:hidden mb-4">
+            <button onclick="history.back()" class="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition">
+                <i class="bi bi-chevron-left text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Breadcrumb -->
+        <nav class="flex text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+            <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                <li class="inline-flex items-center">
+                    <a href="/" class="inline-flex items-center hover:text-gray-900">Home</a>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <i class="bi bi-chevron-right text-gray-400 mx-1"></i>
+                        <span class="text-gray-900 font-medium">
+                            <%= title %>
+                        </span>
+                    </div>
+                </li>
+            </ol>
+        </nav>
+
+        <!-- 모바일: 필터 바텀시트 구조는 리스트 하단에 배치 -->
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Sidebar Filter (Desktop only) -->
+            <div class="hidden lg:block lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-800">Category</div>
+                    <div class="divide-y divide-gray-100">
+                        <a href="/products<%= currentBrand ? ('?brandId=' + encodeURIComponent(currentBrand)) : '' %>"
+                            class="block px-4 py-3 text-sm rounded-md transition-colors duration-150 hover:bg-[var(--gh-secondary)] hover:text-[color:var(--gh-primary-dark)] <%= !currentCategory ? 'brand-chip font-semibold' : 'text-gray-700' %>">
+                            전체 카테고리
+                        </a>
+                        <% categories.forEach(c=> { %>
+                            <a href="/products/category/<%= c.id %><%= currentBrand ? ('?brandId=' + encodeURIComponent(currentBrand)) : '' %>"
+                                class="block px-4 py-3 text-sm rounded-md transition-colors duration-150 hover:bg-[var(--gh-secondary)] hover:text-[color:var(--gh-primary-dark)] <%= currentCategory == c.id ? 'brand-chip font-semibold' : 'text-gray-700' %>">
+                                <%= c.name %>
+                            </a>
+                            <% }) %>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-4">
+                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-800">Brand</div>
+                    <div class="divide-y divide-gray-100">
+                        <a href="/products<%= currentCategory ? ('?categoryId=' + encodeURIComponent(currentCategory)) : '' %>"
+                            class="block px-4 py-3 text-sm rounded-md transition-colors duration-150 hover:bg-[var(--gh-secondary)] hover:text-[color:var(--gh-primary-dark)] <%= !currentBrand ? 'brand-chip font-semibold' : 'text-gray-700' %>">
+                            전체 브랜드
+                        </a>
+                        <% (brands || []).forEach(b=> { %>
+                            <a href="/products/brand/<%= b.id %><%= currentCategory ? ('?categoryId=' + encodeURIComponent(currentCategory)) : '' %>"
+                                class="block px-4 py-3 text-sm rounded-md transition-colors duration-150 hover:bg-[var(--gh-secondary)] hover:text-[color:var(--gh-primary-dark)] <%= String(currentBrand || '') === String(b.id) ? 'brand-chip font-semibold' : 'text-gray-700' %>">
+                                <%= b.name %>
+                            </a>
+                            <% }) %>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Grid -->
+            <div class="lg:col-span-3">
+                <% if (categoryBanner) { %>
+                    <div class="mb-6">
+                        <a href="<%= categoryBanner.link_url || '#' %>">
+                            <img src="<%= categoryBanner.image_url %>" alt="<%= categoryBanner.title || '' %>"
+                                class="w-full h-auto rounded-xl shadow-sm object-cover">
+                        </a>
+                    </div>
+                    <% } %>
+                        <div class="flex flex-col mb-6 gap-3 lg:sticky lg:top-0 lg:bg-gray-50 lg:z-10 lg:pt-2 lg:pb-2" id="products-filter-bar">
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-xl font-bold text-gray-800">Products<% if (currentCategory || currentBrand) { %> <span class="text-gray-500 text-base font-normal">(<%= _pg.total %>)</span><% } %></h4>
+
+                                <!-- 모바일: 필터/정렬/개수 3개 아이콘 버튼 -->
+                                <div class="flex lg:hidden items-center gap-1.5">
+                                    <button type="button" onclick="openFilterSheet()" class="inline-flex items-center gap-1 text-xs text-gray-600 border border-gray-300 rounded-md px-2.5 py-1.5 bg-white hover:bg-gray-50">
+                                        <i class="bi bi-sliders text-[10px]"></i> 필터<% if (currentCategory || currentBrand) { %><span class="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-[var(--gh-primary)]"></span><% } %>
+                                    </button>
+                                    <button type="button" onclick="openSortSheet()" class="inline-flex items-center gap-1 text-xs text-gray-600 border border-gray-300 rounded-md px-2.5 py-1.5 bg-white hover:bg-gray-50">
+                                        <i class="bi bi-arrow-down-up text-[10px]"></i> 정렬
+                                    </button>
+                                    <select onchange="location.href=this.value"
+                                        class="text-xs border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none">
+                                        <% [10, 20, 30, 50].forEach(n => { %>
+                                            <option value="<%= _buildPageUrl(1, n) %>" <%= _pg.perPage === n ? 'selected' : '' %>><%= n %>개</option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+
+                                <!-- PC: 기존 레이아웃 -->
+                                <div class="hidden lg:flex items-center gap-3">
+                                    <select onchange="location.href=this.value"
+                                        class="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--gh-primary)]">
+                                        <% [10, 20, 30, 50].forEach(n => { %>
+                                            <option value="<%= _buildPageUrl(1, n) %>" <%= _pg.perPage === n ? 'selected' : '' %>><%= n %>개씩</option>
+                                        <% }) %>
+                                    </select>
+                                    <div class="relative group mt-0 self-auto">
+                                    <button
+                                        class="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none">
+                                        <span>정렬</span>
+                                        <i class="bi bi-chevron-down text-xs"></i>
+                                    </button>
+                                    <!-- Simple Dropdown via group-hover for pure CSS dropdown or add JS toggler if preferred. Using pure CSS for simplicity in migration unless complex. -->
+                                    <div
+                                        class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 w-max min-w-[120px]">
+                                        <div class="py-1">
+                                            <a href="?<%= sortPrefix %>sort=new"
+                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'new' ? 'font-bold' : '' %>">최신순</a>
+                                            <a href="?<%= sortPrefix %>sort=best"
+                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'best' ? 'font-bold' : '' %>">인기순</a>
+                                            <a href="?<%= sortPrefix %>sort=price_asc"
+                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'price_asc' ? 'font-bold' : '' %>">가격: 낮은 순</a>
+                                            <a href="?<%= sortPrefix %>sort=price_desc"
+                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'price_desc' ? 'font-bold' : '' %>">가격: 높은 순</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div><!-- PC 레이아웃 end -->
+                            </div>
+
+                            <!-- 모바일: 현재 선택된 카테고리/브랜드 활성 태그 -->
+                            <% if (currentCategory || currentBrand) { %>
+                            <div class="lg:hidden flex flex-wrap items-center gap-1.5">
+                                <% if (currentCategory) {
+                                    const _curCat = categories.find(c => String(c.id) === String(currentCategory));
+                                    if (_curCat) { %>
+                                    <span class="inline-flex items-center gap-1 text-[11px] bg-[var(--gh-secondary)] text-[var(--gh-primary-dark)] border brand-border rounded-full px-2 py-0.5">
+                                        <%= _curCat.name %>
+                                        <a href="/products<%= currentBrand ? ('?brandId=' + encodeURIComponent(currentBrand)) : '' %>" class="text-gray-500 hover:text-gray-700">×</a>
+                                    </span>
+                                <% } } %>
+                                <% if (currentBrand) {
+                                    const _curBrand = (brands || []).find(b => String(b.id) === String(currentBrand));
+                                    if (_curBrand) { %>
+                                    <span class="inline-flex items-center gap-1 text-[11px] bg-[var(--gh-secondary)] text-[var(--gh-primary-dark)] border brand-border rounded-full px-2 py-0.5">
+                                        <%= _curBrand.name %>
+                                        <a href="/products<%= currentCategory ? ('?categoryId=' + encodeURIComponent(currentCategory)) : '' %>" class="text-gray-500 hover:text-gray-700">×</a>
+                                    </span>
+                                <% } } %>
+                                <a href="/products" class="text-[11px] text-gray-400 hover:text-gray-600 underline ml-auto">전체 해제</a>
+                            </div>
+                            <% } %>
+
+                            <div class="flex flex-wrap gap-2 text-sm mt-1">
+                                <%
+                                  const _noFilter = !currentDistributionBadge && !_cpBadge;
+                                  const _activeStyle = 'bg-[var(--gh-primary)] text-white border-[var(--gh-primary)] font-semibold shadow-sm';
+                                  const _inactiveStyle = 'bg-white text-gray-600 border-gray-200 hover:border-gray-300';
+                                %>
+                                <a href="?<%= badgePrefix %>"
+                                   class="px-3 py-1.5 rounded-full border transition-colors <%= _noFilter ? _activeStyle : _inactiveStyle %>">
+                                    전체
+                                </a>
+                                <a href="?<%= badgePrefix %>badge=GREENHUB_SPECIAL"
+                                   class="px-3 py-1.5 rounded-full border transition-colors <%= _cpBadge === 'GREENHUB_SPECIAL' ? _activeStyle : _inactiveStyle %>">
+                                    와이디몰특가
+                                </a>
+                                <a href="?<%= badgePrefix %>badge=DEADLINE_SALE"
+                                   class="px-3 py-1.5 rounded-full border transition-colors <%= _cpBadge === 'DEADLINE_SALE' ? 'bg-red-500 text-white border-red-500 font-semibold shadow-sm' : _inactiveStyle %>">
+                                    기간임박할인
+                                </a>
+                                <!-- 오프라인판매전용 필터 — 기능 미사용으로 주석처리
+                                <a href="?<%%= badgePrefix %>distributionBadge=OFFLINE_ONLY"
+                                   class="px-3 py-1.5 rounded-full border transition-colors <%%= currentDistributionBadge === 'OFFLINE_ONLY' ? _activeStyle : _inactiveStyle %>">
+                                    오프라인판매전용
+                                </a>
+                                -->
+                                <a href="?<%= badgePrefix %>distributionBadge=ONLINE_ONLY"
+                                   class="px-3 py-1.5 rounded-full border transition-colors <%= currentDistributionBadge === 'ONLINE_ONLY' ? _activeStyle : _inactiveStyle %>">
+                                    온라인판매가능
+                                </a>
+                            </div>
+                        </div>
+
+                        <% const _isNewCategory = String(currentCategory) === '6' || _cpBadge === 'NEW'; %>
+                        <% if (_isNewCategory) { %>
+                        <a href="<%= (typeof siteSettings !== 'undefined' && siteSettings && siteSettings.kakao_channel_url) ? siteSettings.kakao_channel_url : '#' %>"
+                           target="_blank" rel="noopener noreferrer"
+                           data-kakao-source="new_product_banner" data-kakao-label="신규상품 배너"
+                           class="block bg-gray-800 text-white rounded-lg px-4 py-3 text-sm font-medium mt-3 mb-4 hover:bg-gray-700 transition no-underline text-center">
+                            <span class="hidden sm:inline">&#x1F514; 신제품은 매주 목요일 업데이트 <span class="text-gray-400 mx-1">|</span> 카카오톡 채널 추가하고 가장 먼저 알림 받아보세요 <i class="bi bi-arrow-right"></i></span>
+                            <span class="sm:hidden">&#x1F514; 신제품은 매주 목요일 업데이트<br><span class="text-gray-300 text-xs">카카오톡 채널 추가하고 가장 먼저 알림 받아보세요 <i class="bi bi-arrow-right"></i></span></span>
+                        </a>
+                        <% } %>
+
+                        <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+                            <% products.forEach(product=> { %>
+                                <% const status=product.status || 'ON' ; const stock=(product.stock !=null &&
+                                    product.stock>= 0) ? product.stock : 0;
+                                    const isSoldOut = (status === 'SOLD_OUT') || stock <= 0; const
+                                        isStopped=status==='OFF' ; const isComingSoon=status==='COMING_SOON' ;
+                                        const isRestock=status==='RESTOCK' ;
+                                        /* 오프라인전용 뱃지 미사용으로 ONLINE_ONLY만 표시 */
+                                        const distributionBadgeText=product.distribution_badge==='ONLINE_ONLY' ? '온라인판매가능' : null;
+                                        const _lAllBadges = product.product_badge ? product.product_badge.split(',') : [];
+                                        const _lTopMap = { BEST: { text: 'BEST', cls: 'badge-best' }, NEW: { text: 'NEW', cls: 'badge-new' }, RECOMMEND: { text: '추천', cls: 'badge-recommend' } };
+                                        const _lPriceMap = { DEADLINE_SALE: { text: '기간임박할인', cls: 'badge-deadline' }, GREENHUB_SPECIAL: { text: '와이디몰특가', cls: 'badge-greenhub' } };
+                                        const _lTopBadges = _lAllBadges.filter(b => _lTopMap[b]);
+                                        const _lPriceBadges = _lAllBadges.filter(b => _lPriceMap[b]);
+                                        %>
+                                        <% const detailPath=(product.slug && product.slug.trim()) ?
+                                            `/products/${encodeURIComponent(product.slug)}` :
+                                            `/products/view/${product.id}`; %>
+                                            <div
+                                                class="group bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden relative">
+                                                <% const _isLikedMobile = (typeof likedProductIds !== 'undefined') && likedProductIds.includes(product.id); %>
+                                                <button
+                                                    class="like-btn md:hidden absolute top-2 right-2 z-30 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center <%= _isLikedMobile ? 'text-[color:var(--gh-primary)]' : 'text-gray-400' %> hover:text-[color:var(--gh-primary)] transition-colors shadow-sm"
+                                                    data-product-id="<%= product.id %>"
+                                                    onclick="event.preventDefault();event.stopPropagation();toggleListLike(this, '<%= product.id %>')">
+                                                    <i class="bi <%= _isLikedMobile ? 'bi-heart-fill' : 'bi-heart' %> text-base"></i>
+                                                </button>
+                                                <% if(distributionBadgeText || _lTopBadges.length > 0) { %>
+                                                    <div class="absolute top-3 left-3 z-20 flex flex-wrap gap-1.5">
+                                                        <% if(distributionBadgeText) { %>
+                                                            <span class="product-pill-badge badge-channel">
+                                                                <%= distributionBadgeText %>
+                                                            </span>
+                                                        <% } %>
+                                                        <% _lTopBadges.forEach(b => { const info = _lTopMap[b]; if (info) { %>
+                                                            <span class="product-pill-badge <%= info.cls %>"><%= info.text %></span>
+                                                        <% } }) %>
+                                                    </div>
+                                                <% } %>
+
+                                                                <a href="<%= detailPath %>"
+                                                                    class="block overflow-hidden relative aspect-[4/3]">
+                                                                    <% if(product.discount_rate> 0) { %>
+                                                                        <span
+                                                                            class="absolute bottom-3 right-3 brand-badge text-xs font-bold px-2 py-1 rounded-full z-20 shadow-sm">
+                                                                            <%= product.discount_rate %>%
+                                                                        </span>
+                                                                        <% } %>
+                                                                    <img src="<%= product.thumbnail_image || product.main_image || 'https://via.placeholder.com/300' %>"
+                                                                        class="w-full h-full object-contain p-2 <%= (isSoldOut && !isStopped && !isComingSoon) ? 'status-image-dim' : '' %>"
+                                                                        alt="<%= product.name %>">
+
+                                                                    <% if (isStopped || isComingSoon || isRestock || isSoldOut) { %>
+                                                                        <div
+                                                                            class="absolute inset-0 flex items-center justify-center pointer-events-none <%= (isSoldOut && !isStopped && !isComingSoon && !isRestock) ? 'status-image-overlay' : '' %>">
+                                                                            <div class="px-4 py-1.5 rounded-lg text-white text-base font-bold status-banner shadow-md backdrop-blur-sm
+                                        <%= isStopped
+                                            ? 'bg-red-600/90'
+                                            : (isRestock
+                                                ? 'bg-gradient-to-r from-blue-400/90 to-cyan-400/90 text-white status-banner-blink'
+                                                : (isComingSoon
+                                                    ? 'bg-gradient-to-r from-yellow-400/90 to-orange-400/90 text-white status-banner-blink'
+                                                    : 'bg-gray-800/85')) %>">
+                                                                                <% if (isStopped) { %>
+                                                                                    판매중지
+                                                                                <% } else if (isRestock) { %>
+                                                                                    재입고예정
+                                                                                    <% } else if (isComingSoon) { %>
+                                                                                        COMING SOON
+                                                                                        <% } else { %>
+                                                                                            SOLD OUT
+                                                                                            <% } %>
+                                                                            </div>
+                                                                        </div>
+                                                                        <% } %>
+
+                                                                            <div
+                                                                                class="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-300">
+                                                                            </div>
+                                                                </a>
+                                                                <div class="p-2.5 md:p-4">
+                                                                    <small
+                                                                        class="brand-text font-medium text-xs mb-1 block min-h-[18px]">
+                                                                        <%= product.provider || '\u00A0' %>
+                                                                    </small>
+                                                                    <h5
+                                                                        class="text-gray-900 font-bold text-[14px] md:text-[15px] mb-2 truncate">
+                                                                        <a href="<%= detailPath %>"
+                                                                            class="hover:text-[color:var(--gh-primary-dark)] transition-colors">
+                                                                            <%= product.name %>
+                                                                        </a>
+                                                                    </h5>
+                                                                    <% if (_lPriceBadges.length > 0) { %>
+                                                                        <div class="flex flex-wrap gap-1 mb-2">
+                                                                            <% _lPriceBadges.forEach(b => { const info = _lPriceMap[b]; if (info) { %>
+                                                                                <span class="product-pill-badge <%= info.cls %>"><%= info.text %></span>
+                                                                            <% } }) %>
+                                                                        </div>
+                                                                    <% } %>
+                                                                    <div class="flex items-center justify-between mt-3">
+                                                                        <div class="flex flex-col">
+                                                                            <% // Price Logic
+                                                                                const _price = product.price;
+                                                                                const _listPrice = (product.original_price && product.original_price > _price) ? product.original_price : null; %>
+
+                                                                                <div class="flex flex-col">
+                                                                                    <% if (_listPrice) { %>
+                                                                                        <span class="text-gray-400 text-xs line-through"><%= Number(_listPrice).toLocaleString() %>원</span>
+                                                                                    <% } %>
+                                                                                    <span class="text-gray-900 font-bold text-lg">
+                                                                                        <%= Number(_price).toLocaleString() %>원
+                                                                                    </span>
+                                                                                </div>
+                                                                        </div>
+                                                                        <% const _isLiked = (typeof likedProductIds !== 'undefined') && likedProductIds.includes(product.id); %>
+                                                                        <button
+                                                                            class="like-btn hidden md:flex items-center justify-center <%= _isLiked ? 'text-[color:var(--gh-primary)]' : 'text-gray-400' %> hover:text-[color:var(--gh-primary)] transition-colors"
+                                                                            data-product-id="<%= product.id %>"
+                                                                            onclick="toggleListLike(this, '<%= product.id %>')">
+                                                                            <i class="bi <%= _isLiked ? 'bi-heart-fill' : 'bi-heart' %> text-xl"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                            </div>
+                                            <% }) %>
+                                                <% if(products.length===0) { %>
+                                                    <div class="col-span-full py-12 text-center bg-gray-50 rounded-lg px-4">
+                                                        <i class="bi bi-box-seam text-5xl mb-4 block text-gray-300"></i>
+                                                        <p class="text-lg font-semibold text-gray-700 mb-2">현재 등록된 상품이 없습니다.</p>
+                                                        <p class="text-sm text-gray-500 mb-1">필요한 상품명이나 이미지를 카카오톡 고객센터로 남겨주세요.</p>
+                                                        <p class="text-sm text-gray-500 mb-5">담당자가 직접 확인하여 최적의 상품을 제안해 드립니다.</p>
+                                                        <a href="<%= (typeof siteSettings !== 'undefined' && siteSettings && siteSettings.kakao_channel_url) ? siteSettings.kakao_channel_url : '#' %>"
+                                                           target="_blank" rel="noopener noreferrer"
+                                                           data-kakao-source="no_result" data-kakao-label="상품 없음 문의"
+                                                           class="inline-flex items-center gap-2 px-6 py-3 bg-[#FEE500] text-[#3C1E1E] font-bold rounded-xl shadow hover:brightness-95 transition">
+                                                            <i class="bi bi-chat-dots-fill text-lg"></i> 카카오톡 문의하기
+                                                        </a>
+                                                    </div>
+                                                    <% } %>
+                        </div>
+
+                        <!-- 페이지네이션 -->
+                        <% if (_pg.totalPages > 1) { %>
+                        <div class="mt-8 flex flex-col items-center gap-3">
+                            <nav class="flex items-center gap-1">
+                                <% if (_pg.page > 1) { %>
+                                    <a href="<%= _buildPageUrl(_pg.page - 1) %>"
+                                       class="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 no-underline">이전</a>
+                                <% } %>
+                                <%
+                                    const _maxShow = 5;
+                                    let _startP = Math.max(1, _pg.page - Math.floor(_maxShow / 2));
+                                    let _endP = Math.min(_pg.totalPages, _startP + _maxShow - 1);
+                                    if (_endP - _startP + 1 < _maxShow) _startP = Math.max(1, _endP - _maxShow + 1);
+                                %>
+                                <% if (_startP > 1) { %>
+                                    <a href="<%= _buildPageUrl(1) %>"
+                                       class="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 no-underline">1</a>
+                                    <% if (_startP > 2) { %><span class="px-1 text-gray-400">...</span><% } %>
+                                <% } %>
+                                <% for (let _i = _startP; _i <= _endP; _i++) { %>
+                                    <a href="<%= _buildPageUrl(_i) %>"
+                                       class="px-3 py-2 text-sm rounded-lg border no-underline
+                                       <%= _i === _pg.page ? 'bg-[var(--gh-primary)] text-white border-[var(--gh-primary)]' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50' %>"><%= _i %></a>
+                                <% } %>
+                                <% if (_endP < _pg.totalPages) { %>
+                                    <% if (_endP < _pg.totalPages - 1) { %><span class="px-1 text-gray-400">...</span><% } %>
+                                    <a href="<%= _buildPageUrl(_pg.totalPages) %>"
+                                       class="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 no-underline"><%= _pg.totalPages %></a>
+                                <% } %>
+                                <% if (_pg.page < _pg.totalPages) { %>
+                                    <a href="<%= _buildPageUrl(_pg.page + 1) %>"
+                                       class="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 no-underline">다음</a>
+                                <% } %>
+                            </nav>
+                            <p class="text-xs text-gray-400"><%= (_pg.page - 1) * _pg.perPage + 1 %>-<%= Math.min(_pg.page * _pg.perPage, _pg.total) %> / 총 <%= _pg.total %>개</p>
+                        </div>
+                        <% } %>
+            </div>
+        </div>
+
+<script>
+async function toggleListLike(btn, productId) {
+    try {
+        const res = await fetch('/products/like/' + productId, { method: 'POST' });
+        if (res.status === 401) {
+            alert('로그인이 필요합니다.');
+            location.href = '/auth/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+            return;
+        }
+        const data = await res.json();
+        if (data.success) {
+            const icon = btn.querySelector('i');
+            if (data.liked) {
+                icon.classList.remove('bi-heart');
+                icon.classList.add('bi-heart-fill');
+                btn.classList.remove('text-gray-400');
+                btn.classList.add('text-[color:var(--gh-primary)]');
+            } else {
+                icon.classList.remove('bi-heart-fill');
+                icon.classList.add('bi-heart');
+                btn.classList.remove('text-[color:var(--gh-primary)]');
+                btn.classList.add('text-gray-400');
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+</script>
+
+<!-- 모바일 필터 바텀시트 -->
+<div id="filter-sheet-backdrop" class="lg:hidden fixed inset-0 bg-black/40 z-[60] hidden" onclick="closeFilterSheet()"></div>
+<div id="filter-sheet" class="lg:hidden fixed left-0 right-0 bottom-0 bg-white rounded-t-2xl z-[70] translate-y-full transition-transform duration-300 max-h-[85vh] overflow-y-auto">
+    <div class="sticky top-0 bg-white pt-3 pb-2 px-4 border-b border-gray-100">
+        <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+        <div class="flex items-center justify-between">
+            <h4 class="text-base font-bold text-gray-800">필터</h4>
+            <button type="button" onclick="closeFilterSheet()" class="text-gray-400 text-xl leading-none">&times;</button>
+        </div>
+    </div>
+    <form id="filter-sheet-form" class="px-4 py-4 space-y-5" onsubmit="applyFilterSheet(event)">
+        <div>
+            <div class="text-xs font-semibold text-gray-500 mb-2">카테고리</div>
+            <div class="flex flex-wrap gap-1.5">
+                <label class="cursor-pointer">
+                    <input type="radio" name="sheet_category" value="" <%= !currentCategory ? 'checked' : '' %> class="peer hidden">
+                    <span class="inline-block text-xs px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 peer-checked:bg-[var(--gh-primary)] peer-checked:text-white peer-checked:border-[var(--gh-primary)]">전체</span>
+                </label>
+                <% categories.forEach(c => { %>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="sheet_category" value="<%= c.id %>" <%= String(currentCategory) === String(c.id) ? 'checked' : '' %> class="peer hidden">
+                        <span class="inline-block text-xs px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 peer-checked:bg-[var(--gh-primary)] peer-checked:text-white peer-checked:border-[var(--gh-primary)]"><%= c.name %></span>
+                    </label>
+                <% }) %>
+            </div>
+        </div>
+        <div>
+            <div class="text-xs font-semibold text-gray-500 mb-2">브랜드</div>
+            <div class="flex flex-wrap gap-1.5">
+                <label class="cursor-pointer">
+                    <input type="radio" name="sheet_brand" value="" <%= !currentBrand ? 'checked' : '' %> class="peer hidden">
+                    <span class="inline-block text-xs px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 peer-checked:bg-[var(--gh-primary)] peer-checked:text-white peer-checked:border-[var(--gh-primary)]">전체</span>
+                </label>
+                <% (brands || []).forEach(b => { %>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="sheet_brand" value="<%= b.id %>" <%= String(currentBrand) === String(b.id) ? 'checked' : '' %> class="peer hidden">
+                        <span class="inline-block text-xs px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 peer-checked:bg-[var(--gh-primary)] peer-checked:text-white peer-checked:border-[var(--gh-primary)]"><%= b.name %></span>
+                    </label>
+                <% }) %>
+            </div>
+        </div>
+        <div class="flex gap-2 pt-2 sticky bottom-0 bg-white pb-2 -mx-4 px-4 border-t border-gray-100">
+            <button type="button" onclick="resetFilterSheet()" class="flex-1 py-3 text-sm font-medium border border-gray-300 rounded-lg text-gray-600">초기화</button>
+            <button type="submit" class="flex-[2] py-3 text-sm font-semibold bg-[var(--gh-primary)] text-white rounded-lg">적용하기</button>
+        </div>
+    </form>
+</div>
+
+<!-- 모바일 정렬 바텀시트 -->
+<div id="sort-sheet-backdrop" class="lg:hidden fixed inset-0 bg-black/40 z-[60] hidden" onclick="closeSortSheet()"></div>
+<div id="sort-sheet" class="lg:hidden fixed left-0 right-0 bottom-0 bg-white rounded-t-2xl z-[70] translate-y-full transition-transform duration-300 max-h-[60vh] overflow-y-auto">
+    <div class="pt-3 pb-2 px-4 border-b border-gray-100">
+        <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+        <div class="flex items-center justify-between">
+            <h4 class="text-base font-bold text-gray-800">정렬</h4>
+            <button type="button" onclick="closeSortSheet()" class="text-gray-400 text-xl leading-none">&times;</button>
+        </div>
+    </div>
+    <div class="py-2">
+        <% [['new','최신순'],['best','인기순'],['price_asc','가격: 낮은 순'],['price_desc','가격: 높은 순']].forEach(([v, label]) => { %>
+            <a href="?<%= sortPrefix %>sort=<%= v %>" class="flex items-center justify-between px-5 py-3 text-sm <%= currentSort === v ? 'text-[var(--gh-primary)] font-semibold' : 'text-gray-700' %> hover:bg-gray-50 no-underline">
+                <%= label %>
+                <% if (currentSort === v) { %><i class="bi bi-check-lg"></i><% } %>
+            </a>
+        <% }) %>
+    </div>
+</div>
+
+<script>
+function openFilterSheet() {
+    document.getElementById('filter-sheet-backdrop').classList.remove('hidden');
+    const sheet = document.getElementById('filter-sheet');
+    sheet.classList.remove('translate-y-full');
+    document.body.style.overflow = 'hidden';
+}
+function closeFilterSheet() {
+    document.getElementById('filter-sheet-backdrop').classList.add('hidden');
+    document.getElementById('filter-sheet').classList.add('translate-y-full');
+    document.body.style.overflow = '';
+}
+function resetFilterSheet() {
+    const form = document.getElementById('filter-sheet-form');
+    form.querySelector('input[name="sheet_category"][value=""]').checked = true;
+    form.querySelector('input[name="sheet_brand"][value=""]').checked = true;
+}
+function applyFilterSheet(e) {
+    e.preventDefault();
+    const form = document.getElementById('filter-sheet-form');
+    const cat = form.sheet_category.value;
+    const brand = form.sheet_brand.value;
+    let url;
+    if (cat && brand) url = '/products/category/' + cat + '?brandId=' + brand;
+    else if (cat) url = '/products/category/' + cat;
+    else if (brand) url = '/products/brand/' + brand;
+    else url = '/products';
+    location.href = url;
+}
+function openSortSheet() {
+    document.getElementById('sort-sheet-backdrop').classList.remove('hidden');
+    document.getElementById('sort-sheet').classList.remove('translate-y-full');
+    document.body.style.overflow = 'hidden';
+}
+function closeSortSheet() {
+    document.getElementById('sort-sheet-backdrop').classList.add('hidden');
+    document.getElementById('sort-sheet').classList.add('translate-y-full');
+    document.body.style.overflow = '';
+}
+</script>
+    </div>

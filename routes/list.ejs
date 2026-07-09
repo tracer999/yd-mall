@@ -1,0 +1,57 @@
+<%- layout('layouts/main_layout') %>
+
+<div class="max-w-4xl mx-auto px-4 py-10">
+    <h1 class="text-3xl font-bold text-gray-900 mb-8"><%= title %></h1>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden border border-gray-100">
+        <div class="divide-y divide-gray-100">
+            <% if (posts.length === 0) { %>
+                <div class="p-12 text-center text-gray-500">등록된 게시물이 없습니다.</div>
+            <% } %>
+            <% posts.forEach(post => { %>
+                <div class="p-6 hover:bg-gray-50 transition cursor-pointer" onclick="handleClick('<%= post.id %>')">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-sm text-gray-500"><%= new Date(post.created_at).toLocaleDateString() %></span>
+                        <span class="text-sm text-gray-400">조회 <%= post.view_count %></span>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900">
+                        <% if (post.importance) { %>
+                            <span class="text-red-500 mr-1">[중요]</span>
+                        <% } %>
+                        <%= post.title %>
+                    </h3>
+                </div>
+            <% }) %>
+        </div>
+    </div>
+
+    <!-- 페이지네이션 -->
+    <% if (totalPages > 1) { %>
+        <div class="flex justify-center mt-8 gap-1">
+            <% for(let i=1; i<=totalPages; i++) { %>
+                <a href="?page=<%= i %>" class="px-3 py-1 rounded <%= currentPage === i ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' %>"><%= i %></a>
+            <% } %>
+        </div>
+    <% } %>
+</div>
+
+<script>
+    const boardType = '<%= type %>';
+    const isLoggedIn = '<%= user ? "true" : "false" %>' === 'true';
+
+    function handleClick(id) {
+        // 상품안내 게시판 접근 로직
+        if (boardType === 'guide') {
+            if (isLoggedIn) {
+                location.href = `/boards/${boardType}/${id}`;
+            } else {
+                if (confirm("로그인이 필요한 서비스입니다. 로그인 페이지로 이동하시겠습니까?")) {
+                    location.href = '/auth/login';
+                }
+            }
+        } else {
+            // 공지사항 등 일반 게시판은 바로 이동
+            location.href = `/boards/${boardType}/${id}`;
+        }
+    }
+</script>

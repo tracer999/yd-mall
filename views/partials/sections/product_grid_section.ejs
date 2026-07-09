@@ -1,0 +1,36 @@
+<%
+  /*
+   * 상품 그리드 섹션 (재사용) — 베스트/신상품/추천 등 동일 레이아웃 공용
+   * locals:
+   *   sectionClass : <section> 클래스 (배경 등)
+   *   badgeText    : 상단 뱃지 텍스트 (예: 'BEST', 'NEW')
+   *   badgeClass   : 상단 뱃지 span 클래스
+   *   title        : 섹션 제목
+   *   products     : 상품 배열
+   *   maxCount     : 최대 노출 수 (기본 8)
+   *   moreHref     : '더 보기' 링크
+   *   moreBtnClass : '더 보기' 버튼 클래스
+   */
+  const _max = (typeof maxCount !== 'undefined' && maxCount) ? maxCount : 8;
+  const _items = (products || []).slice(0, _max);
+%>
+<% if (_items.length > 0) { %>
+<section class="<%= sectionClass %>">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-10">
+      <span class="<%= badgeClass %>"><%= badgeText %></span>
+      <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+      <% _items.forEach(product => { %>
+        <%- include('../product_card', { product }) %>
+      <% }); %>
+    </div>
+    <div class="mt-8 text-center">
+      <a href="<%= moreHref %>" class="<%= moreBtnClass %>">
+        더 보기 <i class="bi bi-chevron-right text-xs"></i>
+      </a>
+    </div>
+  </div>
+</section>
+<% } %>

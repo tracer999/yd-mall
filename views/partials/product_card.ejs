@@ -1,0 +1,106 @@
+<%
+  /*
+   * 표준 상품 카드 (ProductCard) — 전 화면 공용 컴포넌트
+   * locals:
+   *   product : 상품 객체 (필수)
+   *   opts    : 표시 옵션 (선택). 미전달 시 아래 기본값 → 기존 동작과 100% 동일.
+   *
+   * opts 필드(기본 true):
+   *   showBrand         공급사(provider) 노출
+   *   showTopBadge      좌상단 BEST/NEW/추천 뱃지
+   *   showDistBadge     좌상단 온라인판매가능 뱃지
+   *   showDiscountBadge 우하단 N% SALE 뱃지
+   *   showStatusOverlay 판매중지/재입고예정/COMING SOON/SOLD OUT 오버레이
+   *   showPriceBadge    가격 위 기간임박할인/와이디몰특가 뱃지
+   *   imageHeightClass  이미지 영역 높이 클래스 (기본 'h-52')
+   */
+  const _opts = Object.assign({
+    showBrand: true,
+    showTopBadge: true,
+    showDistBadge: true,
+    showDiscountBadge: true,
+    showStatusOverlay: true,
+    showPriceBadge: true,
+    imageHeightClass: 'h-52'
+  }, (typeof opts !== 'undefined' && opts) ? opts : {});
+
+  const _status = product.status || 'ON';
+  const _stock = (product.stock != null && product.stock >= 0) ? product.stock : 0;
+  const _isSoldOut = (_status === 'SOLD_OUT') || _stock <= 0;
+  const _isStopped = _status === 'OFF';
+  const _isComingSoon = _status === 'COMING_SOON';
+  const _isRestock = _status === 'RESTOCK';
+  /* 오프라인전용 뱃지 미사용으로 ONLINE_ONLY만 표시 */
+  const _distBadge = product.distribution_badge === 'ONLINE_ONLY' ? '온라인판매가능' : null;
+  const _allBadges = product.product_badge ? product.product_badge.split(',') : [];
+  const _topBadgeMap = {
+    'BEST': { text: 'BEST', cls: 'badge-best' },
+    'NEW': { text: 'NEW', cls: 'badge-new' },
+    'RECOMMEND': { text: '추천', cls: 'badge-recommend' }
+  };
+  const _priceBadgeMap = {
+    'DEADLINE_SALE': { text: '기간임박할인', cls: 'badge-deadline' },
+    'GREENHUB_SPECIAL': { text: '와이디몰특가', cls: 'badge-greenhub' }
+  };
+  const _topBadges = _opts.showTopBadge ? _allBadges.filter(b => _topBadgeMap[b]) : [];
+  const _priceBadges = _opts.showPriceBadge ? _allBadges.filter(b => _priceBadgeMap[b]) : [];
+  const _showDist = _opts.showDistBadge && _distBadge;
+  const _price = product.price;
+  const _listPrice = (product.original_price && product.original_price > _price) ? product.original_price : null;
+  const _detailPath = (product.slug && product.slug.trim())
+    ? `/products/${encodeURIComponent(product.slug)}`
+    : `/products/view/${product.id}`;
+%>
+<div class="group relative bg-white border border-gray-100 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+  <a href="<%= _detailPath %>" class="block">
+    <div class="w-full overflow-hidden bg-white <%= _opts.imageHeightClass %> relative">
+      <img src="<%= product.main_image || '/images/placeholder.png' %>"
+           alt="<%= product.name %>"
+           class="w-full h-full object-contain object-center px-3 pt-3 pb-1 sm:pb-3 <%= (_isSoldOut && !_isStopped && !_isComingSoon) ? 'opacity-60 grayscale-[0.5]' : '' %>">
+
+      <% if (_showDist || _topBadges.length > 0) { %>
+        <div class="absolute top-2 left-2 z-20 flex flex-wrap gap-1.5">
+          <% if (_showDist) { %><span class="product-pill-badge badge-channel"><%= _distBadge %></span><% } %>
+          <% _topBadges.forEach(b => { const info = _topBadgeMap[b]; if (info) { %>
+            <span class="product-pill-badge <%= info.cls %>"><%= info.text %></span>
+          <% } }) %>
+        </div>
+      <% } %>
+
+      <% if (_opts.showDiscountBadge && product.discount_rate > 0) { %>
+        <span class="absolute bottom-2 right-2 brand-badge text-xs font-bold px-2 py-1 rounded z-20 shadow-sm">
+          <%= product.discount_rate %>% SALE
+        </span>
+      <% } %>
+
+      <% if (_opts.showStatusOverlay && (_isStopped || _isComingSoon || _isRestock || _isSoldOut)) { %>
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none <%= (_isSoldOut && !_isStopped && !_isComingSoon && !_isRestock) ? 'bg-black/20' : '' %>">
+          <div class="px-4 py-1.5 rounded-lg text-white text-sm font-bold shadow-md backdrop-blur-sm
+            <%= _isStopped ? 'bg-red-600/90' : (_isRestock ? 'bg-gradient-to-r from-blue-400/90 to-cyan-400/90 status-banner-blink' : (_isComingSoon ? 'bg-gradient-to-r from-yellow-400/90 to-orange-400/90 status-banner-blink' : 'bg-gray-800/85')) %>">
+            <% if (_isStopped) { %>판매중지<% } else if (_isRestock) { %>재입고예정<% } else if (_isComingSoon) { %>COMING SOON<% } else { %>SOLD OUT<% } %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="px-4 pb-4 pt-1 sm:pt-4">
+      <h3 class="text-xs sm:text-sm font-medium text-gray-900 truncate"><%= product.name %></h3>
+      <% if (_opts.showBrand) { %>
+        <p class="mt-0.5 text-[10px] sm:text-xs text-gray-400 truncate"><%= product.provider || '' %></p>
+      <% } %>
+      <% if (_priceBadges.length > 0) { %>
+        <div class="mt-1.5 flex flex-wrap gap-1">
+          <% _priceBadges.forEach(b => { const info = _priceBadgeMap[b]; if (info) { %>
+            <span class="product-pill-badge <%= info.cls %>"><%= info.text %></span>
+          <% } }) %>
+        </div>
+      <% } %>
+      <div class="mt-2 flex flex-col">
+        <% if (_listPrice) { %>
+          <span class="text-gray-400 text-xs line-through"><%= Number(_listPrice).toLocaleString() %>원</span>
+        <% } %>
+        <span class="text-gray-900 font-bold text-lg"><%= Number(_price).toLocaleString() %>원</span>
+      </div>
+    </div>
+  </a>
+</div>

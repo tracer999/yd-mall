@@ -1,0 +1,887 @@
+<div class="flex justify-center">
+    <div class="w-full lg:max-w-5xl">
+        <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+            <div class="px-6 py-4 bg-white border-b border-gray-200">
+                <h5 class="text-lg font-bold text-gray-800">
+                    <%= title %>
+                </h5>
+            </div>
+
+            <script src="https://cdn.tiny.cloud/1/<%= process.env.TINYMCE_KEY %>/tinymce/5/tinymce.min.js"
+                referrerpolicy="origin"></script>
+
+            <div class="p-6 bg-white">
+                <form action="<%= product ? '/admin/products/edit' : '/admin/products/add' %>" method="POST"
+                    enctype="multipart/form-data">
+                    <% if(product) { %>
+                        <input type="hidden" name="id" value="<%= product.id %>">
+                        <input type="hidden" name="old_image" value="<%= product.main_image %>">
+                        <input type="hidden" name="old_thumbnail" value="<%= product.thumbnail_image %>">
+                        <input type="hidden" name="old_video" value="<%= product.video_url %>">
+                        <% } %>
+
+                            <!-- 기본 정보 -->
+                            <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4">기본 정보</h6>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">상품명<span
+                                            class="text-red-500">*</span></label>
+                                    <input type="text" name="name" required value="<%= product ? product.name : '' %>">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">상품코드</label>
+                                    <input type="text" name="product_code"
+                                        value="<%= product && product.product_code ? product.product_code : '' %>"
+                                        placeholder="예: GH-001">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">상품 URL (슬러그)</label>
+                                    <input type="text" name="slug" value="<%= product ? product.slug : '' %>">
+                                    <p class="text-xs text-gray-500 mt-1">비워두면 상품명을 기반으로 자동 생성되며, 동일한 값이 있으면 `-1`, `-2`가
+                                        붙습니다.</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">미리보기: <span id="slug-preview"
+                                            class="font-mono text-blue-700"></span></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                                    <select name="category_id">
+                                        <option value="">선택하세요</option>
+                                        <% (productCategories || []).forEach(c=> { %>
+                                            <option value="<%= c.id %>" <%=product && product.category_id===c.id
+                                                ? 'selected' : '' %>>
+                                                <%= c.name %>
+                                            </option>
+                                            <% }) %>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">테마 카테고리 (중복 선택)</label>
+                                    <div
+                                        class="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md p-3">
+                                        <% (themeCategories || []).forEach(c=> { %>
+                                            <div class="flex items-center">
+                                                <input type="checkbox" name="theme_categories" id="theme_<%= c.id %>"
+                                                    value="<%= c.id %>"
+                                                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                    <%=product && product.theme_ids && product.theme_ids.includes(c.id)
+                                                    ? 'checked' : '' %>
+                                                >
+                                                <label for="theme_<%= c.id %>"
+                                                    class="ml-2 block text-sm text-gray-900 cursor-pointer">
+                                                    <%= c.name %>
+                                                </label>
+                                            </div>
+                                            <% }) %>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">브랜드</label>
+                                    <select name="brand_category_id">
+                                        <option value="">브랜드 선택</option>
+                                        <% (brands || []).forEach(b=> { %>
+                                            <option value="<%= b.id %>" <%=product && String(product.brand_category_id
+                                                || '' )===String(b.id) ? 'selected' : '' %>>
+                                                <%= b.name %>
+                                            </option>
+                                            <% }) %>
+                                    </select>
+                                    <input type="hidden" name="provider"
+                                        value="<%= product ? (product.provider || '') : '' %>">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">판매 상태</label>
+                                    <select name="status">
+                                        <option value="ON" <%=product && product.status==='ON' ? 'selected' : '' %>>판매중
+                                        </option>
+                                        <option value="SOLD_OUT" <%=product && product.status==='SOLD_OUT' ? 'selected'
+                                            : '' %>>품절</option>
+                                        <option value="OFF" <%=product && product.status==='OFF' ? 'selected' : '' %>
+                                            >중지(판매중단)</option>
+                                        <option value="COMING_SOON" <%=product && product.status==='COMING_SOON'
+                                            ? 'selected' : '' %>>판매예정</option>
+                                        <option value="RESTOCK" <%=product && product.status==='RESTOCK'
+                                            ? 'selected' : '' %>>재입고예정</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">노출 설정</label>
+                                    <select name="visibility">
+                                        <option value="PUBLIC" <%= (!product || !product.visibility || product.visibility === 'PUBLIC') ? 'selected' : '' %>>노출 (기본)</option>
+                                        <option value="HIDDEN" <%= product && product.visibility === 'HIDDEN' ? 'selected' : '' %>>노출중지 (프론트 전체 숨김)</option>
+                                        <option value="MEMBER_ONLY" <%= product && product.visibility === 'MEMBER_ONLY' ? 'selected' : '' %>>로그인전용 (로그인 회원만 노출)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">재고 수량</label>
+                                    <input type="number" name="stock" value="<%= product ? product.stock : 0 %>">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">유통채널 구분</label>
+                                    <div class="space-y-2 border border-gray-300 rounded-md p-3">
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="radio" name="distribution_badge" value=""
+                                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                                <%=!product || !product.distribution_badge ? 'checked' : '' %>>
+                                            <span>미선택 (뱃지 미노출)</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="radio" name="distribution_badge" value="ONLINE_ONLY"
+                                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                                <%=product && product.distribution_badge==='ONLINE_ONLY' ? 'checked'
+                                                : '' %>>
+                                            <span>온라인판매가능</span>
+                                        </label>
+                                        <!-- 오프라인판매전용 — 기능 미사용으로 주석처리
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="radio" name="distribution_badge" value="OFFLINE_ONLY"
+                                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                                disabled>
+                                            <span>오프라인판매전용</span>
+                                        </label>
+                                        -->
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">상품구분 (복수 선택 가능)</label>
+                                    <% const _badges = (product && product.product_badge) ? product.product_badge.split(',') : []; %>
+                                    <div class="space-y-2 border border-gray-300 rounded-md p-3">
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" name="product_badge" value="BEST"
+                                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                <%= _badges.includes('BEST') ? 'checked' : '' %>>
+                                            <span>BEST</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" name="product_badge" value="NEW"
+                                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                <%= _badges.includes('NEW') ? 'checked' : '' %>>
+                                            <span>NEW</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" name="product_badge" value="RECOMMEND"
+                                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                <%= _badges.includes('RECOMMEND') ? 'checked' : '' %>>
+                                            <span>추천</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" name="product_badge" value="DEADLINE_SALE"
+                                                class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                                                <%= _badges.includes('DEADLINE_SALE') ? 'checked' : '' %>>
+                                            <span class="text-red-600 font-medium">기간임박할인</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" name="product_badge" value="GREENHUB_SPECIAL"
+                                                class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                                                <%= _badges.includes('GREENHUB_SPECIAL') ? 'checked' : '' %>>
+                                            <span class="text-green-700 font-medium">와이디몰특가</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div id="badgeExpireDateWrap" class="<%= _badges.includes('DEADLINE_SALE') ? '' : 'hidden' %>">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">기간임박할인 만료일</label>
+                                    <input type="date" name="badge_expire_date"
+                                        value="<%= (product && product.badge_expire_date) ? new Date(product.badge_expire_date).toISOString().split('T')[0] : '' %>"
+                                        class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <p class="text-xs text-gray-500 mt-1">만료일이 지나면 자동으로 품절(SOLD_OUT) 처리됩니다.</p>
+                                </div>
+                                <script>
+                                    document.querySelectorAll('input[name="product_badge"]').forEach(cb => {
+                                        cb.addEventListener('change', () => {
+                                            const deadlineChecked = document.querySelector('input[name="product_badge"][value="DEADLINE_SALE"]').checked;
+                                            document.getElementById('badgeExpireDateWrap').classList.toggle('hidden', !deadlineChecked);
+                                        });
+                                    });
+                                </script>
+                            </div>
+
+                            <!-- 함께 보면 좋은 상품 -->
+                            <div class="bg-gray-50 p-4 rounded-lg mb-8">
+                                <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4">함께 보면 좋은 상품 <span class="text-xs font-normal text-gray-400">(최대 8개, 양방향 자동 연결)</span></h6>
+                                <div class="mb-3">
+                                    <div class="flex gap-2">
+                                        <input type="text" id="rec-search-input" placeholder="상품명 또는 상품코드로 검색"
+                                            class="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                        <button type="button" onclick="searchRecommendation()" class="px-4 py-2 bg-gray-700 text-white text-sm rounded-md hover:bg-gray-800">검색</button>
+                                    </div>
+                                    <div id="rec-search-results" class="mt-2 hidden border border-gray-200 rounded-md bg-white max-h-48 overflow-y-auto"></div>
+                                </div>
+                                <div id="rec-list" class="space-y-2">
+                                    <p class="text-sm text-gray-400 py-2 text-center" id="rec-empty">로딩 중...</p>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-2">등록된 추천 상품: <span id="rec-count">0</span>/8개</p>
+                            </div>
+                            <div id="rec-hidden-inputs"></div>
+                            <script>
+                            (function() {
+                                const IS_EDIT = <%= product ? 'true' : 'false' %>;
+                                const PID = '<%= product ? product.id : 0 %>';
+                                const listEl = document.getElementById('rec-list');
+                                const countEl = document.getElementById('rec-count');
+                                const searchInput = document.getElementById('rec-search-input');
+                                const resultsEl = document.getElementById('rec-search-results');
+                                const hiddenInputs = document.getElementById('rec-hidden-inputs');
+
+                                // 신규 등록용: 로컬 추천 목록
+                                let localRecs = [];
+
+                                async function loadRecs() {
+                                    if (IS_EDIT) {
+                                        const res = await fetch('/admin/products/recommendations/' + PID);
+                                        const data = await res.json();
+                                        renderRecs(data.recommendations || []);
+                                    } else {
+                                        renderRecs(localRecs);
+                                    }
+                                }
+
+                                function renderRecs(recs) {
+                                    countEl.textContent = recs.length;
+                                    if (recs.length === 0) {
+                                        listEl.innerHTML = '<p class="text-sm text-gray-400 py-2 text-center">등록된 추천 상품이 없습니다.</p>';
+                                        hiddenInputs.innerHTML = '';
+                                        return;
+                                    }
+                                    listEl.innerHTML = recs.map((r, i) => `
+                                        <div class="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-3 py-2">
+                                            <span class="text-xs text-gray-400 w-5 text-center">${i + 1}</span>
+                                            ${r.main_image ? `<img src="${r.main_image}" class="w-8 h-8 rounded object-cover">` : '<div class="w-8 h-8 rounded bg-gray-100"></div>'}
+                                            <span class="text-sm text-gray-800 flex-1 truncate">${r.name}</span>
+                                            <span class="text-[10px] text-gray-400">${r.product_code || ''}</span>
+                                            <button type="button" onclick="moveRec(${i}, -1)" class="text-gray-400 hover:text-gray-700 text-xs px-1" ${i === 0 ? 'disabled' : ''}>↑</button>
+                                            <button type="button" onclick="moveRec(${i}, 1)" class="text-gray-400 hover:text-gray-700 text-xs px-1" ${i === recs.length - 1 ? 'disabled' : ''}>↓</button>
+                                            <button type="button" onclick="removeRec('${r.id}')" class="text-red-400 hover:text-red-600 text-xs px-1">×</button>
+                                        </div>
+                                    `).join('');
+                                    window._recIds = recs.map(r => r.id);
+                                    // 신규 등록용 hidden inputs
+                                    if (!IS_EDIT) {
+                                        hiddenInputs.innerHTML = recs.map(r => `<input type="hidden" name="recommendation_ids" value="${r.id}">`).join('');
+                                    }
+                                }
+
+                                window.searchRecommendation = async function() {
+                                    const q = searchInput.value.trim();
+                                    if (!q) return;
+                                    const res = await fetch('/admin/products/recommendations/search?q=' + encodeURIComponent(q) + '&excludeId=' + PID);
+                                    const data = await res.json();
+                                    if (data.products.length === 0) {
+                                        resultsEl.innerHTML = '<p class="text-sm text-gray-400 p-3">검색 결과가 없습니다.</p>';
+                                    } else {
+                                        resultsEl.innerHTML = data.products.map(p => `
+                                            <div class="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0" onclick="addRec('${p.id}', '${p.name.replace(/'/g,"\\'")}', '${p.main_image||''}', '${p.product_code||''}')">
+                                                ${p.main_image ? `<img src="${p.main_image}" class="w-8 h-8 rounded object-cover">` : '<div class="w-8 h-8 rounded bg-gray-100"></div>'}
+                                                <span class="text-sm text-gray-800 flex-1 truncate">${p.name}</span>
+                                                <span class="text-[10px] text-gray-400">${p.product_code || ''}</span>
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded ${p.status === 'ON' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${p.status}</span>
+                                            </div>
+                                        `).join('');
+                                    }
+                                    resultsEl.classList.remove('hidden');
+                                };
+
+                                searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchRecommendation(); } });
+
+                                window.addRec = async function(relatedId, name, image, code) {
+                                    if (IS_EDIT) {
+                                        await fetch('/admin/products/recommendations/add', {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ productId: PID, relatedId })
+                                        });
+                                    } else {
+                                        if (localRecs.length >= 8) { alert('최대 8개까지 등록 가능합니다.'); return; }
+                                        if (localRecs.find(r => String(r.id) === String(relatedId))) { alert('이미 등록된 상품입니다.'); return; }
+                                        localRecs.push({ id: relatedId, name: name, main_image: image, product_code: code });
+                                    }
+                                    resultsEl.classList.add('hidden');
+                                    searchInput.value = '';
+                                    loadRecs();
+                                };
+
+                                window.removeRec = async function(relatedId) {
+                                    if (!confirm('추천 상품을 삭제하시겠습니까?' + (IS_EDIT ? ' (양방향 삭제)' : ''))) return;
+                                    if (IS_EDIT) {
+                                        await fetch('/admin/products/recommendations/remove', {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ productId: PID, relatedId })
+                                        });
+                                    } else {
+                                        localRecs = localRecs.filter(r => String(r.id) !== String(relatedId));
+                                    }
+                                    loadRecs();
+                                };
+
+                                window.moveRec = async function(idx, dir) {
+                                    if (IS_EDIT) {
+                                        const ids = [...window._recIds];
+                                        const target = idx + dir;
+                                        if (target < 0 || target >= ids.length) return;
+                                        [ids[idx], ids[target]] = [ids[target], ids[idx]];
+                                        await fetch('/admin/products/recommendations/reorder', {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ productId: PID, order: ids })
+                                        });
+                                    } else {
+                                        const target = idx + dir;
+                                        if (target < 0 || target >= localRecs.length) return;
+                                        [localRecs[idx], localRecs[target]] = [localRecs[target], localRecs[idx]];
+                                    }
+                                    loadRecs();
+                                };
+
+                                document.addEventListener('click', e => {
+                                    if (!resultsEl.contains(e.target) && e.target !== searchInput) resultsEl.classList.add('hidden');
+                                });
+
+                                loadRecs();
+                            })();
+                            </script>
+
+                            <!-- 가격 정보 -->
+                            <div class="bg-gray-50 p-4 rounded-lg mb-8">
+                                <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4">가격 설정</h6>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-900 mb-1">판매가 (필수)<span
+                                                class="text-red-500">*</span></label>
+                                        <input type="text" name="price" id="price"
+                                            class="price-input text-right font-bold ring-1 ring-blue-500 border-blue-500"
+                                            required value="<%= product ? product.price : '' %>">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-500 mb-1">정가 (선택, 취소선 표시용)</label>
+                                        <input type="text" name="original_price" id="original_price"
+                                            class="price-input text-right"
+                                            value="<%= product ? (product.original_price || '') : '' %>">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-500 mb-1">할인율 % (선택)</label>
+                                        <input type="number" name="discount_rate" id="discount_rate" min="0" max="100"
+                                            class="w-full px-3 py-2 text-right text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                            value="<%= product ? (product.discount_rate || 0) : 0 %>">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-3">* 정가를 판매가보다 높게 입력하면 상품 목록·상세에서 정가에 취소선이 표시됩니다. 할인율은 상품 이미지의 SALE 뱃지에 사용됩니다.</p>
+
+                                <!-- 원가(관리자 참고용, 미노출) -->
+                                <input type="hidden" name="purchase_price"
+                                    value="<%= product ? product.purchase_price : 0 %>">
+                            </div>
+
+                            <!-- 상세 정보 -->
+                            <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4 mt-8">상세 정보 및 이미지</h6>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">대표 이미지</label>
+                                    <div class="flex gap-2 mb-2 items-center">
+                                        <input type="file" name="main_image" id="main_image"
+                                            class="flex-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                            accept="image/*">
+                                        <button type="button" id="paste-main-btn"
+                                            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 whitespace-nowrap">붙여넣기</button>
+                                    </div>
+                                    <div id="main-image-preview" class="mt-2">
+                                        <% if(product && product.main_image) { %>
+                                            <div class="text-sm text-gray-500">현재: <%= product.main_image %>
+                                            </div>
+                                            <img src="<%= product.main_image %>"
+                                                class="mt-2 h-24 w-auto rounded border border-gray-200">
+                                            <% } %>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">썸네일 이미지</label>
+                                    <div class="flex gap-2 mb-2 items-center">
+                                        <input type="file" name="thumbnail_image" id="thumbnail_image"
+                                            class="flex-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                                            accept="image/*">
+                                        <button type="button" id="paste-thumbnail-btn"
+                                            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 whitespace-nowrap">붙여넣기</button>
+                                    </div>
+                                    <div id="thumbnail-preview" class="mt-2">
+                                        <% if(product && product.thumbnail_image) { %>
+                                            <div class="text-sm text-gray-500">현재: <%= product.thumbnail_image %>
+                                            </div>
+                                            <img src="<%= product.thumbnail_image %>"
+                                                class="mt-2 h-24 w-auto rounded border border-gray-200">
+                                            <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 추가 이미지 (최대 10개) -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">추가 이미지 (최대 10개)</label>
+                                <input type="file" name="sub_images" id="sub_images" multiple
+                                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                    accept="image/*">
+                                <p class="text-xs text-gray-500 mt-1">* 여러 파일을 한 번에 선택할 수 있습니다.</p>
+
+                                <div id="sub-images-preview" class="mt-2 grid grid-cols-5 gap-2">
+                                    <% if(product && product.images && product.images.length> 0) { %>
+                                        <% product.images.forEach(img=> { %>
+                                            <div class="relative group">
+                                                <img src="<%= img.image_url %>"
+                                                    class="h-20 w-auto rounded border border-gray-200 object-cover">
+                                                <div class="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 cursor-pointer opacity-0 group-hover:opacity-100 transition"
+                                                    onclick="deleteImage('<%= img.id %>', this)">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                                                        viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </div>
+                                                <input type="hidden" name="existing_image_ids[]" value="<%= img.id %>">
+                                            </div>
+                                            <% }) %>
+                                                <% } %>
+                                </div>
+                            </div>
+
+                            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">동영상 설정</label>
+                                <div class="flex gap-4 mb-3">
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="video_type" value="FILE" class="form-radio"
+                                            <%=(!product || product.video_type==='FILE' ) ? 'checked' : '' %>
+                                        onclick="toggleVideoInput('FILE')">
+                                        <span class="ml-2">파일 업로드</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="video_type" value="YOUTUBE" class="form-radio"
+                                            <%=(product && product.video_type==='YOUTUBE' ) ? 'checked' : '' %>
+                                        onclick="toggleVideoInput('YOUTUBE')">
+                                        <span class="ml-2">유튜브 링크</span>
+                                    </label>
+                                </div>
+                                <div id="video-file-input"
+                                    class="<%= (product && product.video_type === 'YOUTUBE') ? 'hidden' : '' %>">
+                                    <input type="file" name="video_file" accept="video/*"
+                                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-200 file:text-gray-700 hover:file:bg-gray-300">
+                                    <% if(product && product.video_type==='FILE' && product.video_url) { %>
+                                        <p class="mt-1 text-sm text-gray-500">현재 파일: <%=
+                                                product.video_url.split('/').pop() %>
+                                        </p>
+                                        <% } %>
+                                </div>
+                                <div id="video-url-input"
+                                    class="<%= (!product || product.video_type === 'FILE') ? 'hidden' : '' %>">
+                                    <input type="url" name="video_url" placeholder="https://www.youtube.com/watch?v=..."
+                                        value="<%= (product && product.video_type === 'YOUTUBE') ? product.video_url : '' %>">
+                                </div>
+                            </div>
+
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">상품 기본설명 (요약)</label>
+                                <textarea id="short_description" name="short_description"
+                                    rows="5"><%= product ? product.short_description : '' %></textarea>
+                                <p class="text-xs text-gray-500 mt-1">상세설명 상단에 노출되는 3~4줄 요약 설명입니다.</p>
+                            </div>
+
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">상품 상세 설명</label>
+                                <textarea id="description" name="description"
+                                    rows="10"><%= product ? product.description : '' %></textarea>
+                            </div>
+
+                            <!-- AI 추천 설정 -->
+                            <div class="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-100">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h6 class="text-base font-semibold text-purple-800">AI 추천 설정</h6>
+                                    <label class="inline-flex items-center cursor-pointer">
+                                        <span class="mr-3 text-sm font-medium text-gray-700">AI 추천 사용</span>
+                                        <div class="relative">
+                                            <input type="checkbox" name="is_ai_recommendation" id="is_ai_recommendation"
+                                                class="sr-only" <%=(product && product.is_ai_recommendation) ? 'checked'
+                                                : '' %> onchange="toggleAIContent()">
+                                            <div class="block bg-gray-300 w-10 h-6 rounded-full checkbox-bg"></div>
+                                            <div
+                                                class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition">
+                                            </div>
+                                        </div>
+                                    </label>
+                                    <style>
+                                        input:checked~.checkbox-bg {
+                                            background-color: #7c3aed;
+                                        }
+
+                                        input:checked~.dot {
+                                            transform: translateX(100%);
+                                        }
+                                    </style>
+                                </div>
+
+                                <div id="ai-content-area"
+                                    class="<%= (product && product.is_ai_recommendation) ? '' : 'hidden' %>">
+                                    <div class="flex justify-end mb-2">
+                                        <button type="button" id="generate-ai-btn"
+                                            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 bg-purple-600 text-white hover:bg-purple-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none"
+                                                viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            AI 추천 생성
+                                        </button>
+                                    </div>
+                                    <textarea name="ai_recommendation_content" id="ai_recommendation_content" rows="4"
+                                        class="focus:border-purple-500 focus:ring-purple-500"
+                                        placeholder="AI가 작성한 추천 문구가 여기에 표시됩니다."><%= product ? product.ai_recommendation_content : '' %></textarea>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end gap-3 mt-8">
+                                <a href="/admin/products"
+                                    class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline min-w-[120px]">취소</a>
+                                <button type="submit"
+                                    class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 min-w-[120px]">
+                                    <%= product ? '수정하기' : '상품 등록' %>
+                                </button>
+                            </div>
+                </form>
+
+                <% if(product) { %>
+                    <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+                        <form action="/admin/products/delete" method="POST" onsubmit="return confirm('정말 삭제하시겠습니까?');">
+                            <input type="hidden" name="id" value="<%= product.id %>">
+                            <button type="submit"
+                                class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 min-w-[120px]">상품
+                                삭제</button>
+                        </form>
+                    </div>
+                    <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Price Formatting and Calculation Logic
+    const priceInputs = document.querySelectorAll('.price-input');
+    const originalPriceInput = document.getElementById('original_price');
+    const discountRateInput = document.getElementById('discount_rate');
+    const priceInput = document.getElementById('price');
+
+    // Slug Preview Logic
+    const productUrlBase = "<%= typeof productUrlBase !== 'undefined' ? productUrlBase : '' %>";
+    const nameInput = document.querySelector('input[name="name"]');
+    const slugInput = document.querySelector('input[name="slug"]');
+    const slugPreviewEl = document.getElementById('slug-preview');
+
+    function slugifyClient(text) {
+        if (!text) return '';
+        let slug = text.toString().toLowerCase();
+        slug = slug
+            .replace(/[^0-9a-zA-Z가-힣\s-]/g, ' ')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        return slug;
+    }
+
+    function updateSlugPreview() {
+        if (!slugPreviewEl) return;
+        const rawSlug = slugInput && slugInput.value.trim();
+        const baseText = rawSlug || (nameInput ? nameInput.value.trim() : '');
+        const slug = slugifyClient(baseText);
+
+        if (!slug) {
+            slugPreviewEl.textContent = '상품명을 입력하면 URL이 생성됩니다.';
+        } else {
+            slugPreviewEl.textContent = productUrlBase + slug;
+        }
+    }
+
+    if (nameInput) {
+        nameInput.addEventListener('input', updateSlugPreview);
+    }
+    if (slugInput) {
+        slugInput.addEventListener('input', updateSlugPreview);
+    }
+    updateSlugPreview();
+
+    // Format number with commas
+    function formatNumber(num) {
+        if (!num && num !== 0) return '';
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    // Remove commas for calculation
+    function unformatNumber(str) {
+        if (!str) return 0;
+        return parseInt(str.toString().replace(/,/g, '')) || 0;
+    }
+
+    // Apply formatting on load
+    priceInputs.forEach(input => {
+        input.value = formatNumber(input.value);
+
+        input.addEventListener('input', (e) => {
+            let val = unformatNumber(e.target.value);
+            e.target.value = formatNumber(val);
+        });
+    });
+
+    // Toggle Video Input
+    window.toggleVideoInput = function (type) {
+        const fileInput = document.getElementById('video-file-input');
+        const urlInput = document.getElementById('video-url-input');
+        if (type === 'FILE') {
+            fileInput.classList.remove('hidden');
+            urlInput.classList.add('hidden');
+        } else {
+            fileInput.classList.add('hidden');
+            urlInput.classList.remove('hidden');
+        }
+    }
+
+    // Toggle AI Content
+    window.toggleAIContent = function () {
+        const checkbox = document.getElementById('is_ai_recommendation');
+        const contentArea = document.getElementById('ai-content-area');
+        if (checkbox.checked) {
+            contentArea.classList.remove('hidden');
+        } else {
+            contentArea.classList.add('hidden');
+        }
+    }
+
+    // Setup Paste Handler function
+    function setupPasteHandler(btnId, inputId, previewId) {
+        const btn = document.getElementById(btnId);
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+
+        if (!btn || !input || !preview) return;
+
+        btn.addEventListener('click', async () => {
+            try {
+                const items = await navigator.clipboard.read();
+                for (const item of items) {
+                    if (!item.types.includes('image/png') && !item.types.includes('image/jpeg')) continue;
+
+                    const blob = await item.getType(item.types[0]);
+                    const file = new File([blob], "pasted_image.png", { type: "image/png" });
+
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    input.files = dataTransfer.files;
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        preview.innerHTML = `<div class="text-sm text-green-600">붙여넣기 성공!</div><img src="${e.target.result}" class="mt-2 h-24 w-auto rounded border border-green-200">`;
+                    };
+                    reader.readAsDataURL(blob);
+                    break;
+                }
+            } catch (err) {
+                console.error(err);
+                alert('클립보드에서 이미지를 읽을 수 없습니다. (권한 허용 필요)');
+            }
+        });
+    }
+
+    // Initialize Paste Handlers
+    setupPasteHandler('paste-main-btn', 'main_image', 'main-image-preview');
+    setupPasteHandler('paste-thumbnail-btn', 'thumbnail_image', 'thumbnail-preview');
+
+    // Delete sub image
+    window.deleteImage = function (id, el) {
+        if (!confirm('이미지를 삭제하시겠습니까? (저장 후 반영됩니다)')) return;
+
+        // Mark for deletion visually
+        const container = el.parentElement;
+        container.style.opacity = '0.3';
+
+        // Add hidden input for deletion
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'delete_image_ids[]';
+        input.value = id;
+        document.querySelector('form').appendChild(input);
+
+        // Remove from existing_image_ids list
+        const hiddenId = container.querySelector('input[name="existing_image_ids[]"]');
+        if (hiddenId) hiddenId.disabled = true;
+    }
+
+    // Sub Images Preview
+    // Sub Images Preview & Accumulation
+    const subImagesInput = document.getElementById('sub_images');
+    const subImagesDataTransfer = new DataTransfer();
+
+    if (subImagesInput) {
+        subImagesInput.addEventListener('change', function (e) {
+            const previewContainer = document.getElementById('sub-images-preview');
+
+            // Add new files to DataTransfer
+            if (this.files) {
+                Array.from(this.files).forEach(file => {
+                    // Check for duplicates (optional, but good UX)
+                    let isDuplicate = false;
+                    for (let i = 0; i < subImagesDataTransfer.items.length; i++) {
+                        if (subImagesDataTransfer.files[i].name === file.name &&
+                            subImagesDataTransfer.files[i].size === file.size) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+
+                    if (!isDuplicate) {
+                        subImagesDataTransfer.items.add(file);
+
+                        // Create preview
+                        const reader = new FileReader();
+                        reader.onload = function (e) {
+                            const div = document.createElement('div');
+                            div.className = 'relative group';
+
+                            // Store file name/size as data attributes to identify for deletion
+                            div.dataset.fileName = file.name;
+                            div.dataset.fileSize = file.size;
+
+                            div.innerHTML = `
+                                <img src="${e.target.result}" class="h-20 w-auto rounded border border-gray-200 object-cover">
+                                <div class="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 cursor-pointer opacity-0 group-hover:opacity-100 transition"
+                                     onclick="removeNewImage(this)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </div>
+                            `;
+                            previewContainer.appendChild(div);
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+
+            // Update input files
+            subImagesInput.files = subImagesDataTransfer.files;
+        });
+    }
+
+    // Remove newly added image
+    window.removeNewImage = function (el) {
+        const container = el.parentElement;
+        const fileName = container.dataset.fileName;
+        const fileSize = container.dataset.fileSize;
+
+        // Remove from DataTransfer
+        const newDataTransfer = new DataTransfer();
+        for (let i = 0; i < subImagesDataTransfer.files.length; i++) {
+            const file = subImagesDataTransfer.files[i];
+            if (file.name == fileName && file.size == fileSize) {
+                continue; // Skip the file to be removed
+            }
+            newDataTransfer.items.add(file);
+        }
+
+        // Update DataTransfer and Input
+        subImagesDataTransfer.items.clear();
+        for (let i = 0; i < newDataTransfer.files.length; i++) {
+            subImagesDataTransfer.items.add(newDataTransfer.files[i]);
+        }
+        document.getElementById('sub_images').files = subImagesDataTransfer.files;
+
+        // Remove preview
+        container.remove();
+    }
+
+    // AI Generation
+    const generateAiBtn = document.getElementById('generate-ai-btn');
+    if (generateAiBtn) {
+        generateAiBtn.addEventListener('click', () => {
+            const name = document.querySelector('input[name="name"]').value;
+            const categoryObj = document.querySelector('select[name="category_id"]');
+            const category_name = categoryObj.options[categoryObj.selectedIndex].text;
+            const brandSelect = document.querySelector('select[name="brand_category_id"]');
+            const provider = (brandSelect && brandSelect.value)
+                ? brandSelect.options[brandSelect.selectedIndex].text
+                : '';
+            const contentArea = document.getElementById('ai_recommendation_content');
+
+            if (!name) {
+                alert('상품명을 입력해주세요.');
+                return;
+            }
+
+            // UI feedback
+            const originalText = generateAiBtn.innerHTML;
+            generateAiBtn.innerHTML = '생성 중...';
+            generateAiBtn.disabled = true;
+
+            fetch('/admin/products/generate-ai-recommendation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, category_name, provider })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.content) {
+                        contentArea.value = data.content;
+                    } else {
+                        alert('AI 생성에 실패했습니다.');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('오류가 발생했습니다.');
+                })
+                .finally(() => {
+                    generateAiBtn.innerHTML = originalText;
+                    generateAiBtn.disabled = false;
+                });
+        });
+    }
+
+
+    // Ensure values are unformatted before submit
+    document.querySelector('form').addEventListener('submit', (e) => {
+        priceInputs.forEach(input => {
+            input.value = unformatNumber(input.value);
+        });
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const commonConfig = {
+            menubar: false,
+            relative_urls: false,
+            remove_script_host: false,
+            convert_urls: false,
+            plugins: [
+                'advlist autolink lists link image charmap print preview anchor',
+                'searchreplace visualblocks code fullscreen',
+                'insertdatetime media table paste code help wordcount'
+            ],
+            toolbar: 'undo redo | formatselect | ' +
+                'bold italic backcolor | alignleft aligncenter ' +
+                'alignright alignjustify | bullist numlist outdent indent | ' +
+                'removeformat | help | image | code',
+            content_style: 'body { font-family:Pretendard,Helvetica,Arial,sans-serif; font-size:14px; } h1 { font-size:2em; font-weight:700; margin:0.5em 0; } h2 { font-size:1.5em; font-weight:700; margin:0.4em 0; } h3 { font-size:1.25em; font-weight:700; margin:0.3em 0; } h4 { font-size:1.1em; font-weight:600; margin:0.3em 0; } h5 { font-size:1em; font-weight:600; margin:0.2em 0; } h6 { font-size:0.875em; font-weight:600; margin:0.2em 0; }',
+            images_upload_handler: function (blobInfo, success, failure) {
+                var xhr = new XMLHttpRequest();
+                xhr.withCredentials = false;
+                xhr.open('POST', '/admin/products/product-image-upload');
+                xhr.onload = function () {
+                    if (xhr.status != 200) { failure('HTTP Error: ' + xhr.status); return; }
+                    var json = JSON.parse(xhr.responseText);
+                    if (!json || typeof json.location != 'string') { failure('Invalid JSON: ' + xhr.responseText); return; }
+                    success(json.location);
+                };
+                var formData = new FormData();
+                formData.append('file', blobInfo.blob(), blobInfo.filename());
+                xhr.send(formData);
+            }
+        };
+
+        if (typeof tinymce !== 'undefined') {
+            tinymce.init({ ...commonConfig, selector: 'textarea#short_description', height: 200 });
+            tinymce.init({ ...commonConfig, selector: 'textarea#description', height: 1000 });
+        }
+    });
+</script>

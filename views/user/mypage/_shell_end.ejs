@@ -1,0 +1,14 @@
+<%
+    const isDashboard = path === '/mypage';
+%>
+<% if (isDashboard) { %>
+        </main>
+        <section>
+            <%- include('./_menu', { sticky: false }) %>
+        </section>
+<% } else { %>
+        </main>
+    </div>
+<% } %>
+    </div>
+</div>

@@ -1,0 +1,102 @@
+<%- include('./_shell_start') %>
+
+<div class="bg-white rounded-lg shadow p-8 border border-gray-100">
+    <h2 class="text-2xl font-bold text-gray-800 mb-2">회원탈퇴</h2>
+    <p class="text-sm text-gray-500 mb-8">탈퇴 전 아래 안내 사항을 반드시 확인해주세요.</p>
+
+    <% if (reauthRequired) { %>
+        <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg mb-6 text-sm">
+            본인 인증이 만료되었습니다. 다시 인증해주세요.
+        </div>
+    <% } %>
+
+    <% if (!identityVerified) { %>
+        <!-- 미인증 상태: 본인 확인 필요 -->
+        <div class="text-center py-10">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                <i class="bi bi-shield-lock text-2xl text-gray-400"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">본인 확인이 필요합니다</h3>
+            <p class="text-sm text-gray-500 mb-6">회원탈퇴를 진행하려면 카카오 계정으로 본인 인증을 먼저 완료해주세요.</p>
+            <a href="/auth/kakao/reauth?return_to=/mypage/withdraw"
+               class="inline-flex items-center gap-2 bg-[#FEE500] text-[#191919] font-bold py-3 px-8 rounded-xl text-sm hover:brightness-95 transition">
+                <i class="bi bi-chat-dots-fill"></i>
+                카카오 본인인증
+            </a>
+        </div>
+    <% } else { %>
+        <!-- 인증 완료: 탈퇴 진행 -->
+        <div class="bg-red-50 border border-red-200 rounded-lg p-5 mb-6">
+            <h3 class="text-sm font-bold text-red-800 mb-3">
+                <i class="bi bi-exclamation-triangle-fill mr-1"></i>
+                탈퇴 시 아래 사항이 적용됩니다
+            </h3>
+            <ul class="text-sm text-red-700 space-y-1.5 list-disc list-inside">
+                <li>보유 중인 <strong>포인트와 쿠폰이 모두 소멸</strong>되며 복구할 수 없습니다.</li>
+                <li><strong>주문 이력 조회가 불가</strong>합니다.</li>
+                <li>작성한 리뷰와 문의 내역은 삭제됩니다.</li>
+                <li>재가입 시 기존 혜택은 복구되지 않습니다.</li>
+                <li>개인정보는 즉시 파기되며 동일 계정으로 재가입할 수 없습니다.</li>
+            </ul>
+        </div>
+
+        <form method="POST" action="/mypage/withdraw" id="withdrawForm">
+            <!-- 탈퇴 사유 -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-3">탈퇴 사유를 선택해주세요</label>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="reason" value="서비스 불만족" class="accent-red-500" required>
+                        <span class="text-sm text-gray-700">서비스가 만족스럽지 않아요</span>
+                    </label>
+                    <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="reason" value="이용빈도 낮음" class="accent-red-500">
+                        <span class="text-sm text-gray-700">이용 빈도가 낮아요</span>
+                    </label>
+                    <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="reason" value="개인정보 우려" class="accent-red-500">
+                        <span class="text-sm text-gray-700">개인정보 보호가 걱정돼요</span>
+                    </label>
+                    <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="reason" value="기타" class="accent-red-500">
+                        <span class="text-sm text-gray-700">기타</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 확인 체크박스 -->
+            <div class="mb-6">
+                <label class="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200 cursor-pointer">
+                    <input type="checkbox" id="withdrawAgree" class="accent-red-500 mt-0.5" required>
+                    <span class="text-sm text-gray-700">위 안내 사항을 모두 확인하였으며, 회원탈퇴에 동의합니다.</span>
+                </label>
+            </div>
+
+            <button type="submit" id="withdrawBtn"
+                    class="w-full bg-red-500 text-white font-bold py-3 px-6 rounded-xl text-sm hover:bg-red-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled>
+                탈퇴하기
+            </button>
+        </form>
+
+        <script>
+        (function() {
+            var form = document.getElementById('withdrawForm');
+            var agree = document.getElementById('withdrawAgree');
+            var btn = document.getElementById('withdrawBtn');
+
+            agree.addEventListener('change', function() {
+                btn.disabled = !agree.checked;
+            });
+
+            form.addEventListener('submit', function(e) {
+                if (!confirm('정말 탈퇴하시겠습니까?\n탈퇴 후에는 되돌릴 수 없습니다.')) {
+                    e.preventDefault();
+                }
+            });
+        })();
+        </script>
+    <% } %>
+</div>
+
+<%- include('./_shell_end') %>

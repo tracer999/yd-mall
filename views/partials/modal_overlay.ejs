@@ -1,0 +1,22 @@
+<%--
+  공통 모달 오버레이
+  - 배경: 반투명 연한 회색
+  - 사용: modalId, modalTitle 필요
+  - body: <%- body %> 또는 include 시 content
+--%>
+<div id="<%= modalId %>" class="fixed inset-0 z-[100] hidden" aria-hidden="true">
+  <div class="fixed inset-0 bg-gray-500/60 backdrop-blur-sm" data-modal-close="<%= modalId %>"></div>
+  <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
+    <div class="bg-white/95 rounded-xl shadow-xl max-h-[90vh] w-full max-w-lg pointer-events-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="<%= modalId %>-title">
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 id="<%= modalId %>-title" class="text-lg font-semibold text-gray-800"><%= modalTitle %></h3>
+        <button type="button" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100" data-modal-close="<%= modalId %>" aria-label="닫기">
+          <i class="bi bi-x-lg text-lg"></i>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <%- typeof body !== 'undefined' ? body : '' %>
+      </div>
+    </div>
+  </div>
+</div>

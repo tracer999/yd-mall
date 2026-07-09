@@ -1,0 +1,30 @@
+<%- include('./_shell_start') %>
+
+<div class="bg-white rounded-lg shadow border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+        <h3 class="text-base font-bold text-gray-800">최근 본 상품</h3>
+        <span class="text-sm text-gray-500">최근 15일 · 총 <%= recentProducts.length %>개</span>
+    </div>
+
+    <% if (recentProducts.length === 0) { %>
+        <div class="p-12 text-center text-gray-500">
+            <div class="text-4xl mb-4"><i class="bi bi-eye"></i></div>
+            <p class="mb-1 font-medium">최근 본 상품이 없습니다.</p>
+            <p class="text-sm text-gray-400 mb-4">상품을 둘러보고 마음에 드는 상품을 찾아보세요.</p>
+            <a href="/products"
+                class="inline-flex items-center gap-2 gh-btn-primary px-5 py-2.5 rounded-lg text-sm font-semibold transition">
+                상품 보러가기
+            </a>
+        </div>
+    <% } else { %>
+        <div class="p-4 sm:p-6">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+                <% recentProducts.forEach(product => { %>
+                    <%- include('../../partials/product_card', { product }) %>
+                <% }) %>
+            </div>
+        </div>
+    <% } %>
+</div>
+
+<%- include('./_shell_end') %>

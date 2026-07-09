@@ -1,0 +1,57 @@
+<%- include('./_shell_start') %>
+
+    <div class="bg-white rounded-lg shadow border border-gray-100">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            <h3 class="text-lg font-bold text-gray-800">포인트 내역</h3>
+        </div>
+
+        <!-- 보유 포인트 -->
+        <div class="p-6 border-b border-gray-100">
+            <div class="flex justify-between items-center">
+                <span class="text-gray-600 font-medium">사용 가능 포인트</span>
+                <span class="text-2xl font-bold text-[var(--gh-primary)]">
+                    <%= (pointsBalance || 0).toLocaleString() %> P
+                </span>
+            </div>
+        </div>
+
+        <!-- 내역 -->
+        <% if (transactions.length===0) { %>
+            <div class="p-12 text-center text-gray-500">
+                포인트 적립/사용 내역이 없습니다.
+            </div>
+            <% } else { %>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-white text-gray-500 text-xs uppercase border-b border-gray-100">
+                            <tr>
+                                <th class="px-6 py-3 font-medium">일시</th>
+                                <th class="px-6 py-3 font-medium">내용</th>
+                                <th class="px-6 py-3 font-medium text-right">포인트 변동</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <% transactions.forEach(tx=> { %>
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-6 py-4 text-sm text-gray-500">
+                                        <%= new Date(tx.created_at).toLocaleString() %>
+                                    </td>
+                                    <td class="px-6 py-4 text-gray-900">
+                                        <%= tx.description %>
+                                            <% if (tx.order_id) { %>
+                                                <a href="/mypage/orders/<%= tx.order_id %>"
+                                                    class="text-xs text-gray-400 hover:text-[var(--gh-primary)] ml-1">(주문보기)</a>
+                                                <% } %>
+                                    </td>
+                                    <td
+                                        class="px-6 py-4 text-right font-bold <%= tx.amount > 0 ? 'text-blue-600' : 'text-red-600' %>">
+                                        <%= (tx.amount> 0 ? '+' : '') + Number(tx.amount).toLocaleString() %>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+                <% } %>
+    </div>
+    <%- include('./_shell_end') %>

@@ -1,0 +1,56 @@
+<div class="mb-6">
+    <p class="text-sm text-gray-500">새로운 버전의 이용약관 또는 개인정보 처리방침을 등록합니다.</p>
+</div>
+
+<form action="/admin/policies/create" method="POST" class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div>
+            <label for="type" class="block text-sm font-medium text-gray-700 mb-1">약관 종류</label>
+            <select name="type" id="type"
+                class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <option value="TERMS">이용약관</option>
+                <option value="PRIVACY">개인정보 처리방침</option>
+            </select>
+        </div>
+        <div>
+            <label for="version" class="block text-sm font-medium text-gray-700 mb-1">버전 명</label>
+            <input type="text" name="version" id="version" placeholder="예: 1.0, 2026-10-01 개정" required
+                class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        <div>
+            <label for="effective_date" class="block text-sm font-medium text-gray-700 mb-1">시행일</label>
+            <input type="date" name="effective_date" id="effective_date" required
+                class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        <div class="flex items-center pt-6">
+            <input type="checkbox" name="is_active" id="is_active"
+                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+            <label for="is_active" class="ml-2 block text-sm text-gray-900">
+                즉시 시행 (현재 버전을 비활성화하고 이 버전을 활성화합니다)
+            </label>
+        </div>
+    </div>
+
+    <div class="mb-6">
+        <label for="content" class="block text-sm font-medium text-gray-700 mb-1">약관 내용</label>
+        <textarea name="content" id="content" rows="20"
+            class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500"></textarea>
+    </div>
+
+    <div class="flex justify-end gap-3">
+        <a href="/admin/policies"
+            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+        <button type="submit"
+            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">등록하기</button>
+    </div>
+</form>
+
+<script src="https://cdn.tiny.cloud/1/<%= tinymceKey %>/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+    tinymce.init({
+        selector: '#content',
+        branding: false,
+        plugins: 'anchor autolink charmap codesample code emoticons image link lists media searchreplace table visualblocks wordcount',
+        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | link image media table | align lineheight | numlist bullist indent outdent | emoticons charmap | code removeformat',
+    });
+</script>

@@ -1,0 +1,41 @@
+<%
+  /* 카테고리별 상품(탭) 섹션 markup. locals: categories. 탭 AJAX 스크립트는 페이지(index)에서 유지. */
+%>
+<% if (categories && categories.length > 0) { %>
+<section class="py-12 bg-white" id="category-section">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="mb-10 text-center">
+      <h2 class="text-2xl font-extrabold text-gray-900 mb-6"><%= (typeof title !== 'undefined' && title) ? title : '카테고리별 상품' %></h2>
+      <!-- 탭 버튼 -->
+      <div class="flex flex-wrap justify-center gap-2" id="cat-tab-list">
+        <% categories.forEach((cat, idx) => { %>
+          <button class="cat-tab <%= idx === 0 ? 'active' : '' %>"
+                  data-cat-id="<%= cat.id %>"
+                  data-cat-name="<%= cat.name %>"
+                  onclick="loadCategoryTab(this)">
+            <%= cat.name %>
+          </button>
+        <% }); %>
+      </div>
+    </div>
+
+    <!-- 상품 그리드 -->
+    <div id="cat-product-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+      <!-- AJAX로 채워짐 -->
+      <div class="col-span-full flex justify-center py-12">
+        <svg class="animate-spin h-8 w-8 text-[var(--gh-primary)]" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 더보기 링크 -->
+    <div class="mt-8 text-center">
+      <a id="cat-more-link" href="/products" class="inline-flex items-center gap-2 px-6 py-2.5 border border-gray-300 rounded-full text-sm font-medium text-gray-700 hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition">
+        전체 보기 <i class="bi bi-chevron-right text-xs"></i>
+      </a>
+    </div>
+  </div>
+</section>
+<% } %>

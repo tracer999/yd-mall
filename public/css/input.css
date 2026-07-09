@@ -1,0 +1,89 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+@import "tailwindcss";
+@config "../../tailwind.config.js";
+@source "../../views";
+@source "../../public/js";
+
+/* 관리자 폼 디자인 시스템 - .admin-main-content 영역 내 공통 스타일 */
+@layer components {
+  .admin-main-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):not([type="image"]),
+  .admin-main-content select {
+    @apply block w-full h-[38px] px-4 py-1.5 text-base text-gray-800 bg-white border border-gray-300 rounded-md shadow-sm
+           focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
+           transition-colors;
+  }
+
+  .admin-main-content textarea {
+    @apply block w-full min-h-[4.86rem] px-4 py-1.5 text-base text-gray-800 bg-white border border-gray-300 rounded-md shadow-sm
+           focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
+           transition-colors;
+  }
+
+  .admin-main-content input::placeholder,
+  .admin-main-content textarea::placeholder {
+    @apply text-gray-400;
+  }
+
+  .admin-main-content .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-2;
+  }
+
+  .admin-main-content .form-input,
+  .admin-main-content .form-select {
+    @apply block w-full h-[38px] px-4 py-1.5 text-base text-gray-800 bg-white border border-gray-300 rounded-md shadow-sm
+           focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20;
+  }
+
+  /* 모바일/PC 텍스트 전환 (768px 이하 = 모바일) */
+  .label-mobile { display: inline; }
+  .label-pc { display: none; }
+  @media (min-width: 768px) {
+    .label-mobile { display: none; }
+    .label-pc { display: inline; }
+  }
+
+  /* 상품 카드 뱃지 */
+  .product-pill-badge {
+    @apply inline-block px-2 py-0.5 rounded text-[10px] font-bold leading-tight;
+  }
+  .badge-best {
+    @apply bg-yellow-400 text-yellow-900;
+  }
+  .badge-new {
+    @apply bg-emerald-500 text-white;
+  }
+  .badge-recommend {
+    @apply bg-blue-500 text-white;
+  }
+  .badge-channel {
+    @apply bg-teal-500 text-white;
+  }
+  .badge-deadline {
+    @apply bg-red-500 text-white;
+  }
+  .badge-greenhub {
+    @apply bg-[var(--gh-primary)] text-white;
+  }
+
+  /* 위지윅 에디터 콘텐츠 (상품 상세 등) */
+  .prose h1 { @apply text-3xl font-bold mt-6 mb-4; }
+  .prose h2 { @apply text-2xl font-bold mt-5 mb-3; }
+  .prose h3 { @apply text-xl font-bold mt-4 mb-2; }
+  .prose h4 { @apply text-lg font-semibold mt-3 mb-2; }
+  .prose h5 { @apply text-base font-semibold mt-3 mb-1; }
+  .prose h6 { @apply text-sm font-semibold mt-2 mb-1; }
+  .prose p { @apply mb-3 leading-relaxed; }
+  .prose ul { @apply list-disc pl-5 mb-3; }
+  .prose ol { @apply list-decimal pl-5 mb-3; }
+  .prose li { @apply mb-1; }
+  .prose blockquote { @apply border-l-4 border-gray-300 pl-4 italic text-gray-600 my-3; }
+  .prose strong { @apply font-bold; }
+  .prose em { @apply italic; }
+  .prose a { @apply text-blue-600 underline; }
+  .prose img { @apply max-w-full h-auto rounded my-3; }
+  .prose table { @apply w-full border-collapse my-3; }
+  .prose th, .prose td { @apply border border-gray-300 px-3 py-2 text-sm; }
+  .prose th { @apply bg-gray-100 font-semibold; }
+  .prose pre { @apply bg-gray-100 rounded p-3 overflow-x-auto text-sm my-3; }
+  .prose code { @apply bg-gray-100 px-1 py-0.5 rounded text-sm; }
+}

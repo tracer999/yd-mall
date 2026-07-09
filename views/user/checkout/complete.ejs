@@ -1,0 +1,17 @@
+<div class="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+    <div class="bg-white border border-green-100 rounded-3xl shadow-sm p-10">
+        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center text-green-600">
+            <i class="bi bi-check2-circle text-2xl"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">주문이 완료되었습니다.</h1>
+        <% if (order) { %>
+            <p class="text-sm text-gray-600 mb-4">주문번호: <span class="font-mono font-semibold"><%= order.order_number %></span></p>
+            <p class="text-sm text-gray-500 mb-2">총 결제금액: <strong><%= Number(order.total_amount).toLocaleString() %>원</strong></p>
+        <% } %>
+        <p class="text-sm text-gray-500 mb-8">주문 내역은 마이페이지에서 확인하실 수 있습니다. (추후 연동 예정)</p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <a href="/" class="px-5 py-2.5 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">메인으로 가기</a>
+            <a href="/products" class="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">계속 쇼핑하기</a>
+        </div>
+    </div>
+</div>

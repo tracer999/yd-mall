@@ -1,0 +1,105 @@
+<div class="p-6 max-w-4xl">
+    <div class="flex items-center gap-4 mb-6">
+        <a href="/admin/shopify-orders" class="text-gray-500 hover:text-gray-700">← 목록</a>
+        <h1 class="text-2xl font-bold text-gray-800">Shopify 주문 상세</h1>
+    </div>
+
+    <!-- 주문 기본 정보 -->
+    <div class="bg-white rounded-xl shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-4">기본 정보</h2>
+        <dl class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+                <dt class="text-gray-500">주문번호</dt>
+                <dd class="font-semibold text-gray-900 mt-1"><%= order.shopify_order_number || order.shopify_order_id %></dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">Shopify 주문 ID</dt>
+                <dd class="text-gray-700 mt-1"><%= order.shopify_order_id %></dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">고객 이메일</dt>
+                <dd class="text-gray-700 mt-1"><%= order.customer_email || '-' %></dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">결제금액</dt>
+                <dd class="font-semibold text-gray-900 mt-1"><%= Number(order.total_price).toLocaleString() %> <%= order.currency %></dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">결제상태</dt>
+                <dd class="mt-1">
+                    <% const fs = order.financial_status; %>
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full
+                        <%= fs === 'paid'     ? 'bg-green-100 text-green-800'  :
+                            fs === 'pending'  ? 'bg-yellow-100 text-yellow-800':
+                            fs === 'refunded' ? 'bg-purple-100 text-purple-800':
+                            fs === 'cancelled'? 'bg-red-100 text-red-800'      :
+                                                'bg-gray-100 text-gray-700'    %>">
+                        <%= fs === 'paid'      ? '결제완료' :
+                            fs === 'pending'   ? '대기중'   :
+                            fs === 'refunded'  ? '환불'     :
+                            fs === 'cancelled' ? '취소'     : fs %>
+                    </span>
+                </dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">배송상태</dt>
+                <dd class="text-gray-700 mt-1"><%= order.fulfillment_status || '미처리' %></dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">주문일시</dt>
+                <dd class="text-gray-700 mt-1"><%= new Date(order.created_at).toLocaleString('ko-KR') %></dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">최종수정</dt>
+                <dd class="text-gray-700 mt-1"><%= new Date(order.updated_at).toLocaleString('ko-KR') %></dd>
+            </div>
+        </dl>
+    </div>
+
+    <!-- 주문 상품 목록 (payload에서 파싱) -->
+    <% if (payload && payload.line_items && payload.line_items.length > 0) { %>
+    <div class="bg-white rounded-xl shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-4">주문 상품</h2>
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-xs uppercase">
+                <tr>
+                    <th class="px-4 py-2 text-left">상품명</th>
+                    <th class="px-4 py-2 text-left">SKU</th>
+                    <th class="px-4 py-2 text-right">수량</th>
+                    <th class="px-4 py-2 text-right">단가</th>
+                    <th class="px-4 py-2 text-right">합계</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <% payload.line_items.forEach(item => { %>
+                <tr>
+                    <td class="px-4 py-3"><%= item.title %> <% if (item.variant_title && item.variant_title !== 'Default Title') { %><span class="text-gray-400">/ <%= item.variant_title %></span><% } %></td>
+                    <td class="px-4 py-3 text-gray-500"><%= item.sku || '-' %></td>
+                    <td class="px-4 py-3 text-right"><%= item.quantity %></td>
+                    <td class="px-4 py-3 text-right"><%= Number(item.price).toLocaleString() %></td>
+                    <td class="px-4 py-3 text-right font-semibold"><%= (Number(item.price) * item.quantity).toLocaleString() %></td>
+                </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+    <% } %>
+
+    <!-- 배송 정보 (payload에서 파싱) -->
+    <% if (payload && payload.shipping_address) { %>
+    <div class="bg-white rounded-xl shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-4">배송 정보</h2>
+        <dl class="grid grid-cols-2 gap-3 text-sm">
+            <div><dt class="text-gray-500">수령인</dt><dd class="mt-1"><%= payload.shipping_address.name %></dd></div>
+            <div><dt class="text-gray-500">전화번호</dt><dd class="mt-1"><%= payload.shipping_address.phone || '-' %></dd></div>
+            <div class="col-span-2"><dt class="text-gray-500">주소</dt><dd class="mt-1"><%= payload.shipping_address.address1 %> <%= payload.shipping_address.address2 || '' %>, <%= payload.shipping_address.city %>, <%= payload.shipping_address.country %></dd></div>
+        </dl>
+    </div>
+    <% } %>
+
+    <!-- Raw Payload -->
+    <details class="bg-white rounded-xl shadow p-6">
+        <summary class="text-sm font-semibold text-gray-600 cursor-pointer">Raw Payload (JSON)</summary>
+        <pre class="mt-4 text-xs text-gray-600 overflow-auto bg-gray-50 p-4 rounded max-h-96"><%= JSON.stringify(payload, null, 2) %></pre>
+    </details>
+</div>

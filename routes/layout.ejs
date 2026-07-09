@@ -1,0 +1,46 @@
+<%- layout('layouts/main_layout') %>
+
+<div class="container mx-auto px-4 py-8">
+    <div class="flex flex-col md:flex-row gap-8">
+        <!-- 사이드바 -->
+        <aside class="w-full md:w-64 flex-shrink-0">
+            <div class="bg-white rounded-lg shadow p-6 sticky top-4">
+                <h2 class="text-xl font-bold mb-6 text-gray-800">마이페이지</h2>
+                <nav class="space-y-1">
+                    <a href="/mypage" class="block px-4 py-2 rounded-md transition-colors <%= path === '/mypage' ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        대시보드
+                    </a>
+                    <a href="/mypage/orders" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/mypage/orders') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        주문/배송 조회
+                    </a>
+                    <a href="/mypage/likes" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/mypage/likes') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        관심 상품
+                    </a>
+                    <a href="/mypage/coupons" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/mypage/coupons') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        내 쿠폰함
+                    </a>
+                    <a href="/mypage/points" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/mypage/points') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        포인트 내역
+                    </a>
+                    <a href="/mypage/activities" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/mypage/activities') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        나의 활동
+                    </a>
+                    <a href="/boards/notice" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/boards/notice') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        공지사항
+                    </a>
+                    <a href="/boards/guide" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/boards/guide') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        상품안내
+                    </a>
+                    <a href="/mypage/profile" class="block px-4 py-2 rounded-md transition-colors <%= path && path.startsWith('/mypage/profile') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' %>">
+                        회원 정보 수정
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- 메인 컨텐츠 -->
+        <main class="flex-1 min-w-0">
+            <%- body %>
+        </main>
+    </div>
+</div>

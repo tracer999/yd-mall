@@ -1,0 +1,281 @@
+<%- layout('layouts/main_layout') %>
+
+<div class="max-w-4xl mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-6">주문/결제</h1>
+
+    <% if (error) { %>
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
+            <span class="block sm:inline">
+                <% if (error === 'point') { %>보유 포인트를 초과하여 사용할 수 없습니다.<% } %>
+                <% if (error === 'point_min') { %>포인트는 최소 단위에 맞춰 사용해야 합니다.<% } %>
+                <% if (error === 'point_max') { %>결제 금액보다 많은 포인트를 사용할 수 없습니다.<% } %>
+                <% if (error === 'coupon') { %>유효하지 않은 쿠폰입니다.<% } %>
+                <% if (error === 'stock') { %>재고가 부족합니다.<% } %>
+                <% if (error === 'coupon_min') { %>쿠폰 최소 주문금액을 만족하지 않습니다.<% } %>
+            </span>
+        </div>
+    <% } %>
+
+    <form action="/checkout" method="POST" id="checkoutForm" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Hidden Inputs -->
+        <input type="hidden" name="product_id" value="<%= query.product_id %>">
+        <input type="hidden" name="quantity" value="<%= query.quantity %>">
+        <input type="hidden" name="cart" value="<%= query.cart %>">
+        <input type="hidden" name="guest" value="<%= isGuest ? '1' : '0' %>">
+        <input type="hidden" name="user_coupon_id" id="userCouponIdInput">
+
+        <!-- Left Column: Info -->
+        <div class="lg:col-span-2 space-y-8">
+            <!-- Products -->
+            <section>
+                <h2 class="text-lg font-bold mb-4">주문 상품</h2>
+                <div class="border rounded-lg divide-y">
+                    <% items.forEach(item => { %>
+                        <div class="p-4 flex gap-4">
+                            <img src="<%= item.image || 'https://via.placeholder.com/100' %>" class="w-20 h-20 object-cover rounded bg-gray-100">
+                            <div>
+                                <h3 class="font-medium"><%= item.name %></h3>
+                                <p class="text-sm text-gray-500"><%= Number(item.price).toLocaleString() %>원 / <%= item.quantity %>개</p>
+                                <p class="font-bold mt-1"><%= Number(item.price * item.quantity).toLocaleString() %>원</p>
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            </section>
+
+            <!-- Buyer Info -->
+            <section>
+                <h2 class="text-lg font-bold mb-4">주문자 정보</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">이름</label>
+                        <input type="text" name="buyer_name" value="<%= prefilled.buyer_name %>" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">연락처</label>
+                        <input type="tel" name="buyer_phone" value="<%= prefilled.buyer_phone %>" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700">이메일</label>
+                        <input type="email" name="buyer_email" value="<%= prefilled.buyer_email %>" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Receiver Info -->
+            <section>
+                <h2 class="text-lg font-bold mb-4">배송지 정보</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="sameAsBuyer" class="rounded border-gray-300 text-green-600">
+                        <label for="sameAsBuyer" class="text-sm text-gray-700">주문자 정보와 동일</label>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">받는 분</label>
+                            <input type="text" name="receiver_name" value="<%= prefilled.receiver_name %>" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">연락처</label>
+                            <input type="tel" name="receiver_phone" value="<%= prefilled.receiver_phone %>" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="flex gap-2">
+                            <input type="text" name="receiver_zipcode" id="postcode" value="<%= prefilled.receiver_zipcode %>" class="block w-32 border-gray-300 rounded-md shadow-sm" placeholder="우편번호" required readonly>
+                            <button type="button" onclick="execDaumPostcode()" class="px-4 py-2 bg-gray-200 rounded-md text-sm hover:bg-gray-300">주소 찾기</button>
+                        </div>
+                        <input type="text" name="receiver_address" id="address" value="<%= prefilled.receiver_address %>" class="block w-full border-gray-300 rounded-md shadow-sm" placeholder="기본 주소" required readonly>
+                        <input type="text" name="receiver_detailed_address" id="detailAddress" value="<%= prefilled.receiver_detailed_address %>" class="block w-full border-gray-300 rounded-md shadow-sm" placeholder="상세 주소">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">배송 메모</label>
+                        <select name="shipping_message" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                            <option value="">배송 메모를 선택해주세요</option>
+                            <option value="부재 시 문 앞에 놓아주세요">부재 시 문 앞에 놓아주세요</option>
+                            <option value="배송 전 연락바랍니다">배송 전 연락바랍니다</option>
+                            <option value="경비실에 맡겨주세요">경비실에 맡겨주세요</option>
+                            <option value="직접 입력">직접 입력</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Right Column: Payment -->
+        <div class="lg:col-span-1">
+            <div class="bg-white border rounded-lg p-6 sticky top-4 space-y-6">
+                <h2 class="text-lg font-bold">결제 금액</h2>
+                
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">총 상품금액</span>
+                        <span><%= Number(totalAmount).toLocaleString() %>원</span>
+                    </div>
+                    <div class="flex justify-between text-red-600">
+                        <span>쿠폰 할인</span>
+                        <span id="couponDiscountText">- 0원</span>
+                    </div>
+                    <div class="flex justify-between text-red-600">
+                        <span>포인트 사용</span>
+                        <span id="pointDiscountText">- 0원</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">배송비</span>
+                        <span>0원</span>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Coupon & Point -->
+                <div class="space-y-4">
+                    <% if (!isGuest) { %>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">쿠폰</label>
+                            <div class="flex justify-between items-center">
+                                <span id="selectedCouponName" class="text-sm text-gray-500">적용된 쿠폰 없음</span>
+                                <button type="button" onclick="openCouponModal()" class="text-sm text-green-600 hover:underline">쿠폰 선택</button>
+                            </div>
+                            <button type="button" id="removeCouponBtn" onclick="removeCoupon()" class="text-xs text-red-500 hover:underline hidden mt-1">적용 취소</button>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">포인트</label>
+                            <div class="flex gap-2">
+                                <input type="number" name="point_use_amount" id="pointInput" class="block w-full border-gray-300 rounded-md shadow-sm text-sm" placeholder="0" min="0" max="<%= pointsBalance %>" step="<%= pointMinUse %>">
+                                <button type="button" onclick="useAllPoints()" class="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-xs whitespace-nowrap hover:bg-gray-200">전액 사용</button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">
+                                보유: <%= Number(pointsBalance).toLocaleString() %> P 
+                                (최소 <%= Number(pointMinUse).toLocaleString() %> P)
+                            </p>
+                        </div>
+                    <% } else { %>
+                        <div class="text-sm text-gray-500 bg-gray-50 p-3 rounded">
+                            로그인하면 쿠폰과 포인트를 사용할 수 있습니다.
+                        </div>
+                    <% } %>
+                </div>
+
+                <hr>
+
+                <div class="flex justify-between items-center font-bold text-lg">
+                    <span>최종 결제금액</span>
+                    <span id="finalAmountText" class="text-green-600"><%= Number(totalAmount).toLocaleString() %>원</span>
+                </div>
+
+                <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition">
+                    결제하기
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Scripts -->
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+<script>
+    var totalAmount = Number('<%= totalAmount || 0 %>');
+    var pointsBalance = Number('<%= pointsBalance || 0 %>');
+    var pointMinUse = Number('<%= pointMinUse || 0 %>');
+    let couponDiscount = 0;
+    let pointDiscount = 0;
+
+    // Address
+    function execDaumPostcode() {
+        new daum.Postcode({
+            oncomplete: function(data) {
+                var addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress;
+                document.getElementById('postcode').value = data.zonecode;
+                document.getElementById("address").value = addr;
+                document.getElementById("detailAddress").focus();
+            }
+        }).open();
+    }
+
+    // Same as buyer
+    document.getElementById('sameAsBuyer').addEventListener('change', function() {
+        if(this.checked) {
+            document.querySelector('[name="receiver_name"]').value = document.querySelector('[name="buyer_name"]').value;
+            document.querySelector('[name="receiver_phone"]').value = document.querySelector('[name="buyer_phone"]').value;
+        }
+    });
+
+    // Points
+    const pointInput = document.getElementById('pointInput');
+    if (pointInput) {
+        pointInput.addEventListener('change', updatePoints);
+        pointInput.addEventListener('keyup', updatePoints);
+    }
+
+    function useAllPoints() {
+        if (!pointInput) return;
+        const maxUse = Math.min(pointsBalance, totalAmount - couponDiscount);
+        const validMax = Math.floor(maxUse / pointMinUse) * pointMinUse;
+        pointInput.value = validMax;
+        updatePoints();
+    }
+
+    function updatePoints() {
+        if (!pointInput) return;
+        let val = parseInt(pointInput.value) || 0;
+        if (val < 0) val = 0;
+        if (val > pointsBalance) {
+            alert('보유 포인트를 초과하여 사용할 수 없습니다.');
+            val = pointsBalance;
+        }
+        const currentTotal = totalAmount - couponDiscount;
+        if (val > currentTotal) val = currentTotal;
+        if (val > 0 && val % pointMinUse !== 0) {
+            val = Math.floor(val / pointMinUse) * pointMinUse;
+        }
+        pointInput.value = val;
+        pointDiscount = val;
+        updateSummary();
+    }
+
+    // Coupon
+    function openCouponModal() {
+        const modal = document.getElementById('couponModal');
+        if (modal) modal.style.display = 'flex';
+    }
+    function closeCouponModal() {
+        const modal = document.getElementById('couponModal');
+        if (modal) modal.style.display = 'none';
+    }
+    function removeCoupon() {
+        couponDiscount = 0;
+        document.getElementById('userCouponIdInput').value = '';
+        document.getElementById('selectedCouponName').textContent = '적용된 쿠폰 없음';
+        document.getElementById('removeCouponBtn').classList.add('hidden');
+        updateSummary();
+        updatePoints(); 
+    }
+    function selectCoupon(element) {
+        const dataset = element.dataset;
+        const minOrder = parseInt(dataset.minPurchase || 0);
+        if (totalAmount < minOrder) {
+            alert(`최소 주문금액 ${minOrder.toLocaleString()}원 이상이어야 사용 가능합니다.`);
+            return;
+        }
+        let discount = parseInt(dataset.amount);
+        if (discount > totalAmount) discount = totalAmount;
+        couponDiscount = discount;
+        document.getElementById('userCouponIdInput').value = dataset.userCouponId;
+        document.getElementById('selectedCouponName').textContent = dataset.name;
+        document.getElementById('removeCouponBtn').classList.remove('hidden');
+        closeCouponModal();
+        updateSummary();
+        updatePoints();
+    }
+
+    function updateSummary() {
+        document.getElementById('couponDiscountText').textContent = '-' + couponDiscount.toLocaleString() + '원';
+        document.getElementById('pointDiscountText').textContent = '-' + pointDiscount.toLocaleString() + '원';
+        const final = Math.max(0, totalAmount - couponDiscount - pointDiscount);
+        document.getElementById('finalAmountText').textContent = final.toLocaleString() + '원';
+    }
+</script>
+
+<%- include('../partials/coupon_modal', { coupons: userCoupons }) %>

@@ -1,0 +1,16 @@
+<div class="py-12 bg-gray-50 min-h-screen">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 class="text-3xl font-extrabold text-gray-900 mb-8 text-center">
+      이용약관
+    </h2>
+    <div
+      class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-gray-700 leading-relaxed"
+    >
+      <% if (siteSettings && siteSettings.terms_of_service) { %>
+        <%- siteSettings.terms_of_service %>
+      <% } else { %>
+        등록된 이용약관이 없습니다.
+      <% } %>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,40 @@
+<div class="py-12 bg-gray-50 min-h-screen">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <h2 class="text-3xl font-extrabold text-gray-900">문의 상세</h2>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
+            <div class="px-6 py-5 border-b border-gray-200 bg-gray-50">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= inquiry.is_answered ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' %>">
+                        <%= inquiry.is_answered ? '답변완료' : '답변대기' %>
+                    </span>
+                    <small class="text-gray-500 font-medium"><%= inquiry.created_at.toISOString().split('T')[0] %></small>
+                </div>
+                <h4 class="text-lg font-bold text-gray-900"><%= inquiry.title %></h4>
+            </div>
+            <div class="p-6 text-gray-700 whitespace-pre-wrap min-h-[200px] leading-relaxed">
+                <%= inquiry.content %>
+            </div>
+        </div>
+
+        <% if (inquiry.answer) { %>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg shadow-sm overflow-hidden mb-8">
+                <div class="px-6 py-4 bg-blue-100 border-b border-blue-200 flex items-center">
+                    <i class="bi bi-arrow-return-right mr-2 text-blue-700"></i>
+                    <h5 class="text-blue-900 font-bold m-0">답변 내용</h5>
+                </div>
+                <div class="p-6 text-gray-800 whitespace-pre-wrap leading-relaxed bg-white bg-opacity-50">
+                    <%= inquiry.answer %>
+                </div>
+            </div>
+        <% } %>
+
+        <div class="text-center mt-8">
+            <a href="/inquiries" class="inline-flex items-center px-6 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                목록으로 돌아가기
+            </a>
+        </div>
+    </div>
+</div>

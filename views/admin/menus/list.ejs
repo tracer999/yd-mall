@@ -1,0 +1,424 @@
+<div class="flex flex-col gap-6">
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <p class="mt-1 text-sm text-gray-500">사이드바 메뉴의 순서, 이름, 경로, 아이콘, 활성/비활성, 삭제를 관리합니다. 드래그로 순서를 변경한 뒤 저장하세요.</p>
+    </div>
+    <div class="flex gap-2">
+      <button id="addMenuRowBtn" type="button"
+        class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline gap-2">
+        <i class="bi bi-plus-lg"></i>
+        메뉴 추가
+      </button>
+      <button form="menuForm" type="submit"
+        class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline gap-2">
+        <i class="bi bi-check-lg"></i>
+        저장하기
+      </button>
+    </div>
+  </div>
+
+  <form id="menuForm" action="/admin/menus/save" method="POST" class="space-y-4">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 bg-gray-50 border-b border-gray-200">
+        <div class="flex items-center gap-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+          <div class="w-10 flex-shrink-0 text-center">이동</div>
+          <div class="w-12 flex-shrink-0 text-center">순서</div>
+          <div class="w-14 flex-shrink-0 text-center">미리보기</div>
+          <div class="flex-1 min-w-0 max-w-[200px]">메뉴명</div>
+          <div class="flex-1 min-w-0">경로 (URL)</div>
+          <div class="w-12 flex-shrink-0 text-center">활성</div>
+          <div class="w-40 flex-shrink-0 text-center">관리</div>
+        </div>
+      </div>
+
+      <ul id="menuList" class="divide-y divide-gray-100">
+        <% if (!menus || menus.length === 0) { %>
+          <li id="emptyState" class="px-6 py-16 text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 text-gray-400 mb-4">
+              <i class="bi bi-menu-button-wide text-3xl"></i>
+            </div>
+            <p class="text-gray-500 font-medium">등록된 메뉴가 없습니다</p>
+            <p class="text-sm text-gray-400 mt-1">메뉴 추가 버튼을 눌러 첫 메뉴를 등록하세요.</p>
+            <button type="button" id="addFirstMenuBtn" class="mt-4 inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 gap-2">
+              <i class="bi bi-plus-lg"></i>
+              메뉴 추가
+            </button>
+          </li>
+        <% } else { %>
+          <% (menus || []).forEach(function(menu, idx) { %>
+            <li class="menu-row group flex flex-col" draggable="true">
+              <div class="flex items-center gap-4 px-5 py-4 hover:bg-gray-50/50 transition-colors">
+                <div class="w-10 flex-shrink-0 flex items-center justify-center text-gray-400 cursor-grab active:cursor-grabbing drag-handle hover:text-gray-600">
+                  <i class="bi bi-grip-vertical text-lg"></i>
+                </div>
+                <div class="w-12 flex-shrink-0 text-center">
+                  <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold"><%= idx + 1 %></span>
+                </div>
+                <div class="w-14 flex-shrink-0 flex items-center justify-center">
+                  <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 text-gray-600">
+                    <i class="icon-preview <%= menu.icon_class || 'bi bi-circle' %> text-lg"></i>
+                  </span>
+                </div>
+                <div class="flex-1 min-w-0 max-w-[200px]">
+                  <input type="text" name="name[]" value="<%- menu.name %>" placeholder="예: 대시보드">
+                </div>
+                <div class="flex-1 min-w-0">
+                  <input type="text" name="path[]" value="<%- menu.path %>" placeholder="예: /admin/products"
+                    class="font-mono">
+                </div>
+                <div class="w-12 flex-shrink-0 flex items-center justify-center">
+                  <input type="hidden" name="is_active[]" value="<%= menu.is_active ? 1 : 0 %>">
+                  <label class="menu-toggle">
+                    <input type="checkbox" class="active-checkbox" <%= menu.is_active ? 'checked' : '' %>>
+                    <span class="menu-toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="w-40 flex-shrink-0 flex items-center gap-2 justify-end">
+                  <button type="button" class="expand-detail-btn inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline gap-1.5 whitespace-nowrap">
+                    <i class="bi bi-gear"></i>
+                    <span>상세</span>
+                    <i class="expand-arrow bi bi-chevron-down text-[10px] transition-transform"></i>
+                  </button>
+                  <button type="button" class="delete-menu-btn inline-flex items-center justify-center h-[33px] px-4 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 no-underline gap-1.5 whitespace-nowrap">
+                    <i class="bi bi-trash"></i>
+                    <span>삭제</span>
+                  </button>
+                </div>
+              </div>
+              <div class="menu-detail hidden border-t border-gray-100 bg-gray-50/80 px-5 py-4">
+                <input type="hidden" name="id[]" value="<%= menu.id %>">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-2">아이콘 클래스 (Bootstrap Icons)</label>
+                    <input type="text" name="icon_class[]" value="<%- menu.icon_class || '' %>" placeholder="예: bi bi-grid-1x2-fill"
+                      class="font-mono">
+                    <p class="mt-1.5 text-[11px] text-gray-400"><a href="https://icons.getbootstrap.com/" target="_blank" rel="noopener" class="text-blue-500 hover:underline">Bootstrap Icons</a> 클래스명을 입력하세요.</p>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-2">접근 가능한 역할</label>
+                    <input type="hidden" name="visible_roles[]" value="<%- menu.visible_roles || '' %>">
+                    <div class="space-y-2">
+                      <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                        <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="super_admin">
+                        <span class="text-sm text-gray-700">최고관리자</span>
+                      </label>
+                      <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                        <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="admin">
+                        <span class="text-sm text-gray-700">관리자</span>
+                      </label>
+                      <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                        <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="content_admin">
+                        <span class="text-sm text-gray-700">컨텐츠관리자</span>
+                      </label>
+                      <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                        <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="customer_admin">
+                        <span class="text-sm text-gray-700">고객관리자</span>
+                      </label>
+                    </div>
+                    <p class="mt-2 text-[11px] text-gray-400">선택된 역할만 메뉴가 보입니다. 비워두면 전체 허용.</p>
+                  </div>
+                </div>
+              </div>
+            </li>
+          <% }); %>
+        <% } %>
+      </ul>
+    </div>
+
+    <div id="saveButtonArea" class="flex justify-end <%= (!menus || menus.length === 0) ? 'hidden' : '' %>">
+      <button type="submit"
+        class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline gap-2">
+        <i class="bi bi-check-lg"></i>
+        저장하기
+      </button>
+    </div>
+  </form>
+</div>
+
+<style>
+  .menu-row.dragging {
+    @apply opacity-60 bg-blue-50;
+  }
+  .menu-row.drag-over {
+    @apply border-t-2 border-blue-400;
+  }
+  .menu-toggle {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+  }
+  .menu-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .menu-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: #e5e7eb;
+    transition: 0.2s;
+    border-radius: 9999px;
+  }
+  .menu-toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    top: 2px;
+    background-color: #fff;
+    transition: 0.2s;
+    border-radius: 9999px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .menu-toggle input:checked + .menu-toggle-slider {
+    background-color: #3b82f6;
+  }
+  .menu-toggle input:checked + .menu-toggle-slider::before {
+    transform: translateX(16px);
+  }
+</style>
+
+<script>
+(function() {
+  const list = document.getElementById('menuList');
+  const addBtn = document.getElementById('addMenuRowBtn');
+  const addFirstBtn = document.getElementById('addFirstMenuBtn');
+  const deleteIdsInput = document.createElement('input');
+  deleteIdsInput.type = 'hidden';
+  deleteIdsInput.name = 'delete_ids[]';
+  deleteIdsInput.value = '';
+  document.getElementById('menuForm')?.appendChild(deleteIdsInput);
+
+  // Expand/collapse 상세
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.expand-detail-btn');
+    if (!btn) return;
+    const row = btn.closest('.menu-row');
+    const detail = row?.querySelector('.menu-detail');
+    const arrow = btn?.querySelector('.expand-arrow');
+    if (detail && arrow) {
+      detail.classList.toggle('hidden');
+      arrow.classList.toggle('rotate-180');
+    }
+  });
+
+  // Drag & Drop
+  let draggedEl = null;
+
+  function onDragStart(e) {
+    const li = e.target.closest('.menu-row');
+    if (!li || li.querySelector('#emptyState')) return;
+    draggedEl = li;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+    li.classList.add('dragging');
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    const li = e.target.closest('.menu-row');
+    if (!li || li === draggedEl || li.querySelector('#emptyState')) return;
+    const rect = li.getBoundingClientRect();
+    const offset = e.clientY - rect.top;
+    const middle = rect.height / 2;
+    li.classList.remove('drag-over');
+    if (offset > middle) {
+      li.after(draggedEl);
+    } else {
+      li.before(draggedEl);
+    }
+    li.classList.add('drag-over');
+  }
+
+  function onDragEnd(e) {
+    const li = e.target.closest('.menu-row');
+    if (li) li.classList.remove('dragging');
+    list?.querySelectorAll('.menu-row').forEach(r => r.classList.remove('drag-over'));
+    draggedEl = null;
+  }
+
+  if (list) {
+    list.addEventListener('dragstart', onDragStart);
+    list.addEventListener('dragover', onDragOver);
+    list.addEventListener('dragend', onDragEnd);
+  }
+
+  // Icon preview
+  function updateIconPreview(row) {
+    const input = row.querySelector('input[name="icon_class[]"]');
+    const preview = row.querySelector('.icon-preview');
+    if (!input || !preview) return;
+    const value = (input.value || '').trim();
+    preview.className = 'icon-preview text-lg ' + (value || 'bi bi-circle');
+  }
+
+  function syncVisibleRoles(row) {
+    const hidden = row.querySelector('input[name="visible_roles[]"]');
+    const checkboxes = row.querySelectorAll('.role-checkbox');
+    if (!hidden || !checkboxes.length) return;
+    const selected = Array.from(checkboxes).filter(c => c.checked).map(c => c.value);
+    hidden.value = selected.join(',');
+  }
+
+  function initRolesForRow(row) {
+    const hidden = row.querySelector('input[name="visible_roles[]"]');
+    const checkboxes = row.querySelectorAll('.role-checkbox');
+    if (!hidden || !checkboxes.length) return;
+    const current = (hidden.value || '').split(',').map(r => r.trim()).filter(Boolean);
+    checkboxes.forEach(cb => {
+      cb.checked = current.includes(cb.value);
+      cb.addEventListener('change', () => syncVisibleRoles(row));
+    });
+  }
+
+  function syncActive(row) {
+    const hidden = row.querySelector('input[name="is_active[]"]');
+    const checkbox = row.querySelector('.active-checkbox');
+    if (!hidden || !checkbox) return;
+    hidden.value = checkbox.checked ? '1' : '0';
+  }
+
+  function setupRow(row) {
+    const iconInput = row.querySelector('input[name="icon_class[]"]');
+    if (iconInput) iconInput.addEventListener('input', () => updateIconPreview(row));
+    initRolesForRow(row);
+    const activeCheckbox = row.querySelector('.active-checkbox');
+    if (activeCheckbox) {
+      activeCheckbox.addEventListener('change', () => syncActive(row));
+      syncActive(row);
+    }
+  }
+
+  list?.querySelectorAll('.menu-row').forEach(setupRow);
+
+  const newRowHtml = (index) => `
+    <li class="menu-row group flex flex-col" draggable="true">
+      <div class="flex items-center gap-4 px-5 py-4 hover:bg-gray-50/50 transition-colors">
+        <div class="w-10 flex-shrink-0 flex items-center justify-center text-gray-400 cursor-grab active:cursor-grabbing drag-handle hover:text-gray-600" draggable="true">
+          <i class="bi bi-grip-vertical text-lg"></i>
+        </div>
+        <div class="w-12 flex-shrink-0 text-center">
+          <span class="row-num inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">${index}</span>
+        </div>
+        <div class="w-14 flex-shrink-0 flex items-center justify-center">
+          <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 text-gray-600">
+            <i class="icon-preview bi bi-circle text-lg"></i>
+          </span>
+        </div>
+        <div class="flex-1 min-w-0 max-w-[200px]">
+          <input type="text" name="name[]" placeholder="예: 새 메뉴" required>
+        </div>
+        <div class="flex-1 min-w-0">
+          <input type="text" name="path[]" placeholder="예: /admin/new-feature" required
+            class="font-mono">
+        </div>
+        <div class="w-12 flex-shrink-0 flex items-center justify-center">
+          <input type="hidden" name="is_active[]" value="1">
+          <label class="menu-toggle">
+            <input type="checkbox" class="active-checkbox" checked>
+            <span class="menu-toggle-slider"></span>
+          </label>
+        </div>
+        <div class="w-40 flex-shrink-0 flex items-center gap-2 justify-end">
+          <button type="button" class="expand-detail-btn inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 gap-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50">
+            <i class="bi bi-gear"></i>
+            <span>상세</span>
+            <i class="expand-arrow bi bi-chevron-down text-[10px] transition-transform"></i>
+          </button>
+          <button type="button" class="delete-menu-btn inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 gap-1.5 whitespace-nowrap">
+            <i class="bi bi-trash"></i>
+            <span>삭제</span>
+          </button>
+        </div>
+      </div>
+      <div class="menu-detail hidden border-t border-gray-100 bg-gray-50/80 px-5 py-4">
+        <input type="hidden" name="id[]" value="">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-2">아이콘 클래스 (Bootstrap Icons)</label>
+            <input type="text" name="icon_class[]" placeholder="예: bi bi-grid-1x2-fill"
+              class="font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-2">접근 가능한 역할</label>
+            <input type="hidden" name="visible_roles[]" value="">
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="super_admin">
+                <span class="text-sm text-gray-700">최고관리자</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="admin">
+                <span class="text-sm text-gray-700">관리자</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="content_admin">
+                <span class="text-sm text-gray-700">컨텐츠관리자</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 -mx-2">
+                <input type="checkbox" class="role-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="customer_admin">
+                <span class="text-sm text-gray-700">고객관리자</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </li>
+  `;
+
+  function addRow() {
+    const emptyState = list?.querySelector('#emptyState');
+    if (emptyState) {
+      emptyState.remove();
+      document.getElementById('saveButtonArea')?.classList.remove('hidden');
+    }
+    const rows = list?.querySelectorAll('.menu-row');
+    const index = (rows?.length || 0) + 1;
+    const temp = document.createElement('div');
+    temp.innerHTML = newRowHtml(index);
+    const newRow = temp.firstElementChild;
+    if (newRow) {
+      list?.appendChild(newRow);
+      setupRow(newRow);
+      newRow.querySelector('.menu-detail')?.classList.remove('hidden');
+      newRow.querySelector('.expand-arrow')?.classList.add('rotate-180');
+    }
+    updateRowNumbers();
+  }
+
+  function updateRowNumbers() {
+    list?.querySelectorAll('.menu-row .row-num').forEach((el, i) => {
+      el.textContent = i + 1;
+    });
+  }
+
+  if (addBtn) addBtn.addEventListener('click', addRow);
+  if (addFirstBtn) addFirstBtn.addEventListener('click', addRow);
+
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.delete-menu-btn');
+    if (!btn) return;
+    const row = btn.closest('.menu-row');
+    if (!row) return;
+    const idInput = row.querySelector('input[name="id[]"]');
+    const menuId = idInput ? Number(idInput.value) : null;
+    const ok = confirm('이 메뉴를 삭제할까요?');
+    if (!ok) return;
+    if (menuId && Number.isFinite(menuId)) {
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'delete_ids[]';
+      hidden.value = String(menuId);
+      document.getElementById('menuForm')?.appendChild(hidden);
+    }
+    row.remove();
+    updateRowNumbers();
+  });
+
+  // Re-number after drag
+  list?.addEventListener('dragend', updateRowNumbers);
+})();
+</script>

@@ -1,0 +1,49 @@
+<div class="flex flex-col gap-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
+    </div>
+
+    <div class="w-full lg:max-w-4xl mx-auto">
+        <form action="/admin/policies" method="POST" class="space-y-6">
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">약관 내용 수정</h5>
+                </div>
+                <div class="p-6 bg-white space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">이용약관</label>
+                        <textarea
+                            class="tinymce-editor block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base px-4 py-3"
+                            name="terms_of_service" rows="15"><%- settings.terms_of_service || '' %></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">개인정보 처리방침</label>
+                        <textarea
+                            class="tinymce-editor block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base px-4 py-3"
+                            name="privacy_policy" rows="15"><%- settings.privacy_policy || '' %></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-4 pb-8">
+                <button type="submit"
+                    class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">저장하기</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<% if (tinymceKey) { %>
+    <script src="https://cdn.tiny.cloud/1/<%= tinymceKey %>/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
+    <script>
+        tinymce.init({
+            selector: 'textarea.tinymce-editor',
+            height: 500,
+            menubar: false,
+            plugins: 'lists link table code fullscreen',
+            toolbar: 'undo redo | blocks | bold italic underline | alignleft aligncenter alignright | bullist numlist | link table | removeformat | code fullscreen',
+            language: 'ko_KR',
+            branding: false,
+            content_style: 'body { font-family: "Noto Sans KR", sans-serif; font-size:14px; }'
+        });
+    </script>
+    <% } %>

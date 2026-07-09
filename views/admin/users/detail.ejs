@@ -1,0 +1,337 @@
+<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div class="flex items-center gap-4">
+    <img src="<%= user.picture || 'https://via.placeholder.com/64' %>" alt="프로필 이미지"
+      class="h-14 w-14 rounded-full border border-gray-200 object-cover">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <p class="text-2xl font-bold text-gray-900">
+          <%= user.name || '이름 없음' %>
+        </p>
+        <% if (!user.is_active && user.withdrawn_at) { %>
+          <span
+            class="px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-700">탈퇴</span>
+          <% } else if (user.is_active) { %>
+          <span
+            class="px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">활성</span>
+          <% } else { %>
+            <span
+              class="px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-200 text-gray-700">비활성</span>
+            <% } %>
+              <% if (user.kakao_id) { %>
+                <span
+                  class="px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Kakao</span>
+                <% } else if (user.google_id) { %>
+                  <span
+                    class="px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Google</span>
+                  <% } else { %>
+                    <span
+                      class="px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Email</span>
+                    <% } %>
+      </div>
+      <p class="text-sm text-gray-500">회원 ID <span class="font-mono">
+          <%= user.id %>
+        </span></p>
+      <p class="text-sm text-gray-500 mt-0.5">
+        <%= user.email %>
+      </p>
+    </div>
+  </div>
+  <div class="flex gap-2 justify-end">
+    <a href="/admin/users"
+      class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline">
+      목록으로 돌아가기
+    </a>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- 좌측: 기본/연락처 정보 -->
+  <div class="lg:col-span-2 space-y-6">
+    <% if (!user.is_active && user.withdrawn_at) { %>
+    <div class="bg-red-50 border border-red-200 rounded-xl p-5">
+      <h3 class="text-sm font-semibold text-red-800 mb-3">
+        <i class="bi bi-person-x-fill mr-1"></i> 탈퇴 회원 정보
+      </h3>
+      <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+        <div>
+          <dt class="text-red-400">탈퇴일</dt>
+          <dd class="font-medium text-red-800"><%= user.withdrawn_at ? new Date(user.withdrawn_at).toISOString().replace('T', ' ').slice(0, 19) : '-' %></dd>
+        </div>
+        <div>
+          <dt class="text-red-400">탈퇴 사유</dt>
+          <dd class="font-medium text-red-800"><%= user.withdraw_reason || '미입력' %></dd>
+        </div>
+      </dl>
+    </div>
+    <% } %>
+    <div class="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">기본 정보</h3>
+      <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-gray-700">
+        <div>
+          <dt class="text-gray-500">이름</dt>
+          <dd class="font-medium">
+            <%= user.name || '-' %>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">이메일</dt>
+          <dd class="font-medium break-all">
+            <%= user.email || '-' %>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">전화번호</dt>
+          <dd class="font-medium">
+            <%= user.phone || '-' %>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">생년월일</dt>
+          <dd class="font-medium">
+            <%= user.birthdate ? user.birthdate.toISOString().split('T')[0] : '-' %>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">주소</dt>
+          <dd class="font-medium">
+            <%= user.address || '-' %>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">상세 주소</dt>
+          <dd class="font-medium">
+            <%= user.detailed_address || '-' %>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">우편번호</dt>
+          <dd class="font-medium">
+            <%= user.zipcode || '-' %>
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">약관 동의 정보</h3>
+      <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-gray-700">
+        <div>
+          <dt class="text-gray-500">이용약관 버전</dt>
+          <dd class="font-medium">
+            <%= user.terms_version || '-' %>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">개인정보 처리방침 버전</dt>
+          <dd class="font-medium">
+            <%= user.privacy_version || '-' %>
+          </dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+
+  <!-- 우측: 계정 상태 카드 -->
+  <div class="space-y-6">
+    <div class="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">계정 상태</h3>
+      <dl class="space-y-3 text-sm text-gray-700">
+        <div class="flex items-center justify-between">
+          <dt class="text-gray-500">활성 여부</dt>
+          <dd>
+            <% if (user.is_active) { %>
+              <span
+                class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">활성</span>
+              <% } else { %>
+                <span
+                  class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-200 text-gray-700">비활성</span>
+                <% } %>
+          </dd>
+        </div>
+        <div class="flex items-center justify-between">
+          <dt class="text-gray-500">마케팅 동의</dt>
+          <dd>
+            <% if (user.marketing_agreed) { %>
+              <span
+                class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">동의</span>
+              <% } else { %>
+                <span
+                  class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">미동의</span>
+                <% } %>
+          </dd>
+        </div>
+        <div class="flex items-center justify-between">
+          <dt class="text-gray-500">가입일</dt>
+          <dd class="font-medium">
+            <%= user.created_at ? user.created_at.toISOString().split('T')[0] : '-' %>
+          </dd>
+        </div>
+        <div class="flex items-center justify-between">
+          <dt class="text-gray-500">최근 로그인</dt>
+          <dd class="font-medium">
+            <%= user.last_login ? user.last_login.toISOString().split('T')[0] : '-' %>
+          </dd>
+        </div>
+        <div class="flex items-center justify-between">
+          <dt class="text-gray-500">보유 포인트</dt>
+          <dd class="font-semibold text-indigo-600">
+            <%= (user.points_balance || 0).toLocaleString() %>P
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+  </div>
+</div>
+
+<!-- 발급된 쿠폰 및 사용 내역 -->
+<div class="mt-8 bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+  <h3 class="text-sm font-semibold text-gray-700 mb-4">발급된 쿠폰 및 사용 내역</h3>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">쿠폰명</th>
+          <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">할인액</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급유형</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">사용일</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">주문번호</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <% if (!issuedCoupons || issuedCoupons.length===0) { %>
+          <tr>
+            <td colspan="6" class="px-4 py-6 text-center text-sm text-gray-500">발급된 쿠폰이 없습니다.</td>
+          </tr>
+          <% } else { %>
+            <% issuedCoupons.forEach(function(c) { %>
+              <tr>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                  <%= c.coupon_name || c.coupon_code || '-' %>
+                </td>
+                <td class="px-4 py-3 text-sm text-right text-gray-900">
+                  <%= (c.discount_amount || 0).toLocaleString() %>원
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500">
+                  <%= c.issued_at ? new Date(c.issued_at).toLocaleString('ko-KR') : '-' %>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500">
+                  <%= c.issued_by==='AUTO' ? '자동' : c.issued_by==='ADMIN' ? '관리자' : '코드' %>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500">
+                  <%= c.used_at ? new Date(c.used_at).toLocaleString('ko-KR') : '-' %>
+                </td>
+                <td class="px-4 py-3 text-sm">
+                  <% if (c.order_id && c.order_number) { %>
+                    <a href="/admin/sales/<%= c.order_id %>" class="text-blue-600 hover:underline">
+                      <%= c.order_number %>
+                    </a>
+                    <% } else { %>
+                      <%= c.order_number || '-' %>
+                        <% } %>
+                </td>
+              </tr>
+              <% }); %>
+                <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 포인트 내역 -->
+<div class="mt-6 bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+  <h3 class="text-sm font-semibold text-gray-700 mb-4">포인트 내역</h3>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">일시</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">유형</th>
+          <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">금액</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">설명</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <% if (!pointTransactions || pointTransactions.length===0) { %>
+          <tr>
+            <td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500">포인트 내역이 없습니다.</td>
+          </tr>
+          <% } else { %>
+            <% pointTransactions.forEach(function(pt) { %>
+              <tr>
+                <td class="px-4 py-3 text-sm text-gray-500">
+                  <%= pt.created_at ? new Date(pt.created_at).toLocaleString('ko-KR') : '-' %>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-700">
+                  <%= pt.transaction_type==='PURCHASE_ACCUMULATE' ? '구매적립' : pt.transaction_type==='PURCHASE_USE'
+                    ? '구매사용' : pt.transaction_type==='ADMIN_GRANT' ? '관리자지급' : '관리자차감' %>
+                </td>
+                <td
+                  class="px-4 py-3 text-sm text-right font-medium <%= pt.amount >= 0 ? 'text-green-600' : 'text-red-600' %>">
+                  <%= pt.amount>= 0 ? '+' : '' %><%= pt.amount.toLocaleString() %>P
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500">
+                  <%= pt.description || '-' %>
+                </td>
+              </tr>
+              <% }); %>
+                <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 주문 내역 및 주문 금액 합계 -->
+<% const orderStatusLabels={ PENDING: '대기' , PAID: '결제완료' , PREPARING: '배송준비' , SHIPPED: '배송중' , DELIVERED: '배송완료' ,
+  CANCELLED: '취소' , REFUNDED: '환불' }; %>
+  <div class="mt-6 bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4">주문 내역</h3>
+    <div class="mb-4 flex items-center justify-between flex-wrap gap-2">
+      <span class="text-sm text-gray-600">결제완료 기준 주문 금액 합계</span>
+      <span class="text-lg font-bold text-indigo-600">
+        <%= (totalOrderAmount || 0).toLocaleString() %>원
+      </span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">주문번호</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">주문일시</th>
+            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">결제금액</th>
+            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">상태</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <% if (!userOrders || userOrders.length===0) { %>
+            <tr>
+              <td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500">주문 내역이 없습니다.</td>
+            </tr>
+            <% } else { %>
+              <% userOrders.forEach(function(o) { %>
+                <tr>
+                  <td class="px-4 py-3 text-sm">
+                    <a href="/admin/sales/<%= o.id %>" class="text-blue-600 hover:underline font-medium">
+                      <%= o.order_number %>
+                    </a>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-500">
+                    <%= o.created_at ? new Date(o.created_at).toLocaleString('ko-KR') : '-' %>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-right text-gray-900">
+                    <%= (o.total_amount || 0).toLocaleString() %>원
+                  </td>
+                  <td class="px-4 py-3 text-sm text-center">
+                    <span
+                      class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium <%= o.status === 'PAID' ? 'bg-green-100 text-green-800' : o.status === 'CANCELLED' || o.status === 'REFUNDED' ? 'bg-gray-100 text-gray-700' : 'bg-blue-100 text-blue-800' %>">
+                      <%= orderStatusLabels[o.status] || o.status %>
+                    </span>
+                  </td>
+                </tr>
+                <% }); %>
+                  <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>

@@ -1,0 +1,14 @@
+<% /* 재귀 카테고리 노드 (P1.5 카테고리 드롭다운) — node = { id, name, children[] } · 전체 뎁스 지원 */ %>
+<li class="mb-0.5">
+    <a href="/products/category/<%= node.id %>"
+        class="block px-2 py-1.5 text-sm rounded hover:bg-gray-50 hover:text-[var(--gh-primary)] transition-colors <%= (node.children && node.children.length) ? 'font-semibold text-gray-900' : 'text-gray-600' %>">
+        <%= node.name %>
+    </a>
+    <% if (node.children && node.children.length) { %>
+        <ul class="ml-2 pl-2 border-l border-gray-100">
+            <% node.children.forEach(function (child) { %>
+                <%- include('category_node', { node: child }) %>
+            <% }); %>
+        </ul>
+    <% } %>
+</li>

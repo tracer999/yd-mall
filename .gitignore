@@ -1,0 +1,28 @@
+# ===== dev-mall (Express / Node.js) =====
+
+# 의존성
+node_modules/
+
+# 환경 변수 — 비공개 저장소이므로 추적함 (루트 .gitignore의 .env 무시를 여기서 해제)
+!.env
+!.env.development
+!.env.production
+# 단, 개인용 로컬 오버라이드는 추적하지 않음
+.env.local
+.env.*.local
+
+# 로그
+logs/
+*.log
+npm-debug.log*
+
+# 빌드 캐시 / 임시
+.cache/
+tmp/
+
+# PM2 런타임
+.pm2/
+
+# OS / 에디터
+.DS_Store
+*.swp

@@ -1,0 +1,44 @@
+<%#
+  Shopify Markets 국가 선택기 (상단 헤더 Top Bar용)
+  - /shopify/markets 에서 사용 가능한 국가를 동적 로드
+  - 선택 시 POST /shopify/market-context 로 세션 저장 후 페이지 새로고침(가격/통화 반영)
+  - 현재 선택: locals.shopifyMarket.country (해외 구매하기 결제도 이 세션 국가를 사용)
+%>
+<div class="flex items-center gap-1" title="Global Checkout 국가/통화 선택">
+  <i class="bi bi-globe2 text-gray-500"></i>
+  <select id="header-market-select" onchange="headerSetMarket(this.value)"
+    class="text-sm bg-transparent border-0 text-gray-700 focus:outline-none focus:ring-0 cursor-pointer py-0 pl-0 pr-5">
+    <option value="">국가 선택</option>
+  </select>
+</div>
+<script>
+(function () {
+  var sel = document.getElementById('header-market-select');
+  if (!sel) return;
+  var current = '<%= (typeof locals !== "undefined" && locals.shopifyMarket && locals.shopifyMarket.country) ? locals.shopifyMarket.country : "" %>';
+
+  fetch('/shopify/markets')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      if (!data || !data.availableCountries) return;
+      data.availableCountries.forEach(function (c) {
+        var o = document.createElement('option');
+        o.value = c.isoCode;
+        o.textContent = c.name + ' (' + c.currency.isoCode + ')';
+        if (c.isoCode === current) o.selected = true;
+        sel.appendChild(o);
+      });
+    })
+    .catch(function () {});
+
+  window.headerSetMarket = function (code) {
+    if (!code) return;
+    fetch('/shopify/market-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ countryCode: code })
+    }).then(function () { location.reload(); })
+      .catch(function () { location.reload(); });
+  };
+})();
+</script>

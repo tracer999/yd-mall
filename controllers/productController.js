@@ -1,0 +1,528 @@
+const pool = require('../config/db');
+
+function buildKakaoChannelUrl(rawValue) {
+    if (!rawValue) return '';
+    const raw = String(rawValue).trim();
+    if (!raw) return '';
+
+    if (/^https?:\/\//i.test(raw)) {
+        return raw;
+    }
+
+    if (raw.startsWith('/')) {
+        return `https://pf.kakao.com${raw}`;
+    }
+
+    if (raw.startsWith('@')) {
+        return `https://pf.kakao.com/${raw}`;
+    }
+
+    if (raw.startsWith('_')) {
+        return `https://pf.kakao.com/${raw}`;
+    }
+
+    return `https://pf.kakao.com/_${raw}`;
+}
+
+exports.getList = async (req, res) => {
+    const categoryId = req.params.categoryId;
+    const brandId = req.params.brandId;
+    const queryCategoryId = req.query.categoryId;
+    const queryBrandId = req.query.brandId;
+    const sort = req.query.sort || 'new';
+    const distributionBadge = req.query.distributionBadge || '';
+    const productBadge = req.query.badge || '';
+
+    const selectedCategoryId = categoryId || queryCategoryId || null;
+    const selectedBrandId = brandId || queryBrandId || null;
+
+    const _visibilityFilter = req.user
+        ? "visibility IN ('PUBLIC','MEMBER_ONLY')"
+        : "visibility = 'PUBLIC'";
+    let query = `SELECT * FROM products WHERE status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}`;
+    const params = [];
+
+    let pageTitle = '전체상품';
+    let categoryBanner = null;
+
+    try {
+        if (selectedCategoryId) {
+            const [catRows] = await pool.query('SELECT id, name, type FROM categories WHERE id = ?', [selectedCategoryId]);
+            if (catRows.length > 0) {
+                const selected = catRows[0];
+                pageTitle = selected.name.endsWith('상품') ? selected.name : `${selected.name} 상품`;
+
+                if (selected.type === 'THEME') {
+                    // 테마 카테고리: 직접 연결 + product_themes + 뱃지 자동 매칭
+                    const badgeMap = { 5: 'BEST', 6: 'NEW' };
+                    const badge = badgeMap[Number(selectedCategoryId)];
+                    if (badge) {
+                        query += " AND (theme_category_id = ? OR id IN (SELECT product_id FROM product_themes WHERE category_id = ?) OR FIND_IN_SET(?, product_badge))";
+                        params.push(selectedCategoryId, selectedCategoryId, badge);
+                    } else {
+                        query += ' AND (theme_category_id = ? OR id IN (SELECT product_id FROM product_themes WHERE category_id = ?))';
+                        params.push(selectedCategoryId, selectedCategoryId);
+                    }
+                } else {
+                    query += ' AND category_id = ?';
+                    params.push(selectedCategoryId);
+                }
+
+                const [bannerRows] = await pool.query(
+                    `SELECT * FROM banners
+                     WHERE is_active = 1
+                       AND banner_type = 'CATEGORY'
+                       AND category_id = ?
+                     ORDER BY created_at DESC, id DESC
+                     LIMIT 1`,
+                    [selectedCategoryId]
+                );
+                if (bannerRows.length > 0) {
+                    categoryBanner = bannerRows[0];
+                }
+            }
+        }
+
+        if (selectedBrandId) {
+            const [brandRows] = await pool.query("SELECT id, name FROM categories WHERE id = ? AND type = 'BRAND'", [selectedBrandId]);
+            if (brandRows.length > 0) {
+                const brandName = brandRows[0].name;
+                pageTitle = selectedCategoryId ? `${pageTitle} · ${brandName}` : `${brandName} 브랜드`;
+                query += ' AND brand_category_id = ?';
+                params.push(selectedBrandId);
+
+                if (!categoryBanner) {
+                    const [brandBannerRows] = await pool.query(
+                        `SELECT * FROM banners
+                         WHERE is_active = 1
+                           AND banner_type = 'BRAND'
+                           AND category_id = ?
+                         ORDER BY created_at DESC, id DESC
+                         LIMIT 1`,
+                        [selectedBrandId]
+                    );
+                    if (brandBannerRows.length > 0) {
+                        categoryBanner = brandBannerRows[0];
+                    }
+                }
+            }
+        }
+
+        if (distributionBadge === 'ONLINE_ONLY') {
+            query += " AND distribution_badge = 'ONLINE_ONLY'";
+        }
+        /* 오프라인판매전용 필터 — 기능 미사용으로 주석처리
+        else if (distributionBadge === 'OFFLINE_ONLY') {
+            query += " AND distribution_badge = 'OFFLINE_ONLY'";
+        }
+        */
+
+        if (productBadge === 'BEST') {
+            query += " AND FIND_IN_SET('BEST', product_badge)";
+            if (pageTitle === '전체상품') pageTitle = '베스트 상품';
+        } else if (productBadge === 'NEW') {
+            query += " AND FIND_IN_SET('NEW', product_badge)";
+            if (pageTitle === '전체상품') pageTitle = '신상품';
+        } else if (productBadge === 'RECOMMEND') {
+            query += " AND FIND_IN_SET('RECOMMEND', product_badge)";
+            if (pageTitle === '전체상품') pageTitle = '추천 상품';
+        } else if (productBadge === 'DEADLINE_SALE') {
+            query += " AND FIND_IN_SET('DEADLINE_SALE', product_badge)";
+            if (pageTitle === '전체상품') pageTitle = '기간임박할인';
+        } else if (productBadge === 'GREENHUB_SPECIAL') {
+            query += " AND FIND_IN_SET('GREENHUB_SPECIAL', product_badge)";
+            if (pageTitle === '전체상품') pageTitle = '와이디몰특가';
+        }
+
+        // 페이지네이션
+        const allowedSizes = [10, 20, 30, 50];
+        const perPage = allowedSizes.includes(Number(req.query.perPage)) ? Number(req.query.perPage) : 30;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const offset = (page - 1) * perPage;
+
+        // 전체 개수 조회
+        const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as total');
+        const [[{ total }]] = await pool.query(countQuery, params);
+        const totalPages = Math.ceil(total / perPage);
+
+        const statusOrder = "FIELD(status,'ON','COMING_SOON','RESTOCK','SOLD_OUT','OFF')";
+        switch (sort) {
+            case 'best': query += ` ORDER BY ${statusOrder}, view_count DESC, created_at DESC`; break;
+            case 'price_asc': query += ` ORDER BY ${statusOrder}, price ASC, created_at DESC`; break;
+            case 'price_desc': query += ` ORDER BY ${statusOrder}, price DESC, created_at DESC`; break;
+            case 'new':
+            default: query += ` ORDER BY ${statusOrder}, created_at DESC`; break;
+        }
+
+        query += ' LIMIT ? OFFSET ?';
+        params.push(perPage, offset);
+
+        const [products] = await pool.query(query, params);
+        const [categories] = await pool.query("SELECT * FROM categories WHERE type = 'NORMAL' ORDER BY display_order ASC");
+        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' ORDER BY display_order ASC, id ASC");
+
+        const siteSettings = res.locals.siteSettings || {};
+        const companyName = siteSettings.company_name || '와이디몰';
+        const domain = ((global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr').replace(/\/$/, '');
+
+        let canonicalUrl = `${domain}/products`;
+        if (categoryId) canonicalUrl = `${domain}/products/category/${categoryId}`;
+        if (brandId) canonicalUrl = `${domain}/products/brand/${brandId}`;
+
+        const seo = {
+            title: `${pageTitle} | ${companyName}`,
+            description: `${companyName}의 ${pageTitle} 페이지입니다.`,
+            url: canonicalUrl,
+            image: siteSettings.logo_url ? (siteSettings.logo_url.startsWith('http') ? siteSettings.logo_url : domain + siteSettings.logo_url) : '',
+            type: 'website',
+            siteName: companyName,
+            robots: 'index,follow',
+            jsonLd: null
+        };
+
+        // 찜 목록 조회 (로그인 사용자만)
+        let likedProductIds = [];
+        if (req.user) {
+            const [likeRows] = await pool.query('SELECT product_id FROM likes WHERE user_id = ?', [req.user.id]);
+            likedProductIds = likeRows.map(r => r.product_id);
+        }
+
+        res.render('user/products/list', {
+            title: pageTitle,
+            products,
+            categories,
+            brands,
+            currentCategory: selectedCategoryId,
+            currentBrand: selectedBrandId,
+            currentSort: sort,
+            currentDistributionBadge: distributionBadge,
+            currentProductBadge: productBadge,
+            currentUser: req.user,
+            likedProductIds,
+            categoryBanner,
+            seo,
+            pagination: { page, perPage, total, totalPages }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+exports.getDetail = async (req, res) => {
+    const id = req.params.id;
+    try {
+        // Get Product
+        const [rows] = await pool.query(`
+            SELECT p.*, c.name as category_name, bc.name as brand_name
+            FROM products p 
+            LEFT JOIN categories c ON p.category_id = c.id 
+            LEFT JOIN categories bc ON p.brand_category_id = bc.id
+            WHERE p.id = ?
+        `, [id]);
+
+        if (rows.length === 0) {
+            return res.status(404).render('user/404', {
+                title: '상품을 찾을 수 없습니다',
+                seo: { ...res.locals.seo, title: '상품을 찾을 수 없습니다', robots: 'noindex,follow' }
+            });
+        }
+        const product = rows[0];
+
+        // 노출 설정에 따른 접근 제어
+        if (product.visibility === 'HIDDEN') {
+            return res.status(404).render('user/404', {
+                title: '상품을 찾을 수 없습니다',
+                seo: { ...res.locals.seo, title: '상품을 찾을 수 없습니다', robots: 'noindex,follow' }
+            });
+        }
+        if (product.visibility === 'MEMBER_ONLY' && !req.user) {
+            return res.redirect('/auth/login?redirect=' + encodeURIComponent(req.originalUrl));
+        }
+
+        // If accessed via legacy /products/view/:id URL and slug exists, redirect to slug URL (301)
+        if (product.slug && req.originalUrl && req.originalUrl.startsWith('/products/view/')) {
+            return res.redirect(301, `/products/${product.slug}`);
+        }
+
+        // Update View Count (only when actually rendering the detail page)
+        await pool.query('UPDATE products SET view_count = view_count + 1 WHERE id = ?', [id]);
+
+        // 최근 본 상품 기록 (로그인 사용자만)
+        if (req.user) {
+            pool.query(
+                `INSERT INTO recent_views (user_id, product_id, viewed_at) VALUES (?, ?, NOW())
+                 ON DUPLICATE KEY UPDATE viewed_at = NOW()`,
+                [req.user.id, id]
+            ).catch(() => {});
+        }
+
+        // Get Sub Images
+        const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
+        product.images = images;
+
+        // Get Likes (Check if current user liked)
+        let isLiked = false;
+        if (req.user) {
+            const [likeRows] = await pool.query('SELECT * FROM likes WHERE user_id = ? AND product_id = ?', [req.user.id, id]);
+            if (likeRows.length > 0) isLiked = true;
+        }
+
+        // Get Reviews (Simple)
+        const [reviews] = await pool.query(`
+            SELECT r.*, u.name as user_name 
+            FROM reviews r 
+            JOIN users u ON r.user_id = u.id 
+            WHERE r.product_id = ? 
+            ORDER BY r.created_at DESC
+        `, [id]);
+
+        // 함께 보면 좋은 상품 (수동 + 자동 하이브리드)
+        const vFilterRec = req.user
+            ? "p.visibility IN ('PUBLIC','MEMBER_ONLY')"
+            : "p.visibility = 'PUBLIC'";
+
+        // 1) 수동 등록분 (판매중 상태만)
+        const [manualRecs] = await pool.query(`
+            SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
+                   p.discount_rate, p.status, p.stock,
+                   p.provider, p.product_badge, p.distribution_badge
+            FROM product_recommendations pr
+            JOIN products p ON p.id = pr.related_id
+            WHERE pr.product_id = ? AND p.status = 'ON' AND ${vFilterRec}
+            ORDER BY pr.display_order ASC
+        `, [id]);
+
+        // 수동 등록분만 노출
+        const recommendedProducts = manualRecs;
+
+        // Shopify 상품 매핑 조회 (테이블 없으면 null 처리)
+        let shopifyMapping = null;
+        try {
+            const [shopifyRows] = await pool.query(
+                'SELECT * FROM shopify_product_mappings WHERE product_id = ?', [id]
+            );
+            shopifyMapping = shopifyRows.length > 0 ? shopifyRows[0] : null;
+        } catch (_) {}
+
+        // ===== SEO 메타/OG/JSON-LD 구성 =====
+        const siteSettings = res.locals.siteSettings || {};
+        const companyName = siteSettings.company_name || '와이디몰';
+
+        const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
+        const domain = domainFromSettings.replace(/\/$/, '');
+        const slugPath = (product.slug && product.slug.trim())
+            ? `/products/${product.slug}`
+            : `/products/view/${id}`;
+        const productUrl = domain + slugPath;
+
+        const seoTitle = `${product.name} | ${companyName}`;
+
+        let seoDescription = '';
+        if (product.meta_description && product.meta_description.trim()) {
+            seoDescription = product.meta_description.trim();
+        } else if (product.short_description && product.short_description.trim()) {
+            seoDescription = product.short_description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        } else if (product.description) {
+            const plain = String(product.description).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            seoDescription = plain.substring(0, 150);
+        }
+
+        const imagePath = product.main_image || product.thumbnail_image || '';
+        let imageUrl = '';
+        if (imagePath) {
+            if (/^https?:\/\//i.test(imagePath)) {
+                imageUrl = imagePath;
+            } else {
+                const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+                imageUrl = domain + normalizedPath;
+            }
+        }
+
+        let availability;
+        if (product.status === 'ON' && product.stock > 0) {
+            availability = 'https://schema.org/InStock';
+        } else if (product.status === 'COMING_SOON') {
+            availability = 'https://schema.org/PreOrder';
+        } else {
+            availability = 'https://schema.org/OutOfStock';
+        }
+
+        const offerPrice = product.price || 0;
+
+        const brandName = (product.brand_name || product.provider || companyName || '').toString().trim();
+
+        const jsonLdObject = {
+            '@context': 'https://schema.org/',
+            '@type': 'Product',
+            name: product.name,
+            description: seoDescription || undefined,
+            image: imageUrl ? [imageUrl] : undefined,
+            brand: {
+                '@type': 'Brand',
+                name: brandName
+            },
+            offers: {
+                '@type': 'Offer',
+                url: productUrl,
+                priceCurrency: 'KRW',
+                price: String(offerPrice),
+                availability,
+                seller: {
+                    '@type': 'Organization',
+                    name: companyName
+                }
+            },
+            sku: String(product.id)
+        };
+
+        const seo = {
+            title: seoTitle,
+            description: seoDescription,
+            url: productUrl,
+            image: imageUrl,
+            type: 'product',
+            siteName: companyName,
+            robots: 'index,follow',
+            jsonLd: JSON.stringify(jsonLdObject, null, 2)
+        };
+
+        const kakaoJsKey = global.systemSettings && global.systemSettings.kakao_js_key;
+        const kakaoChannelUrl = siteSettings.kakao_channel_enabled
+            ? buildKakaoChannelUrl(siteSettings.kakao_channel_url)
+            : '';
+
+        const visitorIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+            || req.socket.remoteAddress || '';
+
+        res.render('user/products/detail', {
+            title: product.name,
+            product,
+            isLiked,
+            reviews,
+            currentUser: req.user,
+            visitorIp,
+            seo,
+            kakaoJsKey,
+            kakaoChannelUrl,
+            stockError: req.query.error === 'stock' ? req.query.max : null,
+            recommendedProducts,
+            shopifyMapping
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+// 슬러그 기반 상세 보기: /products/:slug
+exports.getDetailBySlug = async (req, res) => {
+    const { slug } = req.params;
+    try {
+        const [rows] = await pool.query('SELECT id FROM products WHERE slug = ?', [slug]);
+        if (rows.length === 0) {
+            return res.status(404).render('user/404', {
+                title: '상품을 찾을 수 없습니다',
+                seo: { ...res.locals.seo, title: '상품을 찾을 수 없습니다', robots: 'noindex,follow' }
+            });
+        }
+        req.params.id = rows[0].id;
+        return exports.getDetail(req, res);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.toggleLike = async (req, res) => {
+    if (!req.user) return res.status(401).json({ success: false, message: 'Login required' });
+
+    const productId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        const [rows] = await pool.query('SELECT * FROM likes WHERE user_id = ? AND product_id = ?', [userId, productId]);
+        if (rows.length > 0) {
+            // Un-like
+            await pool.query('DELETE FROM likes WHERE user_id = ? AND product_id = ?', [userId, productId]);
+            res.json({ success: true, liked: false });
+        } else {
+            // Like
+            await pool.query('INSERT INTO likes (user_id, product_id) VALUES (?, ?)', [userId, productId]);
+            res.json({ success: true, liked: true });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false });
+    }
+};
+
+// 검색 전용 화면
+exports.searchPage = async (req, res) => {
+    const qRaw = req.query.q || '';
+    const q = qRaw.trim();
+
+    let products = [];
+    let total = 0;
+
+    if (q.length >= 2) {
+        try {
+            const like = `%${q}%`;
+            const [rows] = await pool.query(`
+                SELECT p.id, p.name, COALESCE(bc.name, p.provider) AS provider, p.price, p.original_price,
+                       p.discount_rate,
+                       p.main_image, p.thumbnail_image, p.slug, p.short_description, p.status, p.stock,
+                       c.name AS category_name, c.type AS category_type,
+                       (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                LEFT JOIN categories bc ON p.brand_category_id = bc.id
+                WHERE (
+                      p.name LIKE ?
+                      OR p.slug LIKE ?
+                      OR p.provider LIKE ?
+                      OR bc.name LIKE ?
+                      OR p.description LIKE ?
+                      OR p.ai_recommendation_content LIKE ?
+                  )
+                  AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
+                  AND (p.visibility = 'PUBLIC' ${req.user ? "OR p.visibility = 'MEMBER_ONLY'" : ''})
+                ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT','OFF'), p.created_at DESC
+                LIMIT 50
+            `, [like, like, like, like, like, like]);
+
+            products = rows;
+            total = rows.length;
+
+            // 검색 로그 저장 (없는 경우 에러는 무시)
+            try {
+                await pool.query(
+                    `INSERT INTO search_logs (user_id, keyword, result_count)
+                     VALUES (?, ?, ?)` ,
+                    [req.user ? req.user.id : null, q, total]
+                );
+            } catch (logErr) {
+                console.error('Search log insert error:', logErr.message || logErr);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    const siteSettings = res.locals.siteSettings || {};
+    const companyName = siteSettings.company_name || '와이디몰';
+
+    const seo = {
+        ...res.locals.seo,
+        title: `상품 검색 | ${companyName}`,
+        robots: 'noindex,follow'
+    };
+
+    res.render('user/search', {
+        title: '상품 검색',
+        query: qRaw,
+        products,
+        total,
+        currentUser: req.user,
+        seo
+    });
+};

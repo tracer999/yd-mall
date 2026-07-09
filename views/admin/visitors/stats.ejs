@@ -1,0 +1,87 @@
+<div class="mb-6 flex justify-between items-center">
+    <div>
+        <p class="text-sm text-gray-500">
+            <% if (currentPeriod==='24h' ) { %>최근 24시간<% } %>
+                    <% if (currentPeriod==='7d' ) { %>최근 7일<% } %>
+                            <% if (currentPeriod==='30d' ) { %>최근 30일<% } %>
+                                    데이터 추이
+        </p>
+    </div>
+    <div>
+        <select onchange="location.href='?period=' + this.value"
+            class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="24h" <%=currentPeriod==='24h' ? 'selected' : '' %>>최근 24시간</option>
+            <option value="7d" <%=currentPeriod==='7d' ? 'selected' : '' %>>최근 7일</option>
+            <option value="30d" <%=currentPeriod==='30d' ? 'selected' : '' %>>최근 30일</option>
+        </select>
+    </div>
+</div>
+
+<!-- Hidden element to pass data to script safely without IDE syntax errors -->
+<!-- We use EJS output tag which escapes HTML entities, ensuring the JSON string doesn't break the HTML attribute -->
+<div id="chart-data-container" data-stats="<%= JSON.stringify(chartData) %>" style="display: none;"></div>
+
+<div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+    <div class="relative h-96 w-full">
+        <canvas id="visitorChart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('visitorChart').getContext('2d');
+
+    // Read data from hidden element
+    const container = document.getElementById('chart-data-container');
+    const rawData = container.dataset.stats;
+    const chartData = JSON.parse(rawData);
+
+    const labels = chartData.labels;
+    const data = chartData.data;
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '방문자 수',
+                data: data,
+                borderColor: '#0ea5e9', // Sky blue
+                backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#0ea5e9',
+                pointHoverBackgroundColor: '#0ea5e9',
+                pointHoverBorderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    },
+                    grid: {
+                        display: true,
+                        color: '#f3f4f6'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+</script>

@@ -1,0 +1,44 @@
+<%--
+  회원 검색 모달 (공통)
+--%>
+<% 
+  var mid = typeof modalId !== 'undefined' ? modalId : 'userSearchModal'; 
+  var inputNameVal = typeof inputName !== 'undefined' ? inputName : 'user_id'; 
+  var displayId = typeof displayElId !== 'undefined' ? displayElId : 'selectedUserDisplay';
+  var midTitle = mid + '-title';
+  var midSearchInput = mid + '-searchInput';
+  var midSearchBtn = mid + '-searchBtn';
+  var midResults = mid + '-results';
+  var midEmptyMsg = mid + '-emptyMsg';
+  var midResultList = mid + '-resultList';
+%>
+<div id="<%= mid %>" class="fixed inset-0 z-[100] hidden" aria-hidden="true" data-user-search-modal data-modal-id="<%= mid %>" data-input-name="<%= inputNameVal %>" data-display-el-id="<%= displayId %>">
+  <div class="fixed inset-0 bg-gray-500/60 backdrop-blur-sm modal-overlay" data-modal-close="<%= mid %>"></div>
+  <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
+    <div class="bg-white rounded-xl shadow-xl max-h-[90vh] w-full max-w-2xl pointer-events-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="<%= midTitle %>">
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 id="<%= midTitle %>" class="text-lg font-semibold text-gray-800">회원 검색</h3>
+        <button type="button" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100" data-modal-close="<%= mid %>" aria-label="닫기">
+          <i class="bi bi-x-lg text-lg"></i>
+        </button>
+      </div>
+      <div class="p-6 flex flex-col gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">이메일, 이름, 연락처, 생년월일 검색 (예: 1981-08-10)</label>
+          <div class="flex gap-2">
+            <input type="text" id="<%= midSearchInput %>" placeholder="검색어 입력"
+              class="flex-1 min-w-0 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-4 py-2.5">
+            <button type="button" id="<%= midSearchBtn %>" class="flex-shrink-0 px-5 py-2.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium">
+              검색
+            </button>
+          </div>
+        </div>
+        <div id="<%= midResults %>" class="border border-gray-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+          <p class="text-sm text-gray-500 p-4 text-center" id="<%= midEmptyMsg %>">검색어를 입력하고 검색하세요.</p>
+          <ul id="<%= midResultList %>" class="divide-y divide-gray-100 hidden"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/user-search-modal.js"></script>

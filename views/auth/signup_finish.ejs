@@ -1,0 +1,206 @@
+<div class="min-h-screen bg-gray-50 flex flex-col justify-center py-6 sm:px-6 lg:px-8">
+  <div class="sm:mx-auto sm:w-full sm:max-w-md">
+    <h2 class="mt-3 text-center text-3xl font-extrabold text-gray-900">
+      추가 정보 입력
+    </h2>
+    <p class="mt-2 text-center text-sm text-gray-600">
+      원활한 서비스 이용을 위해 추가 정보를 입력해주세요.
+    </p>
+  </div>
+
+  <div class="mt-4 sm:mx-auto sm:w-full sm:max-w-md">
+    <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+      <form id="signup-form" class="space-y-6" action="/auth/signup-finish" method="POST" enctype="multipart/form-data">
+        <% if (locals.errorMessage) { %>
+          <div class="rounded-md bg-red-50 p-4 mb-4">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                  fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clip-rule="evenodd" />
+                </svg>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">
+                  <%= errorMessage %>
+                </h3>
+              </div>
+            </div>
+          </div>
+          <% } %>
+            <!-- Name -->
+            <div>
+              <label for="name" class="block text-sm font-medium text-gray-700">성함</label>
+              <div class="mt-1">
+                <input id="name" name="name" type="text" placeholder="홍길동" required
+                  class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
+              </div>
+            </div>
+
+            <!-- Email (카카오 이메일 미제공 사용자만) -->
+            <% const needsEmail = !user.email || user.email.includes('@no-email.com'); %>
+            <% if (needsEmail) { %>
+            <div>
+              <label for="email" class="block text-sm font-medium text-gray-700">이메일 <span class="text-red-500">*</span></label>
+              <div class="mt-1">
+                <input id="email" name="email" type="email" placeholder="example@email.com" required
+                  class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
+              </div>
+              <p class="mt-1 text-xs text-gray-500">주문 확인 등 알림을 받을 이메일 주소를 입력해주세요.</p>
+            </div>
+            <% } %>
+
+            <!-- Birthdate -->
+            <div>
+              <label for="birthdate" class="block text-sm font-medium text-gray-700">생년월일</label>
+              <div class="mt-1">
+                <input id="birthdate" name="birthdate" type="text" placeholder="예: 19800101" maxlength="8" required
+                  class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
+              </div>
+            </div>
+
+            <!-- Phone -->
+            <div>
+              <label for="phone" class="block text-sm font-medium text-gray-700">휴대폰 번호</label>
+              <div class="mt-1">
+                <input id="phone" name="phone" type="tel" placeholder="01012345678" required
+                  class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
+              </div>
+              <p id="phone-msg" class="text-sm mt-1 hidden"></p>
+            </div>
+
+            <!-- Address -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700">주소</label>
+              <div class="mt-1 flex gap-2">
+                <input type="text" id="postcode" name="zipcode" placeholder="우편번호" readonly required
+                  class="w-1/3 appearance-none block px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm" />
+                <button type="button" onclick="execDaumPostcode()"
+                  class="w-2/3 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                  우편번호 찾기
+                </button>
+              </div>
+              <div class="mt-2">
+                <input type="text" id="address" name="address" placeholder="기본 주소" readonly required
+                  class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm" />
+              </div>
+              <div class="mt-2">
+                <input type="text" id="detailAddress" name="detailed_address" placeholder="상세 주소" required
+                  class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
+              </div>
+            </div>
+
+            <!-- Terms of Service (Scrollable) -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">이용약관</label>
+              <div
+                class="h-32 overflow-y-auto p-3 bg-gray-50 border border-gray-300 rounded-md text-xs text-gray-600 leading-relaxed">
+                <%- termsContent %>
+              </div>
+            </div>
+
+            <!-- Privacy Policy (Scrollable) -->
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">개인정보 처리방침</label>
+              <div
+                class="h-32 overflow-y-auto p-3 bg-gray-50 border border-gray-300 rounded-md text-xs text-gray-600 leading-relaxed">
+                <%- privacyContent %>
+              </div>
+            </div>
+
+            <!-- Terms Agreement Checkbox -->
+            <div class="flex items-start">
+              <div class="flex items-center h-5">
+                <input id="terms" name="terms" type="checkbox" required
+                  class="focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300 rounded" />
+              </div>
+              <div class="ml-3 text-sm">
+                <label for="terms" class="font-medium text-gray-700">
+                  위 <strong>이용약관</strong> 및
+                  <strong>개인정보 처리방침</strong>을 확인하였으며 이에 동의합니다.
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <button type="submit"
+                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                가입 완료
+              </button>
+            </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+<script>
+  // 휴대폰 번호 중복 확인
+  let isPhoneValid = false;
+
+  document.getElementById('phone').addEventListener('blur', async () => {
+    const phone = document.getElementById('phone').value.replace(/[^0-9]/g, '');
+    const msgEl = document.getElementById('phone-msg');
+    if (!phone) {
+      msgEl.classList.add('hidden');
+      isPhoneValid = false;
+      return;
+    }
+
+    try {
+      const res = await fetch('/auth/phone/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+
+      msgEl.classList.remove('hidden', 'text-green-600', 'text-red-500');
+      if (data.success) {
+        msgEl.classList.add('text-green-600');
+        msgEl.innerText = data.message;
+        isPhoneValid = true;
+      } else {
+        msgEl.classList.add('text-red-500');
+        msgEl.innerText = data.message;
+        isPhoneValid = false;
+      }
+    } catch (e) {
+      isPhoneValid = false;
+    }
+  });
+
+  document.getElementById('signup-form').addEventListener('submit', (e) => {
+    const phone = document.getElementById('phone').value.replace(/[^0-9]/g, '');
+    if (!phone) {
+      e.preventDefault();
+      alert('휴대폰 번호를 입력해주세요.');
+      return;
+    }
+    if (!isPhoneValid) {
+      e.preventDefault();
+      alert('휴대폰 번호 중복 확인을 완료해주세요. (번호 입력 후 다른 곳을 클릭하세요)');
+    }
+  });
+
+  function execDaumPostcode() {
+    new daum.Postcode({
+      oncomplete: function (data) {
+        var addr = "";
+        var extraAddr = "";
+
+        if (data.userSelectedType === "R") {
+          addr = data.roadAddress;
+        } else {
+          addr = data.jibunAddress;
+        }
+
+        document.getElementById("postcode").value = data.zonecode;
+        document.getElementById("address").value = addr;
+        document.getElementById("detailAddress").focus();
+      },
+    }).open();
+  }
+</script>

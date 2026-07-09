@@ -1,0 +1,32 @@
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6 flex items-center justify-between gap-2">
+        <a href="/admin/notices"
+            class="inline-flex items-center justify-center h-[36px] px-3 text-sm font-medium rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 no-underline">
+            목록으로
+        </a>
+        <a href="/admin/notices/edit/<%= notice.id %>"
+            class="inline-flex items-center justify-center h-[36px] px-3 text-sm font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">
+            수정
+        </a>
+    </div>
+
+    <article class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <header class="px-6 py-5 border-b border-gray-100">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <% if (notice.importance) { %>
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">중요</span>
+                <% } else { %>
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">일반</span>
+                <% } %>
+                <span class="text-xs text-gray-500">번호 <%= notice.id %></span>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900 break-words"><%= notice.title %></h2>
+            <div class="mt-3 text-sm text-gray-500 flex gap-4">
+                <span>등록일: <%= notice.created_at ? new Date(notice.created_at).toISOString().split('T')[0] : '-' %></span>
+                <span>조회수: <%= notice.view_count || 0 %></span>
+            </div>
+        </header>
+
+        <div class="px-6 py-6 text-gray-800 leading-7"><%- notice.content %></div>
+    </article>
+</div>

@@ -1,0 +1,224 @@
+<%- include('./_shell_start') %>
+
+<div class="space-y-6">
+
+  <!-- 상태 알림 -->
+  <% if (locals.updated) { %>
+    <div class="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+      <i class="bi bi-check-circle-fill"></i> 정보가 수정되었습니다.
+    </div>
+  <% } %>
+  <% if (locals.justVerified) { %>
+    <div class="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm">
+      <i class="bi bi-shield-check"></i> 본인확인이 완료되었습니다. 보안 정보를 수정할 수 있습니다. (15분 유효)
+    </div>
+  <% } %>
+  <% if (locals.reauthFailed) { %>
+    <div class="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+      <i class="bi bi-exclamation-circle-fill"></i> 인증에 실패했습니다. 다시 시도해주세요.
+    </div>
+  <% } %>
+  <% if (locals.reauthRequired) { %>
+    <div class="flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-700 px-4 py-3 rounded-lg text-sm">
+      <i class="bi bi-lock-fill"></i> 보안을 위해 다시 인증이 필요합니다.
+    </div>
+  <% } %>
+
+  <!-- ── 기본 정보 섹션 ── -->
+  <div class="bg-white rounded-lg shadow border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+      <h2 class="text-base font-bold text-gray-800">기본 정보</h2>
+      <p class="text-xs text-gray-500 mt-0.5">카카오 로그인 회원은 비밀번호 없이 정보를 수정할 수 있습니다.</p>
+    </div>
+    <div class="p-6">
+      <form method="POST" action="/mypage/profile/update" class="space-y-5" id="general-form" onsubmit="return confirmUpdate(event)">
+        <input type="hidden" name="type" value="general">
+
+        <div>
+          <label for="email" class="block text-sm font-semibold text-gray-700 mb-1.5">이메일</label>
+          <input type="email" id="email" name="email" value="<%= user.email && !user.email.includes('@no-email.com') ? user.email : '' %>"
+            placeholder="example@email.com"
+            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
+          <p class="mt-1 text-xs text-gray-400">주문 확인 등 알림을 받을 이메일 주소입니다.</p>
+        </div>
+
+        <div>
+          <label for="name" class="block text-sm font-semibold text-gray-700 mb-1.5">성함</label>
+          <input type="text" id="name" name="name" value="<%= user.name || '' %>"
+            placeholder="홍길동"
+            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button type="submit"
+            class="px-6 py-2.5 gh-btn-primary rounded-lg text-sm font-semibold hover:opacity-90 transition">
+            수정하기
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── 보안 정보 섹션 ── -->
+  <div class="bg-white rounded-lg shadow border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-gray-800">보안 정보</h2>
+        <p class="text-xs text-gray-500 mt-0.5">
+          <% if (identityVerified) { %>
+            <span class="text-blue-600 font-medium"><i class="bi bi-shield-check mr-1"></i>본인확인 완료 — 정보를 수정할 수 있습니다.</span>
+          <% } else { %>
+            수정하려면 카카오 본인확인이 필요합니다.
+          <% } %>
+        </p>
+      </div>
+      <% if (!identityVerified) { %>
+        <button type="button" onclick="document.getElementById('reauth-modal').classList.remove('hidden')"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-lg hover:bg-yellow-100 transition">
+          <i class="bi bi-shield-lock-fill"></i> 본인확인
+        </button>
+      <% } %>
+    </div>
+
+    <div class="p-6">
+      <% if (identityVerified) { %>
+        <!-- 재인증 완료: 수정 가능 폼 -->
+        <form method="POST" action="/mypage/profile/update" class="space-y-5" id="sensitive-form" onsubmit="return confirmUpdate(event)">
+          <input type="hidden" name="type" value="sensitive">
+
+          <div>
+            <label for="phone" class="block text-sm font-semibold text-gray-700 mb-1.5">휴대폰 번호</label>
+            <input type="tel" id="phone" name="phone" value="<%= user.phone || '' %>"
+              placeholder="01012345678"
+              class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1.5">주소</label>
+            <div class="flex gap-2 mb-2">
+              <input type="text" id="zipcode" name="zipcode" value="<%= user.zipcode || '' %>"
+                placeholder="우편번호" readonly
+                class="w-32 px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-500">
+              <button type="button" onclick="execDaumPostcode()"
+                class="px-4 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition">
+                우편번호 찾기
+              </button>
+            </div>
+            <input type="text" id="address" name="address" value="<%= user.address || '' %>"
+              placeholder="기본 주소" readonly
+              class="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-500 mb-2">
+            <input type="text" id="detailed_address" name="detailed_address" value="<%= user.detailed_address || '' %>"
+              placeholder="상세 주소"
+              class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
+          </div>
+
+          <div class="flex justify-end pt-2">
+            <button type="submit"
+              class="px-6 py-2.5 gh-btn-primary rounded-lg text-sm font-semibold hover:opacity-90 transition">
+              수정하기
+            </button>
+          </div>
+        </form>
+
+      <% } else { %>
+        <!-- 재인증 전: 마스킹된 정보 표시 -->
+        <dl class="space-y-4 text-sm">
+          <div class="flex items-center justify-between py-3 border-b border-gray-100">
+            <dt class="text-gray-500 font-medium">휴대폰 번호</dt>
+            <dd class="flex items-center gap-3">
+              <span class="text-gray-700 font-medium">
+                <% if (user.phone) { %>
+                  <%= user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1-****-$2') %>
+                <% } else { %>
+                  <span class="text-gray-400">미등록</span>
+                <% } %>
+              </span>
+              <button type="button"
+                onclick="document.getElementById('reauth-modal').classList.remove('hidden')"
+                class="text-xs font-semibold text-blue-600 hover:underline">변경</button>
+            </dd>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <dt class="text-gray-500 font-medium">배송지</dt>
+            <dd class="flex items-center gap-3">
+              <span class="text-gray-700 font-medium text-right max-w-xs truncate">
+                <% if (user.address) { %>
+                  <%= user.address %>
+                <% } else { %>
+                  <span class="text-gray-400">미등록</span>
+                <% } %>
+              </span>
+              <button type="button"
+                onclick="document.getElementById('reauth-modal').classList.remove('hidden')"
+                class="text-xs font-semibold text-blue-600 hover:underline">변경</button>
+            </dd>
+          </div>
+        </dl>
+      <% } %>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 카카오 재인증 모달 ── -->
+<div id="reauth-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <div class="text-center mb-5">
+      <div class="w-14 h-14 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-3">
+        <i class="bi bi-shield-lock-fill text-2xl text-yellow-500"></i>
+      </div>
+      <h3 class="text-lg font-bold text-gray-900 mb-1">본인확인이 필요합니다</h3>
+      <p class="text-sm text-gray-500 leading-relaxed">
+        회원정보 보호를 위해<br>카카오 계정으로 다시 인증해주세요.
+      </p>
+    </div>
+
+    <a href="/auth/kakao/reauth?return_to=/mypage/profile"
+      class="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-sm"
+      style="background-color: #FEE500; color: #3C1E1E;">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" clip-rule="evenodd"
+          d="M9 1.5C4.86 1.5 1.5 4.19 1.5 7.5c0 2.11 1.27 3.96 3.18 5.04l-.81 3.03a.3.3 0 0 0 .44.33L7.9 13.7c.36.05.72.08 1.1.08 4.14 0 7.5-2.69 7.5-6S13.14 1.5 9 1.5z"
+          fill="#3C1E1E"/>
+      </svg>
+      카카오로 본인확인
+    </a>
+
+    <button type="button"
+      onclick="document.getElementById('reauth-modal').classList.add('hidden')"
+      class="mt-3 w-full py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 transition">
+      취소
+    </button>
+  </div>
+</div>
+
+<script>
+  function confirmUpdate(e) {
+    if (!confirm('입력한 내용으로 수정하시겠습니까?')) {
+      e.preventDefault();
+      return false;
+    }
+    return true;
+  }
+</script>
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+<script>
+  function execDaumPostcode() {
+    new daum.Postcode({
+      oncomplete: function(data) {
+        const addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress;
+        document.getElementById('zipcode').value = data.zonecode;
+        document.getElementById('address').value = addr;
+        document.getElementById('detailed_address').focus();
+      }
+    }).open();
+  }
+</script>
+
+<!-- 회원탈퇴 링크 -->
+<div class="mt-10 pt-6 border-t border-gray-100 text-center">
+    <p class="text-xs text-gray-400 mb-1">서비스를 더 이상 이용하지 않으시나요?</p>
+    <a href="/mypage/withdraw" class="text-xs text-gray-400 hover:text-red-400 transition">회원 탈퇴하기 →</a>
+</div>
+
+<%- include('./_shell_end') %>

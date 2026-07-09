@@ -1,0 +1,28 @@
+<%
+  /* 팝업 배너 오버레이. locals: popupBanner (없으면 미출력). 표시 제어 스크립트는 페이지 하단에 유지. */
+%>
+<% if (popupBanner) { %>
+<div id="popup-banner-overlay"
+     class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 py-8">
+  <div class="relative w-[520px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col">
+    <button type="button" id="popup-banner-close" aria-label="닫기"
+            class="absolute top-3 right-3 z-20 text-white bg-black/45 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center shadow-lg">
+      <i class="bi bi-x-lg text-sm"></i>
+    </button>
+    <a href="<%= popupBanner.link_url || '#' %>" class="block w-full overflow-hidden bg-black/5 relative">
+      <img src="<%= popupBanner.image_url %>" alt="<%= popupBanner.title || '이벤트 배너' %>"
+           class="w-full h-full object-contain object-center">
+    </a>
+    <div class="flex items-center justify-between gap-2 px-4 py-3 bg-white border-t border-gray-100 text-xs sm:text-sm">
+      <div class="flex items-center gap-2 min-w-0 flex-shrink">
+        <input type="checkbox" id="popup-banner-hide-today-checkbox"
+               class="h-4 w-4 rounded border-gray-300 text-[var(--gh-primary)] focus:ring-[var(--gh-primary)] flex-shrink-0">
+        <label for="popup-banner-hide-today-checkbox"
+               class="text-[0.8rem] sm:text-sm text-gray-700 select-none truncate">오늘 하루 보지 않기</label>
+      </div>
+      <button type="button" id="popup-banner-dismiss"
+              class="px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] hover:bg-[var(--gh-primary-dark)] shadow-sm transition-colors whitespace-nowrap">닫기</button>
+    </div>
+  </div>
+</div>
+<% } %>
