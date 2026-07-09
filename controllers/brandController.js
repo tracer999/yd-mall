@@ -9,6 +9,16 @@ exports.getList = async (req, res) => {
             ORDER BY c.display_order ASC, c.id ASC
         `);
 
+        // 로그인 사용자의 찜한 브랜드 id 목록(하트 초기 상태용)
+        let likedBrandIds = [];
+        if (req.user) {
+            const [rows] = await pool.query(
+                'SELECT category_id FROM brand_likes WHERE user_id = ?',
+                [req.user.id]
+            );
+            likedBrandIds = rows.map(r => r.category_id);
+        }
+
         const siteSettings = res.locals.siteSettings || {};
         const companyName = siteSettings.company_name || '와이디몰';
         const domain = ((global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr').replace(/\/$/, '');
@@ -16,6 +26,8 @@ exports.getList = async (req, res) => {
         res.render('user/brands/list', {
             title: '브랜드',
             brands,
+            likedBrandIds,
+            currentUser: req.user || null,
             seo: {
                 ...res.locals.seo,
                 title: `브랜드 | ${companyName}`,

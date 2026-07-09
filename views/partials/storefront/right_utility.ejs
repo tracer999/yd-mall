@@ -132,10 +132,16 @@
     <% } %>
   </a>
 
-  <!-- 찜 -->
-  <a href="/likes" class="yd-rail__item" title="찜한 상품">
+  <!-- 찜 (GET /likes 는 라우트가 없다 — 마이페이지 관심상품으로 연결) -->
+  <a href="/mypage/likes" class="yd-rail__item" title="찜한 상품">
     <i class="bi bi-heart" aria-hidden="true"></i>
     <span class="yd-rail__label">찜</span>
+  </a>
+
+  <!-- 찜한 브랜드 -->
+  <a href="/mypage/brand-likes" class="yd-rail__item" title="찜한 브랜드">
+    <i class="bi bi-bookmark-heart" aria-hidden="true"></i>
+    <span class="yd-rail__label">찜한<br>브랜드</span>
   </a>
 
   <!-- 최근 본 상품 -->

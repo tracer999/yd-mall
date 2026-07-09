@@ -234,10 +234,13 @@ async function startServer() {
     const manualRoutes = require('./routes/manual');
     const sitemapRoutes = require('./routes/sitemap');
     const shopifyRoutes = require('./routes/shopify');
+    const featureRoutes = require('./routes/feature');
     const adminMenuMiddleware = require('./middleware/adminMenu');
 
     app.use('/shopify', shopifyRoutes);
     app.use('/', sitemapRoutes);
+    // 기능 메뉴 표준 URL(/best, /new, /deal/today, /event) — indexRoutes 의 '/' 핸들러보다 먼저 마운트
+    app.use('/', featureRoutes);
     app.use('/', indexRoutes);
     app.use('/auth', authRoutes);
     app.use('/likes', likesRoutes);

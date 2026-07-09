@@ -381,11 +381,48 @@ CREATE TABLE IF NOT EXISTS `page_revision` (
 
 ---
 
-## 6. Phase 3 — 메뉴/카테고리 빌더 (관리 UI + 뎁스)
+## 6. Phase 3 — 메뉴/카테고리 빌더 → **M 트랙으로 전면 대체 (2026-07-09)**
 
-> 목표: 상단 GNB를 카테고리와 분리해 몰별 자유 구성. (설계 8, 25.4)
+> ## 🔴 이 장(§6)의 "자유형 메뉴 빌더" 설계는 폐기되었다.
+>
+> 근거: [`shopping_mall_builder_menu_design_summary.md`](./shopping_mall_builder_menu_design_summary.md)
+> — "완전 동적 메뉴는 과설계. **통제된 동적 메뉴 시스템**이어야 한다."
+>
+> **대체 원칙**: `카테고리=동적 / 일반메뉴=사전정의 ON·OFF / 커스텀메뉴=슬롯 제한 / 시스템메뉴=고정`
+> **위치 고정 원칙(사용자 확정)**: 커스텀 메뉴를 제외한 모든 메뉴는 **위치(position)가 코드에 고정**되고
+> 운영자는 **ON/OFF·표시명·순서**만 관리한다. (예: 일반메뉴→`gnb`, 장바구니·찜·최근본→`right_rail`)
+>
+> ### 변경된 스펙
+> | 항목 | 기존 §6 | 신규 M 트랙 |
+> |---|---|---|
+> | 메뉴 저장 | `storefront_menu` 단일 | `feature_menu`+`mall_feature_menu`+`custom_menu`+`navigation_config` |
+> | 일반 메뉴 | 운영자가 URL 직접 입력 | 사전정의 기능코드, **URL 고정**, ON/OFF |
+> | 커스텀 메뉴 | 무제한 | **GNB 슬롯 최대 3** (`navigation_config.max_custom_items`) |
+> | **카테고리 뎁스** | **4뎁스** | **3뎁스로 축소 확정** |
+> | 죽은 링크 | 발생 가능 | `module_ready=0` 이면 켜도 미노출 (게이트) |
+>
+> ### M 트랙 진행 현황
+> | 단계 | 내용 | 상태 |
+> |---|---|---|
+> | **M1** | DB: `feature_menu`/`mall_feature_menu`/`custom_menu`/`navigation_config`/`brand_likes` + `categories` 컬럼 보강(mall_id·slug·depth·is_active·pc/mobile_visible) | ✅ 2026-07-09 |
+> | **M2** | 시드/이관: 기능메뉴 카탈로그 23건, 몰1 활성 15건, `storefront_menu` 7행 매핑 | ✅ 2026-07-09 |
+> | **M3** | 표준 라우트 `routes/feature.js`(`/best` `/new` `/deal/today` `/event`) + 찜한 브랜드(`/mypage/brand-likes`, `POST /likes/brand/toggle`) | ✅ 2026-07-09 |
+> | **M4** | 서비스: `navigationService`(위치별 조립) + `depthGuard`(카테고리 max 3) | ⬜ |
+> | **M5** | 렌더 전환: `middleware/menuData.js` → navigationService. GNB·우측레일을 데이터 기반으로 | ⬜ |
+> | **M6** | 관리자 UI: 카테고리 트리 / 일반메뉴 ON·OFF / 커스텀 슬롯 / 시스템 노출 / 헤더 설정 | ⬜ |
+> | **M7** | `storefront_menu` 제거(검증 후) | ⬜ |
+> | **M8** | **고객센터 페이지** (신규 요구, 캡처 `capture/image copy.png`) — 좌측 LNB(1:1문의/문의내역/공지/FAQ 카테고리/비회원 주문조회/대표번호) + 본문(FAQ 검색·자주묻는질문 BEST10 아코디언·공지 목록) + 우측 유틸 레일. **FAQ 모듈 신설 필요**(`faq`, `faq_category` 테이블). `HEADER_CS` 의 `default_path` 를 `/boards/notice` → `/cs` 로 승격 | ⬜ |
+>
+> ### M1~M3 구현 메모 (2026-07-09)
+> - `feature_menu.module_ready` 게이트 신설: 렌더 조건은 **`is_enabled AND module_ready`**. 모듈 미구현 메뉴(EXHIBITION/RANKING/OUTLET/COUPON/MEMBERSHIP/GROUP_BUY/LIVE)는 관리자에서 켜도 GNB에 나오지 않는다 → **죽은 `#` 링크 구조적 제거**.
+> - 기존 GNB 6개(카테고리 제외) → **오늘특가·베스트·신상품·이벤트&혜택 4개**로 정리. `TV편성표`는 카탈로그에 없어 폐기, `쇼핑라이브`·`공동구매`는 `module_ready=0` 으로 비활성.
+> - `/event` 는 이벤트 모듈 구현 전까지 `/boards/notice` 302 별칭(표준 URL 선점).
+> - 상품목록 재사용: `req.featurePreset`(Express 5의 `req.query` 는 getter라 변형 금지) → `productController.getList` 가 병합.
+> - **버그 수정**: P1.5 우측 레일의 `찜` 링크가 `/likes`(GET 라우트 없음 → 404)였다. `/mypage/likes` 로 교정.
+> - 적용: `node scripts/migrate_menu_architecture.js` (멱등). `tables.sql` 반영 완료.
 
-> **⚠️ 재정렬(2026-07-08)**: `storefront_menu` **테이블 생성과 GNB 렌더는 P1.5(§4.5)로 앞당겨졌다**(구조 우선). P3는 이제 **① 카테고리 4뎁스 관리 UI ② 메뉴 빌더 관리 UI ③ `depthGuard`(뎁스 강제) ④ 3뎁스 드롭다운 완성**에 집중한다. 아래 §6.1(b) `storefront_menu` DDL은 **P1.5에서 이미 생성**되므로 P3에서는 `depth` CHECK/관리 기능만 보강한다(중복 CREATE 금지).
+<details>
+<summary>(참고) 폐기된 기존 §6 설계 — 자유형 메뉴 빌더</summary>
 
 ### 6.0 뎁스 제한(확정 스펙) ⭐
 
@@ -457,6 +494,11 @@ CREATE TABLE IF NOT EXISTS `storefront_menu` (
 - **메뉴 4뎁스째 생성 시도 → 저장 거부 + 오류 메시지**, 3뎁스까지는 정상 생성
 - 부모를 다른 노드로 이동해도 자신+후손의 `depth`가 재계산되어 제한이 계속 지켜짐
 - 스토어프론트 GNB가 최대 3뎁스 드롭다운으로 정상 노출
+
+</details>
+
+> ⚠️ 위 접힌 내용은 **폐기된 설계**다. 카테고리 뎁스는 **4 → 3**, `storefront_menu` 는 M7에서 제거된다.
+> `depthGuard` 의 `maxDepth` 는 카테고리 **3**(메뉴 트리는 더 이상 존재하지 않음)으로 구현한다.
 
 ---
 

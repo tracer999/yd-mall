@@ -25,13 +25,17 @@ function buildKakaoChannelUrl(rawValue) {
 }
 
 exports.getList = async (req, res) => {
+    // 기능 메뉴(/best, /new, /deal/today)가 프리셋을 주입한다. 사용자 쿼리스트링보다 우선.
+    // Express 5의 req.query 는 getter 라 직접 변형하지 않고 병합해서 쓴다.
+    const q = Object.assign({}, req.query, req.featurePreset || {});
+
     const categoryId = req.params.categoryId;
     const brandId = req.params.brandId;
-    const queryCategoryId = req.query.categoryId;
-    const queryBrandId = req.query.brandId;
-    const sort = req.query.sort || 'new';
-    const distributionBadge = req.query.distributionBadge || '';
-    const productBadge = req.query.badge || '';
+    const queryCategoryId = q.categoryId;
+    const queryBrandId = q.brandId;
+    const sort = q.sort || 'new';
+    const distributionBadge = q.distributionBadge || '';
+    const productBadge = q.badge || '';
 
     const selectedCategoryId = categoryId || queryCategoryId || null;
     const selectedBrandId = brandId || queryBrandId || null;

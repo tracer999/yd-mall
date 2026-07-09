@@ -9,4 +9,10 @@ const { ensureAuthenticated } = require('../middleware/auth');
  */
 router.post('/toggle', ensureAuthenticated, likeController.toggleLike);
 
+/**
+ * POST /likes/brand/toggle
+ * 브랜드 찜하기/해제 토글 API (로그인 필요)
+ */
+router.post('/brand/toggle', ensureAuthenticated, likeController.toggleBrandLike);
+
 module.exports = router;

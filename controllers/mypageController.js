@@ -334,6 +334,38 @@ exports.getLikes = async (req, res, next) => {
     }
 };
 
+/**
+ * 찜한 브랜드 목록 (brand_likes → categories[type=BRAND])
+ * 브랜드별 판매중 상품 수를 함께 보여준다.
+ */
+exports.getBrandLikes = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+
+        const [likedBrands] = await pool.query(
+            `SELECT
+                c.id, c.name, c.logo_image_path,
+                COUNT(p.id) AS product_count
+             FROM brand_likes bl
+             JOIN categories c ON bl.category_id = c.id AND c.type = 'BRAND'
+             LEFT JOIN products p
+                    ON p.brand_category_id = c.id
+                   AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
+             WHERE bl.user_id = ?
+             GROUP BY c.id, c.name, c.logo_image_path
+             ORDER BY bl.created_at DESC`,
+            [userId]
+        );
+
+        res.render('user/mypage/brand_likes', {
+            title: '찜한 브랜드',
+            likedBrands
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 exports.getRecentViews = async (req, res, next) => {
     try {
         const userId = req.user.id;

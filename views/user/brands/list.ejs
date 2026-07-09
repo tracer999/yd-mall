@@ -9,8 +9,10 @@
             등록된 브랜드가 없습니다.
         </div>
         <% } else { %>
+            <% const _liked = new Set((typeof likedBrandIds !== 'undefined' ? likedBrandIds : []).map(Number)); %>
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                <% brands.forEach(brand=> { %>
+                <% brands.forEach(brand=> { const isLiked = _liked.has(Number(brand.id)); %>
+                    <div class="relative">
                     <a href="/brands/<%= brand.id %>"
                         class="group flex flex-col items-center justify-start p-3 sm:p-4 h-28 sm:h-32 bg-white border border-gray-200 rounded-2xl hover:border-[var(--gh-primary)] hover:shadow-md transition-all">
                         <% if (brand.logo_image_path) { %>
@@ -31,7 +33,46 @@
                                 </div>
                                 <% } %>
                     </a>
+                    <button type="button"
+                        class="brand-like-btn absolute top-1.5 right-1.5 z-10 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center transition hover:bg-white <%= isLiked ? 'text-red-500' : 'text-gray-300 hover:text-red-400' %>"
+                        data-brand-id="<%= brand.id %>" data-liked="<%= isLiked ? '1' : '0' %>"
+                        aria-pressed="<%= isLiked ? 'true' : 'false' %>"
+                        title="<%= isLiked ? '찜 해제' : '브랜드 찜하기' %>">
+                        <i class="bi <%= isLiked ? 'bi-heart-fill' : 'bi-heart' %> text-sm"></i>
+                    </button>
+                    </div>
                     <% }) %>
             </div>
             <% } %>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.brand-like-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function (e) {
+            e.preventDefault();
+            try {
+                const res = await fetch('/likes/brand/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brandId: Number(btn.dataset.brandId) })
+                });
+                if (res.status === 401 || res.redirected) { location.href = '/auth/login'; return; }
+                const result = await res.json();
+                if (!result.success) { alert(result.message || '처리에 실패했습니다.'); return; }
+
+                const icon = btn.querySelector('i');
+                btn.dataset.liked = result.liked ? '1' : '0';
+                btn.setAttribute('aria-pressed', result.liked ? 'true' : 'false');
+                btn.title = result.liked ? '찜 해제' : '브랜드 찜하기';
+                icon.className = 'bi ' + (result.liked ? 'bi-heart-fill' : 'bi-heart') + ' text-sm';
+                btn.classList.toggle('text-red-500', result.liked);
+                btn.classList.toggle('text-gray-300', !result.liked);
+                btn.classList.toggle('hover:text-red-400', !result.liked);
+            } catch (err) {
+                location.href = '/auth/login';
+            }
+        });
+    });
+});
+</script>
 </div>

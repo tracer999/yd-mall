@@ -8,6 +8,7 @@ router.use(ensureAuthenticated);
 
 router.get('/', mypageController.getDashboard);
 router.get('/likes', mypageController.getLikes);
+router.get('/brand-likes', mypageController.getBrandLikes);
 router.get('/recent-views', mypageController.getRecentViews);
 router.get('/activities', mypageController.getActivities);
 router.get('/coupons', mypageController.getCoupons);

@@ -93,14 +93,20 @@ CREATE TABLE IF NOT EXISTS `carts` (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS `categories` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '카테고리 ID (PK)',
+  `mall_id` bigint NOT NULL DEFAULT '1' COMMENT '몰 ID(멀티몰 대비)',
   `name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '카테고리명',
+  `slug` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'URL 슬러그',
   `display_order` int DEFAULT '0' COMMENT '노출 순서',
   `parent_id` int DEFAULT NULL COMMENT '상위 카테고리 ID (Self FK)',
+  `depth` int NOT NULL DEFAULT '1' COMMENT '계층 뎁스(1~3, 최상위=1). 앱 레이어에서 최대 3 강제',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT '노출 여부',
+  `pc_visible` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'PC 노출',
+  `mobile_visible` tinyint(1) NOT NULL DEFAULT '1' COMMENT '모바일 노출',
   `type` enum('NORMAL','THEME','BRAND') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'NORMAL' COMMENT '카테고리 타입 (일반, 테마)',
   PRIMARY KEY (`id`),
   KEY `parent_id` (`parent_id`),
   CONSTRAINT `categories_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='상품 카테고리 (계층 구조 지원)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='상품 카테고리 (계층 구조 지원, 최대 3뎁스)';
 
 
 -- =============================================================================
@@ -882,3 +888,102 @@ CREATE TABLE IF NOT EXISTS `storefront_menu` (
 /*!40101 SET CHARACTER_SET_CLIENT=IFNULL(@OLD_CHARACTER_SET_CLIENT,'utf8mb4') */;
 
 /*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
+
+-- =============================================================================
+-- 통제된 동적 메뉴 아키텍처 (M1)
+-- docs/사이트개선/shopping_mall_builder_menu_design_summary.md 반영
+--   · 카테고리 = 동적 관리(최대 3뎁스)
+--   · 일반 기능 메뉴 = 사전정의 카탈로그 + 몰별 ON/OFF (위치 고정)
+--   · 커스텀 메뉴 = 위치 선택 가능, 슬롯 제한
+--   · 시스템 메뉴 = 고정(노출 여부만)
+-- 적용 스크립트: scripts/migrate_menu_architecture.js (멱등)
+-- =============================================================================
+
+-- 기능/시스템 메뉴 카탈로그. position 은 고정이며 운영자가 변경할 수 없다.
+-- module_ready=0 이면 몰에서 켜더라도 렌더에서 제외한다(죽은 링크 방지).
+CREATE TABLE IF NOT EXISTS `feature_menu` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `feature_code` varchar(50) NOT NULL COMMENT '기능 코드(고정 식별자)',
+  `default_name` varchar(100) NOT NULL COMMENT '기본 메뉴명',
+  `default_path` varchar(255) DEFAULT NULL COMMENT '표준 URL(운영자 변경 불가). null=클라이언트 동작',
+  `position` varchar(30) NOT NULL COMMENT '고정 위치: gnb/right_rail/header_util/footer/mobile_quick',
+  `required_module` varchar(50) DEFAULT NULL COMMENT '필요 기능 모듈',
+  `module_ready` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=모듈 구현됨(렌더 허용)',
+  `is_system` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=시스템 메뉴(삭제 불가)',
+  `is_required` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=항상 노출(끌 수 없음)',
+  `default_sort_order` int NOT NULL DEFAULT '0',
+  `description` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_feature_code` (`feature_code`),
+  KEY `idx_feature_position` (`position`,`default_sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='기능/시스템 메뉴 카탈로그(위치 고정)';
+
+-- 몰별 기능 메뉴 ON/OFF. 표시명·순서·노출조건만 관리(URL/위치는 불가).
+CREATE TABLE IF NOT EXISTS `mall_feature_menu` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `mall_id` bigint NOT NULL DEFAULT '1',
+  `feature_code` varchar(50) NOT NULL,
+  `display_name` varchar(100) DEFAULT NULL COMMENT 'null이면 feature_menu.default_name 사용',
+  `sort_order` int NOT NULL DEFAULT '0' COMMENT '같은 position 내 순서',
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `pc_visible` tinyint(1) NOT NULL DEFAULT '1',
+  `mobile_visible` tinyint(1) NOT NULL DEFAULT '1',
+  `login_required` tinyint(1) NOT NULL DEFAULT '0',
+  `visible_start_at` datetime DEFAULT NULL,
+  `visible_end_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_mall_feature` (`mall_id`,`feature_code`),
+  CONSTRAINT `fk_mfm_feature` FOREIGN KEY (`feature_code`) REFERENCES `feature_menu` (`feature_code`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='몰별 기능 메뉴 ON/OFF';
+
+-- 몰별 커스텀 메뉴. 유일하게 위치(location)를 선택할 수 있으며 슬롯 수 제한을 받는다.
+CREATE TABLE IF NOT EXISTS `custom_menu` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `mall_id` bigint NOT NULL DEFAULT '1',
+  `display_name` varchar(100) NOT NULL,
+  `link_type` varchar(20) NOT NULL DEFAULT 'internal' COMMENT 'internal / external',
+  `link_url` varchar(500) NOT NULL,
+  `location` varchar(30) NOT NULL DEFAULT 'gnb',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `pc_visible` tinyint(1) NOT NULL DEFAULT '1',
+  `mobile_visible` tinyint(1) NOT NULL DEFAULT '1',
+  `login_required` tinyint(1) NOT NULL DEFAULT '0',
+  `new_window` tinyint(1) NOT NULL DEFAULT '0',
+  `visible_start_at` datetime DEFAULT NULL,
+  `visible_end_at` datetime DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_custom_mall_loc` (`mall_id`,`location`,`sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='몰별 커스텀 메뉴(슬롯 제한)';
+
+-- 몰별 내비게이션 정책(헤더 레이아웃, 카테고리 뎁스 상한, 커스텀 슬롯 수 등)
+CREATE TABLE IF NOT EXISTS `navigation_config` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `mall_id` bigint NOT NULL DEFAULT '1',
+  `header_layout_type` varchar(50) NOT NULL DEFAULT 'main_right_utility_v1',
+  `category_display_type` varchar(50) NOT NULL DEFAULT 'dropdown' COMMENT 'dropdown / mega',
+  `max_gnb_items` int NOT NULL DEFAULT '8' COMMENT 'GNB 최대 노출 수(카테고리 버튼 제외)',
+  `max_custom_items` int NOT NULL DEFAULT '3' COMMENT 'GNB 커스텀 메뉴 슬롯 수',
+  `category_max_depth` int NOT NULL DEFAULT '3' COMMENT '카테고리 최대 뎁스(앱 레이어 강제)',
+  `use_mega_menu` tinyint(1) NOT NULL DEFAULT '0',
+  `use_search_bar` tinyint(1) NOT NULL DEFAULT '1',
+  `config_json` json DEFAULT NULL,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_navconfig_mall` (`mall_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='몰별 내비게이션 정책';
+
+-- 찜한 브랜드 (우측 유틸 레일 RAIL_BRAND_WISHLIST)
+CREATE TABLE IF NOT EXISTS `brand_likes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `category_id` int NOT NULL COMMENT 'categories.id (type=BRAND)',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_brand_like` (`user_id`,`category_id`),
+  KEY `idx_bl_user` (`user_id`),
+  CONSTRAINT `fk_bl_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='찜한 브랜드';
