@@ -1,0 +1,64 @@
+<%
+  /*
+   * 퀵 사이드메뉴 섹션 (CT-6)
+   * 데이터소스: config_json (리졸버 불필요 — 정적 섹션)
+   *
+   * locals (config_json):
+   *   title        : 섹션 제목 (없으면 헤더 생략)
+   *   items        : [{ icon, label, url, badge }]  icon = bootstrap-icons 클래스명(bi- 제외)
+   *   columns      : PC 열 수 (기본 4)
+   *   sectionClass : <section> 클래스
+   *
+   * icon 은 화이트리스트가 아니라 클래스 문자열이므로, 관리자 입력이라도
+   * 영숫자/하이픈만 통과시켜 클래스 인젝션을 막는다.
+   */
+  const _items = (typeof items !== 'undefined' && Array.isArray(items)) ? items : [];
+  const _cols = (typeof columns !== 'undefined' && columns) ? Number(columns) : 4;
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-10 bg-white';
+  const _title = (typeof title !== 'undefined' && title) ? title : '';
+  const _safeIcon = (v) => {
+    const s = String(v || '').trim();
+    return /^[a-z0-9-]+$/i.test(s) ? s : 'dot';
+  };
+%>
+<% if (_items.length > 0) { %>
+<section class="<%= _sectionClass %>">
+  <style>
+    .yd-quick { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
+    @media (min-width: 768px) { .yd-quick { grid-template-columns: repeat(var(--yd-quick-cols), minmax(0,1fr)); } }
+    .yd-quick__item {
+      position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: .5rem; padding: 1.25rem .75rem; text-decoration: none;
+      border: 1px solid #eef0f2; border-radius: 1rem; background: #fff;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
+    }
+    .yd-quick__item:hover { border-color: var(--gh-primary); box-shadow: 0 8px 20px rgba(0,0,0,.07); transform: translateY(-2px); }
+    .yd-quick__item i { font-size: 26px; color: var(--gh-primary); }
+    .yd-quick__label { font-size: .8125rem; font-weight: 600; color: #374151; text-align: center; }
+    .yd-quick__item:hover .yd-quick__label { color: var(--gh-primary); }
+    .yd-quick__badge {
+      position: absolute; top: .5rem; right: .5rem;
+      background: var(--gh-accent); color: #fff; font-size: 10px; font-weight: 700;
+      padding: .125rem .375rem; border-radius: 9999px;
+    }
+  </style>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <% if (_title) { %>
+      <div class="text-center mb-6">
+        <h2 class="text-2xl font-extrabold text-gray-900"><%= _title %></h2>
+      </div>
+    <% } %>
+
+    <div class="yd-quick" style="--yd-quick-cols: <%= _cols %>">
+      <% _items.forEach(function (it) { %>
+        <a href="<%= it.url || '#' %>" class="yd-quick__item" title="<%= it.label %>">
+          <% if (it.badge) { %><span class="yd-quick__badge"><%= it.badge %></span><% } %>
+          <i class="bi bi-<%= _safeIcon(it.icon) %>" aria-hidden="true"></i>
+          <span class="yd-quick__label"><%= it.label %></span>
+        </a>
+      <% }); %>
+    </div>
+  </div>
+</section>
+<% } %>

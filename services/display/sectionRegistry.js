@@ -90,5 +90,40 @@ module.exports = {
       { key: 'layout', label: '레이아웃', type: 'select', options: ['rect', 'vertical'], default: 'rect' },
       Object.assign({}, FIELD.columns, { label: '열 수(PC)', max: 4, default: 2 })
     ]
+  },
+  benefit_bento: {
+    view: 'partials/sections/benefit_bento',
+    label: '혜택 벤토',
+    dataSource: 'product_group',
+    fields: [
+      { key: 'dealProductId', label: '대형 딜 상품 ID', type: 'number', min: 1, default: null },
+      Object.assign({}, FIELD.maxCount, { label: '썸네일 수', max: 12, default: 8 }),
+      { key: 'promoBlocks', label: '프로모 블록 [{copy,color,url}]', type: 'json', default: [] }
+    ]
+  },
+  quick_menu: {
+    view: 'partials/sections/quick_menu',
+    label: '퀵 메뉴',
+    dataSource: null, // config_json 만 사용 (리졸버 없음)
+    fields: [
+      { key: 'items', label: '항목 [{icon,label,url,badge}]', type: 'json', default: [] },
+      Object.assign({}, FIELD.columns, { label: '열 수(PC)', max: 6, default: 4 })
+    ]
+  },
+  recent_product: {
+    view: 'partials/sections/recent_product',
+    label: '최근 본 상품',
+    dataSource: null, // 로그인=recent_views / 비로그인=localStorage
+    fields: [
+      Object.assign({}, FIELD.maxCount, { label: '표시 상품 수', max: 20, default: 8 })
+    ]
+  },
+  custom_html: {
+    view: 'partials/sections/custom_html',
+    label: '커스텀 HTML',
+    dataSource: null,
+    fields: [
+      { key: 'html', label: '커스텀 HTML (저장·렌더 시 새니타이즈)', type: 'textarea', default: '' }
+    ]
   }
 };

@@ -36,8 +36,8 @@
 | **M4** | `navigationService` (위치별 메뉴 조립) + `depthGuard`(카테고리 max 3) | ✅ 2026-07-09 |
 | **M5** | 렌더 전환: `menuData.js` → navigationService. GNB·우측레일 데이터 기반화 | ✅ 2026-07-09 |
 | **M7** | `storefront_menu` 제거 (백업 후 DROP) | ✅ 2026-07-09 |
-| **M8** | 고객센터 페이지 + FAQ 모듈 | ⬜ |
-| **CT** | 섹션 컴포넌트 트랙 (CT-0 ~ CT-9) | ⬜ **다음 작업** |
+| **CT** | 섹션 컴포넌트 트랙 (CT-0 ~ CT-9) | ✅ 2026-07-09 |
+| **M8** | 고객센터 페이지 + FAQ 모듈 | ⬜ **다음 작업** |
 | **P4** | 테마 시스템 (CSS 변수) | ⬜ |
 | **P5** | 멀티몰(도메인 기반) | ⬜ |
 | **P6+** | SaaS 고도화 (멀티테넌시·미디어·AI) | 장기 |
@@ -289,16 +289,35 @@ services/tree/depthGuard.js
 | `product_grid` | N열 상품 그리드 | `product_group` | ✅ |
 | `category_showcase` | 카테고리별 상품 탭(AJAX) | `category` | ✅ |
 | `value_proposition` / `kakao_cta` / `popup_banner` | 정적/설정형 | config | ✅ |
-| `utility_rail` | 우측 유틸 레일 | client + 고정 | 🟡 전역 레일 구현. 히어로 내부 레일 제거는 CT-7 |
-| `product_carousel` | 상품 캐러셀 | `product_group` | ⬜ CT-1 |
-| `brand_carousel` | 브랜드 로고 캐러셀 | `categories(type=BRAND)` | ⬜ CT-2 |
-| `ranking_tabs` | 랭킹(카테고리 탭 + 랭크 뱃지) | `product_group` | ⬜ CT-3 |
-| `benefit_bento` | 혜택 벤토 | `product_group` + 카피 | ⬜ CT-4 |
-| `promotion_banner` | 프로모션 배너 | `banner_group` | ⬜ CT-5 |
-| `quick_menu` | 퀵 사이드메뉴 | config | ⬜ CT-6 |
-| `recent_product` | 최근 본 상품 | client | ⬜ CT-8 |
-| `custom_html` | 제한적 커스텀 HTML | inline | ⬜ CT-9 |
+| `utility_rail` | 우측 유틸 레일(전역, 전 페이지) | `feature_menu[right_rail]` | ✅ CT-7 |
+| `product_carousel` | 상품 캐러셀 | `product_group` | ✅ CT-1 |
+| `brand_carousel` | 브랜드 로고 캐러셀 | `categories(type=BRAND)` | ✅ CT-2 |
+| `ranking_tabs` | 랭킹(카테고리 탭 + 랭크 뱃지) | 카테고리 + 상품 | ✅ CT-3 |
+| `benefit_bento` | 혜택 벤토 | `product_group` + 카피 | ✅ CT-4 |
+| `promotion_banner` | 프로모션 배너 | `banners.group_key` | ✅ CT-5 |
+| `quick_menu` | 퀵 메뉴 | config (리졸버 없음) | ✅ CT-6 |
+| `recent_product` | 최근 본 상품 | `recent_views` / localStorage | ✅ CT-8 |
+| `custom_html` | 제한적 커스텀 HTML | inline (sanitize) | ✅ CT-9 |
 | `live_cards` | 라이브 카드 | P6 미디어 | P6 |
+
+### 6.0 CT 트랙 완료 (2026-07-09)
+
+현재 홈 섹션 구성 (15개, `page_section` 순서대로):
+```text
+hero → value_proposition → product_grid(베스트) → product_carousel(MD 추천)
+→ product_grid(신상품) → product_carousel(오늘의 특가) → quick_menu → benefit_bento
+→ promotion_banner → ranking_tabs → brand_carousel → category_showcase
+→ recent_product → custom_html → kakao_cta
+```
+시드: `node scripts/seed_ct_sections.js` (멱등, `--reset` 지원). `config_json.seed_key` 로 중복 방지.
+
+**구현 메모**
+- **캐러셀 공용화**: `_carousel_base.ejs` 가 CSS + 동작을 제공(`window.__ydCarouselInit` 가드로 멀티 인스턴스에서 1회만 바인딩). 외부 라이브러리 없이 CSS `scroll-snap`.
+- **CT-3 AJAX**: `GET /sections/ranking` (`routes/sections.js`). 정렬은 **화이트리스트**만, `limit` 상한 20, 파라미터화 쿼리. `sort=1;DROP TABLE` 시도 → 기본 정렬로 처리됨을 검증.
+- **CT-5**: `banners.group_key` 컬럼 신설(`scripts/migrate_banner_group_key.js`). `bannerService.getByGroup` 로 배너 소스 일원화. 시드는 `banner_type='CATEGORY' + category_id=NULL` 로 심어 히어로(MAIN)/팝업(POPUP)/카테고리 배너 조회를 오염시키지 않음.
+- **CT-8**: 로그인 → `recent_views` 테이블 SSR, 비로그인 → `localStorage('yd_recent_products')` 로 클라이언트 렌더(이력 없으면 섹션 숨김).
+- **CT-9 보안**: `sanitize-html` 도입. `services/display/htmlSanitizer.js` 가 허용 태그/속성 화이트리스트 + `javascript:`/`data:` 스킴 차단 + `style` 값 정규식 검증 + 외부 링크 `noopener` 강제. **저장 시(`pageBuilderService.updateSection`)와 렌더 시(리졸버) 이중 새니타이즈.** 검증: `<script>`·`onerror`·`javascript:`·`data:`·`<iframe>`·`expression()` 8종 전부 제거, 정상 링크·텍스트는 보존.
+- **CT-7**: 히어로 내부 유틸 레일 **완전 제거**. 전역 레일이 `position:fixed` 라 본문에 영향이 없으므로 `main_layout` 이 `rightRailMenus` 존재 시 **스토어프론트 전 페이지**에 렌더. (`≥1600px` 노출 게이트는 유지 — 본문 `max-w-1400px` 와 충돌 방지)
 
 ### 6.1 컴포넌트 추가 표준 절차 (5단계)
 1. **레지스트리 등록** — `sectionRegistry.js` 에 `section_type: { view, label, fields }`
@@ -321,10 +340,11 @@ services/display/resolvers/
 ```
 **DoD**: 홈 렌더 결과가 CT-0 전과 픽셀 동일. 이후 컴포넌트 추가 시 `displayService.js` 를 수정하지 않고 **리졸버 파일 + 레지스트리 등록만으로** 동작.
 
-### 6.3 CT-7 — utility_rail 잔여
-- [ ] 히어로(`hero_showcase.ejs`)에서 내부 유틸 레일 **완전 제거** (현재는 `<1600px` 구간용으로 잔존)
-- [ ] 홈 외 전 페이지 노출 (현재 `layout_type='main_right_utility_v1'` = 홈만)
-- [ ] 찜 개수 뱃지용 미들웨어
+### 6.3 CT-7 — utility_rail ✅ 완료
+- [x] 히어로(`hero_showcase.ejs`)에서 내부 유틸 레일 완전 제거
+- [x] 홈 외 전 페이지 노출 (`main_layout` 이 `rightRailMenus` 존재 시 렌더)
+- [ ] **잔여**: 찜 개수 뱃지용 미들웨어(장바구니만 `cartCount` 뱃지 있음)
+- [ ] **잔여**: `<1600px` 에서는 레일 미노출(본문 폭 충돌). 좁은 화면용 대안은 기존 플로팅 TOP 버튼
 
 ### 6.4 CT 트랙 DoD
 - 모든 "예정" 컴포넌트가 `page_section` INSERT 만으로 배치 가능

@@ -1,0 +1,99 @@
+<%
+  /*
+   * 최근 본 상품 섹션 (CT-8)
+   *
+   * 로그인 사용자 : 서버가 recent_views 로 채워 SSR
+   * 비로그인      : clientOnly=true → 클라이언트가 localStorage('yd_recent_products')로 채움.
+   *                 이력이 없으면 JS가 섹션 전체를 숨긴다.
+   *
+   * locals (config_json):
+   *   title        : 섹션 제목
+   *   products     : 상품 배열 (로그인 시)
+   *   clientOnly   : 비로그인 여부
+   *   maxCount     : 최대 노출 수 (기본 8)
+   *   sectionClass : <section> 클래스
+   */
+  const _items = products || [];
+  const _clientOnly = (typeof clientOnly !== 'undefined') ? clientOnly : true;
+  const _max = (typeof maxCount !== 'undefined' && maxCount) ? Number(maxCount) : 8;
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-12 bg-white';
+  const _won = (n) => Number(n || 0).toLocaleString();
+  const _href = (p) => (p.slug && String(p.slug).trim())
+    ? '/products/' + encodeURIComponent(String(p.slug).trim())
+    : '/products/view/' + p.id;
+%>
+<section class="<%= _sectionClass %>" data-yd-recent-section <%= _clientOnly ? 'hidden' : '' %>>
+  <style>
+    .yd-recent-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1.25rem; }
+    @media (min-width: 640px) { .yd-recent-grid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+    .yd-recent-item { display: block; text-decoration: none; border: 1px solid #f1f2f4; border-radius: .75rem;
+      overflow: hidden; background: #fff; transition: box-shadow .15s, transform .15s; }
+    .yd-recent-item:hover { box-shadow: 0 8px 20px rgba(0,0,0,.08); transform: translateY(-2px); }
+    .yd-recent-item img { width: 100%; height: 160px; object-fit: contain; padding: .75rem; background: #fff; }
+    .yd-recent-item__body { padding: .75rem 1rem 1rem; }
+    .yd-recent-item__name { font-size: .875rem; color: #111827; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+    .yd-recent-item__price { margin-top: .25rem; font-weight: 700; color: #111827; }
+  </style>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-8">
+      <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+    </div>
+
+    <div class="yd-recent-grid" data-yd-recent-grid data-max="<%= _max %>">
+      <% _items.slice(0, _max).forEach(function (p) { %>
+        <a href="<%= _href(p) %>" class="yd-recent-item">
+          <img src="<%= p.main_image || '/images/placeholder.png' %>" alt="<%= p.name %>" loading="lazy">
+          <div class="yd-recent-item__body">
+            <p class="yd-recent-item__name"><%= p.name %></p>
+            <p class="yd-recent-item__price"><%= _won(p.price) %>원</p>
+          </div>
+        </a>
+      <% }); %>
+    </div>
+  </div>
+</section>
+
+<% if (_clientOnly) { %>
+<script>
+/* 비로그인: localStorage 이력으로 채우고, 없으면 섹션을 숨긴 채로 둔다. */
+(function () {
+  if (window.__ydRecentSectionInit) return;
+  window.__ydRecentSectionInit = true;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function render() {
+    var section = document.querySelector('[data-yd-recent-section]');
+    var grid = section && section.querySelector('[data-yd-recent-grid]');
+    if (!section || !grid) return;
+
+    var list = [];
+    try {
+      var raw = localStorage.getItem('yd_recent_products');
+      list = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(list)) list = [];
+    } catch (e) { list = []; }
+
+    if (list.length === 0) return; // hidden 유지
+
+    var max = Number(grid.dataset.max) || 8;
+    grid.innerHTML = list.slice(0, max).map(function (p) {
+      return '<a href="' + esc(p.url) + '" class="yd-recent-item">'
+        + '<img src="' + esc(p.image || '/images/placeholder.png') + '" alt="' + esc(p.name) + '" loading="lazy">'
+        + '<div class="yd-recent-item__body"><p class="yd-recent-item__name">' + esc(p.name) + '</p></div>'
+        + '</a>';
+    }).join('');
+    section.removeAttribute('hidden');
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render);
+  else render();
+})();
+</script>
+<% } %>

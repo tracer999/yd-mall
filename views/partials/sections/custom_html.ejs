@@ -1,0 +1,29 @@
+<%
+  /*
+   * 커스텀 HTML 섹션 (CT-9)
+   *
+   * locals:
+   *   title        : 섹션 제목 (없으면 헤더 생략)
+   *   safeHtml     : **리졸버가 새니타이즈한** HTML (원본 config.html 을 절대 직접 출력하지 않는다)
+   *   sectionClass : <section> 클래스
+   *
+   * 주의: 이스케이프 없이 출력하므로 safeHtml 이외의 값을 넣지 말 것.
+   */
+  const _html = (typeof safeHtml !== 'undefined' && safeHtml) ? safeHtml : '';
+  const _title = (typeof title !== 'undefined' && title) ? title : '';
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-10 bg-white';
+%>
+<% if (_html) { %>
+<section class="<%= _sectionClass %>">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <% if (_title) { %>
+      <div class="text-center mb-6">
+        <h2 class="text-2xl font-extrabold text-gray-900"><%= _title %></h2>
+      </div>
+    <% } %>
+    <div class="yd-custom-html prose max-w-none">
+      <%- _html %>
+    </div>
+  </div>
+</section>
+<% } %>

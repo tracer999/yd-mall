@@ -58,6 +58,18 @@ async function addSection(pageId, { section_type }) {
 }
 
 // 섹션 설정 갱신(제목/데이터소스/config/노출조건)
+/**
+ * 섹션 타입별 config_json 정제. 현재는 custom_html 의 HTML 만 새니타이즈한다.
+ * @returns 정제된 config 객체(또는 null)
+ */
+function sanitizeSectionConfig(sectionType, config) {
+  if (config == null) return null;
+  if (sectionType !== 'custom_html') return config;
+
+  const { sanitize } = require('./htmlSanitizer');
+  return Object.assign({}, config, { html: sanitize(config.html) });
+}
+
 async function updateSection(id, patch) {
   const section = await getSection(id);
   if (!section) throw new Error('섹션을 찾을 수 없습니다.');
@@ -71,7 +83,10 @@ async function updateSection(id, patch) {
     set('data_source_id', patch.data_source_id === '' || patch.data_source_id == null ? null : Number(patch.data_source_id));
   }
   if (patch.config_json !== undefined) {
-    set('config_json', patch.config_json == null ? null : JSON.stringify(patch.config_json));
+    // custom_html 은 저장 시점에도 새니타이즈한다(렌더 시 리졸버의 새니타이즈와 이중 방어).
+    // 관리자 입력이라도 저장형 XSS 를 신뢰하지 않는다.
+    const cfg = sanitizeSectionConfig(section.section_type, patch.config_json);
+    set('config_json', cfg == null ? null : JSON.stringify(cfg));
   }
   if (patch.visible_start_at !== undefined) set('visible_start_at', patch.visible_start_at || null);
   if (patch.visible_end_at !== undefined) set('visible_end_at', patch.visible_end_at || null);

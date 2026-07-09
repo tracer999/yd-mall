@@ -20,4 +20,8 @@ module.exports = {
     brand_carousel: require('./brand_carousel'),
     ranking_tabs: require('./ranking_tabs'),
     promotion_banner: require('./promotion_banner'),
+    benefit_bento: require('./benefit_bento'),
+    recent_product: require('./recent_product'),
+    custom_html: require('./custom_html'),
+    // quick_menu 는 config_json 만으로 렌더되는 정적 섹션이라 리졸버가 없다.
 };

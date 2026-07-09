@@ -1,0 +1,107 @@
+<%
+  /*
+   * 혜택 벤토 섹션 (CT-4)
+   * 대형 딜 카드 + 원형 썸네일 그리드 + 컬러블록 프로모.
+   *
+   * locals (config_json):
+   *   title        : 섹션 제목
+   *   deal         : 대형 딜 상품 (리졸버 주입, 없을 수 있음)
+   *   products     : 썸네일 그리드 상품 배열 (리졸버 주입)
+   *   promoBlocks  : [{ copy, color, url }] 컬러블록
+   *   maxCount     : 썸네일 수 (기본 8)
+   *   sectionClass : <section> 클래스
+   *
+   * 딜 상품이 없으면 해당 슬롯만 숨기고 섹션은 유지한다.
+   * 데스크톱은 벤토, 모바일은 1열 스택.
+   */
+  const _items = (products || []).slice(0, (typeof maxCount !== 'undefined' && maxCount) ? Number(maxCount) : 8);
+  const _deal = (typeof deal !== 'undefined') ? deal : null;
+  const _blocks = (typeof promoBlocks !== 'undefined' && Array.isArray(promoBlocks)) ? promoBlocks : [];
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-12 bg-white';
+  const _won = (n) => Number(n || 0).toLocaleString();
+  const _href = (p) => (p.slug && String(p.slug).trim())
+    ? '/products/' + encodeURIComponent(String(p.slug).trim())
+    : '/products/view/' + p.id;
+%>
+<% if (_deal || _items.length > 0 || _blocks.length > 0) { %>
+<section class="<%= _sectionClass %>">
+  <style>
+    .yd-bento { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+    @media (min-width: 1024px) {
+      .yd-bento { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(120px, auto); }
+      .yd-bento__deal { grid-column: span 2; grid-row: span 2; }
+      .yd-bento__thumbs { grid-column: span 2; grid-row: span 2; }
+    }
+    .yd-bento__cell { border-radius: 1rem; border: 1px solid #eef0f2; background: #fff; overflow: hidden; }
+    .yd-bento__deal { display: flex; flex-direction: column; text-decoration: none; transition: box-shadow .15s, transform .15s; }
+    .yd-bento__deal:hover { box-shadow: 0 12px 30px rgba(0,0,0,.10); transform: translateY(-2px); }
+    .yd-bento__deal img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #fff; padding: 1rem; }
+    .yd-bento__thumbs { padding: 1rem; }
+    .yd-bento__thumb-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .75rem; }
+    .yd-bento__thumb { display: flex; flex-direction: column; align-items: center; gap: .35rem; text-decoration: none; }
+    .yd-bento__thumb img {
+      width: 100%; aspect-ratio: 1/1; border-radius: 9999px; object-fit: cover;
+      border: 1px solid #f1f2f4; background: #fff; transition: transform .15s;
+    }
+    .yd-bento__thumb:hover img { transform: scale(1.05); }
+    .yd-bento__thumb span {
+      font-size: 11px; color: #4b5563; text-align: center; line-height: 1.25;
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .yd-bento__promo {
+      display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+      padding: 1.25rem; color: #fff; text-decoration: none; font-weight: 700;
+      transition: filter .15s;
+    }
+    .yd-bento__promo:hover { filter: brightness(1.06); }
+  </style>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-8">
+      <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+    </div>
+
+    <div class="yd-bento">
+      <% if (_deal) { %>
+        <a href="<%= _href(_deal) %>" class="yd-bento__cell yd-bento__deal">
+          <img src="<%= _deal.main_image || '/images/placeholder.png' %>" alt="<%= _deal.name %>" loading="lazy">
+          <div class="p-5 border-t border-gray-100">
+            <span class="brand-chip inline-block px-2.5 py-1 rounded-full text-[11px] font-bold mb-2">특가</span>
+            <h3 class="text-lg font-bold text-gray-900 line-clamp-2"><%= _deal.name %></h3>
+            <div class="mt-2 flex items-baseline gap-2">
+              <% if (_deal.original_price && _deal.original_price > _deal.price) { %>
+                <span class="text-gray-400 text-sm line-through"><%= _won(_deal.original_price) %>원</span>
+              <% } %>
+              <span class="text-2xl font-extrabold text-gray-900"><%= _won(_deal.price) %>원</span>
+              <% if (_deal.discount_rate > 0) { %>
+                <span class="brand-badge text-xs font-bold px-2 py-1 rounded"><%= _deal.discount_rate %>%</span>
+              <% } %>
+            </div>
+          </div>
+        </a>
+      <% } %>
+
+      <% if (_items.length > 0) { %>
+        <div class="yd-bento__cell yd-bento__thumbs">
+          <div class="yd-bento__thumb-grid">
+            <% _items.forEach(function (p) { %>
+              <a href="<%= _href(p) %>" class="yd-bento__thumb" title="<%= p.name %>">
+                <img src="<%= p.main_image || '/images/placeholder.png' %>" alt="<%= p.name %>" loading="lazy">
+                <span><%= p.name %></span>
+              </a>
+            <% }); %>
+          </div>
+        </div>
+      <% } %>
+
+      <% _blocks.forEach(function (b) { %>
+        <a href="<%= b.url || '#' %>" class="yd-bento__cell yd-bento__promo"
+           style="background: <%= b.color || 'var(--gh-primary)' %>">
+          <span><%= b.copy %></span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      <% }); %>
+    </div>
+  </div>
+</section>
+<% } %>

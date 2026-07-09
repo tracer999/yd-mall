@@ -112,6 +112,62 @@ const SECTIONS = [
             sectionClass: 'py-10 bg-white',
         },
     },
+    {
+        seedKey: 'ct4_benefit_bento',
+        section_type: 'benefit_bento',
+        title: '최고의 혜택',
+        groupSeedKey: 'ct_recommend', // 썸네일 그리드 소스
+        config: {
+            maxCount: 8,
+            // dealProductId 는 시드 시 실제 할인 상품으로 채운다(아래 resolveDealProductId).
+            promoBlocks: [
+                { copy: '신규회원 웰컴 쿠폰', color: 'var(--gh-primary)', url: '/mypage/coupons' },
+                { copy: '오늘특가 모아보기', color: '#f59e0b', url: '/deal/today' },
+            ],
+            sectionClass: 'py-12 bg-[var(--gh-secondary)]',
+        },
+    },
+    {
+        seedKey: 'ct6_quick_menu',
+        section_type: 'quick_menu',
+        title: '바로가기',
+        groupSeedKey: null, // config_json 만 사용
+        config: {
+            columns: 4,
+            items: [
+                { icon: 'ticket-perforated', label: '쿠폰', url: '/mypage/coupons' },
+                { icon: 'fire', label: '오늘특가', url: '/deal/today', badge: 'HOT' },
+                { icon: 'stars', label: '베스트', url: '/best' },
+                { icon: 'headset', label: '고객센터', url: '/boards/notice' },
+            ],
+            sectionClass: 'py-10 bg-white',
+        },
+    },
+    {
+        seedKey: 'ct8_recent_product',
+        section_type: 'recent_product',
+        title: '최근 본 상품',
+        groupSeedKey: null, // 로그인=recent_views / 비로그인=localStorage
+        config: { maxCount: 8, sectionClass: 'py-12 bg-white' },
+    },
+    {
+        seedKey: 'ct9_custom_html',
+        section_type: 'custom_html',
+        title: '',
+        groupSeedKey: null,
+        config: {
+            sectionClass: 'py-8 bg-[var(--gh-secondary)]',
+            // 새니타이즈 동작 확인을 겸한 시드: script/onerror/javascript: 는 모두 제거되어야 한다.
+            html: '<div style="text-align:center">'
+                + '<h3>건강한 하루, 와이디몰과 함께</h3>'
+                + '<p>엄선한 <strong>건강식품</strong>을 합리적인 가격에 만나보세요. '
+                + '<a href="/products">전체 상품 보기</a></p>'
+                + '<script>alert("xss")</script>'
+                + '<img src=x onerror="alert(1)">'
+                + '<a href="javascript:alert(1)">위험한 링크</a>'
+                + '</div>',
+        },
+    },
 ];
 
 /** 최종 홈 섹션 순서 (section_type 또는 seed_key 기준) */
@@ -122,10 +178,14 @@ const ORDER = [
     { match: { seedKey: 'ct1_carousel_recommend' } },
     { match: { section_type: 'product_grid', data_source_id: 2 } },   // 신상품
     { match: { seedKey: 'ct1_carousel_deal' } },
+    { match: { seedKey: 'ct6_quick_menu' } },
+    { match: { seedKey: 'ct4_benefit_bento' } },
     { match: { seedKey: 'ct5_promotion_banner' } },
     { match: { seedKey: 'ct3_ranking_tabs' } },
     { match: { seedKey: 'ct2_brand_carousel' } },
     { match: { section_type: 'category_showcase' } },
+    { match: { seedKey: 'ct8_recent_product' } },
+    { match: { seedKey: 'ct9_custom_html' } },
     { match: { section_type: 'kakao_cta' } },
 ];
 
@@ -287,6 +347,16 @@ async function reset(conn) {
 
         console.log('\n[2] 프로모션 배너 그룹');
         await upsertPromoBanners(conn);
+
+        // benefit_bento 의 대형 딜 상품은 실제 할인 상품으로 채운다.
+        const [deals] = await conn.query(
+            "SELECT id FROM products WHERE status IN ('ON','SOLD_OUT') AND discount_rate > 0 ORDER BY discount_rate DESC LIMIT 1"
+        );
+        const bento = SECTIONS.find(s => s.seedKey === 'ct4_benefit_bento');
+        if (bento && deals[0]) {
+            bento.config.dealProductId = deals[0].id;
+            console.log(`\n  · benefit_bento 대형 딜 상품 = product #${deals[0].id}`);
+        }
 
         console.log('\n[3] 홈 섹션');
         const sectionMap = await upsertSections(conn, groupMap);

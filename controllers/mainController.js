@@ -94,6 +94,8 @@ async function buildHomeContext(req, res) {
 
     const shared = {
         hasUser,
+        // 리졸버가 사용자별 데이터(최근 본 상품 등)를 조회할 때 필요 (CT-8)
+        userId: (req.user && req.user.id) || null,
         kakaoUrl: computeKakaoUrl(siteSettings),
         heroData: {
             variant: heroVariant,

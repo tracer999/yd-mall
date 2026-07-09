@@ -373,13 +373,15 @@
 
     <%
         /*
-         * 레이아웃 골격(P1.5 §4.5.2). page.layout_type 값으로 우측 유틸 레일 노출을 결정한다.
-         *   main_basic            → 본문만
-         *   main_right_utility_v1 → 본문 + 우측 유틸 레일(fixed rail)
-         * 섹션들이 full-bleed 이므로 본문을 2컬럼 컨테이너로 감싸지 않고 레일을 고정 배치한다.
+         * 레이아웃 골격(P1.5 §4.5.2 / CT-7).
+         *   layoutType 은 page.layout_type (main_basic | main_right_utility_v1).
+         *   우측 유틸 레일은 position:fixed 라 본문 레이아웃에 영향을 주지 않으므로
+         *   CT-7 이후 스토어프론트 **전 페이지**에 노출한다(레일 항목이 있을 때만).
+         *   레일 항목은 feature_menu(position='right_rail') 로 관리된다.
          */
         const _layoutType = (typeof layoutType !== 'undefined' && layoutType) ? layoutType : 'main_basic';
-        const _hasRightUtility = _layoutType === 'main_right_utility_v1';
+        const _hasRightUtility = (typeof rightRailMenus !== 'undefined')
+            && Array.isArray(rightRailMenus) && rightRailMenus.length > 0;
     %>
 
     <!-- Main Content -->
@@ -387,7 +389,7 @@
         <%- body %>
     </main>
 
-    <!-- Right Utility Rail (layout_type = main_right_utility_v1) -->
+    <!-- Right Utility Rail (전역, CT-7) -->
     <% if (_hasRightUtility) { %>
         <%- include('../partials/storefront/right_utility') %>
     <% } %>

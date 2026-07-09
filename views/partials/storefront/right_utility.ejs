@@ -55,11 +55,9 @@
   @media (min-width: 1600px) {
     .yd-rail { display: flex; }
     /* 레일에 TOP이 포함되므로 레거시 플로팅 TOP 버튼은 숨긴다(중복 방지).
-       scrollTopBtn은 JS가 inline style로 display를 제어하므로 !important 필요. */
+       scrollTopBtn은 JS가 inline style로 display를 제어하므로 !important 필요.
+       (히어로 내부 레일은 CT-7 에서 완전 제거됨) */
     #scrollTopBtn { display: none !important; }
-    /* 히어로 내부 유틸 레일(장바구니/찜/최근본/TOP)도 전역 레일과 중복되므로 숨긴다.
-       (완전 제거는 부록 A CT-7에서) */
-    .hero-util-rail { display: none !important; }
   }
 
   .yd-rail__item {
