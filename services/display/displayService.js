@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const registry = require('./sectionRegistry');
-const productGroupService = require('./productGroupService');
+const resolvers = require('./resolvers');
+const { loadHomeCategories } = require('./resolvers/_shared');
 
 /*
  * 홈 전시 렌더 엔진 (P1) + 발행/미리보기 분리 (P2)
@@ -11,29 +12,10 @@ const productGroupService = require('./productGroupService');
  *  스토어프론트에 반영된다(SDUI + draft/publish 분리).
  */
 
-const P_STATUS = "p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')";
-function visibilityClause(hasUser) {
-  return hasUser ? "p.visibility IN ('PUBLIC','MEMBER_ONLY')" : "p.visibility = 'PUBLIC'";
-}
-
 function parseConfig(v) {
   if (!v) return {};
   if (typeof v === 'object') return v;
   try { return JSON.parse(v); } catch (e) { return {}; }
-}
-
-async function loadHomeCategories(hasUser) {
-  const vis = visibilityClause(hasUser);
-  const [rows] = await pool.query(`
-    SELECT c.id, c.name, COUNT(p.id) AS product_count
-    FROM categories c
-    JOIN products p ON p.category_id = c.id AND ${P_STATUS} AND ${vis}
-    WHERE c.type = 'NORMAL'
-    GROUP BY c.id, c.name
-    HAVING product_count > 0
-    ORDER BY c.display_order ASC
-  `);
-  return rows;
 }
 
 async function getHomePage() {
@@ -77,6 +59,12 @@ function filterSnapshotRows(rows) {
 
 /*
  * 섹션 행 목록 → 렌더 가능한 형태로 해석한다. (스토어프론트/미리보기 공통)
+ *
+ * CT-0: section_type 별 분기를 resolvers/ 맵으로 위임한다.
+ *   - 리졸버가 null 을 반환하면 해당 섹션은 스킵(빈 데이터 규약)
+ *   - 리졸버가 없으면 config_json 만으로 렌더(정적 섹션)
+ * 새 컴포넌트를 추가할 때 이 파일은 수정하지 않는다.
+ *
  * @param rows   page_section 행 배열(DB 또는 스냅샷)
  * @param shared { hasUser, heroData, kakaoUrl }
  * @returns [{ type, view, locals }]
@@ -87,29 +75,21 @@ async function resolveSections(rows, shared = {}) {
     const reg = registry[s.section_type];
     if (!reg) continue; // 미등록 섹션 타입은 스킵
 
-    const cfg = parseConfig(s.config_json);
-    const locals = Object.assign({}, cfg, { title: s.title });
+    const config = parseConfig(s.config_json);
+    const baseLocals = Object.assign({}, config, { title: s.title });
 
-    if (s.section_type === 'product_grid') {
-      const group = await productGroupService.getById(s.data_source_id);
-      const products = await productGroupService.resolve(group, {
-        hasUser: shared.hasUser,
-        limit: cfg.maxCount || 8
-      });
-      if (!products || products.length === 0) continue; // 빈 그리드 미노출(기존 동작)
-      locals.products = products;
-    } else if (s.section_type === 'hero') {
-      Object.assign(locals, shared.heroData || {});
-    } else if (s.section_type === 'category_showcase') {
-      const categories = await loadHomeCategories(shared.hasUser);
-      if (!categories || categories.length === 0) continue;
-      locals.categories = categories;
-    } else if (s.section_type === 'value_proposition') {
-      locals.kakaoUrl = shared.kakaoUrl || '#';
-    } else if (s.section_type === 'kakao_cta') {
-      if (!shared.kakaoUrl || shared.kakaoUrl === '#') continue; // kakaoUrl 없으면 미노출(기존 동작)
-      locals.kakaoUrl = shared.kakaoUrl;
+    const resolver = resolvers[s.section_type];
+    let locals = baseLocals;
+    if (resolver) {
+      try {
+        locals = await resolver.resolve({ section: s, shared, config, locals: baseLocals });
+      } catch (err) {
+        // 한 섹션의 데이터 조회 실패가 홈 전체를 죽이지 않도록 격리한다.
+        console.error(`[displayService] '${s.section_type}' 리졸버 실패:`, err.message);
+        continue;
+      }
     }
+    if (!locals) continue; // 리졸버가 스킵을 지시
 
     sections.push({ type: s.section_type, view: reg.view, locals });
   }

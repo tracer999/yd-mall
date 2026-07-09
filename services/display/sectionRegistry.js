@@ -12,6 +12,7 @@
 const FIELD = {
   maxCount: { key: 'maxCount', label: '표시 상품 수', type: 'number', min: 1, max: 60, default: 8 },
   columns: { key: 'columns', label: '열 수(PC)', type: 'number', min: 1, max: 6, default: 4 },
+  columnsPerView: { key: 'columnsPerView', label: '뷰당 표시 수(PC)', type: 'number', min: 2, max: 6, default: 4 },
   moreLink: { key: 'moreLink', label: '더보기 링크(URL)', type: 'text', default: '' }
 };
 
@@ -45,5 +46,28 @@ module.exports = {
     label: '카카오 상담 CTA',
     dataSource: null,
     fields: []
+  },
+
+  // ── CT 트랙 컴포넌트 ─────────────────────────────────────────────
+  product_carousel: {
+    view: 'partials/sections/product_carousel',
+    label: '상품 캐러셀',
+    dataSource: 'product_group',
+    fields: [
+      Object.assign({}, FIELD.maxCount, { default: 12 }),
+      FIELD.columnsPerView,
+      FIELD.moreLink
+    ]
+  },
+  brand_carousel: {
+    view: 'partials/sections/brand_carousel',
+    label: '브랜드 캐러셀',
+    dataSource: null, // categories(type=BRAND) 고정 소스
+    fields: [
+      Object.assign({}, FIELD.maxCount, { label: '표시 브랜드 수', default: 20 }),
+      Object.assign({}, FIELD.columns, { label: '뷰당 표시 수(PC)', max: 8, default: 6 }),
+      { key: 'shape', label: '모양', type: 'select', options: ['rect', 'circle'], default: 'rect' },
+      FIELD.moreLink
+    ]
   }
 };

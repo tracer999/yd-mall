@@ -1,0 +1,60 @@
+<%
+  /*
+   * 상품 캐러셀 섹션 (CT-1)
+   * product_grid 와 데이터는 동일(product_group), 표현만 가로 스크롤 캐러셀.
+   *
+   * locals (config_json):
+   *   title          : 섹션 제목
+   *   products       : 상품 배열 (리졸버 주입)
+   *   maxCount       : 최대 노출 수 (기본 12)
+   *   columnsPerView : PC 뷰당 표시 수 (기본 4). 모바일은 2 고정
+   *   moreLink       : '더 보기' 링크 (없으면 버튼 숨김)
+   *   sectionClass   : <section> 클래스 (배경 등)
+   *   badgeText/badgeClass : 상단 뱃지 (선택)
+   *
+   * 캐러셀 CSS/동작은 _carousel_base.ejs 가 제공한다(멀티 인스턴스 안전).
+   */
+  const _max = (typeof maxCount !== 'undefined' && maxCount) ? Number(maxCount) : 12;
+  const _items = (products || []).slice(0, _max);
+  const _perView = (typeof columnsPerView !== 'undefined' && columnsPerView) ? Number(columnsPerView) : 4;
+  const _more = (typeof moreLink !== 'undefined' && moreLink) ? moreLink : '';
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-12 bg-white';
+  const _badgeText = (typeof badgeText !== 'undefined') ? badgeText : '';
+  const _badgeClass = (typeof badgeClass !== 'undefined' && badgeClass) ? badgeClass : 'brand-chip inline-block px-3 py-1 rounded-full text-xs font-bold mb-3';
+%>
+<% if (_items.length > 0) { %>
+<section class="<%= _sectionClass %>">
+  <%- include('./_carousel_base') %>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" data-yd-carousel>
+    <div class="flex items-end justify-between mb-6 gap-4">
+      <div class="text-left">
+        <% if (_badgeText) { %><span class="<%= _badgeClass %>"><%= _badgeText %></span><% } %>
+        <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" class="yd-carousel__nav" data-yd-prev aria-label="이전 상품">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button type="button" class="yd-carousel__nav" data-yd-next aria-label="다음 상품">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="yd-carousel__track" data-yd-track style="--yd-per-view: <%= _perView %>">
+      <% _items.forEach(product => { %>
+        <div><%- include('../product_card', { product }) %></div>
+      <% }); %>
+    </div>
+
+    <% if (_more) { %>
+      <div class="mt-8 text-center">
+        <a href="<%= _more %>" class="brand-pill--ghost inline-flex items-center gap-1 px-5 py-2.5 rounded-full text-sm font-semibold">
+          더 보기 <i class="bi bi-chevron-right text-xs"></i>
+        </a>
+      </div>
+    <% } %>
+  </div>
+</section>
+<% } %>

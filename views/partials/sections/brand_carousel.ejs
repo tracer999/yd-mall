@@ -1,0 +1,86 @@
+<%
+  /*
+   * 브랜드 로고 캐러셀 (CT-2)
+   * 데이터소스: categories WHERE type='BRAND'
+   *
+   * locals (config_json):
+   *   title        : 섹션 제목
+   *   brands       : 브랜드 배열 (리졸버 주입) — { id, name, logo_image_path, product_count }
+   *   maxCount     : 최대 노출 수 (기본 20)
+   *   columns      : PC 뷰당 표시 수 (기본 6)
+   *   shape        : 'circle' | 'rect' (기본 rect)
+   *   moreLink     : '더 보기' 링크 (기본 /brands)
+   *   sectionClass : <section> 클래스
+   *
+   * 로고가 없는 브랜드는 브랜드명 텍스트로 폴백한다.
+   */
+  const _max = (typeof maxCount !== 'undefined' && maxCount) ? Number(maxCount) : 20;
+  const _items = (brands || []).slice(0, _max);
+  const _perView = (typeof columns !== 'undefined' && columns) ? Number(columns) : 6;
+  const _shape = (typeof shape !== 'undefined' && shape === 'circle') ? 'circle' : 'rect';
+  const _more = (typeof moreLink !== 'undefined') ? moreLink : '/brands';
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-12 bg-white';
+%>
+<% if (_items.length > 0) { %>
+<section class="<%= _sectionClass %>">
+  <%- include('./_carousel_base') %>
+
+  <style>
+    .yd-brand {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: .5rem; padding: 1rem .5rem; height: 100%;
+      border: 1px solid #e5e7eb; background: #fff;
+      text-decoration: none; transition: border-color .15s, box-shadow .15s, transform .15s;
+    }
+    .yd-brand--rect { border-radius: 1rem; }
+    .yd-brand--circle { border-radius: 9999px; aspect-ratio: 1 / 1; }
+    .yd-brand:hover { border-color: var(--gh-primary); box-shadow: 0 6px 18px rgba(0,0,0,.07); transform: translateY(-2px); }
+    .yd-brand__logo { height: 40px; display: flex; align-items: center; justify-content: center; }
+    .yd-brand__logo img { max-height: 100%; max-width: 100%; object-fit: contain; }
+    .yd-brand__name { font-size: 12px; font-weight: 600; color: #4b5563; text-align: center;
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+    .yd-brand:hover .yd-brand__name { color: var(--gh-primary); }
+    .yd-brand__count { font-size: 11px; color: #9ca3af; }
+  </style>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" data-yd-carousel>
+    <div class="flex items-end justify-between mb-6 gap-4">
+      <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" class="yd-carousel__nav" data-yd-prev aria-label="이전 브랜드">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button type="button" class="yd-carousel__nav" data-yd-next aria-label="다음 브랜드">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="yd-carousel__track" data-yd-track style="--yd-per-view: <%= _perView %>">
+      <% _items.forEach(function (brand) { %>
+        <a href="/products/brand/<%= brand.id %>" class="yd-brand yd-brand--<%= _shape %>" title="<%= brand.name %>">
+          <% if (brand.logo_image_path) { %>
+            <span class="yd-brand__logo">
+              <img src="<%= brand.logo_image_path %>" alt="<%= brand.name %>" loading="lazy">
+            </span>
+          <% } else { %>
+            <span class="yd-brand__logo"><span class="text-sm font-bold text-gray-800"><%= brand.name %></span></span>
+          <% } %>
+          <span class="yd-brand__name"><%= brand.name %></span>
+          <% if (brand.product_count) { %>
+            <span class="yd-brand__count">상품 <%= brand.product_count %></span>
+          <% } %>
+        </a>
+      <% }); %>
+    </div>
+
+    <% if (_more) { %>
+      <div class="mt-8 text-center">
+        <a href="<%= _more %>" class="brand-pill--ghost inline-flex items-center gap-1 px-5 py-2.5 rounded-full text-sm font-semibold">
+          브랜드 전체보기 <i class="bi bi-chevron-right text-xs"></i>
+        </a>
+      </div>
+    <% } %>
+  </div>
+</section>
+<% } %>

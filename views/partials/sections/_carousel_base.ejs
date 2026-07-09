@@ -1,0 +1,86 @@
+<%
+  /*
+   * 캐러셀 공용 에셋 (CT-1 / CT-2 공유)
+   *
+   * 가로 스크롤 캐러셀의 CSS + 동작 스크립트. 외부 라이브러리 없이 CSS scroll-snap 사용.
+   * product_carousel / brand_carousel 등에서 include 한다.
+   *
+   * 마크업 계약:
+   *   [data-yd-carousel]           래퍼
+   *     [data-yd-track]            트랙 (style="--yd-per-view: N")
+   *     [data-yd-prev] [data-yd-next]  화살표 버튼
+   *
+   * 여러 섹션이 include 하면 <style> 이 중복 출력되지만 동일 규칙이라 무해하고,
+   * <script> 는 window.__ydCarouselInit 가드로 1회만 바인딩된다.
+   */
+%>
+<style>
+  .yd-carousel__track {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: calc((100% - 1.25rem) / 2);   /* 모바일 2열 */
+    gap: 1.25rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+  .yd-carousel__track::-webkit-scrollbar { display: none; }
+  .yd-carousel__track > * { scroll-snap-align: start; }
+  @media (min-width: 1024px) {
+    .yd-carousel__track {
+      grid-auto-columns: calc((100% - (var(--yd-per-view) - 1) * 1.25rem) / var(--yd-per-view));
+    }
+  }
+  .yd-carousel__nav {
+    width: 40px; height: 40px; border-radius: 9999px;
+    background: #fff; border: 1px solid var(--gh-border);
+    box-shadow: 0 2px 10px rgba(0,0,0,.08);
+    display: none; align-items: center; justify-content: center;
+    color: #4b5563; transition: color .15s, border-color .15s;
+  }
+  .yd-carousel__nav:hover { color: var(--gh-primary); border-color: var(--gh-primary); }
+  .yd-carousel__nav:disabled { opacity: .35; cursor: default; }
+  @media (min-width: 1024px) { .yd-carousel__nav { display: inline-flex; } }
+</style>
+
+<script>
+/* 멀티 인스턴스 안전: 섹션이 여러 번 include 돼도 초기화는 1회만.
+   DOM 준비 후 모든 [data-yd-carousel] 을 한 번에 바인딩한다. */
+(function () {
+  if (window.__ydCarouselInit) return;
+  window.__ydCarouselInit = true;
+
+  function initAll() {
+    document.querySelectorAll('[data-yd-carousel]').forEach(function (root) {
+      var track = root.querySelector('[data-yd-track]');
+      var prev = root.querySelector('[data-yd-prev]');
+      var next = root.querySelector('[data-yd-next]');
+      if (!track || !prev || !next) return;
+
+      function page() {
+        var first = track.firstElementChild;
+        if (!first) return track.clientWidth;
+        var gap = parseFloat(getComputedStyle(track).columnGap || '0') || 0;
+        var perView = Math.max(1, Math.round(track.clientWidth / (first.offsetWidth + gap)));
+        return (first.offsetWidth + gap) * perView;
+      }
+
+      function sync() {
+        prev.disabled = track.scrollLeft <= 1;
+        next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+      }
+
+      prev.addEventListener('click', function () { track.scrollBy({ left: -page(), behavior: 'smooth' }); });
+      next.addEventListener('click', function () { track.scrollBy({ left: page(), behavior: 'smooth' }); });
+      track.addEventListener('scroll', sync, { passive: true });
+      window.addEventListener('resize', sync);
+      sync();
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAll);
+  else initAll();
+})();
+</script>
