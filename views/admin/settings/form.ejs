@@ -569,6 +569,24 @@
 
             <div class="bg-white overflow-hidden shadow-sm rounded-lg">
                 <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">Shopify 연동</h5>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Shopify 동기화 사용</label>
+                        <p class="text-xs text-gray-500 mb-2">상품 저장/삭제 시 Shopify 자동 동기화 및 일괄 동기화 버튼의 사용 여부입니다. (스토어 도메인/토큰 등은 시드/DB에서 관리)</p>
+                        <% var _shopSync = (systemSettings && typeof systemSettings.shopify_sync_enabled !== 'undefined') ? String(systemSettings.shopify_sync_enabled) : '1'; %>
+                        <select name="shopify_sync_enabled"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="1" <%= (_shopSync !== '0' && _shopSync.toLowerCase() !== 'false' && _shopSync.toLowerCase() !== 'off' && _shopSync.toLowerCase() !== 'no') ? 'selected' : '' %>>사용</option>
+                            <option value="0" <%= (_shopSync === '0' || _shopSync.toLowerCase() === 'false' || _shopSync.toLowerCase() === 'off' || _shopSync.toLowerCase() === 'no') ? 'selected' : '' %>>미사용</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
                     <h5 class="text-lg font-bold text-gray-800">Google 로그인 설정</h5>
                 </div>
                 <div class="p-6 bg-white space-y-4">

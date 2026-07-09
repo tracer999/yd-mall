@@ -12,7 +12,7 @@
  *     → 2026-04에서 inventory mutation에 @idempotent 디렉티브 필수 요건으로 변경됨
  */
 
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
 const { adminQuery } = require('../services/shopify/adminClient');
 const { processDescriptionImages } = require('../services/shopify/imageUploader');
@@ -21,9 +21,8 @@ const isDryRun = process.argv.includes('--dry-run');
 const limitArg = process.argv.find(a => a.startsWith('--limit='));
 const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : null;
 
-const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
-const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
-const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
+// SHOPIFY_* 는 system_settings 에서 로드되므로 bootstrap() 이후에 채운다.
+let SHOP, CLIENT_ID, CLIENT_SECRET;
 
 async function getAdminToken() {
     const r = await fetch(`https://${SHOP}/admin/oauth/access_token`, {
@@ -80,6 +79,11 @@ const SET_INVENTORY = `
 `;
 
 async function syncProducts() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
+    SHOP = process.env.SHOPIFY_STORE_DOMAIN;
+    CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
+    CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
+
     if (isDryRun) console.log('[DRY RUN 모드] 실제 API 호출 없음\n');
 
     const locationId = process.env.SHOPIFY_LOCATION_ID;

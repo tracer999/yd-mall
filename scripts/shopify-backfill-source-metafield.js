@@ -9,7 +9,7 @@
  *   node scripts/shopify-backfill-source-metafield.js            # 전체
  *   node scripts/shopify-backfill-source-metafield.js --limit 5  # 앞에서 5개만 (테스트용)
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
 const { adminQuery } = require('../services/shopify/adminClient');
 
@@ -26,6 +26,7 @@ const METAFIELDS_SET = `
 const CHUNK = 25;
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     const limitArg = process.argv.indexOf('--limit');
     const limit = limitArg !== -1 ? parseInt(process.argv[limitArg + 1], 10) : null;
 

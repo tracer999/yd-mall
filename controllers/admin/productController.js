@@ -1,7 +1,7 @@
 const pool = require('../../config/db');
 const fs = require('fs');
 const path = require('path');
-const { syncProductById, syncProductsByIds, deleteProductById } = require('../../services/shopify/syncService');
+const { syncProductById, syncProductsByIds, deleteProductById, isShopifySyncEnabled } = require('../../services/shopify/syncService');
 
 const OpenAI = require('openai');
 
@@ -898,6 +898,10 @@ exports.postDelete = async (req, res) => {
 // Body: { productIds: [1, 2, 3] }
 exports.postShopifySync = async (req, res) => {
     const { productIds } = req.body;
+
+    if (!isShopifySyncEnabled()) {
+        return res.status(409).json({ success: false, disabled: true, message: 'Shopify 동기화가 비활성화되어 있습니다. (system_settings.shopify_sync_enabled)' });
+    }
 
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
         return res.status(400).json({ success: false, message: '상품 ID 목록이 필요합니다.' });

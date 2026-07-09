@@ -3,10 +3,11 @@
  * 실행: node scripts/shopify-get-locations.js
  */
 
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const { adminQuery } = require('../services/shopify/adminClient');
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     const data = await adminQuery(`
         query {
             locations(first: 10) {

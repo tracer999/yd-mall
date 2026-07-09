@@ -9,7 +9,7 @@
  *   node scripts/shopify-remap-variants.js --dry-run --limit=5   # 미리보기
  *   node scripts/shopify-remap-variants.js                       # 전체 적용
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
 const { getProductByHandle } = require('../services/shopify/productService');
 
@@ -20,6 +20,7 @@ const LIMIT = limitArg ? parseInt(limitArg.split('=')[1], 10) : null;
 const tail = (gid) => (gid ? String(gid).split('/').pop() : '(없음)');
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     let sql =
         'SELECT product_id, shopify_product_id, shopify_variant_id, shopify_handle ' +
         'FROM shopify_product_mappings WHERE shopify_handle IS NOT NULL AND shopify_handle <> "" ORDER BY product_id';

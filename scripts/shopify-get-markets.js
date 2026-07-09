@@ -3,7 +3,7 @@
  * 현재 스토어에 설정된 국가/통화/언어 목록 출력
  * 사용: node scripts/shopify-get-markets.js
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 
 const QUERY = `{
   localization {
@@ -14,6 +14,7 @@ const QUERY = `{
 }`;
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     const domain  = process.env.SHOPIFY_STORE_DOMAIN;
     const token   = process.env.SHOPIFY_STOREFRONT_API_TOKEN;
     const version = process.env.SHOPIFY_API_VERSION || '2026-04';

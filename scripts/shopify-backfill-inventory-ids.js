@@ -3,7 +3,7 @@
  * Admin API로 각 variant의 inventoryItem.id를 조회해서 DB에 저장
  * 사용: node scripts/shopify-backfill-inventory-ids.js
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
 const { adminQuery } = require('../services/shopify/adminClient');
 
@@ -19,6 +19,7 @@ const QUERY = `
 `;
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     const [rows] = await pool.query(
         'SELECT product_id, shopify_variant_id FROM shopify_product_mappings WHERE shopify_inventory_item_id IS NULL'
     );

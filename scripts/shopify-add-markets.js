@@ -6,7 +6,7 @@
  *   node scripts/shopify-add-markets.js              # KR, JP 추가
  *   node scripts/shopify-add-markets.js --list       # 현재 Markets 목록 조회
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const { adminQuery } = require('../services/shopify/adminClient');
 
 const LIST_QUERY = `
@@ -95,6 +95,7 @@ async function addMarket(market) {
 }
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
   const args = process.argv.slice(2);
   const listOnly = args.includes('--list');
 

@@ -244,6 +244,7 @@ exports.updateSettings = async (req, res) => {
 exports.updateSystemSettings = async (req, res) => {
     const entries = [
         ['tinymce_key', req.body.tinymce_key, 'TinyMCE API Key'],
+        ['shopify_sync_enabled', req.body.shopify_sync_enabled, 'Shopify 동기화 사용 여부 (1=사용, 0=미사용)'],
         ['openai_api_key', req.body.openai_api_key, 'OpenAI API Key'],
         ['openai_timeout_ms', req.body.openai_timeout_ms, 'OpenAI 요청 타임아웃(ms)'],
         ['openai_model', req.body.openai_model, '기본 OpenAI 모델'],

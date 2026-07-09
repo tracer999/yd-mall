@@ -24,4 +24,19 @@ if (loaded.length > 0) {
   console.warn('[env] No .env files found, falling back to process.env');
 }
 
+// ENC: 접두어가 붙은 암호화된 환경변수(DB_PASS, REDIS_PASSWORD 등)를 자동 복호화한다.
+// ENCRYPTION_KEY 는 시스템 환경변수(/etc/environment)로 관리한다.
+const { decryptEnvVars, ENC_PREFIX } = require('../shared/crypto');
+const hasEncrypted = Object.values(process.env).some(
+  (v) => typeof v === 'string' && v.startsWith(ENC_PREFIX)
+);
+if (hasEncrypted && !process.env.ENCRYPTION_KEY) {
+  console.error(
+    '[env] ENC: 로 암호화된 값이 있으나 ENCRYPTION_KEY 환경변수가 없습니다. ' +
+    '/etc/environment 에 ENCRYPTION_KEY 를 설정하세요.'
+  );
+  process.exit(1);
+}
+decryptEnvVars();
+
 module.exports = { nodeEnv, loaded };

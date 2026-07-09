@@ -14,7 +14,7 @@
  *   node scripts/shopify-sync-collections.js --dry-run    # 생성 대상 출력만 (API 호출 없음)
  *   node scripts/shopify-sync-collections.js --delete-all # 모든 커스텀/스마트 컬렉션 삭제
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
 const { adminQuery } = require('../services/shopify/adminClient');
 
@@ -179,6 +179,7 @@ async function syncCollections(dryRun) {
 }
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     const args = process.argv.slice(2);
 
     if (args.includes('--list')) {

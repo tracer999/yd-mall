@@ -6,7 +6,7 @@
  *
  * 사용: node scripts/shopify-check-source-metafield.js
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
 const { adminQuery } = require('../services/shopify/adminClient');
 
@@ -27,6 +27,7 @@ const QUERY = `
 `;
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     const products = [];
     let cursor = null;
     let hasNext = true;

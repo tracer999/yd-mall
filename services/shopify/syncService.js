@@ -9,6 +9,18 @@ const { processDescriptionImages } = require('./imageUploader');
 
 const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
 
+/**
+ * Shopify 동기화 사용 여부.
+ * system_settings.shopify_sync_enabled → process.env.SHOPIFY_SYNC_ENABLED 로 주입된다.
+ * 미설정/빈값이면 기본 활성(true). '0','false','off','no' 이면 비활성.
+ * @returns {boolean}
+ */
+function isShopifySyncEnabled() {
+    const raw = process.env.SHOPIFY_SYNC_ENABLED;
+    if (raw == null || String(raw).trim() === '') return true;
+    return !['0', 'false', 'off', 'no'].includes(String(raw).trim().toLowerCase());
+}
+
 async function getAdminToken() {
     const r = await fetch(`https://${SHOP}/admin/oauth/access_token`, {
         method: 'POST',
@@ -141,6 +153,11 @@ function buildMediaInput(product) {
  * @returns {{ action: 'created'|'updated', shopifyProductId: string }}
  */
 async function syncProductById(productId) {
+    if (!isShopifySyncEnabled()) {
+        console.log(`[Shopify Sync] 비활성화 상태 — 동기화 건너뜀 (product_id=${productId})`);
+        return { action: 'skipped', reason: 'shopify_sync_disabled' };
+    }
+
     const locationId = process.env.SHOPIFY_LOCATION_ID;
     if (!locationId) throw new Error('SHOPIFY_LOCATION_ID 환경변수가 필요합니다.');
 
@@ -287,6 +304,11 @@ async function syncProductById(productId) {
  * @returns {{ results: Array, created: number, updated: number, failed: number }}
  */
 async function syncProductsByIds(productIds) {
+    if (!isShopifySyncEnabled()) {
+        console.log('[Shopify Sync] 비활성화 상태 — 일괄 동기화 건너뜀');
+        return { results: [], created: 0, updated: 0, failed: 0, skipped: productIds.length, disabled: true };
+    }
+
     const results = [];
     let created = 0, updated = 0, failed = 0;
 
@@ -295,6 +317,7 @@ async function syncProductsByIds(productIds) {
             const r = await syncProductById(id);
             results.push({ productId: id, ...r });
             if (r.action === 'created') created++;
+            else if (r.action === 'skipped') { /* 비활성화 등으로 건너뜀 */ }
             else updated++;
         } catch (err) {
             results.push({ productId: id, action: 'failed', error: err.message });
@@ -321,6 +344,11 @@ const PRODUCT_DELETE = `
  * @param {number} productId
  */
 async function deleteProductById(productId) {
+    if (!isShopifySyncEnabled()) {
+        console.log(`[Shopify Sync] 비활성화 상태 — 삭제 동기화 건너뜀 (product_id=${productId})`);
+        return { action: 'skipped', reason: 'shopify_sync_disabled' };
+    }
+
     const [rows] = await pool.query(
         'SELECT shopify_product_id FROM shopify_product_mappings WHERE product_id = ?',
         [productId]
@@ -338,4 +366,4 @@ async function deleteProductById(productId) {
     await pool.query('DELETE FROM shopify_product_mappings WHERE product_id = ?', [productId]);
 }
 
-module.exports = { syncProductById, syncProductsByIds, deleteProductById, rewriteRelativeImageUrls };
+module.exports = { syncProductById, syncProductsByIds, deleteProductById, rewriteRelativeImageUrls, isShopifySyncEnabled };

@@ -11,7 +11,19 @@ async function loadSystemSettingsAndApplyEnv() {
         global.systemSettings = settings;
 
         const envMap = {
+            // 세션
+            session_secret: 'SESSION_SECRET',
+            // 에디터
             tinymce_key: 'TINYMCE_KEY',
+            // Shopify Headless 연동
+            shopify_sync_enabled: 'SHOPIFY_SYNC_ENABLED',
+            shopify_store_domain: 'SHOPIFY_STORE_DOMAIN',
+            shopify_client_id: 'SHOPIFY_CLIENT_ID',
+            shopify_client_secret: 'SHOPIFY_CLIENT_SECRET',
+            shopify_storefront_api_token: 'SHOPIFY_STOREFRONT_API_TOKEN',
+            shopify_api_version: 'SHOPIFY_API_VERSION',
+            shopify_location_id: 'SHOPIFY_LOCATION_ID',
+            shopify_webhook_base_url: 'SHOPIFY_WEBHOOK_BASE_URL',
             openai_api_key: 'OPENAI_API_KEY',
             openai_timeout_ms: 'OPENAI_TIMEOUT_MS',
             openai_model: 'OPENAI_MODEL',

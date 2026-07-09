@@ -6,16 +6,11 @@
  * --list       : 현재 등록된 Webhook 목록 출력
  * --delete-all : 기존 Webhook 전체 삭제 후 재등록
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const { adminQuery } = require('../services/shopify/adminClient');
 
-const BASE_URL = process.env.SHOPIFY_WEBHOOK_BASE_URL;
-if (!BASE_URL) {
-    console.error('SHOPIFY_WEBHOOK_BASE_URL 환경변수가 설정되지 않았습니다.');
-    process.exit(1);
-}
-
-const WEBHOOK_URL = `${BASE_URL}/shopify/webhooks`;
+// SHOPIFY_WEBHOOK_BASE_URL 은 system_settings 에서 로드되므로 bootstrap() 이후에 채운다.
+let WEBHOOK_URL;
 
 const TOPICS = [
     'ORDERS_CREATE',
@@ -78,6 +73,14 @@ async function createWebhook(topic) {
 }
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
+    const BASE_URL = process.env.SHOPIFY_WEBHOOK_BASE_URL;
+    if (!BASE_URL) {
+        console.error('SHOPIFY_WEBHOOK_BASE_URL 이 system_settings 에 설정되지 않았습니다.');
+        process.exit(1);
+    }
+    WEBHOOK_URL = `${BASE_URL}/shopify/webhooks`;
+
     const args = process.argv.slice(2);
     const doList = args.includes('--list');
     const doDeleteAll = args.includes('--delete-all');

@@ -4,11 +4,11 @@
  *   --delete  기존 Webhook 전체 삭제 후 재등록
  */
 
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const { adminQuery } = require('../services/shopify/adminClient');
 
-const WEBHOOK_BASE_URL = process.env.SHOPIFY_WEBHOOK_BASE_URL
-    || 'https://dev-mall.ydata.co.kr';
+// SHOPIFY_* 는 system_settings 에서 로드되므로 bootstrap() 이후에 채운다.
+let WEBHOOK_BASE_URL;
 
 const TOPICS = [
     'ORDERS_CREATE',
@@ -69,6 +69,9 @@ async function deleteAll(webhooks) {
 }
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
+    WEBHOOK_BASE_URL = process.env.SHOPIFY_WEBHOOK_BASE_URL || 'https://dev-mall.ydata.co.kr';
+
     const doDelete = process.argv.includes('--delete');
     const callbackUrl = `${WEBHOOK_BASE_URL}/shopify/webhooks`;
 

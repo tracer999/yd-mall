@@ -7,7 +7,7 @@
  *   node scripts/shopify-delete-products.js --all            # 매핑된 전체 삭제
  *   node scripts/shopify-delete-products.js --product-id=27  # 특정 dev-mall product_id 삭제
  */
-require('../config/env');
+const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
 const { adminQuery } = require('../services/shopify/adminClient');
 
@@ -31,6 +31,7 @@ async function deleteProduct(shopifyProductId, dryRun) {
 }
 
 async function main() {
+    await bootstrap(); // system_settings → process.env (SHOPIFY_* 주입)
     const args = process.argv.slice(2);
     const dryRun = args.includes('--dry-run');
     const all = args.includes('--all');
