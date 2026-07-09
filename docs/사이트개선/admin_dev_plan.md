@@ -295,6 +295,42 @@
 
 > UI에서 `module_ready = 0` 항목은 **"모듈 미구현"** 배지와 함께 **비활성(토글 잠금)** 으로 표시한다.
 
+### 4.2.1 일반 메뉴 관리 화면 — ✅ B2 구현 완료 (2026-07-09)
+
+`/admin/feature-menus` (메뉴/카테고리 관리 그룹)
+
+| 편집 가능 | 편집 불가 (코드 고정) |
+|---|---|
+| 사용 여부(ON/OFF) · **표시 명칭** · 순서 · PC/모바일 노출 · 로그인 필요 · 배지 | **기본 명칭** · 표준 URL · 위치(position) |
+
+> **기본 명칭 / 표시 명칭 2단 구조** *(사용자 확정)*
+> - **기본 명칭**(`feature_menu.default_name`)은 읽기 전용으로 노출한다 → 운영자가 그 메뉴의 **성격**을 안다.
+> - **표시 명칭**(`mall_feature_menu.display_name`)만 변경 가능하다. 비우면 기본 명칭을 쓴다.
+>   (`COALESCE(NULLIF(display_name,''), default_name)`)
+
+**서버측 강제 규칙** (폼 값을 신뢰하지 않고 `feature_menu` 를 다시 조회해 판정)
+- `is_required = 1` → 끌 수 없다. 강제로 `is_enabled = 1` 저장 (로그인·마이쇼핑·장바구니·검색·TOP)
+- `module_ready = 0` → 켤 수 없다. 강제로 `is_enabled = 0` 저장 (켜도 렌더에서 제외되므로 상태를 정직하게 유지)
+- 배지는 `NEW/HOT/SALE` 화이트리스트만 저장 (그 외/스크립트 주입은 `NULL`)
+
+**검증**: `RANKING`(모듈없음) 켜기 시도 → 0 유지 / `HEADER_LOGIN`(필수) 끄기 시도 → 1 유지 /
+`BEST` 정상 OFF / 배지에 `<script>` 주입 → `NULL` / 표시명 변경이 스토어프론트 GNB 에 즉시 반영.
+
+### 4.2.2 기본 GNB 구성 (사용자 확정, 2026-07-09)
+
+`node scripts/seed_gnb_menus.js` (멱등) — **초기값만** 세팅하고, 이후는 위 화면에서 조정한다.
+
+```text
+카테고리(고정) · 오늘특가 · 베스트 · 기획전 · 이벤트&혜택 · 브랜드 · 신상품 · 공동구매 · 쇼핑라이브
+```
+
+- `기획전` `공동구매` `쇼핑라이브` 는 전용 모듈이 없어 **'준비 중' 랜딩 페이지**로 연결한다
+  (`routes/feature.js` + `views/user/coming_soon.ejs`). `#` 죽은 링크가 아니라 실제 **200 페이지**(noindex)이므로
+  `module_ready = 1` 로 올려 GNB 에 노출한다. 모듈 구현 시 핸들러만 교체하면 URL·설정은 그대로다.
+- `navigation_config.max_gnb_items` 를 8 → **11** 로 상향했다. `navigationService` 가 GNB 총량으로 자르므로
+  기능 8종이 슬롯을 다 채우면 커스텀 메뉴 3슬롯이 잘린다.
+- 여전히 `module_ready = 0`(잠금): `RANKING` `OUTLET` `COUPON` `MEMBERSHIP`
+
 ✅ **`mall_feature_menu.badge_type`(NEW/HOT/SALE) 컬럼 추가 완료** (2026-07-09, `scripts/migrate_menu_columns.js`).
 GNB 렌더도 배지를 표시하며, `navigationService` 가 `NEW/HOT/SALE` 화이트리스트로 정규화한다.
 → 관리자 UI 는 이 세 값 중 선택하는 드롭다운이면 된다(자유 입력 금지).
@@ -455,7 +491,7 @@ brand_likes         (사용자) user_id, category_id  ← 우측 레일 '찜한 
 
 ### B. 1차 구현 (핵심)
 - [ ] **B1** 카테고리 관리 트리 UI + `depthGuard`(max 3) + `is_active`/`pc·mobile_visible`
-- [ ] **B2** 일반 메뉴 관리 (ON/OFF·표시명·순서, `module_ready=0` 잠금 표시)
+- [x] **B2** 일반 메뉴 관리 ✅ 2026-07-09 — `/admin/feature-menus` (아래 §4.2.1)
 - [ ] **B3** 커스텀 메뉴 관리 (GNB 슬롯 3 제한, 서버 측 강제)
 - [ ] **B4** 시스템 메뉴 설정 (`is_required` 잠금)
 - [ ] **B5** Header 설정 (`navigation_config` UI)

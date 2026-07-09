@@ -1,0 +1,55 @@
+<%
+  /*
+   * 준비 중 랜딩 (기획전 / 공동구매 / 쇼핑라이브)
+   *
+   * 이 메뉴들은 GNB 에 노출되지만 모듈이 아직 없다.
+   * '#' 죽은 링크 대신 실제 페이지를 두어, 사용자가 무엇을 기대할 수 있는지 알려준다.
+   *
+   * locals: feature = { name, icon, description, bullets[], primary:{label,href}, secondary:{label,href} }
+   */
+  const f = feature || {};
+  const _bullets = f.bullets || [];
+%>
+
+<section class="py-20 bg-white">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+
+    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full mb-6"
+         style="background: var(--gh-primary-soft); color: var(--gh-primary);">
+      <i class="bi <%= f.icon || 'bi-hourglass-split' %> text-3xl"></i>
+    </div>
+
+    <span class="brand-chip inline-block px-3 py-1 rounded-full text-xs font-bold mb-4">준비 중</span>
+
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4"><%= f.name %></h1>
+
+    <p class="text-base text-gray-500 leading-relaxed mb-10">
+      <%- f.description %>
+    </p>
+
+    <% if (_bullets.length > 0) { %>
+      <ul class="text-left max-w-md mx-auto mb-10 space-y-3">
+        <% _bullets.forEach(function (b) { %>
+          <li class="flex items-start gap-3 text-sm text-gray-600">
+            <i class="bi bi-check-circle-fill mt-0.5" style="color: var(--gh-primary);"></i>
+            <span><%= b %></span>
+          </li>
+        <% }); %>
+      </ul>
+    <% } %>
+
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+      <% if (f.primary) { %>
+        <a href="<%= f.primary.href %>" class="gh-btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold">
+          <%= f.primary.label %> <i class="bi bi-chevron-right text-xs"></i>
+        </a>
+      <% } %>
+      <% if (f.secondary) { %>
+        <a href="<%= f.secondary.href %>" class="brand-pill--ghost inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold">
+          <%= f.secondary.label %>
+        </a>
+      <% } %>
+    </div>
+
+  </div>
+</section>

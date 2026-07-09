@@ -27,6 +27,8 @@ router.get('/traffic-sources/drill', dashboardController.getTrafficSourceDrill);
 router.get('/popular-products', dashboardController.getPopularProducts);
 
 router.use('/categories', requireMenuAccess('/admin/categories'), require('./admin/categories'));
+// 스토어프론트 메뉴(GNB/헤더유틸/우측레일) ON·OFF·순서 관리 (B2)
+router.use('/feature-menus', requireMenuAccess('/admin/feature-menus'), require('./admin/feature-menus'));
 router.use('/products', requireMenuAccess('/admin/products'), require('./admin/products'));
 router.use('/banners', requireMenuAccess('/admin/banners'), require('./admin/banners'));
 router.use('/display', requireMenuAccess('/admin/display'), require('./admin/display'));

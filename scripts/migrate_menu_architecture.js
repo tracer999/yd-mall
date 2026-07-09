@@ -74,10 +74,15 @@ const READY_MODULES = new Set([
     'NEW_PRODUCT',       // routes/feature.js  /new
     'EVENT',             // routes/feature.js  /event (→ /boards/notice 별칭)
     'BRAND',             // routes/brands.js   /brands
+    // 아래 3종은 전용 모듈 대신 '준비 중' 랜딩 페이지를 제공한다(routes/feature.js).
+    // '#' 죽은 링크가 아니라 실제 200 페이지(noindex)이므로 GNB 에 노출해도 된다.
+    'EXHIBITION',        // routes/feature.js  /exhibition  (준비 중)
+    'GROUP_BUY',         // routes/feature.js  /group-buy   (준비 중)
+    'LIVE',              // routes/feature.js  /live        (준비 중)
     'RAIL_CART', 'RAIL_WISHLIST', 'RAIL_BRAND_WISHLIST', 'RAIL_RECENT', 'RAIL_TOP',
     'HEADER_SEARCH', 'HEADER_LOGIN', 'HEADER_MYPAGE', 'HEADER_CART', 'HEADER_CS',
 ]);
-// 미구현(module_ready=0): EXHIBITION, RANKING, OUTLET, COUPON, MEMBERSHIP, GROUP_BUY, LIVE
+// 미구현(module_ready=0): RANKING, OUTLET, COUPON, MEMBERSHIP
 
 /** mall_id=1 초기 ON/OFF. 현행 GNB(오늘특가/베스트/이벤트&혜택)를 보존하고 신상품을 추가. */
 const ENABLED_FOR_MALL1 = new Set([
