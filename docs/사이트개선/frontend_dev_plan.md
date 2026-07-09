@@ -33,11 +33,11 @@
 | **P2** | 관리자 페이지 빌더 (발행/롤백) → *관리자 문서 참조* | ✅ 2026-07-08 |
 | **P1.5** | 레이아웃 골격 + 헤더/GNB + 우측 유틸 레일 | ✅ 2026-07-09 |
 | **M1~M3** | 통제된 동적 메뉴 아키텍처(DB·시드) + 표준 기능 라우트 + 찜한 브랜드 | ✅ 2026-07-09 |
-| **M4** | `navigationService` (위치별 메뉴 조립) + `depthGuard`(카테고리 max 3) | ⬜ **다음 작업** |
-| **M5** | 렌더 전환: `menuData.js` → navigationService. GNB·우측레일 데이터 기반화 | ⬜ |
-| **M7** | `storefront_menu` 제거 (M5 검증 후) | ⬜ |
+| **M4** | `navigationService` (위치별 메뉴 조립) + `depthGuard`(카테고리 max 3) | ✅ 2026-07-09 |
+| **M5** | 렌더 전환: `menuData.js` → navigationService. GNB·우측레일 데이터 기반화 | ✅ 2026-07-09 |
+| **M7** | `storefront_menu` 제거 (백업 후 DROP) | ✅ 2026-07-09 |
 | **M8** | 고객센터 페이지 + FAQ 모듈 | ⬜ |
-| **CT** | 섹션 컴포넌트 트랙 (CT-0 ~ CT-9) | ⬜ |
+| **CT** | 섹션 컴포넌트 트랙 (CT-0 ~ CT-9) | ⬜ **다음 작업** |
 | **P4** | 테마 시스템 (CSS 변수) | ⬜ |
 | **P5** | 멀티몰(도메인 기반) | ⬜ |
 | **P6+** | SaaS 고도화 (멀티테넌시·미디어·AI) | 장기 |
@@ -226,7 +226,7 @@ Footer
   `TV편성표` 폐기, `쇼핑라이브`·`공동구매` 는 `module_ready=0` 으로 비활성
 - **버그 수정**: 우측 레일의 `찜` 링크가 `/likes`(GET 라우트 없음 → 404)였다 → `/mypage/likes` 로 교정
 
-### 5.4 M4 — `navigationService` (다음 작업)
+### 5.4 M4 — `navigationService` ✅ 구현 완료
 ```text
 services/menu/navigationService.js
 ├─ getNavigation(mallId, { isMobile, isLoggedIn })
@@ -245,11 +245,21 @@ services/tree/depthGuard.js
 - 카테고리 `maxDepth = navigation_config.category_max_depth` (기본 **3**)
 - 캐시: 요청당 1회 조회. 변경 빈도가 낮으므로 프로세스 메모리 캐시 + 관리자 저장 시 무효화 검토
 
-### 5.5 M5 — 렌더 전환
+### 5.5 M5 — 렌더 전환 ✅ 구현 완료
 - `middleware/menuData.js` 를 `navigationService` 기반으로 교체
-- `header.ejs` GNB → `gnb` 배열 렌더 / `right_utility.ejs` → `rightRail` 배열 렌더
-- **폴백**: 신규 테이블이 비어 있으면 기존 `storefront_menu` → 그것도 없으면 카테고리 평면 (회귀 안전)
-- 검증 후 **M7** 에서 `storefront_menu` 제거
+- `header.ejs` GNB → `gnbMenus` 배열 렌더 (PC는 `pcVisible`, 모바일 패널은 `mobileVisible` 필터)
+- `header.ejs` 카테고리 버튼 → `categoryButton`(=`feature_menu.CATEGORY`). 끄면 버튼 자체가 사라진다
+- `right_utility.ejs` → `rightRailMenus` 배열 렌더. **아이콘/동작만 코드 고정**(`featureCode` → 아이콘 맵),
+  `RAIL_TOP` 은 최하단 고정, `RAIL_RECENT` 는 패널 토글, `RAIL_CART` 는 `cartCount` 뱃지
+- 레일 항목이 0건이면 `<style>` 까지 렌더하지 않는다 (레거시 `#scrollTopBtn` 숨김 규칙이 함께 사라지도록)
+- 커스텀 메뉴는 `custom_menu.new_window` 시 `target="_blank" rel="noopener noreferrer"`
+
+### 5.5.1 M7 — `storefront_menu` 제거 ✅ 구현 완료
+`node scripts/migrate_m7_drop_storefront_menu.js`
+- **안전 가드**: 활성 GNB 기능메뉴가 1건 이상일 때만 DROP (메뉴 전체 소실 방지)
+- **백업**: DROP 직전 전체 행을 `scripts/backup_storefront_menu.sql` 로 덤프(DDL + INSERT)
+- 멱등: 테이블이 없으면 아무 것도 하지 않음
+- `menuData.js` 의 레거시 폴백 제거, `tables.sql` DDL 제거
 
 ### 5.6 M8 — 고객센터 페이지
 참조 캡처: `capture/image copy.png`
@@ -396,7 +406,7 @@ CREATE TABLE IF NOT EXISTS `mall` (
 | 항목 | 조치 |
 |---|---|
 | `main_display_sections` / `main_display_products` | `page_section` 이 대체. 검증 후 제거 (관리자 `/admin/display` 와 함께) |
-| `storefront_menu` | `feature_menu` 계열이 대체. **M5 검증 후 M7에서 제거** |
+| ~~`storefront_menu`~~ | ✅ **M7에서 제거 완료**. 백업: `scripts/backup_storefront_menu.sql` |
 | `hero_showcase.ejs` 내부 유틸 레일 | 전역 레일로 승격 완료 → CT-7 에서 제거 |
 | `categories.seo_config` | 미도입. 카테고리 SEO 필요 시 추가 |
 | `mall_feature_menu.badge_type` | NEW/HOT/SALE 배지용 컬럼 미도입 |

@@ -13,7 +13,26 @@
   const _appUrl = (siteSettings && siteSettings.app_download_url) ? String(siteSettings.app_download_url).trim() : '';
   const _appQrImage = (siteSettings && siteSettings.app_qr_image_url) ? String(siteSettings.app_qr_image_url).trim() : '';
   const _membershipUrl = (siteSettings && siteSettings.membership_url) ? String(siteSettings.membership_url).trim() : '';
+
+  /* 골격=코드, 항목=데이터.
+     레일 항목은 feature_menu(position='right_rail') 에서 오고, 아이콘/동작만 코드가 고정한다. */
+  const _rail = (typeof rightRailMenus !== 'undefined' && Array.isArray(rightRailMenus)) ? rightRailMenus : [];
+  const _icons = {
+    RAIL_CART: 'bi-bag',
+    RAIL_WISHLIST: 'bi-heart',
+    RAIL_BRAND_WISHLIST: 'bi-bookmark-heart',
+    RAIL_RECENT: 'bi-clock-history',
+    RAIL_TOP: 'bi-chevron-up',
+  };
+  // TOP 은 레일 최하단 고정이므로 루프에서 분리한다.
+  const _topItem = _rail.find(function (m) { return m.featureCode === 'RAIL_TOP'; }) || null;
+  const _railItems = _rail.filter(function (m) { return m.featureCode !== 'RAIL_TOP'; });
 %>
+<%#
+  레일 항목이 하나도 없으면 CSS(레거시 #scrollTopBtn 숨김 규칙 포함)까지 통째로 렌더하지 않는다.
+  그렇지 않으면 레일 없이 TOP 버튼만 사라진다.
+%>
+<% if (_rail.length > 0) { %>
 
 <style>
   .yd-rail {
@@ -110,7 +129,7 @@
 </style>
 
 <aside class="yd-rail" aria-label="바로가기 유틸리티">
-  <!-- Login Box -->
+  <!-- Login Box (시스템 고정) -->
   <% if (user) { %>
     <a href="/mypage" class="yd-rail__item" title="마이쇼핑">
       <i class="bi bi-person-circle" aria-hidden="true"></i>
@@ -123,32 +142,23 @@
     </a>
   <% } %>
 
-  <!-- 장바구니 -->
-  <a href="/cart" class="yd-rail__item" title="장바구니">
-    <i class="bi bi-bag" aria-hidden="true"></i>
-    <span class="yd-rail__label">장바구니</span>
-    <% if (typeof cartCount !== 'undefined' && cartCount > 0) { %>
-      <span class="yd-rail__badge"><%= cartCount %></span>
-    <% } %>
-  </a>
-
-  <!-- 찜 (GET /likes 는 라우트가 없다 — 마이페이지 관심상품으로 연결) -->
-  <a href="/mypage/likes" class="yd-rail__item" title="찜한 상품">
-    <i class="bi bi-heart" aria-hidden="true"></i>
-    <span class="yd-rail__label">찜</span>
-  </a>
-
-  <!-- 찜한 브랜드 -->
-  <a href="/mypage/brand-likes" class="yd-rail__item" title="찜한 브랜드">
-    <i class="bi bi-bookmark-heart" aria-hidden="true"></i>
-    <span class="yd-rail__label">찜한<br>브랜드</span>
-  </a>
-
-  <!-- 최근 본 상품 -->
-  <button type="button" class="yd-rail__item" id="yd-recent-btn" aria-expanded="false" aria-controls="yd-recent-panel" title="최근 본 상품">
-    <i class="bi bi-clock-history" aria-hidden="true"></i>
-    <span class="yd-rail__label">최근본</span>
-  </button>
+  <% _railItems.forEach(function (m) {
+       const icon = _icons[m.featureCode] || 'bi-dot';
+       if (m.featureCode === 'RAIL_RECENT') { %>
+    <button type="button" class="yd-rail__item" id="yd-recent-btn" aria-expanded="false" aria-controls="yd-recent-panel" title="<%= m.name %>">
+      <i class="bi <%= icon %>" aria-hidden="true"></i>
+      <span class="yd-rail__label"><%= m.name %></span>
+    </button>
+  <%   } else { %>
+    <a href="<%= m.href %>" class="yd-rail__item" title="<%= m.name %>">
+      <i class="bi <%= icon %>" aria-hidden="true"></i>
+      <span class="yd-rail__label"><%= m.name %></span>
+      <% if (m.featureCode === 'RAIL_CART' && typeof cartCount !== 'undefined' && cartCount > 0) { %>
+        <span class="yd-rail__badge"><%= cartCount %></span>
+      <% } %>
+    </a>
+  <%   }
+     }); %>
 
   <!-- 멤버십 숏컷 (설정 시에만) -->
   <% if (_membershipUrl) { %>
@@ -171,11 +181,13 @@
     </a>
   <% } %>
 
-  <!-- TOP -->
-  <button type="button" class="yd-rail__item yd-rail__top" id="yd-rail-top" title="맨 위로">
-    <i class="bi bi-chevron-up" aria-hidden="true"></i>
-    <span class="yd-rail__label">TOP</span>
-  </button>
+  <!-- TOP (레일 최하단 고정) -->
+  <% if (_topItem) { %>
+    <button type="button" class="yd-rail__item yd-rail__top" id="yd-rail-top" title="<%= _topItem.name %>">
+      <i class="bi bi-chevron-up" aria-hidden="true"></i>
+      <span class="yd-rail__label"><%= _topItem.name %></span>
+    </button>
+  <% } %>
 
   <!-- 최근 본 상품 패널 -->
   <div class="yd-recent" id="yd-recent-panel" hidden>
@@ -243,3 +255,5 @@
   if (topBtn) topBtn.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
 })();
 </script>
+
+<% } %>

@@ -861,25 +861,8 @@ CREATE TABLE IF NOT EXISTS `page_revision` (
   KEY `idx_rev_page` (`page_id`, `revision_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='페이지 발행 이력(스냅샷/롤백)';
 
--- 스토어프론트 GNB 메뉴(P1.5): 카테고리와 분리된 몰별 상단 메뉴. 골격 고정 + 항목 데이터화(최대 3뎁스)
-CREATE TABLE IF NOT EXISTS `storefront_menu` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `mall_id` BIGINT NOT NULL DEFAULT 1,
-  `parent_id` BIGINT NULL,
-  `depth` INT NOT NULL DEFAULT 1,            -- 1~3, 최상위=1 (앱 레이어 강제)
-  `name` VARCHAR(100) NOT NULL,             -- 몰별 가변 명칭
-  `menu_type` VARCHAR(50) NOT NULL,         -- category / page / promotion / brand / external_url / custom
-  `target_type` VARCHAR(50) NULL,
-  `target_id` BIGINT NULL,
-  `url` VARCHAR(500) NULL,
-  `is_fixed` TINYINT(1) DEFAULT 0,          -- 1 = 카테고리 버튼 등 고정 항목(삭제 금지)
-  `sort_order` INT DEFAULT 0,
-  `is_active` TINYINT(1) DEFAULT 1,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_menu_mall` (`mall_id`, `parent_id`, `sort_order`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='스토어프론트 GNB 메뉴(카테고리와 분리)';
+-- storefront_menu 는 M7에서 제거됨 (feature_menu/mall_feature_menu/custom_menu 가 대체).
+-- 복구가 필요하면 scripts/backup_storefront_menu.sql 참조.
 
 
 /*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;

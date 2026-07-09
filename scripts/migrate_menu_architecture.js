@@ -16,7 +16,7 @@
  *   categories += mall_id, slug, depth, is_active, pc_visible, mobile_visible
  *
  * 이관:
- *   storefront_menu(7행) → mall_feature_menu (카테고리/오늘특가/베스트/이벤트&혜택 활성,
+ *   (완료) storefront_menu(7행) → mall_feature_menu 이관. 원본 테이블은 M7에서 DROP.
  *                          쇼핑라이브·공동구매는 모듈 미구현으로 비활성, TV편성표는 폐기)
  *
  * 멱등(idempotent): 재실행해도 안전하다.
@@ -291,7 +291,7 @@ async function reportLegacy(conn) {
             'TV편성표': '폐기 (카탈로그에 없음, 죽은 링크)',
         };
         for (const r of rows) console.log(`  · ${r.name.padEnd(12)} → ${map[r.name] || '미매핑'}`);
-        console.log('  ※ storefront_menu 는 M5(렌더 전환) 검증 후 M7에서 제거한다.');
+        console.log('  ※ storefront_menu 는 M7에서 제거 완료. 백업: scripts/backup_storefront_menu.sql');
     } catch (e) {
         console.log(`  (storefront_menu 없음: ${e.message})`);
     }

@@ -120,12 +120,14 @@
         <!-- Header Row 2: GNB (카테고리 드롭다운 + 몰별 가변 메뉴) -->
         <div class="hidden md:block border-t border-gray-100">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <% const _catBtn = (typeof categoryButton !== 'undefined') ? categoryButton : { name: '카테고리' }; %>
                 <nav class="flex items-stretch gap-1" aria-label="주 메뉴">
-                    <!-- 카테고리 (클릭 토글 드롭다운 패널, 전체 뎁스) -->
+                    <!-- 카테고리 (고정 버튼, 클릭 토글 드롭다운 패널) — feature_menu.CATEGORY 로 ON/OFF -->
+                    <% if (_catBtn) { %>
                     <div class="relative" id="gnb-cat-wrap">
                         <button type="button" id="gnb-cat-btn" aria-expanded="false"
                             class="flex items-center gap-2 px-3 py-3 text-base font-bold text-gray-900 hover:text-[var(--gh-primary)]">
-                            <i class="bi bi-list text-xl"></i><span>카테고리</span>
+                            <i class="bi bi-list text-xl"></i><span><%= _catBtn.name %></span>
                         </button>
                         <div id="gnb-cat-panel"
                             class="hidden absolute left-0 top-full z-50 w-[860px] max-w-[92vw] bg-white border border-gray-200 shadow-xl rounded-b-lg p-5">
@@ -142,11 +144,12 @@
                     </div>
 
                     <div class="w-px bg-gray-200 my-2"></div>
+                    <% } %>
 
-                    <!-- 몰별 가변 메뉴(storefront_menu, 카테고리 제외) -->
-                    <% (typeof gnbMenus !== 'undefined' ? gnbMenus : []).filter(function(m){ return !m.is_fixed; }).forEach(function (m) {
+                    <!-- 몰별 가변 메뉴 (feature_menu[gnb] + custom_menu 슬롯). PC 노출 항목만. -->
+                    <% (typeof gnbMenus !== 'undefined' ? gnbMenus : []).filter(function(m){ return m.pcVisible !== 0; }).forEach(function (m) {
                          var active = m.href && m.href !== '#' && currentPath === m.href; %>
-                        <a href="<%= m.href %>"
+                        <a href="<%= m.href %>" <%= m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
                             class="px-4 py-3 text-base font-medium border-b-2 transition-colors <%= active ? 'text-[var(--gh-primary)] border-[var(--gh-primary)]' : 'text-gray-700 border-transparent hover:text-[var(--gh-primary)]' %>">
                             <%= m.name %>
                         </a>
@@ -169,11 +172,12 @@
                     </div>
                 </form>
 
-                <!-- 몰별 가변 메뉴 -->
-                <% if (typeof gnbMenus !== 'undefined' && gnbMenus && gnbMenus.length > 0) { %>
+                <!-- 몰별 가변 메뉴 (모바일 노출 항목만) -->
+                <% var _mobileMenus = (typeof gnbMenus !== 'undefined' ? gnbMenus : []).filter(function(m){ return m.mobileVisible !== 0; }); %>
+                <% if (_mobileMenus.length > 0) { %>
                     <p class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider py-1">메뉴</p>
-                    <% gnbMenus.filter(function(m){ return !m.is_fixed; }).forEach(function (m) { %>
-                        <a href="<%= m.href %>"
+                    <% _mobileMenus.forEach(function (m) { %>
+                        <a href="<%= m.href %>" <%= m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
                             class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">
                             <%= m.name %>
                         </a>
