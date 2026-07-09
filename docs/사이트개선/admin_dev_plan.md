@@ -88,10 +88,31 @@
     ├─ 외부 연동 설정 / 업로드 관리 / 로그·통계 / 알림 / 백업·복구
 ```
 
-### 2.1 `admin_menus` 그룹화 마이그레이션 (선행 작업 A1)
+### 2.1 `admin_menus` 그룹화 마이그레이션 — ✅ **A1 완료 (2026-07-09)**
 
-`admin_menus` 스키마: `id, name, path, icon_class, display_order, parent_id, is_active, visible_roles`
-→ 스키마 변경 **불필요**. 그룹 행 8건을 `path = NULL` 로 추가하고 기존 19건의 `parent_id` 를 지정한다.
+`node scripts/migrate_admin_menu_groups.js` (멱등, `--reset` 로 평면 복구 가능)
+
+> ⚠️ **문서 정정**: "스키마 변경 불필요" 는 **틀렸다.** 실측 결과 `admin_menus.path` 가 `NOT NULL` 이라
+> 그룹 행(`path IS NULL`)을 만들 수 없었다. → 마이그레이션이 `path` 를 **NULL 허용**으로 변경한다.
+> 그룹은 링크가 없으므로 `path` 가 없는 게 맞다.
+
+**결과**: 그룹 7건 신설 + 기존 19건에 `parent_id` 지정 (총 26행). 대시보드는 그룹 없이 최상위 유지.
+
+**함께 수정한 것** (A1이 관리 화면을 깨뜨리지 않도록):
+- `middleware/adminMenu.js` — 평면 목록 → **2뎁스 트리**(`res.locals.adminMenuTree`).
+  권한(`visible_roles`)은 **잎 메뉴에만** 적용하고, 보이는 자식이 없는 그룹은 통째로 숨긴다.
+  `res.locals.adminMenus`(접근 가능한 잎 평면 목록)는 하위호환으로 유지.
+- `views/layouts/admin_layout.ejs` — 접기/펼치기 그룹 렌더. 활성 자식이 있는 그룹은 서버가 펼친 상태로 보낸다.
+- `controllers/admin/menuController.js` — **2건의 버그를 함께 고침**:
+  1. `getMenus` 가 `WHERE parent_id IS NULL` 이라 그룹화 후 **자식 19건이 관리 화면에서 사라짐** → 전체를 트리 순서로 조회
+  2. `saveMenus` 가 ① `path` 없는 행을 건너뛰어 그룹 편집 불가 ② `display_order` 를 전역 `i+1` 로 매겨 그룹 간 순서가 뒤섞임
+     ③ **자식 있는 그룹을 지우면 자식이 고아가 되어 사이드바에서 통째로 사라짐**
+     → `parent_id` 왕복 보존, 빈 path 는 `NULL`(그룹)로 저장, 순서는 그룹 단위로 부여, **고아 발생 삭제는 400 차단**
+- `views/admin/menus/list.ejs` — `parent_id[]` 히든 입력 왕복, 그룹/소속 표시, 그룹은 path 비움 허용
+
+**검증**: 역할별 트리(super_admin 14잎 / content_admin 8잎 / customer_admin 2잎, 빈 그룹 자동 숨김),
+레이아웃 실제 렌더(그룹 7·링크 14·활성 그룹 자동 펼침), 삭제 가드(자식 5건 보호, 그룹+자식 동시 삭제는 허용),
+`--reset` → 재적용 왕복, `requireMenuAccess` 무영향(`path` 조회이므로 그룹 행에 안 걸림).
 
 | 기존 메뉴 | id | 이동할 그룹 |
 |---|---|---|
@@ -116,8 +137,7 @@
 | 공지사항 관리 | 17 | 8. 운영/시스템 |
 | 접속 통계(visitors) | – | 8. 운영/시스템 (로그·통계) |
 
-> 구현 시 `scripts/migrate_admin_menu_groups.js` (멱등)로 작성한다.
-> `middleware/adminMenu.js` 와 사이드바 뷰가 2뎁스 렌더를 지원하는지 먼저 확인할 것.
+> ✅ 위 매핑대로 `scripts/migrate_admin_menu_groups.js` 에 반영되어 적용 완료.
 
 ---
 
@@ -385,9 +405,12 @@ brand_likes         (사용자) user_id, category_id  ← 우측 레일 '찜한 
 ## 7. 우선 구현 순서
 
 ### A. 선행 정리
-- [ ] **A1** `admin_menus` 8그룹 재편 + 2뎁스 사이드바 렌더 (`scripts/migrate_admin_menu_groups.js`)
-- [ ] **A2** `/admin/menus` → "관리자 메뉴 관리"로 개명, 운영/시스템 그룹으로 이동
-- [ ] **A3** 비활성 메뉴 정리: 쿠폰·포인트·판매·배송·문의 — 완성 후 활성화할지, 숨길지 결정
+- [x] **A1** `admin_menus` 8그룹 재편 + 2뎁스 사이드바 렌더 ✅ 2026-07-09 (§2.1)
+- [ ] **A2** `/admin/menus` → "관리자 메뉴 관리"로 개명 (그룹 이동은 A1에서 이미 완료)
+- [ ] **A3** 비활성 메뉴 정리: 쿠폰·포인트·판매·배송·문의 — 완성 후 활성화할지, 숨길지 **결정 필요**
+
+> **A1에서 발견한 데이터 이슈**: `Shopify 주문`(id=20)의 `visible_roles` 가 비어 있어
+> **역할이 없는 사용자에게도 노출**된다. 다른 메뉴는 모두 역할이 지정돼 있다. A2/A3 에서 정리할 것.
 
 ### B. 1차 구현 (핵심)
 - [ ] **B1** 카테고리 관리 트리 UI + `depthGuard`(max 3) + `is_active`/`pc·mobile_visible`

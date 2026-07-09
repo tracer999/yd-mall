@@ -22,10 +22,10 @@ CREATE TABLE IF NOT EXISTS `admins` (
 CREATE TABLE IF NOT EXISTS `admin_menus` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '메뉴 ID (PK)',
   `name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '메뉴명',
-  `path` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT '클릭 시 이동 URL (예: /admin/products)',
+  `path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '클릭 시 이동 URL (예: /admin/products). NULL = 그룹 행(링크 없음)',
   `icon_class` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '아이콘 클래스 (Bootstrap Icons 등)',
-  `display_order` int NOT NULL DEFAULT '0' COMMENT '표시 순서 (오름차순)',
-  `parent_id` int DEFAULT NULL COMMENT '부모 메뉴 ID (NULL이면 1차 메뉴)',
+  `display_order` int NOT NULL DEFAULT '0' COMMENT '표시 순서 (그룹 내 오름차순)',
+  `parent_id` int DEFAULT NULL COMMENT '부모 그룹 ID (NULL이면 최상위). 적용: scripts/migrate_admin_menu_groups.js',
   `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT '활성 여부',
   `visible_roles` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '표시할 관리자 역할 목록 (콤마구분: super_admin,admin 등, NULL=전체)',
   PRIMARY KEY (`id`) USING BTREE,

@@ -146,24 +146,72 @@
       </a>
     </div>
 
-    <!-- Navigation -->
+    <!-- Navigation (A1: 8그룹 2뎁스) -->
     <nav class="flex-1 overflow-y-auto sidebar-scroll py-2 px-4 space-y-0">
-      <% if (typeof adminMenus !== 'undefined' && adminMenus && adminMenus.length) { %>
-        <% adminMenus.forEach(function(menu) { 
-             const activeClass = (menu.path === '/admin')
-               ? (path === '/admin' ? 'active text-white' : '')
-               : (path.startsWith(menu.path) ? 'active text-white' : '');
-        %>
-          <a href="<%= menu.path %>"
-            class="sidebar-link flex items-center px-4 py-1 rounded-xl text-sm font-medium text-gray-700 hover:text-blue-900 mb-0 <%= activeClass %>">
-            <% if (menu.icon_class) { %>
-              <i class="<%= menu.icon_class %> mr-4 text-lg opacity-80"></i>
-            <% } %>
-            <span class="menu-text"><%= menu.name %></span>
+      <%
+        /* 그룹 행은 path 가 null 이다. 잎 메뉴만 링크가 된다.
+           adminMenuTree 가 없으면(구버전 미들웨어) adminMenus 평면 목록으로 폴백한다. */
+        const _tree = (typeof adminMenuTree !== 'undefined' && adminMenuTree && adminMenuTree.length)
+          ? adminMenuTree
+          : ((typeof adminMenus !== 'undefined' && adminMenus) ? adminMenus.map(m => Object.assign({}, m, { isGroup: false, children: [] })) : []);
+
+        const _isActive = (menuPath) => {
+          if (!menuPath) return false;
+          return menuPath === '/admin' ? path === '/admin' : path.startsWith(menuPath);
+        };
+      %>
+
+      <% _tree.forEach(function (node, gi) { %>
+        <% if (!node.isGroup) { %>
+          <%# 최상위 잎 (대시보드) %>
+          <a href="<%= node.path %>"
+            class="sidebar-link flex items-center px-4 py-1 rounded-xl text-sm font-medium text-gray-700 hover:text-blue-900 mb-0 <%= _isActive(node.path) ? 'active text-white' : '' %>">
+            <% if (node.icon_class) { %><i class="<%= node.icon_class %> mr-4 text-lg opacity-80"></i><% } %>
+            <span class="menu-text"><%= node.name %></span>
           </a>
-        <% }) %>
-      <% } %>
+        <% } else {
+             const _open = node.children.some(c => _isActive(c.path)); %>
+          <div class="admin-menu-group mt-1" data-admin-group>
+            <button type="button"
+              class="admin-group-toggle w-full flex items-center px-4 py-1.5 rounded-xl text-sm font-semibold text-gray-600 hover:text-blue-900"
+              aria-expanded="<%= _open ? 'true' : 'false' %>" data-group-toggle>
+              <% if (node.icon_class) { %><i class="<%= node.icon_class %> mr-4 text-lg opacity-70"></i><% } %>
+              <span class="menu-text flex-1 text-left"><%= node.name %></span>
+              <i class="bi bi-chevron-down menu-text text-xs transition-transform <%= _open ? 'rotate-180' : '' %>" data-group-chevron></i>
+            </button>
+
+            <div class="admin-group-items pl-3 <%= _open ? '' : 'hidden' %>" data-group-items>
+              <% node.children.forEach(function (child) { %>
+                <a href="<%= child.path %>"
+                  class="sidebar-link flex items-center px-4 py-1 rounded-xl text-sm font-medium text-gray-700 hover:text-blue-900 mb-0 <%= _isActive(child.path) ? 'active text-white' : '' %>">
+                  <% if (child.icon_class) { %><i class="<%= child.icon_class %> mr-4 text-base opacity-80"></i><% } %>
+                  <span class="menu-text"><%= child.name %></span>
+                </a>
+              <% }); %>
+            </div>
+          </div>
+        <% } %>
+      <% }); %>
     </nav>
+
+    <script>
+      /* 그룹 펼침/접힘. 활성 자식이 있는 그룹은 서버가 이미 펼쳐서 보낸다. */
+      (function () {
+        document.querySelectorAll('[data-admin-group]').forEach(function (group) {
+          var btn = group.querySelector('[data-group-toggle]');
+          var items = group.querySelector('[data-group-items]');
+          var chevron = group.querySelector('[data-group-chevron]');
+          if (!btn || !items) return;
+
+          btn.addEventListener('click', function () {
+            var willOpen = items.classList.contains('hidden');
+            items.classList.toggle('hidden', !willOpen);
+            btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            if (chevron) chevron.classList.toggle('rotate-180', willOpen);
+          });
+        });
+      })();
+    </script>
 
     <!-- User Profile (Bottom Sidebar) -->
     <div id="bottomProfile" class="admin-sidebar-bottom px-4"

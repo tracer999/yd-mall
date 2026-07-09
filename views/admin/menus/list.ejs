@@ -60,10 +60,23 @@
                   </span>
                 </div>
                 <div class="flex-1 min-w-0 max-w-[200px]">
-                  <input type="text" name="name[]" value="<%- menu.name %>" placeholder="예: 대시보드">
+                  <%# 그룹 소속을 유지해야 저장 시 계층이 평면으로 무너지지 않는다 (A1) %>
+                  <input type="hidden" name="parent_id[]" value="<%= menu.parent_id || '' %>">
+                  <div class="flex items-center gap-1.5">
+                    <% if (menu.depth === 1) { %>
+                      <span class="shrink-0 text-gray-300"><i class="bi bi-arrow-return-right"></i></span>
+                    <% } %>
+                    <input type="text" name="name[]" value="<%- menu.name %>" placeholder="예: 대시보드">
+                  </div>
+                  <% if (menu.isGroup) { %>
+                    <span class="mt-1 inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">그룹</span>
+                  <% } else if (menu.groupName) { %>
+                    <span class="mt-1 inline-block text-[10px] text-gray-400"><%= menu.groupName %></span>
+                  <% } %>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <input type="text" name="path[]" value="<%- menu.path %>" placeholder="예: /admin/products"
+                  <input type="text" name="path[]" value="<%- menu.path || '' %>"
+                    placeholder="<%= menu.isGroup ? '그룹은 비워둠 (하위 메뉴만 링크)' : '예: /admin/products' %>"
                     class="font-mono">
                 </div>
                 <div class="w-12 flex-shrink-0 flex items-center justify-center">
