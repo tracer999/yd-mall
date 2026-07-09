@@ -971,3 +971,38 @@ CREATE TABLE IF NOT EXISTS `brand_likes` (
   KEY `idx_bl_user` (`user_id`),
   CONSTRAINT `fk_bl_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='찜한 브랜드';
+
+-- =============================================================================
+-- 고객센터 FAQ 모듈 (M8)
+-- 적용 스크립트: scripts/migrate_faq.js (멱등)
+-- answer 는 HTML — 저장/렌더 시 services/display/htmlSanitizer.js 로 새니타이즈한다.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `faq_category` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `mall_id` bigint NOT NULL DEFAULT '1',
+  `code` varchar(50) NOT NULL COMMENT '분류 코드(고정 식별자)',
+  `name` varchar(100) NOT NULL COMMENT '분류명(운영자 변경 가능)',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_faq_category_code` (`mall_id`,`code`),
+  KEY `idx_faq_category_sort` (`mall_id`,`sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='FAQ 분류';
+
+CREATE TABLE IF NOT EXISTS `faq` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `mall_id` bigint NOT NULL DEFAULT '1',
+  `category_id` bigint DEFAULT NULL,
+  `question` varchar(255) NOT NULL,
+  `answer` text NOT NULL COMMENT 'HTML. 저장/렌더 시 새니타이즈',
+  `is_best` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=자주묻는질문 BEST 노출',
+  `view_count` int NOT NULL DEFAULT '0',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_faq_category` (`mall_id`,`category_id`,`sort_order`),
+  KEY `idx_faq_best` (`mall_id`,`is_best`,`view_count`),
+  CONSTRAINT `fk_faq_category` FOREIGN KEY (`category_id`) REFERENCES `faq_category` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='FAQ';

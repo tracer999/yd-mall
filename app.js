@@ -236,6 +236,7 @@ async function startServer() {
     const shopifyRoutes = require('./routes/shopify');
     const featureRoutes = require('./routes/feature');
     const sectionRoutes = require('./routes/sections');
+    const csRoutes = require('./routes/cs');
     const adminMenuMiddleware = require('./middleware/adminMenu');
 
     app.use('/shopify', shopifyRoutes);
@@ -244,6 +245,8 @@ async function startServer() {
     app.use('/', featureRoutes);
     // 스토어프론트 섹션 AJAX (CT-3 ranking_tabs 등)
     app.use('/sections', sectionRoutes);
+    // 고객센터 (M8)
+    app.use('/cs', csRoutes);
     app.use('/', indexRoutes);
     app.use('/auth', authRoutes);
     app.use('/likes', likesRoutes);

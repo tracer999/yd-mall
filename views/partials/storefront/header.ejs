@@ -5,6 +5,13 @@
    * main_layout.ejs 에서 include 한다. 로컬(siteSettings/user/isAdmin/cartCount/gnbMenus/categoryTree/currentPath)은
    * EJS include 가 상위 locals 를 그대로 상속한다.
    */
+
+  /* headerUtil 항목(feature_menu position='header_util')을 코드로 찾는다.
+     로그인/마이쇼핑/장바구니/검색은 is_required 라 항상 켜져 있고, 고객센터는 ON/OFF 가능하다. */
+  const _headerUtil = (code) => {
+    const list = (typeof headerUtilMenus !== 'undefined' && Array.isArray(headerUtilMenus)) ? headerUtilMenus : [];
+    return list.find((m) => m.featureCode === code) || null;
+  };
 %>
     <!-- Header -->
     <header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
@@ -104,9 +111,14 @@
                             </span>
                         <% } %>
                     </a>
-                    <a href="/boards/notice" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                        <i class="bi bi-headset text-xl"></i><span class="text-xs">고객센터</span>
-                    </a>
+                    <%# 고객센터는 시스템 메뉴이지만 ON/OFF 가능 (feature_menu.HEADER_CS).
+                        표준 URL(default_path)도 데이터에서 온다 — 하드코딩 금지. %>
+                    <% var _cs = _headerUtil('HEADER_CS'); %>
+                    <% if (_cs) { %>
+                        <a href="<%= _cs.href %>" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-headset text-xl"></i><span class="text-xs"><%= _cs.name %></span>
+                        </a>
+                    <% } %>
 
                     <!-- Mobile menu button -->
                     <button type="button" id="mobile-menu-btn"

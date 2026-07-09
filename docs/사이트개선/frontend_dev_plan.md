@@ -37,8 +37,8 @@
 | **M5** | 렌더 전환: `menuData.js` → navigationService. GNB·우측레일 데이터 기반화 | ✅ 2026-07-09 |
 | **M7** | `storefront_menu` 제거 (백업 후 DROP) | ✅ 2026-07-09 |
 | **CT** | 섹션 컴포넌트 트랙 (CT-0 ~ CT-9) | ✅ 2026-07-09 |
-| **M8** | 고객센터 페이지 + FAQ 모듈 | ⬜ **다음 작업** |
-| **P4** | 테마 시스템 (CSS 변수) | ⬜ |
+| **M8** | 고객센터 페이지 + FAQ 모듈 | ✅ 2026-07-09 |
+| **P4** | 테마 시스템 (CSS 변수) | ⬜ **다음 작업(프론트 마지막)** |
 | **P5** | 멀티몰(도메인 기반) | ⬜ |
 | **P6+** | SaaS 고도화 (멀티테넌시·미디어·AI) | 장기 |
 
@@ -261,20 +261,27 @@ services/tree/depthGuard.js
 - 멱등: 테이블이 없으면 아무 것도 하지 않음
 - `menuData.js` 의 레거시 폴백 제거, `tables.sql` DDL 제거
 
-### 5.6 M8 — 고객센터 페이지
+### 5.6 M8 — 고객센터 페이지 ✅ 구현 완료
 참조 캡처: `capture/image copy.png`
 ```text
 좌측 LNB                본문                          우측
-├─ 1:1 문의하기         ├─ FAQ 검색                   └─ 유틸 레일
+├─ 1:1 문의하기         ├─ FAQ 검색                   └─ 유틸 레일 (전역)
 ├─ 1:1 문의내역         ├─ 자주묻는질문 BEST 10 (아코디언)
 ├─ 공지사항             └─ 공지사항 목록 (더보기)
-├─ 자주묻는질문(카테고리)
+├─ 자주묻는질문(분류)
 ├─ 비회원 주문조회
-└─ 대표번호 / 운영시간
+└─ 대표번호
 ```
-**신설 필요**: `faq`, `faq_category` 테이블 + `/cs` 라우트
-`HEADER_CS.default_path` 를 `/boards/notice` → `/cs` 로 승격.
-기존 `/inquiries`(1:1 문의), `/boards/notice`(공지) 재사용.
+- **DB**: `faq_category`(6분류) + `faq`(12건 시드). `scripts/migrate_faq.js` (멱등)
+- **라우트**: `routes/cs.js` — `GET /cs`, `GET /cs/faq?categoryId=&q=`, `POST /cs/faq/:id/view`(조회수)
+- **`HEADER_CS.default_path` 를 `/boards/notice` → `/cs` 로 승격.** 헤더의 고객센터 링크도
+  하드코딩을 제거하고 `headerUtilMenus` 에서 가져온다 → **관리자에서 끄면 헤더에서 사라진다**(검증 완료)
+- 기존 `/inquiries`(1:1 문의), `/boards/notice`(공지) 재사용. 공지는 `notices` 테이블이며
+  `type`/`is_deleted`/`importance` 컬럼 유무를 런타임 탐지(배포 시점차 대응)
+- **보안**: FAQ `answer` 는 HTML 이므로 렌더 직전 `htmlSanitizer` 로 새니타이즈.
+  검색어는 LIKE 와일드카드를 **파라미터로 전달**(문자열 결합 금지), 길이 100자 제한.
+  검증: `<script>`/`onerror` 주입 답변이 렌더에 노출되지 않음, `q=%' OR '1'='1` → 정상 200
+- **관리자 FAQ 관리 화면은 미구현** → `admin_dev_plan.md` §3.8 "고객센터 관리"
 
 ---
 
