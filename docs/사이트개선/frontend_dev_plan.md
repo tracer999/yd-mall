@@ -49,6 +49,8 @@
 > **다음 단계는 관리자**다. [`admin_dev_plan.md`](./admin_dev_plan.md) 의 작업 순서 원칙에 따라,
 > 관리자 화면을 만들면서 위 프론트 항목이 전부 관리 가능한지 커버리지를 검사하고,
 > 관리자에만 있고 프론트에 없는 기능은 프론트를 보완한다.
+>
+> **그 다음이 디자인 개선(§12)** 이다. 구조(데이터 모델)는 끝났고 표현만 남았다.
 
 ### 권장 진행 순서
 ```text
@@ -543,11 +545,121 @@ P6은 먼 얘기지만, 지금 구조가 그때 결정적으로 유리하게 작
 
 ## 11. 정리 대상 (기술 부채)
 
+> 성격이 다른 항목을 한 표에 섞으면 "언제 무엇을 해야 하는가"가 사라진다. **A/B/C 로 분리한다.**
+
+### A. 진짜 제거 대상 — 관리자 작업에 태워서 해소
+
+#### A-1. `main_display_sections` / `main_display_products` + `/admin/display`
+
+> ⚠️ **주의: 아직 살아 있다.** "`page_section` 이 대체해서 홈에 영향 없음" 은 **사실이 아니다.**
+> `mainController.getCategoryProducts`(카테고리 탭 AJAX)가 여전히 읽고 있다:
+> ```js
+> const [[catCfg]] = await pool.query(
+>     "SELECT max_count FROM main_display_sections WHERE section_key = 'category'");
+> ```
+> 실측(2026-07-09): `main_display_sections` 3행, `main_display_products` 4행,
+> `admin_menus` 의 '전시관리' `is_active=1`. **지금 DROP 하면 카테고리 탭이 깨진다.**
+
+제거 순서 (M7 `storefront_menu` 패턴 재사용: *의존성 제거 → 관찰 → 백업 → DROP*):
+
+1. **의존성 끊기** — `getCategoryProducts` 가 `main_display_sections.max_count` 대신
+   `category_showcase` 섹션의 `config_json.maxCount` 를 읽도록 변경.
+   AJAX 요청은 자기가 어느 섹션인지 모르므로 `page_section` 에서 `section_type='category_showcase'`
+   를 조회하거나 클라이언트가 `sectionId` 를 넘겨야 한다.
+2. **관리자 `/admin/display` 를 페이지 빌더로 흡수** — `admin_menus` 에서 **비활성화만**(`is_active=0`).
+   라우트는 살려둔다(운영자 화면을 즉시 없애면 되돌릴 수 없다).
+3. **관찰 기간 후 코드 제거** — `displayController.js`, `routes/admin/display.js`, `views/admin/display/`
+4. **백업 후 DROP** — 안전 가드(`page_section` 에 `category_showcase` 생존 확인) + DDL·INSERT 백업 파일 생성
+
+> **왜 지금이 아닌가**: 1단계는 페이지 빌더와 카테고리 섹션 설정 UI 에 얽힌다.
+> **관리자 작업 중 자연히 해소**되므로 지금 따로 하면 같은 코드를 두 번 만진다.
+
+#### A-2. 비활성 관리자 메뉴 5개
+쿠폰 · 포인트 · 판매 · 배송 · 문의 — 라우트/뷰는 있는데 `admin_menus.is_active=0`.
+"완성 후 켠다" 인지 "폐기" 인지 결정되지 않은 채 방치. → `admin_dev_plan.md` A3
+
+---
+
+### B. 미도입 컬럼 — ✅ 2026-07-09 처리 완료
+
+> **판단 근거**: `custom_menu` 가 **0행**이었다. 지금 스키마를 바꾸면 데이터 마이그레이션 비용이 0이다.
+> 관리자 M6(메뉴 관리 UI)를 먼저 만들고 운영자가 메뉴를 넣기 시작한 뒤에 컬럼을 추가하면
+> UI·서비스·시드를 모두 다시 손대야 한다.
+
+`node scripts/migrate_menu_columns.js` (멱등)
+
 | 항목 | 조치 |
 |---|---|
-| `main_display_sections` / `main_display_products` | `page_section` 이 대체. 검증 후 제거 (관리자 `/admin/display` 와 함께) |
-| ~~`storefront_menu`~~ | ✅ **M7에서 제거 완료**. 백업: `scripts/backup_storefront_menu.sql` |
-| `hero_showcase.ejs` 내부 유틸 레일 | 전역 레일로 승격 완료 → CT-7 에서 제거 |
-| `categories.seo_config` | 미도입. 카테고리 SEO 필요 시 추가 |
-| `mall_feature_menu.badge_type` | NEW/HOT/SALE 배지용 컬럼 미도입 |
-| `custom_menu.link_type` | `EXHIBITION`/`PRODUCT_GROUP`/`BRAND`/`CATEGORY` 확장 + `link_target` 필요 |
+| `mall_feature_menu.badge_type` | ✅ 추가 (NEW/HOT/SALE) |
+| `custom_menu.badge_type` | ✅ 추가 |
+| `custom_menu.link_target` | ✅ 추가 (내부 리소스 id) |
+| `custom_menu.link_type` | ✅ `varchar(20)` → `varchar(30)`, 값 체계를 대문자 코드로 통일<br>`INTERNAL_PAGE / EXTERNAL_URL / CATEGORY / BRAND / EXHIBITION / PRODUCT_GROUP` |
+| `custom_menu.link_url` | ✅ `NOT NULL` → `NULL` (CATEGORY/BRAND 는 URL 을 파생하므로) |
+| `categories.seo_config` | ⬜ **도입하지 않음 (YAGNI)** — 카테고리 SEO 요구 없음, `seoDefaults` 미들웨어로 충분 |
+| `custom_menu.tracking_code` | ⬜ **도입하지 않음 (YAGNI)** — 캠페인 분석 소비처 없음 |
+
+**링크 유형 해석기** (`navigationService.LINK_RESOLVERS`)
+`module_ready` 와 **같은 원칙**을 적용한다 — 실제 라우트가 있는 유형만 등록하고,
+미등록 유형(`EXHIBITION`, `PRODUCT_GROUP`)이나 `link_target` 이 비어 href 를 만들 수 없는 행은
+**렌더에서 제외**한다. 관리자가 저장해도 죽은 링크가 노출되지 않는다.
+외부 링크(`EXTERNAL_URL`)는 관리자 설정과 무관하게 **항상 새 창 + `rel="noopener noreferrer"`** 강제.
+
+배지 값은 `BADGE_TYPES` 화이트리스트(`NEW/HOT/SALE`)로 정규화한다 — 임의 문자열이 뷰로 새어나가지 않는다.
+
+> 🐛 **이 작업 중 발견해 고친 버그**: `header.ejs` 가 `<%= %>`(이스케이프 출력)로 속성 문자열을
+> 내보내 `target="_blank"` 가 `target=&#34;_blank&#34;` 로 깨져 있었다. **외부 링크가 새 창으로
+> 열리지 않고 `rel="noopener"` 보안 속성도 무효**였다. 이스케이프 없는 출력으로 수정.
+>
+> 🐛 EJS 주석/스크립틀릿 안에 리터럴 `%>` 를 쓰면 태그가 조기 종료되어 전 페이지 500 이 난다.
+> (`custom_html.ejs`, `header.ejs` 에서 각각 한 번씩 발생) — 주석에 EJS 태그 문법을 쓰지 말 것.
+
+---
+
+### C. 이미 해소 (기록 보존용)
+
+| 항목 | 결과 |
+|---|---|
+| ~~`storefront_menu`~~ | ✅ M7에서 제거. 백업: `scripts/backup_storefront_menu.sql` |
+| ~~`hero_showcase.ejs` 내부 유틸 레일~~ | ✅ CT-7에서 완전 제거(잔존 0) |
+
+> **부채가 아닌 것**: `hero_banner` / `hero_showcase` / `popup_banner` 가 `sectionRegistry` 에 없는 것은 정상이다.
+> 앞의 둘은 `hero` 디스패처가 `variant` 로 분기해 include 하는 하위 partial 이고,
+> `popup_banner` 는 섹션이 아니라 `index.ejs` 가 직접 넣는 오버레이다.
+
+---
+
+### D. 남은 부채 (문서에 없던 것)
+
+| 항목 | 내용 |
+|---|---|
+| **CT-7 잔여** | 찜 개수 뱃지 미들웨어 없음(장바구니만 `cartCount`). `<1600px` 에서 레일 미노출 |
+| **EJS 정적 검증 불가** | `modal_overlay.ejs` · `user_search_modal.ejs` · `checkout/fail.ejs` · `mypage/order_detail.ejs` 4개가 단독 컴파일 실패(최초 커밋부터). 런타임은 정상이나 **CI lint 를 막는다** |
+| **`tables.sql` 노후화** | 테이블 수는 51=51 로 맞지만 컬럼 단위 일치는 미검증. 실제로 `banners.banner_type` 에 `BRAND` 가 빠져 있던 것을 CT-5 에서 발견해 보정했다. **스키마 판단은 항상 실 DB 기준** |
+
+---
+
+## 12. 디자인 개선 (벤치마킹 정합) — ⏸ 관리자 완료 후 착수
+
+> **사용자 확정(2026-07-09)**: 현재 사용자 화면의 **GNB · 히어로 슬라이드쇼 · 우측 유틸 레일**의
+> 디자인 구조가 벤치마킹 대상(신세계TV쇼핑 · GS SHOP)과 **차이가 크다.**
+> 다만 **관리자를 모두 정리한 뒤** 이 부분을 다시 확인하고 착수한다.
+
+### 지금까지의 우선순위였던 것 (그래서 디자인이 밀린 이유)
+지금까지는 **"골격=코드, 항목=데이터"** 구조를 세우는 데 집중했다(P1.5 · M 트랙 · CT 트랙).
+즉 **무엇을 데이터로 그릴 수 있는가**가 목표였고, **어떻게 보이는가**는 최소한으로만 맞췄다.
+구조가 잡혔으므로 이제 표현을 참조몰 수준으로 끌어올릴 수 있다.
+
+### 착수 시 검토 대상
+| 영역 | 현재 | 참조 |
+|---|---|---|
+| GNB | 텍스트 링크 + 카테고리 드롭다운 패널(평면 1뎁스) | 2단 컬럼 메가메뉴, hover 확장, 3뎁스 |
+| 히어로 | `hero_showcase`(좌 LNB + 슬라이더 + 피처카드) / `hero_banner`(전체폭 스와이퍼) | `capture/image.png`, `image2.png` |
+| 우측 유틸 레일 | `≥1600px` 고정 레일, 아이콘+라벨 | `capture/image7.png` (바로접속 ON, 최근본 썸네일 포함) |
+| 고객센터 | LNB + FAQ 아코디언 | `capture/image copy.png` |
+
+### 착수 전 확인할 것
+- **구조는 이미 데이터화되어 있다.** GNB 항목·레일 항목은 `feature_menu` 로, 섹션은 `page_section` 으로 관리된다.
+  따라서 디자인 작업은 **partial/CSS 교체**로 끝나며 데이터 모델은 건드리지 않는다.
+- 레일 노출 브레이크포인트(`≥1600px`)는 본문 `max-w-1400px` 와의 충돌 때문이다. 참조몰처럼
+  더 좁은 화면에서도 띄우려면 **본문 컨테이너 폭 정책**을 함께 정해야 한다(§4.3, CT-7 잔여).
+- 회귀 검증은 **렌더 HTML 바이트 비교**가 아니라 **스크린샷 비교**여야 한다(디자인 변경은 HTML 이 바뀌는 게 정상).

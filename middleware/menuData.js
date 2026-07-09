@@ -28,6 +28,8 @@ function toViewItem(item) {
         featureCode: item.featureCode || null,
         isCustom: Boolean(item.isCustom),
         newWindow: Boolean(item.newWindow),
+        // NEW / HOT / SALE (navigationService 가 화이트리스트로 정규화함). 없으면 null
+        badgeType: item.badgeType || null,
         pcVisible: item.pcVisible === undefined ? 1 : Number(item.pcVisible),
         mobileVisible: item.mobileVisible === undefined ? 1 : Number(item.mobileVisible),
         // 레거시 뷰 호환: 고정 항목 필터에 사용되던 필드

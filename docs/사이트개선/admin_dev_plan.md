@@ -275,7 +275,9 @@
 
 > UI에서 `module_ready = 0` 항목은 **"모듈 미구현"** 배지와 함께 **비활성(토글 잠금)** 으로 표시한다.
 
-**미구현 항목**: `badge_type`(NEW/HOT/SALE 배지) 컬럼이 `mall_feature_menu` 에 없다 → 추가 필요.
+✅ **`mall_feature_menu.badge_type`(NEW/HOT/SALE) 컬럼 추가 완료** (2026-07-09, `scripts/migrate_menu_columns.js`).
+GNB 렌더도 배지를 표시하며, `navigationService` 가 `NEW/HOT/SALE` 화이트리스트로 정규화한다.
+→ 관리자 UI 는 이 세 값 중 선택하는 드롭다운이면 된다(자유 입력 금지).
 
 ### 4.3 커스텀 메뉴 관리
 경로: `관리자 > 메뉴/카테고리 관리 > 커스텀 메뉴 관리`
@@ -287,15 +289,25 @@
 | Footer | 최대 20 | ⬜ |
 | 모바일 퀵 메뉴 | 최대 5 | ⬜ |
 
-`custom_menu` 현재 컬럼: `display_name, link_type(internal/external), link_url, location, sort_order, is_enabled, pc_visible, mobile_visible, login_required, new_window, visible_start_at, visible_end_at`
+✅ **스키마 확정 완료** (2026-07-09, `scripts/migrate_menu_columns.js`). `custom_menu` 가 0행일 때 처리해 마이그레이션 비용 0.
 
-**미구현/추가 필요**:
-- `link_type` 확장: `EXHIBITION` / `PRODUCT_GROUP` / `BRAND` / `CATEGORY` (현재 internal/external 2종)
-- `link_target`(내부 리소스 id) 컬럼
-- `badge_type`(NEW/HOT/SALE)
-- `tracking_code`(캠페인 분석)
+| 컬럼 | 값 |
+|---|---|
+| `link_type` | `INTERNAL_PAGE` / `EXTERNAL_URL` / `CATEGORY` / `BRAND` / `EXHIBITION` / `PRODUCT_GROUP` |
+| `link_target` | 내부 리소스 id (CATEGORY/BRAND = `categories.id`) |
+| `link_url` | `INTERNAL_PAGE`/`EXTERNAL_URL` 일 때만 사용 (**NULL 허용**) |
+| `badge_type` | `NEW` / `HOT` / `SALE` |
 
-**서버 측 강제 규칙**: 슬롯 초과 저장 거부 / 메뉴명 10자 제한 / 외부 링크 기본 새 창 / 기간 종료 시 자동 숨김.
+**관리자 UI 가 지켜야 할 규칙** (`navigationService` 가 이미 렌더 측에서 강제하고 있음):
+- `EXHIBITION` / `PRODUCT_GROUP` 은 **모듈 미구현** → 저장은 되지만 스토어프론트에 노출되지 않는다.
+  UI 에서 "모듈 미구현" 배지와 함께 비활성 표시할 것 (`feature_menu.module_ready` 와 같은 원칙).
+- `CATEGORY`/`BRAND` 는 `link_target` 이 없으면 렌더에서 제외된다 → **저장 시 필수 검증**.
+- `EXTERNAL_URL` 은 관리자 설정과 무관하게 **항상 새 창 + `rel="noopener noreferrer"`** 로 강제된다.
+- `badge_type` 은 자유 입력 금지, 3값 드롭다운.
+
+**서버 측 강제 규칙(관리자에서 추가 구현 필요)**: 슬롯 초과 저장 거부 / 메뉴명 10자 제한 / 기간 종료 시 자동 숨김.
+
+**도입하지 않음(YAGNI)**: `tracking_code`(캠페인 분석 소비처 없음)
 
 ### 4.4 시스템 메뉴 설정
 경로: `관리자 > 메뉴/카테고리 관리 > 시스템 메뉴 설정`

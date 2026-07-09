@@ -39,6 +39,27 @@ function periodClause(alias) {
 /** GNB 최좌측 고정 버튼(전체 카테고리 드롭다운) */
 const CATEGORY_CODE = 'CATEGORY';
 
+/** 강조 배지 화이트리스트 — 그 외 값은 무시한다(뷰에 임의 문자열이 새어나가지 않도록) */
+const BADGE_TYPES = ['NEW', 'HOT', 'SALE'];
+
+/**
+ * 커스텀 메뉴 link_type → href 해석기.
+ * 실제 라우트가 있는 유형만 등록한다. 미등록 유형(EXHIBITION/PRODUCT_GROUP)은
+ * 모듈이 없으므로 렌더에서 제외한다 — feature_menu.module_ready 와 같은 원칙(죽은 링크 차단).
+ */
+const LINK_RESOLVERS = {
+    INTERNAL_PAGE: (m) => m.linkUrl || null,
+    EXTERNAL_URL: (m) => m.linkUrl || null,
+    CATEGORY: (m) => (m.linkTarget ? `/products/category/${m.linkTarget}` : null),
+    BRAND: (m) => (m.linkTarget ? `/products/brand/${m.linkTarget}` : null),
+    // EXHIBITION, PRODUCT_GROUP: 모듈 미구현 → 의도적으로 미등록
+};
+
+function normalizeBadge(v) {
+    const b = String(v || '').trim().toUpperCase();
+    return BADGE_TYPES.includes(b) ? b : null;
+}
+
 async function getConfig(mallId) {
     const [rows] = await pool.query('SELECT * FROM navigation_config WHERE mall_id = ? LIMIT 1', [mallId]);
     return Object.assign({}, DEFAULT_CONFIG, rows[0] || {});
@@ -57,7 +78,8 @@ async function getFeatureMenus(mallId) {
             m.sort_order                                     AS sortOrder,
             m.login_required                                 AS loginRequired,
             m.pc_visible                                     AS pcVisible,
-            m.mobile_visible                                 AS mobileVisible
+            m.mobile_visible                                 AS mobileVisible,
+            m.badge_type                                     AS badgeType
         FROM mall_feature_menu m
         JOIN feature_menu f ON f.feature_code = m.feature_code
         WHERE m.mall_id = ?
@@ -66,14 +88,20 @@ async function getFeatureMenus(mallId) {
           ${periodClause('m')}
         ORDER BY f.position ASC, m.sort_order ASC, f.default_sort_order ASC
     `, [mallId]);
-    return rows;
+    return rows.map(r => Object.assign({}, r, { badgeType: normalizeBadge(r.badgeType) }));
 }
 
-/** 몰별 커스텀 메뉴 (위치별 슬롯 제한은 호출부에서 적용) */
+/**
+ * 몰별 커스텀 메뉴 (위치별 슬롯 제한은 호출부에서 적용)
+ *
+ * link_type 별로 href 를 파생한다. 라우트가 없는 유형(EXHIBITION/PRODUCT_GROUP)이나
+ * 대상이 비어 href 를 만들 수 없는 행은 **렌더에서 제외**한다(죽은 링크 차단).
+ */
 async function getCustomMenus(mallId) {
     const [rows] = await pool.query(`
         SELECT
-            id, display_name AS name, link_type AS linkType, link_url AS path,
+            id, display_name AS name, link_type AS linkType, link_url AS linkUrl,
+            link_target AS linkTarget, badge_type AS badgeType,
             location, sort_order AS sortOrder, login_required AS loginRequired,
             pc_visible AS pcVisible, mobile_visible AS mobileVisible,
             new_window AS newWindow
@@ -82,7 +110,23 @@ async function getCustomMenus(mallId) {
         ${periodClause()}
         ORDER BY location ASC, sort_order ASC, id ASC
     `, [mallId]);
-    return rows.map(r => Object.assign({}, r, { isCustom: true }));
+
+    const resolved = [];
+    for (const r of rows) {
+        const resolver = LINK_RESOLVERS[r.linkType];
+        if (!resolver) continue; // 모듈 미구현 링크 유형 → 미노출
+        const path = resolver(r);
+        if (!path) continue;     // 대상 누락 → 미노출
+
+        resolved.push(Object.assign({}, r, {
+            path,
+            isCustom: true,
+            badgeType: normalizeBadge(r.badgeType),
+            // 외부 링크는 항상 새 창 (관리자 설정과 무관하게 강제)
+            newWindow: r.linkType === 'EXTERNAL_URL' ? 1 : r.newWindow,
+        }));
+    }
+    return resolved;
 }
 
 /** parent_id 기반 재귀 트리 */
@@ -165,4 +209,6 @@ module.exports = {
     getCategoryTree,
     buildTree,
     DEFAULT_CONFIG,
+    BADGE_TYPES,
+    LINK_RESOLVERS,
 };

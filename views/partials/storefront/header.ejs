@@ -161,9 +161,19 @@
                     <!-- 몰별 가변 메뉴 (feature_menu[gnb] + custom_menu 슬롯). PC 노출 항목만. -->
                     <% (typeof gnbMenus !== 'undefined' ? gnbMenus : []).filter(function(m){ return m.pcVisible !== 0; }).forEach(function (m) {
                          var active = m.href && m.href !== '#' && currentPath === m.href; %>
-                        <a href="<%= m.href %>" <%= m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
-                            class="px-4 py-3 text-base font-medium border-b-2 transition-colors <%= active ? 'text-[var(--gh-primary)] border-[var(--gh-primary)]' : 'text-gray-700 border-transparent hover:text-[var(--gh-primary)]' %>">
+                        <%# 속성 문자열은 반드시 이스케이프 없이 출력한다.
+                            이스케이프 출력 태그를 쓰면 따옴표가 &#34; 로 변환되어
+                            target="_blank" 와 rel="noopener" 가 통째로 무효가 된다. %>
+                        <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
+                            class="relative px-4 py-3 text-base font-medium border-b-2 transition-colors <%= active ? 'text-[var(--gh-primary)] border-[var(--gh-primary)]' : 'text-gray-700 border-transparent hover:text-[var(--gh-primary)]' %>">
                             <%= m.name %>
+                            <%# 강조 배지(NEW/HOT/SALE) — navigationService 가 화이트리스트로 정규화한 값만 온다 %>
+                            <% if (m.badgeType) { %>
+                                <span class="absolute top-1 right-0 text-[9px] font-extrabold leading-none px-1 py-0.5 rounded
+                                    <%= m.badgeType === 'HOT' ? 'bg-red-500 text-white'
+                                      : (m.badgeType === 'SALE' ? 'bg-amber-500 text-white'
+                                      : 'bg-[var(--gh-primary)] text-white') %>"><%= m.badgeType %></span>
+                            <% } %>
                         </a>
                     <% }); %>
                 </nav>
@@ -189,9 +199,15 @@
                 <% if (_mobileMenus.length > 0) { %>
                     <p class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider py-1">메뉴</p>
                     <% _mobileMenus.forEach(function (m) { %>
-                        <a href="<%= m.href %>" <%= m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
+                        <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
                             class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">
                             <%= m.name %>
+                            <% if (m.badgeType) { %>
+                                <span class="ml-1 align-middle text-[9px] font-extrabold px-1 py-0.5 rounded
+                                    <%= m.badgeType === 'HOT' ? 'bg-red-500 text-white'
+                                      : (m.badgeType === 'SALE' ? 'bg-amber-500 text-white'
+                                      : 'bg-[var(--gh-primary)] text-white') %>"><%= m.badgeType %></span>
+                            <% } %>
                         </a>
                     <% }); %>
                 <% } %>
