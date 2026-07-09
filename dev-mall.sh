@@ -22,8 +22,9 @@
 
 set -euo pipefail
 
+# 앱(app.js / ecosystem.config.cjs)은 이 스크립트가 있는 프로젝트 루트에 위치한다.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEV_MALL_DIR="$ROOT/dev-mall"
+DEV_MALL_DIR="$ROOT"
 APP="dev-mall"
 
 # --- Node 22 (nvm) 로드 ---
