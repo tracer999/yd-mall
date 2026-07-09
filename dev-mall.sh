@@ -27,6 +27,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEV_MALL_DIR="$ROOT"
 APP="dev-mall"
 
+# --- ENCRYPTION_KEY 확보 ---
+# .env* 의 DB_PASS/REDIS_PASSWORD 는 ENC: 로 암호화돼 있고, config/env.js 는
+# ENCRYPTION_KEY 가 없으면 즉시 종료한다.
+# 키는 /etc/environment 로 관리하는데, PAM 을 거치지 않는 비로그인 셸
+# (CI/CD 의 SSH 액션 등)에서는 자동으로 로드되지 않는다. 그래서 여기서 직접 읽는다.
+if [ -z "${ENCRYPTION_KEY:-}" ] && [ -r /etc/environment ]; then
+  ENCRYPTION_KEY="$(grep -m1 '^ENCRYPTION_KEY=' /etc/environment | cut -d= -f2- | tr -d '"'"'"'')"
+  export ENCRYPTION_KEY
+fi
+if [ -z "${ENCRYPTION_KEY:-}" ]; then
+  echo "✗ ENCRYPTION_KEY 가 없습니다. /etc/environment 에 설정하거나 환경변수로 전달하세요." >&2
+  echo "  (없으면 .env 의 ENC: 값을 복호화하지 못해 앱이 기동하지 않습니다)" >&2
+  exit 1
+fi
+
 # --- Node 22 (nvm) 로드 ---
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [ -s "$NVM_DIR/nvm.sh" ]; then
