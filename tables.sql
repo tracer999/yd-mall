@@ -1006,3 +1006,23 @@ CREATE TABLE IF NOT EXISTS `faq` (
   KEY `idx_faq_best` (`mall_id`,`is_best`,`view_count`),
   CONSTRAINT `fk_faq_category` FOREIGN KEY (`category_id`) REFERENCES `faq_category` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='FAQ';
+
+-- =============================================================================
+-- 테마 시스템 (P4)
+-- 적용 스크립트: scripts/migrate_theme.js (멱등)
+--
+-- 경계: site_settings = 브랜드 색상/로고 (기존 유지)
+--       theme.config_json = 버튼/카드 반경, 폰트, 카드 스타일 등 빌더 전용 스타일 토큰
+-- 값은 CSS 에 직접 삽입되므로 services/theme/themeService.js 가 화이트리스트+정규식으로 검증한다.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `theme` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `mall_id` bigint NOT NULL DEFAULT '1',
+  `name` varchar(100) NOT NULL DEFAULT '기본 테마',
+  `config_json` json DEFAULT NULL COMMENT '스타일 토큰(버튼/카드 반경, 폰트, 카드 스타일 등)',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_theme_mall_active` (`mall_id`,`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='몰별 테마(스타일 토큰)';

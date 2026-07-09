@@ -38,9 +38,17 @@
 | **M7** | `storefront_menu` 제거 (백업 후 DROP) | ✅ 2026-07-09 |
 | **CT** | 섹션 컴포넌트 트랙 (CT-0 ~ CT-9) | ✅ 2026-07-09 |
 | **M8** | 고객센터 페이지 + FAQ 모듈 | ✅ 2026-07-09 |
-| **P4** | 테마 시스템 (CSS 변수) | ⬜ **다음 작업(프론트 마지막)** |
-| **P5** | 멀티몰(도메인 기반) | ⬜ |
+| **P4** | 테마 시스템 (CSS 변수) | ✅ 2026-07-09 |
+| **P5** | 멀티몰(도메인 기반) | ⬜ (프론트 범위 밖 — 스펙 확정 필요) |
 | **P6+** | SaaS 고도화 (멀티테넌시·미디어·AI) | 장기 |
+
+> ## ✅ 스토어프론트 구현 완료 (2026-07-09)
+> P0 · P1 · P1.5 · M1~M8 · CT-0~CT-9 · P4 전부 완료.
+> 남은 것은 **P5(멀티몰)** 로, `§8.4 의사결정`(거래 데이터 몰 귀속)이 확정돼야 착수 가능하다.
+>
+> **다음 단계는 관리자**다. [`admin_dev_plan.md`](./admin_dev_plan.md) 의 작업 순서 원칙에 따라,
+> 관리자 화면을 만들면서 위 프론트 항목이 전부 관리 가능한지 커버리지를 검사하고,
+> 관리자에만 있고 프론트에 없는 기능은 프론트를 보완한다.
 
 ### 권장 진행 순서
 ```text
@@ -360,21 +368,43 @@ services/display/resolvers/
 
 ---
 
-## 7. Phase 4 — 테마 시스템
+## 7. Phase 4 — 테마 시스템 ✅ 구현 완료
 
-```sql
-CREATE TABLE IF NOT EXISTS `theme` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `mall_id` BIGINT NOT NULL DEFAULT 1,
-  `name` VARCHAR(100) NULL,
-  `config_json` JSON NULL,   -- primaryColor / fontFamily / buttonRadius / productCardStyle
-  `is_active` TINYINT(1) DEFAULT 1,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB;
+`node scripts/migrate_theme.js` (멱등) → `theme(mall_id, name, config_json, is_active)`
+
+**경계 분리** (중복 최소화):
+| 대상 | 저장소 |
+|---|---|
+| 브랜드 색상(`--gh-primary` 등) · 로고 · 파비콘 | `site_settings` (기존 유지) |
+| 버튼/카드/입력 반경, 폰트, 카드 스타일, 섹션 간격 | **`theme.config_json`** |
+
+**스타일 토큰 → CSS 변수** (`services/theme/themeService.js`)
+```text
+fontFamily       → --yd-font-family
+buttonRadius     → --yd-radius-button      (.gh-btn-primary)
+cardRadius       → --yd-radius-card        (.product-card-surface)
+pillRadius       → --yd-radius-pill        (.brand-pill--ghost, .brand-cta)
+inputRadius      → --yd-radius-input       (.brand-focus)
+sectionSpacing   → --yd-section-spacing
+containerWidth   → --yd-container-width
+productCardStyle → body.yd-card-{shadow|border|flat}
 ```
-- 기존 `site_settings`(브랜드 색상/로고)와 **경계 분리**: 색상·로고는 `site_settings` 유지, `theme.config_json` 은 레이아웃/카드/버튼 스타일 등 빌더 전용 항목만
-- `main_layout.ejs` `<head>` 에 CSS 변수 인라인 주입 (`:root { --gh-primary: ... }`) — 이미 동일 패턴 사용 중
-- **DoD**: 테마 변경 시 주요 색상·버튼·카드가 CSS 변수로 일괄 변경. 하드코딩 색상값이 변수로 치환됨
+- `middleware/themeData.js` 가 `res.locals.theme` 주입(60초 메모리 캐시, `invalidate()` 제공)
+- `main_layout.ejs` `<head>` 가 `:root` 에 인라인 주입. 테마가 없거나 DB 오류여도 **기본값으로 폴백**하여 화면이 깨지지 않는다
+- 상품 카드에 `.product-card-surface` 훅 추가 → 테마로 반경/테두리/그림자 제어
+
+**🔒 CSS 인젝션 방어 (중요)**
+테마 값은 스타일시트에 **직접 삽입**되므로, `}` 를 섞어 `:root` 를 탈출하는 CSS 인젝션이 가능하다.
+`themeService` 가 토큰별 **화이트리스트 + 정규식**으로 검증하고, 실패하면 기본값으로 대체한다.
+- 길이값: `/^(0|\d{1,5}(\.\d{1,3})?(px|rem|em|%|vw))$/`
+- `productCardStyle`: `shadow|border|flat` 열거형만
+- `fontFamily`: 영숫자·공백·따옴표·하이픈만(200자 이내)
+
+검증: `buttonRadius: "0.5rem; } body { display:none } .x{"`, `fontFamily: "x</style><script>"`,
+`productCardStyle: "evil"`, `sectionSpacing: "expression(alert(1))"` 를 DB에 저장해도
+탈출 문자열 0건, 전부 기본값 폴백, 홈 200.
+
+**⬜ 잔여**: 관리자 테마 설정 화면(색상 피커/폰트/반경/카드 스타일) → `admin_dev_plan.md` §3.2
 
 ---
 

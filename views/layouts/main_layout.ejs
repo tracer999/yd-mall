@@ -136,8 +136,26 @@
                                                                                                     href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
                                                                                                 <!-- Pretendard Font (loaded via CSS @import) -->
 
+                                                                                                <%
+                                                                                                    /* P4 테마 — 활성 테마의 스타일 토큰을 :root 에 주입.
+                                                                                                       값은 themeService 가 화이트리스트+정규식으로 검증한 것만 온다(CSS 인젝션 차단).
+                                                                                                       테마가 없으면 아래 기본값이 그대로 쓰인다. */
+                                                                                                    const _theme = (typeof theme !== 'undefined' && theme) ? theme : null;
+                                                                                                    const _themeVars = _theme ? _theme.cssVars.join('\n                                                                                                        ') : '';
+                                                                                                    const _cardStyle = _theme ? _theme.cardStyle : 'shadow';
+                                                                                                %>
                                                                                                 <style>
                                                                                                     :root {
+                                                                                                        /* ── 테마 토큰 (theme.config_json) ── */
+                                                                                                        --yd-font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+                                                                                                        --yd-radius-button: 0.5rem;
+                                                                                                        --yd-radius-card: 0.5rem;
+                                                                                                        --yd-radius-pill: 9999px;
+                                                                                                        --yd-radius-input: 0.375rem;
+                                                                                                        --yd-section-spacing: 3rem;
+                                                                                                        --yd-container-width: 72rem;
+                                                                                                        <%- _themeVars %>
+
                                                                                                         --gh-primary: <%=brandMain %>;
                                                                                                         --gh-primary-dark: <%=brandDark %>;
                                                                                                         --gh-secondary: <%=brandLight %>;
@@ -153,20 +171,50 @@
                                                                                                     }
 
                                                                                                     body {
-                                                                                                        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+                                                                                                        font-family: var(--yd-font-family);
                                                                                                         color: var(--gh-text);
                                                                                                         background-color: #FFFFFF;
                                                                                                     }
 
                                                                                                     .gh-serif {
-                                                                                                        font-family: 'Pretendard', serif;
+                                                                                                        font-family: var(--yd-font-family);
                                                                                                         font-weight: 700;
                                                                                                     }
 
                                                                                                     .gh-btn-primary {
                                                                                                         background-color: var(--gh-primary);
                                                                                                         color: var(--gh-primary-contrast);
+                                                                                                        border-radius: var(--yd-radius-button);
                                                                                                         transition: background-color 0.2s ease, transform 0.2s ease;
+                                                                                                    }
+
+                                                                                                    /* ── 테마 토큰 적용 (P4) ── */
+                                                                                                    .brand-pill--ghost,
+                                                                                                    .brand-cta {
+                                                                                                        border-radius: var(--yd-radius-pill);
+                                                                                                    }
+
+                                                                                                    .brand-focus {
+                                                                                                        border-radius: var(--yd-radius-input);
+                                                                                                    }
+
+                                                                                                    /* 상품 카드 스타일 — theme.productCardStyle (shadow | border | flat) */
+                                                                                                    body.yd-card-shadow .product-card-surface {
+                                                                                                        border-radius: var(--yd-radius-card);
+                                                                                                        box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+                                                                                                        border: 1px solid #f3f4f6;
+                                                                                                    }
+
+                                                                                                    body.yd-card-border .product-card-surface {
+                                                                                                        border-radius: var(--yd-radius-card);
+                                                                                                        box-shadow: none;
+                                                                                                        border: 1px solid var(--gh-border);
+                                                                                                    }
+
+                                                                                                    body.yd-card-flat .product-card-surface {
+                                                                                                        border-radius: var(--yd-radius-card);
+                                                                                                        box-shadow: none;
+                                                                                                        border: none;
                                                                                                     }
 
                                                                                                     .gh-btn-primary:hover {
@@ -365,7 +413,7 @@
                                                                                                 </style>
 </head>
 
-<body class="flex flex-col min-h-screen">
+<body class="flex flex-col min-h-screen yd-card-<%= _cardStyle %>">
 
 
     <!-- Header (partials/storefront/header.ejs) -->

@@ -201,6 +201,9 @@ async function startServer() {
     // Site Settings Middleware (Global)
     app.use(require('./middleware/siteSettings'));
 
+    // Theme Middleware (P4) — 활성 테마의 스타일 토큰을 res.locals.theme 에 주입
+    app.use(require('./middleware/themeData'));
+
     // Visitor Logger Middleware (Global)
     app.use(require('./middleware/visitorLogger'));
 

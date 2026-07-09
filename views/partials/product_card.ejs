@@ -51,7 +51,8 @@
     ? `/products/${encodeURIComponent(product.slug)}`
     : `/products/view/${product.id}`;
 %>
-<div class="group relative bg-white border border-gray-100 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+<%# product-card-surface: 테마(P4)가 반경/테두리/그림자를 제어하는 훅. body.yd-card-* 참조 %>
+<div class="product-card-surface group relative bg-white hover:shadow-md transition-shadow overflow-hidden">
   <a href="<%= _detailPath %>" class="block">
     <div class="w-full overflow-hidden bg-white <%= _opts.imageHeightClass %> relative">
       <img src="<%= product.main_image || '/images/placeholder.png' %>"

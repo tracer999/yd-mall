@@ -136,7 +136,7 @@
 | 기본 정보(상호·연락처·주소·사업자) | ✅ | `/admin/site-settings`, `site_settings` |
 | 로고/브랜드 컬러/파비콘/OG | ✅ | `site_settings.logo_url`, `brand_*_color`, `favicon_url`, `kakao_share_image_url` |
 | 정책 설정(약관/개인정보) | ✅ | `/admin/policies` |
-| **테마 설정** | ⬜ | `theme` 테이블 없음. CSS 변수는 `main_layout.ejs` 인라인 주입 |
+| **테마 설정** | ⬜ | **`theme` 테이블·`themeService`·CSS 변수 주입은 P4에서 완료.** 관리 UI만 없음. 저장 시 `themeService` 검증 규칙(길이값 정규식/열거형)을 서버에서 재적용할 것 → CSS 인젝션 방어 |
 | **Header 설정** | ⬜ | `navigation_config` 테이블은 **생성됨**, 관리 UI 없음 |
 | **Footer 설정** | 🟡 | SNS·회사정보만 `site_settings` 에 있음. Footer 커스텀 메뉴 없음 |
 | **검색 설정** | ⬜ | 검색창 ON/OFF·위치 설정 없음 (`navigation_config.use_search_bar` 필드만 존재) |
@@ -166,6 +166,8 @@
 | 카테고리 페이지 관리 | ⬜ | — |
 | 기획전 페이지 관리 | ⬜ | `EXHIBITION` 모듈 자체가 없음 |
 | 섹션 템플릿 관리 | ⬜ | `sectionRegistry.js` 코드 고정 (의도된 설계) |
+| **섹션 팔레트 (CT 컴포넌트)** | ✅ | CT-0~9 완료. `sectionRegistry` 에 14종 등록돼 **페이지 빌더 "섹션 추가" 팔레트에 자동 노출**됨: `product_carousel` `brand_carousel` `ranking_tabs` `benefit_bento` `promotion_banner` `quick_menu` `recent_product` `custom_html` |
+| **custom_html 저장 새니타이즈** | ✅ | `pageBuilderService.updateSection` 이 저장 시 새니타이즈(렌더 시와 이중 방어) |
 | **전시관리(레거시)** | 🟡 | `/admin/display` + `main_display_*`. **`page_section` 으로 대체됨 → 폐기 대상** |
 
 ### 3.5 상품 관리
@@ -214,7 +216,7 @@
 | 업로드 관리 | ✅ | `/admin/uploads` (문서 원안에 누락된 항목) |
 | 접속 통계 | ✅ | `/admin/visitors` |
 | 권한 그룹 관리 | 🟡 | `admin_menus.visible_roles` + `adminRoleGuard.js`. 별도 권한 그룹 화면 없음 |
-| **고객센터 관리** | ⬜ | **FAQ 모듈 신설 필요** (`faq`, `faq_category`). → 프론트 M8 과 짝 |
+| **고객센터 관리** | ⬜ | **`faq`/`faq_category` 테이블과 `/cs` 프론트는 M8에서 완료.** FAQ CRUD 관리 UI만 없음(현재 시드 12건). `answer` 저장 시 `htmlSanitizer.sanitize()` 필수 |
 | 알림 설정 | ⬜ | — |
 | 로그 관리 | 🟡 | `logs/access.log` 파일. 관리 화면 없음 |
 | 데이터 백업/복구 | ⬜ | — |
