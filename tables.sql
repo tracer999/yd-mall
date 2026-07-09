@@ -891,7 +891,7 @@ CREATE TABLE IF NOT EXISTS `storefront_menu` (
 
 -- =============================================================================
 -- 통제된 동적 메뉴 아키텍처 (M1)
--- docs/사이트개선/shopping_mall_builder_menu_design_summary.md 반영
+-- docs/사이트개선/frontend_dev_plan.md 반영
 --   · 카테고리 = 동적 관리(최대 3뎁스)
 --   · 일반 기능 메뉴 = 사전정의 카탈로그 + 몰별 ON/OFF (위치 고정)
 --   · 커스텀 메뉴 = 위치 선택 가능, 슬롯 제한

@@ -7,7 +7,7 @@ const productController = require('../controllers/productController');
  *
  * feature_menu.default_path 와 1:1 대응한다. 운영자는 이 URL 을 바꿀 수 없고,
  * 관리자에서는 사용 여부(is_enabled)·표시명·순서만 관리한다.
- * (docs/사이트개선/shopping_mall_builder_menu_design_summary.md §5)
+ * (docs/사이트개선/frontend_dev_plan.md §5)
  *
  * 기존 상품목록 컨트롤러(productController.getList)를 얇게 재사용한다.
  * Express 5의 req.query 는 getter 이므로 변형하지 않고 req.featurePreset 으로 주입한다.

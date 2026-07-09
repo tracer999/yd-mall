@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * M1/M2 — 통제된 동적 메뉴 아키텍처 마이그레이션
- * (docs/사이트개선/shopping_mall_builder_menu_design_summary.md 반영)
+ * (docs/사이트개선/frontend_dev_plan.md 반영)
  *
  * 실행: node scripts/migrate_menu_architecture.js [--dry-run]
  *
