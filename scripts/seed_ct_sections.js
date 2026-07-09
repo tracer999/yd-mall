@@ -34,6 +34,18 @@ const GROUPS = [
     },
 ];
 
+/*
+ * 프로모션 배너 그룹 (CT-5)
+ * banner_type='CATEGORY' + category_id=NULL 로 심는다.
+ * 기존 카테고리/브랜드 배너 조회는 category_id 로 필터하므로 이 행들은 절대 걸리지 않는다.
+ * (MAIN=히어로, POPUP=팝업이라 그 타입은 쓰면 안 된다)
+ */
+const PROMO_GROUP_KEY = 'home_promo';
+const PROMO_BANNERS = [
+    { title: 'CT 프로모션 A', display_order: 1 },
+    { title: 'CT 프로모션 B', display_order: 2 },
+];
+
 /** 홈에 배치할 섹션 (sort_order 는 아래 ORDER 로 일괄 재배치) */
 const SECTIONS = [
     {
@@ -75,6 +87,31 @@ const SECTIONS = [
             sectionClass: 'py-12 bg-white',
         },
     },
+    {
+        seedKey: 'ct3_ranking_tabs',
+        section_type: 'ranking_tabs',
+        title: '카테고리 랭킹',
+        groupSeedKey: null, // 카테고리 탭 고정 소스
+        config: {
+            maxTabs: 6,
+            rankLimit: 8,
+            sort: 'views',
+            sectionClass: 'py-12 bg-[var(--gh-secondary)]',
+        },
+    },
+    {
+        seedKey: 'ct5_promotion_banner',
+        section_type: 'promotion_banner',
+        title: '진행 중인 프로모션',
+        groupSeedKey: null, // banners.group_key 소스
+        config: {
+            groupKey: PROMO_GROUP_KEY,
+            maxCount: 4,
+            layout: 'rect',
+            columns: 2,
+            sectionClass: 'py-10 bg-white',
+        },
+    },
 ];
 
 /** 최종 홈 섹션 순서 (section_type 또는 seed_key 기준) */
@@ -85,6 +122,8 @@ const ORDER = [
     { match: { seedKey: 'ct1_carousel_recommend' } },
     { match: { section_type: 'product_grid', data_source_id: 2 } },   // 신상품
     { match: { seedKey: 'ct1_carousel_deal' } },
+    { match: { seedKey: 'ct5_promotion_banner' } },
+    { match: { seedKey: 'ct3_ranking_tabs' } },
     { match: { seedKey: 'ct2_brand_carousel' } },
     { match: { section_type: 'category_showcase' } },
     { match: { section_type: 'kakao_cta' } },
@@ -123,6 +162,42 @@ async function upsertGroups(conn) {
         }
     }
     return map;
+}
+
+/** 프로모션 배너 그룹 시드. 이미지가 없으므로 기존 업로드 이미지를 재사용한다. */
+async function upsertPromoBanners(conn) {
+    const [existing] = await conn.query(
+        'SELECT id, title FROM banners WHERE group_key = ?', [PROMO_GROUP_KEY]
+    );
+    if (existing.length >= PROMO_BANNERS.length) {
+        console.log(`  = 프로모션 배너 ${existing.length}건 이미 존재 (group_key=${PROMO_GROUP_KEY})`);
+        return existing.length;
+    }
+
+    // 기존 배너에서 실제 존재하는 이미지 경로를 빌려온다.
+    const [srcs] = await conn.query(
+        "SELECT image_url FROM banners WHERE image_url IS NOT NULL AND image_url <> '' LIMIT ?",
+        [PROMO_BANNERS.length]
+    );
+    if (srcs.length === 0) {
+        console.log('  ! 사용할 배너 이미지가 없어 프로모션 배너 시드를 건너뜁니다.');
+        return 0;
+    }
+
+    let created = 0;
+    for (let i = 0; i < PROMO_BANNERS.length; i++) {
+        const b = PROMO_BANNERS[i];
+        if (existing.some(e => e.title === b.title)) continue;
+        const img = srcs[i % srcs.length].image_url;
+        await conn.query(
+            `INSERT INTO banners (banner_type, group_key, category_id, title, image_url, link_url, display_order, is_active)
+             VALUES ('CATEGORY', ?, NULL, ?, ?, '/products', ?, 1)`,
+            [PROMO_GROUP_KEY, b.title, img, b.display_order]
+        );
+        created++;
+        console.log(`  + 배너 '${b.title}' 생성 (group_key=${PROMO_GROUP_KEY})`);
+    }
+    return created;
 }
 
 async function findSectionBySeedKey(conn, seedKey) {
@@ -198,6 +273,8 @@ async function reset(conn) {
             console.log(`  - product_group id=${existing.id} 삭제`);
         }
     }
+    const [b] = await conn.query('DELETE FROM banners WHERE group_key = ?', [PROMO_GROUP_KEY]);
+    if (b.affectedRows) console.log(`  - 프로모션 배너 ${b.affectedRows}건 삭제`);
 }
 
 (async () => {
@@ -208,10 +285,13 @@ async function reset(conn) {
         console.log('\n[1] 상품 그룹');
         const groupMap = await upsertGroups(conn);
 
-        console.log('\n[2] 홈 섹션');
+        console.log('\n[2] 프로모션 배너 그룹');
+        await upsertPromoBanners(conn);
+
+        console.log('\n[3] 홈 섹션');
         const sectionMap = await upsertSections(conn, groupMap);
 
-        console.log('\n[3] 순서 재배치');
+        console.log('\n[4] 순서 재배치');
         await reorder(conn, sectionMap);
 
         console.log('\n✅ CT 시드 완료');

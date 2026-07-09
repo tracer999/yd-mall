@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS `admin_verification_codes` (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS `banners` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '배너 ID (PK)',
-  `banner_type` enum('MAIN','CATEGORY','POPUP') COLLATE utf8mb4_general_ci DEFAULT 'MAIN' COMMENT '배너 타입 (메인/카테고리/팝업)',
+  `banner_type` enum('MAIN','CATEGORY','POPUP','BRAND') COLLATE utf8mb4_general_ci DEFAULT 'MAIN' COMMENT '배너 타입 (메인/카테고리/팝업/브랜드)',
+  `group_key` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 그룹 키(promotion_banner 등 섹션 데이터소스). 적용: scripts/migrate_banner_group_key.js',
   `category_id` int DEFAULT NULL COMMENT '카테고리 ID (CATEGORY 타입일 경우)',
   `title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 제목',
   `image_url` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT '배너 이미지 URL',

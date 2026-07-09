@@ -1,0 +1,148 @@
+<%
+  /*
+   * 랭킹 탭 섹션 (CT-3)
+   * 카테고리 탭 + 랭크 뱃지(1·2·3…) 그리드.
+   * 초기 탭은 SSR(FCP 확보), 탭 전환은 GET /sections/ranking AJAX.
+   *
+   * locals (config_json):
+   *   title        : 섹션 제목
+   *   tabs         : [{ id, name }] 탭 카테고리 (리졸버 주입)
+   *   products     : 첫 탭 상품 배열 (리졸버 주입)
+   *   rankLimit    : 탭당 노출 수 (기본 8)
+   *   sort         : views | sales | newest | discount (기본 views)
+   *   sectionClass : <section> 클래스
+   *
+   * 멀티 인스턴스 안전: id 대신 data 속성 + 지역 스코프.
+   */
+  const _tabs = tabs || [];
+  const _items = products || [];
+  const _rankLimit = (typeof rankLimit !== 'undefined' && rankLimit) ? Number(rankLimit) : 8;
+  const _sort = (typeof sort !== 'undefined' && sort) ? sort : 'views';
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-12 bg-white';
+%>
+<% if (_tabs.length > 0) { %>
+<section class="<%= _sectionClass %>">
+  <style>
+    .yd-rank__tab {
+      padding: .5rem 1.25rem; font-size: .875rem; font-weight: 600;
+      border-radius: 9999px; border: 1.5px solid #e5e7eb;
+      color: #6b7280; background: #fff; cursor: pointer;
+      transition: all .15s; white-space: nowrap;
+    }
+    .yd-rank__tab:hover { border-color: var(--gh-primary); color: var(--gh-primary); }
+    .yd-rank__tab.is-active { background: var(--gh-primary); color: #fff; border-color: var(--gh-primary); }
+    .yd-rank__card { position: relative; }
+    .yd-rank__badge {
+      position: absolute; top: .5rem; left: .5rem; z-index: 25;
+      width: 28px; height: 28px; border-radius: .5rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800; color: #fff;
+      background: rgba(31,41,55,.85); box-shadow: 0 2px 6px rgba(0,0,0,.18);
+    }
+    .yd-rank__badge--top { background: var(--gh-primary); }
+    .yd-rank__empty { grid-column: 1 / -1; padding: 3rem 0; text-align: center; color: #9ca3af; }
+  </style>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8"
+       data-yd-ranking data-sort="<%= _sort %>" data-limit="<%= _rankLimit %>">
+    <div class="text-center mb-8">
+      <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+    </div>
+
+    <div class="flex flex-wrap justify-center gap-2 mb-8" data-yd-rank-tabs>
+      <% _tabs.forEach(function (t, i) { %>
+        <button type="button" class="yd-rank__tab <%= i === 0 ? 'is-active' : '' %>" data-category-id="<%= t.id %>">
+          <%= t.name %>
+        </button>
+      <% }); %>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5" data-yd-rank-grid>
+      <% if (_items.length === 0) { %>
+        <div class="yd-rank__empty">상품이 없습니다.</div>
+      <% } else { %>
+        <% _items.slice(0, _rankLimit).forEach(function (product, i) { %>
+          <div class="yd-rank__card">
+            <span class="yd-rank__badge <%= i < 3 ? 'yd-rank__badge--top' : '' %>"><%= i + 1 %></span>
+            <%- include('../product_card', { product }) %>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+  </div>
+</section>
+
+<script>
+/* 멀티 인스턴스 안전: 초기화는 1회, 각 [data-yd-ranking] 을 개별 바인딩 */
+(function () {
+  if (window.__ydRankingInit) return;
+  window.__ydRankingInit = true;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function detailPath(p) {
+    return (p.slug && String(p.slug).trim())
+      ? '/products/' + encodeURIComponent(p.slug)
+      : '/products/view/' + p.id;
+  }
+
+  function card(p, i) {
+    var price = Number(p.price).toLocaleString();
+    var list = (p.original_price && p.original_price > p.price)
+      ? '<span class="text-gray-400 text-xs line-through">' + Number(p.original_price).toLocaleString() + '원</span>' : '';
+    var sale = (p.discount_rate > 0)
+      ? '<span class="absolute bottom-2 right-2 brand-badge text-xs font-bold px-2 py-1 rounded z-20 shadow-sm">' + p.discount_rate + '% SALE</span>' : '';
+    return '<div class="yd-rank__card">'
+      + '<span class="yd-rank__badge ' + (i < 3 ? 'yd-rank__badge--top' : '') + '">' + (i + 1) + '</span>'
+      + '<div class="group relative bg-white border border-gray-100 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">'
+      + '<a href="' + esc(detailPath(p)) + '" class="block">'
+      + '<div class="w-full overflow-hidden bg-white h-52 relative">'
+      + '<img src="' + esc(p.main_image || '/images/placeholder.png') + '" alt="' + esc(p.name) + '" class="w-full h-full object-contain object-center p-3">'
+      + sale + '</div>'
+      + '<div class="p-4">'
+      + '<h3 class="text-sm font-medium text-gray-900 truncate">' + esc(p.name) + '</h3>'
+      + '<p class="mt-0.5 text-xs text-gray-400 truncate">' + esc(p.provider || '') + '</p>'
+      + '<div class="mt-2 flex flex-col">' + list + '<span class="text-gray-900 font-bold text-lg">' + price + '원</span></div>'
+      + '</div></a></div></div>';
+  }
+
+  document.querySelectorAll('[data-yd-ranking]').forEach(function (root) {
+    var tabs = root.querySelector('[data-yd-rank-tabs]');
+    var grid = root.querySelector('[data-yd-rank-grid]');
+    if (!tabs || !grid) return;
+
+    tabs.addEventListener('click', function (e) {
+      var btn = e.target.closest('.yd-rank__tab');
+      if (!btn) return;
+
+      tabs.querySelectorAll('.yd-rank__tab').forEach(function (t) { t.classList.remove('is-active'); });
+      btn.classList.add('is-active');
+
+      grid.innerHTML = '<div class="yd-rank__empty">불러오는 중…</div>';
+
+      var qs = new URLSearchParams({
+        categoryId: btn.dataset.categoryId,
+        sort: root.dataset.sort || 'views',
+        limit: root.dataset.limit || '8'
+      });
+
+      fetch('/sections/ranking?' + qs.toString())
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var list = (data && data.products) || [];
+          grid.innerHTML = list.length
+            ? list.map(card).join('')
+            : '<div class="yd-rank__empty">상품이 없습니다.</div>';
+        })
+        .catch(function () {
+          grid.innerHTML = '<div class="yd-rank__empty text-red-400">상품을 불러오지 못했습니다.</div>';
+        });
+    });
+  });
+})();
+</script>
+<% } %>

@@ -18,4 +18,6 @@ module.exports = {
     // CT 트랙 컴포넌트
     product_carousel: require('./product_carousel'),
     brand_carousel: require('./brand_carousel'),
+    ranking_tabs: require('./ranking_tabs'),
+    promotion_banner: require('./promotion_banner'),
 };

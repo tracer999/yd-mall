@@ -69,5 +69,26 @@ module.exports = {
       { key: 'shape', label: '모양', type: 'select', options: ['rect', 'circle'], default: 'rect' },
       FIELD.moreLink
     ]
+  },
+  ranking_tabs: {
+    view: 'partials/sections/ranking_tabs',
+    label: '랭킹 탭',
+    dataSource: null, // 카테고리 탭 고정 소스
+    fields: [
+      { key: 'maxTabs', label: '탭 개수', type: 'number', min: 2, max: 12, default: 6 },
+      { key: 'rankLimit', label: '탭당 상품 수', type: 'number', min: 3, max: 20, default: 8 },
+      { key: 'sort', label: '랭킹 기준', type: 'select', options: ['views', 'sales', 'newest', 'discount'], default: 'views' }
+    ]
+  },
+  promotion_banner: {
+    view: 'partials/sections/promotion_banner',
+    label: '프로모션 배너',
+    dataSource: 'banner_group',
+    fields: [
+      { key: 'groupKey', label: '배너 그룹 키', type: 'text', default: '' },
+      Object.assign({}, FIELD.maxCount, { label: '표시 배너 수', max: 12, default: 4 }),
+      { key: 'layout', label: '레이아웃', type: 'select', options: ['rect', 'vertical'], default: 'rect' },
+      Object.assign({}, FIELD.columns, { label: '열 수(PC)', max: 4, default: 2 })
+    ]
   }
 };
