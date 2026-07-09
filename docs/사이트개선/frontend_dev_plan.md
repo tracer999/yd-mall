@@ -39,7 +39,7 @@
 | **CT** | 섹션 컴포넌트 트랙 (CT-0 ~ CT-9) | ✅ 2026-07-09 |
 | **M8** | 고객센터 페이지 + FAQ 모듈 | ✅ 2026-07-09 |
 | **P4** | 테마 시스템 (CSS 변수) | ✅ 2026-07-09 |
-| **P5** | 멀티몰(도메인 기반) | ⬜ (프론트 범위 밖 — 스펙 확정 필요) |
+| **P5** | 멀티몰(도메인 기반) | ⬜ **구조만 정의**(§8.2). 거래 데이터는 `(B) 분리` 확정, 적용은 후속 과제 |
 | **P6+** | SaaS 고도화 (멀티테넌시·미디어·AI) | 장기 |
 
 > ## ✅ 스토어프론트 구현 완료 (2026-07-09)
@@ -68,6 +68,8 @@ P1.5(완료) → M1~M3(완료) → M4 → M5 → M7 → CT-0 → CT 컴포넌트
 - 섹션/테마 가변 옵션은 `config_json`(MySQL `JSON`)에 저장
 - **파일 800줄 초과 금지.** 섹션 렌더러·서비스는 기능별 소파일로 분리
 - 신규 테이블에 `mall_id BIGINT NOT NULL DEFAULT 1` 포함 (멀티몰 대비, 값은 1 고정)
+- **`mall_id` 는 인덱스의 첫 컬럼**으로 둔다: `KEY (mall_id, ...)`. P5에서 필터를 걸 때 인덱스를 다시 만들지 않아도 된다 (§8.2)
+- `mall_id = 1` 을 코드에 상수로 박지 않는다 — 한 곳에서 주입한다 (현재 하드코딩 위치는 §8.2-3)
 - **스키마 확인은 실 DB(mysql CLI/노드 스크립트)를 소스 오브 트루스로.** `tables.sql` 은 노후화되어 있다.
 
 ---
@@ -410,6 +412,54 @@ productCardStyle → body.yd-card-{shadow|border|flat}
 
 ## 8. Phase 5 — 멀티몰 (도메인 기반)
 
+> 하나의 앱 인스턴스가 접속 **도메인(Host 헤더)** 에 따라 서로 다른 쇼핑몰을 렌더한다.
+> **단일 프로세스 내 논리 분리**이며, DB 레벨 강제 격리(P6)는 아니다.
+
+### 8.1 ✅ 확정 결정 (2026-07-09)
+
+**거래 데이터는 몰별 `(B) 분리` 로 간다. 단, 현 시점에는 구조만 정의하고 실제 적용은 후속 과제로 미룬다.**
+
+| | 결정 |
+|---|---|
+| 상품 / 회원 / 주문 | **몰별 분리** (공유 아님) |
+| 지금 할 일 | **구조 정의만** (아래 §8.2 규약) |
+| 실제 컬럼 추가·쿼리 필터·세션 격리 | **별도 과제로 분리** — 착수 전 재검토 |
+
+> **왜 지금 적용하지 않는가**: 분리는 `products`/`users`/`orders`/`carts`/`likes`/`coupons` 등
+> 거래 테이블 전부에 `mall_id` 를 추가하고 **모든 쿼리에 필터를 거는 작업**이다.
+> 한 곳이라도 빠지면 A몰 화면에 B몰 데이터가 새어 나간다(데이터 유출).
+> 인증·세션·장바구니도 몰 단위로 격리해야 한다. 지금 착수하면 프론트/관리자 진행을 막는다.
+
+### 8.2 지금 확정하는 구조 규약
+
+1. **신규 테이블은 예외 없이 `mall_id BIGINT NOT NULL DEFAULT 1` 을 포함한다.** (값은 1 고정)
+2. **`mall_id` 는 항상 첫 번째 인덱스 컬럼**으로 둔다 — `KEY (mall_id, ...)`. 나중에 필터를 걸 때 인덱스를 다시 만들 필요가 없다.
+3. `mall_id = 1` 을 **코드에 상수로 박지 말고 한 곳에서 주입**한다. 현재 하드코딩 위치(P5 착수 시 치환 대상):
+   - `middleware/menuData.js` `MALL_ID`
+   - `middleware/themeData.js` `MALL_ID`
+   - `services/menu/navigationService.js` `getNavigation(mallId = 1)`
+   - `services/tree/depthGuard.js` `getCategoryMaxDepth(mallId = 1)`
+   - `services/theme/themeService.js` `getActiveTheme(mallId = 1)`
+   - `services/display/displayService.js` / `pageBuilderService.js` — SQL 내 `mall_id = 1` 리터럴
+   - `controllers/mainController.js` — `hero_slide.mall_id = 1`
+4. **거래 테이블 분리는 "전 쿼리 필터"가 아니라 리포지토리 계층에서 강제**한다. P5 착수 시
+   `req.mall.id` 를 강제로 주입하는 조회 헬퍼를 두고, raw `pool.query` 직접 호출을 금지한다.
+   (사람이 필터를 기억하는 방식은 반드시 새어 나간다)
+
+### 8.3 현재 `mall_id` 보유 현황 (2026-07-09 실측)
+
+| | 테이블 |
+|---|---|
+| **보유 (10)** | `page` · `product_group` · `categories` · `mall_feature_menu` · `custom_menu` · `navigation_config` · `theme` · `faq` · `faq_category` · `hero_slide` |
+| **미보유** | `products` · `users` · `orders` · `carts` · `likes` · `brand_likes` · `banners` · `coupons` · `notices` · `admins` · `site_settings` · `system_settings` · `recent_views` · `product_group_item` · `page_revision` |
+
+즉 **전시·설정 계열은 준비 완료, 거래·공용 계열은 미착수**. 이 경계가 곧 (B) 분리의 작업 범위다.
+
+> `product_group_item` / `page_revision` 은 부모(`product_group` / `page`)가 `mall_id` 를 갖고
+> FK 로 묶여 있으므로 별도 컬럼 없이 조인으로 해결 가능하다.
+
+### 8.4 P5 착수 시 작업
+
 ```sql
 CREATE TABLE IF NOT EXISTS `mall` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -423,24 +473,57 @@ CREATE TABLE IF NOT EXISTS `mall` (
 ) ENGINE=InnoDB;
 ```
 - `middleware/mallResolver.js`: Host 헤더 → `mall` 조회 → `req.mall` 주입(캐시)
-- 지금까지 `mall_id = 1` 상수로 둔 모든 조회(`page` / `product_group` / `feature_menu` 계열 / `categories` / `theme`)를 `req.mall.id` 로 치환
-
-### ⚠️ 의사결정 필요
-상품/회원/주문을 **몰 간 공유**할지 **몰별 분리**할지. 분리 시 `products` 등 핵심 테이블에 `mall_id` 추가 + 전 쿼리 필터 필요 → **범위가 크므로 별도 스펙 확정 후 진행**.
+- 위 §8.2-3 의 하드코딩을 `req.mall.id` 로 치환
+- 관리자에 몰 목록/생성/도메인 매핑 화면
+- **거래 데이터 분리(B)** 는 이 다음, 별도 스펙으로
 
 ---
 
-## 9. Phase 6+ — SaaS 고도화 (장기)
+## 9. Phase 6+ — SaaS 고도화 (장기 트랙)
 
-| 항목 | 스택 변화 |
-|---|---|
-| 멀티테넌시 격리 (`tenant_id` + RLS) | ORM/미들웨어 도입 검토 |
-| 에지 라우팅 (도메인→테넌트 0ms) | 게이트웨이/에지 |
-| SDUI 전면화 (GraphQL Union 위젯) | **기존 `spf-mall`(Next.js)을 SDUI 렌더러로 승격** (신규 프로젝트 생성 대신 재활용) |
-| 비디오 커머스 (HLS·숏폼·라이브) | AWS MediaLive/S3/CloudFront |
-| AI 에이전트 | Bedrock 서버리스 |
+> **P5 와의 결정적 차이**
+> - **P5(멀티몰)** = *우리가* 운영하는 몰이 여러 개. 격리는 **애플리케이션 쿼리 필터**에 의존.
+> - **P6(멀티테넌시)** = *남(입점 브랜드)* 이 자기 몰을 운영. 격리를 **DB/인프라가 강제**.
+>
+> 즉 P6은 "기능 추가"가 아니라 **사업 모델 전환**(자사몰 → SaaS 플랫폼)이다.
+> 실수로 데이터가 새면 P5는 사내 사고지만, P6은 **타사 매출·고객정보 유출**이다. 그래서 방어선이 다르다.
 
-**진입 조건**: P0~P5 안정화 + 입점 브랜드 수요 확정 + 프론트엔드 Next.js 분리 결정
+### 9.1 다섯 갈래
+
+| # | 항목 | 무엇을 | 왜 | 스택 변화 |
+|---|---|---|---|---|
+| 1 | **멀티테넌시 격리** | 전 테이블 `tenant_id` + Global Query Filter + **RLS**(Row Level Security) | 사람이 `WHERE tenant_id` 를 기억하는 방식은 반드시 새어 나간다. **DB가 강제**해야 한다 | ORM/미들웨어 도입 검토 |
+| 2 | **에지 라우팅** | 도메인 → 테넌트 해소를 에지 캐시(KV/Redis)로 | 테넌트가 늘면 매 요청 DB 조회가 병목. 라우팅은 0ms 여야 한다 | 게이트웨이/에지 |
+| 3 | **SDUI 전면화** | GraphQL Union/Interface 위젯 규약, 무배포 반영 | 현재 EJS 렌더러의 한계(클라이언트 상호작용·앱 대응). **데이터 모델(`page_section`)은 이미 프레임워크 무관**하게 만들어 뒀다 | **기존 `spf-mall`(Next.js)을 SDUI 렌더러로 승격** — 신규 프로젝트 생성이 아니라 재활용 |
+| 4 | **비디오 커머스** | HLS 트랜스코딩 · 숏폼 · 라이브 방송 | `live_cards` 섹션과 `LIVE`/`GROUP_BUY` 기능 메뉴가 여기서 열린다 (현재 `module_ready=0`) | AWS MediaLive/S3/CloudFront |
+| 5 | **AI 에이전트** | 실시간 상담·추천 | — | Bedrock 서버리스 |
+
+*(O2O — QR·UTM·딥링크 기반 오프라인 연계 전시 — 도 원설계에 포함되어 있으나 위 5개 이후 순위)*
+
+### 9.2 지금까지의 작업이 P6에 남긴 자산
+
+P6은 먼 얘기지만, 지금 구조가 그때 결정적으로 유리하게 작용한다.
+
+- **`page` / `page_section` / `sectionRegistry`** — SDUI 데이터 모델이 **렌더러와 완전히 분리**돼 있다.
+  EJS partial 을 React 컴포넌트로 1:1 교체하면 그대로 동작한다. (§3.1 "SDUI의 가치는 렌더러가 아니라 데이터 아키텍처")
+- **`services/display/resolvers/`** (CT-0) — 데이터 해석이 뷰와 분리됐다. GraphQL resolver 로 그대로 이식 가능.
+- **`feature_menu.module_ready`** — 미구현 모듈을 구조적으로 감춘다. `LIVE`/`GROUP_BUY` 는 P6에서 켜기만 하면 된다.
+- **모든 신규 테이블의 `mall_id`** — `tenant_id` 로 승격하거나 그 위에 얹으면 된다.
+
+### 9.3 진입 조건
+
+```text
+1. P0~P5 안정화
+2. 입점 브랜드(테넌트) 실수요 확정   ← 사업 결정. 없으면 착수 금물
+3. 프론트엔드 Next.js 분리 결정
+```
+2번이 핵심이다. 테넌트 수요 없이 멀티테넌시를 먼저 만들면, **쓰지 않는 격리 비용**만 전 코드에 남는다.
+
+### 9.4 착수 전 반드시 짚을 것
+
+- **RLS 를 쓸 것인가** — MySQL 은 PostgreSQL 같은 네이티브 RLS 가 없다. PostgreSQL 이관 또는 애플리케이션 레벨 강제(리포지토리 계층) 중 택일해야 한다. **이 결정이 P6 전체 난이도를 좌우한다.**
+- **EJS ↔ Next.js 병행 유지보수 부담** — 전환 기간 동안 두 렌더러를 동시에 관리해야 한다. 화면 단위 스트랭글러로 끊어야 한다.
+- P5(B) 의 거래 데이터 분리를 **P6의 `tenant_id` 와 같은 축으로 설계**할 것. 두 번 나누면 두 번 마이그레이션한다.
 
 ---
 
