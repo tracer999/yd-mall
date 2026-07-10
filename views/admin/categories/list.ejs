@@ -53,14 +53,14 @@ const toJs = (v) => JSON.stringify(v)
     <% TABS.forEach(tab => { %>
         <div id="content-<%= tab.key %>" class="p-6 hidden">
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table class="min-w-full lg:min-w-[1480px] divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">순서</th>
                             <% if (tab.hasLogo) { %>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48"><%= tab.type === 'BRAND' ? '로고' : '이미지' %></th>
                             <% } %>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= tab.nameLabel %></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[240px]"><%= tab.nameLabel %></th>
                             <% if (tab.hasDesc) { %>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">간략 설명</th>
                             <% } %>
@@ -115,7 +115,7 @@ const toJs = (v) => JSON.stringify(v)
                                         <% if (category._depth > 1) { %>
                                             <span class="text-gray-300 mr-1 select-none" aria-hidden="true">└</span>
                                         <% } %>
-                                        <input form="<%= formId %>" type="text" name="name" value="<%= category.name %>" class="flex-1">
+                                        <input form="<%= formId %>" type="text" name="name" value="<%= category.name %>" class="flex-1 min-w-[120px]">
                                         <span class="ml-2 text-[11px] text-gray-400 whitespace-nowrap">D<%= category._depth %></span>
                                     </div>
                                 </td>
