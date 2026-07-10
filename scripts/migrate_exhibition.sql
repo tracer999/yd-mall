@@ -92,3 +92,19 @@ CREATE TABLE IF NOT EXISTS exhibition_product (
   CONSTRAINT fk_exh_product_section    FOREIGN KEY (section_id)    REFERENCES exhibition_section (id) ON DELETE CASCADE,
   CONSTRAINT fk_exh_product_product    FOREIGN KEY (product_id)    REFERENCES products (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='기획전 상품 전시 매핑';
+
+-- ─────────────────────────────────────────────────────────────
+-- 관리자 메뉴 ('페이지/전시 관리' 그룹 id=31 아래 형제로 추가)
+--
+-- ⚠️ 컬럼명은 sort_order 가 아니라 display_order 다. 형제가 1~4 이므로 5.
+-- ⚠️ is_active=0 으로 넣는다. dev·prod 가 같은 DB 라, 라우트가 배포되기 전에
+--    메뉴부터 뜨면 운영 관리자가 클릭했을 때 404 가 난다.
+--    `routes/admin/exhibitions.js` 를 배포한 **뒤에** 아래 UPDATE 로 켠다.
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO admin_menus (name, path, icon_class, display_order, parent_id, is_active, visible_roles)
+SELECT '기획전 관리', '/admin/exhibitions', 'bi bi-stars', 5, 31, 0, 'super_admin,admin,content_admin'
+WHERE NOT EXISTS (SELECT 1 FROM (SELECT id FROM admin_menus WHERE path = '/admin/exhibitions') x);
+
+-- 배포 완료 후 실행 (super_admin 은 메뉴 행과 무관하게 접근 가능하지만,
+-- content_admin 은 이 행이 활성이어야 requireMenuAccess 를 통과한다)
+-- UPDATE admin_menus SET is_active = 1 WHERE path = '/admin/exhibitions';
