@@ -1,22 +1,100 @@
 const pool = require('../../config/db');
+const { issueCoupon } = require('../../services/coupon/couponIssueService');
+
+/*
+ * 관리자 쿠폰 (쿠폰 문서 §8)
+ *
+ * ── 축을 세 개로 나눴다 (§4-2)
+ *      coupon_type    목적 라벨   NEW_SIGNUP · EVENT · SEASON · SPECIAL   (동작 분기 없음)
+ *      issue_method   발급 방식   AUTO_SIGNUP · ADMIN · CODE · DOWNLOAD   (동작을 바꾼다)
+ *      benefit_type   혜택 유형   2차
+ *    옛 코드는 `coupon_type` 하나가 목적과 발급 방식을 겸했다. "이벤트 목적의 다운로드 쿠폰"을
+ *    표현할 수 없었다.
+ *
+ * ── `status` 가 정본, `is_active` 는 하위호환 미러다 (§5-2)
+ *    운영이 아직 옛 코드를 돌리는 동안 `is_active` 를 읽는다. 쓰기 시 둘을 함께 갱신한다.
+ *
+ * ── 쿠폰은 삭제하지 않고 종료(ENDED)한다 (C7)
+ *    FK 가 ON DELETE CASCADE 라, 삭제를 붙이는 순간 회원 보유 쿠폰과 사용 이력이 함께 사라진다.
+ */
 
 const COUPON_TYPES = ['NEW_SIGNUP', 'EVENT', 'SEASON', 'SPECIAL'];
-const ISSUED_BY = ['AUTO', 'ADMIN', 'CODE'];
+const ISSUE_METHODS = ['AUTO_SIGNUP', 'ADMIN', 'CODE', 'DOWNLOAD'];
+const STATUSES = ['DRAFT', 'ACTIVE', 'PAUSED', 'ENDED'];
+
+/** ACTIVE 만 살아 있는 쿠폰이다. is_active 는 여기서 파생한다. */
+const isActiveMirror = (status) => (status === 'ACTIVE' ? 1 : 0);
+
+function toIntOrNull(v) {
+    const s = String(v ?? '').trim();
+    if (s === '') return null;
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? n : null;
+}
+
+/** `datetime-local` 값을 MySQL DATETIME 으로. 빈 값은 NULL. */
+function toDateTime(v) {
+    const s = String(v ?? '').trim();
+    if (!s) return null;
+    return s.replace('T', ' ').length === 16 ? s.replace('T', ' ') + ':00' : s.replace('T', ' ');
+}
+
+/** 폼 → 저장값. 발급 방식에 따라 무의미한 필드를 NULL 로 지운다. */
+function normalizeForm(body) {
+    const couponType = COUPON_TYPES.includes(body.coupon_type) ? body.coupon_type : 'EVENT';
+    const issueMethod = ISSUE_METHODS.includes(body.issue_method) ? body.issue_method : 'ADMIN';
+    const status = STATUSES.includes(body.status) ? body.status : 'DRAFT';
+
+    const now = new Date();
+    const defaultTo = new Date(now);
+    defaultTo.setFullYear(defaultTo.getFullYear() + 1);
+
+    return {
+        name: String(body.name || '').trim(),
+        mall_id: toIntOrNull(body.mall_id),                                  // NULL = 전 몰 공용
+        coupon_type: couponType,
+        issue_method: issueMethod,
+        status,
+        // 코드는 CODE 방식일 때만 의미가 있다
+        code: issueMethod === 'CODE' && body.code ? String(body.code).trim() : null,
+        discount_amount: toIntOrNull(body.discount_amount) || 0,
+        min_order_amount: toIntOrNull(body.min_order_amount) || 0,
+        valid_from: toDateTime(body.valid_from) || now.toISOString().slice(0, 19).replace('T', ' '),
+        valid_to: toDateTime(body.valid_to) || defaultTo.toISOString().slice(0, 19).replace('T', ' '),
+        valid_days: toIntOrNull(body.valid_days),
+        max_total_uses: toIntOrNull(body.max_total_uses),                    // 사용 한도
+        // 수령 기간·선착순 수량은 다운로드 전용
+        download_start_at: issueMethod === 'DOWNLOAD' ? toDateTime(body.download_start_at) : null,
+        download_end_at: issueMethod === 'DOWNLOAD' ? toDateTime(body.download_end_at) : null,
+        issue_limit: toIntOrNull(body.issue_limit),                          // 수령 한도
+    };
+}
 
 exports.getList = async (req, res) => {
     try {
+        const { status, issue_method, keyword } = req.query;
+        const where = ['1=1'];
+        const params = [];
+        if (STATUSES.includes(status)) { where.push('c.status = ?'); params.push(status); }
+        if (ISSUE_METHODS.includes(issue_method)) { where.push('c.issue_method = ?'); params.push(issue_method); }
+        if (keyword) { where.push('(c.name LIKE ? OR c.code LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`); }
+
         const [coupons] = await pool.query(`
-            SELECT c.*,
-                (SELECT COUNT(*) FROM user_coupons uc WHERE uc.coupon_id = c.id) AS issued_count,
+            SELECT c.*, m.name AS mall_name,
+                (SELECT COUNT(*) FROM user_coupons uc WHERE uc.coupon_id = c.id) AS issued_total,
                 (SELECT COUNT(*) FROM user_coupons uc WHERE uc.coupon_id = c.id AND uc.used_at IS NULL) AS unused_count,
                 (SELECT COUNT(*) FROM user_coupons uc WHERE uc.coupon_id = c.id AND uc.used_at IS NOT NULL) AS used_count
             FROM coupons c
+            LEFT JOIN mall m ON m.id = c.mall_id
+            WHERE ${where.join(' AND ')}
             ORDER BY c.created_at DESC
-        `);
+        `, params);
+
         res.render('admin/coupons/list', {
             layout: 'layouts/admin_layout',
             title: '쿠폰 관리',
-            coupons
+            coupons,
+            filters: { status: status || '', issue_method: issue_method || '', keyword: keyword || '' },
         });
     } catch (err) {
         console.error(err);
@@ -24,13 +102,19 @@ exports.getList = async (req, res) => {
     }
 };
 
+async function renderForm(res, title, coupon) {
+    const [malls] = await pool.query('SELECT id, name FROM mall WHERE is_active = 1 ORDER BY id');
+    res.render('admin/coupons/form', {
+        layout: 'layouts/admin_layout',
+        title,
+        coupon,
+        malls,
+    });
+}
+
 exports.getCreate = async (req, res) => {
     try {
-        res.render('admin/coupons/form', {
-            layout: 'layouts/admin_layout',
-            title: '쿠폰 등록',
-            coupon: null
-        });
+        await renderForm(res, '쿠폰 등록', null);
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -38,44 +122,16 @@ exports.getCreate = async (req, res) => {
 };
 
 exports.postCreate = async (req, res) => {
-    const {
-        name,
-        code,
-        coupon_type,
-        discount_amount,
-        min_order_amount,
-        valid_from,
-        valid_to,
-        max_total_uses,
-        is_active
-    } = req.body;
-
-    const type = COUPON_TYPES.includes(coupon_type) ? coupon_type : 'EVENT';
-    const codeVal = (coupon_type === 'SPECIAL' && code) ? String(code).trim() : null;
-
-    const now = new Date();
-    const defaultFrom = valid_from || now.toISOString().slice(0, 16);
-    const defaultTo = valid_to || (() => {
-        const y = new Date(now);
-        y.setFullYear(y.getFullYear() + 1);
-        return y.toISOString().slice(0, 16);
-    })();
-
+    const f = normalizeForm(req.body);
     try {
         await pool.query(
-            `INSERT INTO coupons (name, code, coupon_type, discount_amount, min_order_amount, valid_from, valid_to, max_total_uses, is_active)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                name,
-                codeVal || null,
-                type,
-                Number(discount_amount) || 0,
-                Number(min_order_amount) || 0,
-                defaultFrom.replace('T', ' ') + ':00',
-                defaultTo.replace('T', ' ') + ':00',
-                max_total_uses ? Number(max_total_uses) : null,
-                is_active ? 1 : 0
-            ]
+            `INSERT INTO coupons (name, mall_id, code, coupon_type, issue_method, discount_amount, min_order_amount,
+                                  valid_from, valid_to, valid_days, max_total_uses, is_active, status,
+                                  download_start_at, download_end_at, issue_limit)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [f.name, f.mall_id, f.code, f.coupon_type, f.issue_method, f.discount_amount, f.min_order_amount,
+             f.valid_from, f.valid_to, f.valid_days, f.max_total_uses, isActiveMirror(f.status), f.status,
+             f.download_start_at, f.download_end_at, f.issue_limit]
         );
         res.redirect('/admin/coupons');
     } catch (err) {
@@ -87,7 +143,10 @@ exports.postCreate = async (req, res) => {
 exports.getDetail = async (req, res) => {
     try {
         const { id } = req.params;
-        const [rows] = await pool.query('SELECT * FROM coupons WHERE id = ?', [id]);
+        const [rows] = await pool.query(
+            'SELECT c.*, m.name AS mall_name FROM coupons c LEFT JOIN mall m ON m.id = c.mall_id WHERE c.id = ?',
+            [id]
+        );
         if (rows.length === 0) return res.redirect('/admin/coupons');
 
         const coupon = rows[0];
@@ -101,11 +160,29 @@ exports.getDetail = async (req, res) => {
             [id]
         );
 
+        // 총 할인액 — 이 쿠폰이 실제로 깎아준 금액 (§8-4)
+        const [[stat]] = await pool.query(
+            `SELECT COALESCE(SUM(o.coupon_discount), 0) AS total_discount
+               FROM user_coupons uc JOIN orders o ON o.id = uc.order_id
+              WHERE uc.coupon_id = ? AND uc.used_at IS NOT NULL`,
+            [id]
+        );
+
+        const issuedTotal = recipients.length;
+        const usedCount = recipients.filter((r) => r.used_at).length;
+
         res.render('admin/coupons/detail', {
             layout: 'layouts/admin_layout',
             title: '쿠폰 상세 - ' + coupon.name,
             coupon,
-            recipients
+            recipients,
+            stats: {
+                issuedTotal,
+                usedCount,
+                totalDiscount: Number(stat.total_discount) || 0,
+                claimRate: coupon.issue_limit ? Math.round((coupon.issued_count / coupon.issue_limit) * 1000) / 10 : null,
+                useRate: issuedTotal ? Math.round((usedCount / issuedTotal) * 1000) / 10 : 0,
+            },
         });
     } catch (err) {
         console.error(err);
@@ -115,15 +192,9 @@ exports.getDetail = async (req, res) => {
 
 exports.getEdit = async (req, res) => {
     try {
-        const { id } = req.params;
-        const [rows] = await pool.query('SELECT * FROM coupons WHERE id = ?', [id]);
+        const [rows] = await pool.query('SELECT * FROM coupons WHERE id = ?', [req.params.id]);
         if (rows.length === 0) return res.redirect('/admin/coupons');
-
-        res.render('admin/coupons/form', {
-            layout: 'layouts/admin_layout',
-            title: '쿠폰 수정',
-            coupon: rows[0]
-        });
+        await renderForm(res, '쿠폰 수정', rows[0]);
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -132,47 +203,28 @@ exports.getEdit = async (req, res) => {
 
 exports.postEdit = async (req, res) => {
     const { id } = req.params;
-    const {
-        name,
-        code,
-        coupon_type,
-        discount_amount,
-        min_order_amount,
-        valid_from,
-        valid_to,
-        max_total_uses,
-        is_active
-    } = req.body;
-
-    const type = COUPON_TYPES.includes(coupon_type) ? coupon_type : 'EVENT';
-    const codeVal = (coupon_type === 'SPECIAL' && code) ? String(code).trim() : null;
-
-    const now = new Date();
-    const defaultFrom = valid_from || now.toISOString().slice(0, 16);
-    const defaultTo = valid_to || (() => {
-        const y = new Date(now);
-        y.setFullYear(y.getFullYear() + 1);
-        return y.toISOString().slice(0, 16);
-    })();
-
+    const f = normalizeForm(req.body);
     try {
         await pool.query(
-            `UPDATE coupons SET name=?, code=?, coupon_type=?, discount_amount=?, min_order_amount=?,
-             valid_from=?, valid_to=?, max_total_uses=?, is_active=?
+            `UPDATE coupons SET name=?, mall_id=?, code=?, coupon_type=?, issue_method=?, discount_amount=?,
+                    min_order_amount=?, valid_from=?, valid_to=?, valid_days=?, max_total_uses=?,
+                    is_active=?, status=?, download_start_at=?, download_end_at=?, issue_limit=?
              WHERE id=?`,
-            [
-                name,
-                codeVal || null,
-                type,
-                Number(discount_amount) || 0,
-                Number(min_order_amount) || 0,
-                defaultFrom.replace('T', ' ') + ':00',
-                defaultTo.replace('T', ' ') + ':00',
-                max_total_uses ? Number(max_total_uses) : null,
-                is_active ? 1 : 0,
-                id
-            ]
+            [f.name, f.mall_id, f.code, f.coupon_type, f.issue_method, f.discount_amount, f.min_order_amount,
+             f.valid_from, f.valid_to, f.valid_days, f.max_total_uses, isActiveMirror(f.status), f.status,
+             f.download_start_at, f.download_end_at, f.issue_limit, id]
         );
+        res.redirect('/admin/coupons');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+/** 삭제 대신 종료 (C7). 발급된 쿠폰과 사용 이력은 남는다. */
+exports.postEnd = async (req, res) => {
+    try {
+        await pool.query("UPDATE coupons SET status = 'ENDED', is_active = 0 WHERE id = ?", [req.params.id]);
         res.redirect('/admin/coupons');
     } catch (err) {
         console.error(err);
@@ -182,23 +234,23 @@ exports.postEdit = async (req, res) => {
 
 exports.getIssue = async (req, res) => {
     try {
-        const success = req.query.success;
-        const error = req.query.error;
         const issueResult = req.session.couponIssueResult || null;
         if (req.session.couponIssueResult) {
             delete req.session.couponIssueResult;
             req.session.save(() => {});
         }
         const [coupons] = await pool.query(
-            "SELECT id, name, code, coupon_type, discount_amount, valid_from, valid_to FROM coupons WHERE is_active = 1 AND valid_to >= NOW() ORDER BY name"
+            `SELECT id, name, code, coupon_type, issue_method, discount_amount, valid_from, valid_to,
+                    issue_limit, issued_count
+               FROM coupons WHERE status = 'ACTIVE' AND valid_to >= NOW() ORDER BY name`
         );
         res.render('admin/coupons/issue', {
             layout: 'layouts/admin_layout',
             title: '쿠폰 지급',
             coupons,
-            success,
-            error,
-            issueResult
+            success: req.query.success,
+            error: req.query.error,
+            issueResult,
         });
     } catch (err) {
         console.error(err);
@@ -206,87 +258,71 @@ exports.getIssue = async (req, res) => {
     }
 };
 
+const ISSUE_FAIL_LABEL = {
+    already_held: '이미 보유',
+    issue_limit: '발급 한도 소진',
+    inactive: '활성 상태가 아님',
+    expired: '만료된 쿠폰',
+};
+
 exports.postIssue = async (req, res) => {
-    const { issue_type, coupon_id, user_id, user_ids, coupon_code } = req.body;
+    const { issue_type, coupon_id, user_id, user_ids } = req.body;
 
     if (!coupon_id) {
         return res.redirect('/admin/coupons/issue?error=쿠폰을 선택하세요');
     }
 
     try {
-        const [couponRows] = await pool.query('SELECT * FROM coupons WHERE id = ? AND is_active = 1', [coupon_id]);
+        const [couponRows] = await pool.query("SELECT * FROM coupons WHERE id = ? AND status = 'ACTIVE'", [coupon_id]);
         if (couponRows.length === 0) {
             return res.redirect('/admin/coupons/issue?error=유효한 쿠폰이 아닙니다');
         }
         const coupon = couponRows[0];
-
-        const now = new Date();
-        const validFrom = coupon.valid_from ? new Date(coupon.valid_from) : null;
-        const validTo = coupon.valid_to ? new Date(coupon.valid_to) : null;
-        if (validTo && validTo < now) {
+        if (coupon.valid_to && new Date(coupon.valid_to) < new Date()) {
             return res.redirect('/admin/coupons/issue?error=만료된 쿠폰입니다');
         }
 
         let targetUserIds = [];
-
         if (issue_type === 'all') {
             const [allUsers] = await pool.query('SELECT id FROM users');
-            targetUserIds = allUsers.map(u => u.id);
+            targetUserIds = allUsers.map((u) => u.id);
         } else if (issue_type === 'user') {
             const ids = Array.isArray(user_ids) ? user_ids : (user_id ? [user_id] : []);
-            targetUserIds = ids.map(id => Number(id)).filter(Boolean);
+            targetUserIds = ids.map((v) => Number(v)).filter(Boolean);
         }
-
         if (targetUserIds.length === 0) {
             return res.redirect('/admin/coupons/issue?error=지급 대상 회원이 없습니다');
         }
 
-        const [usersRows] = await pool.query(
-            'SELECT id, name, email, phone FROM users WHERE id IN (?)',
-            [targetUserIds]
-        );
-        const userMap = {};
-        usersRows.forEach(u => { userMap[u.id] = u; });
+        const [usersRows] = await pool.query('SELECT id, name, email, phone FROM users WHERE id IN (?)', [targetUserIds]);
+        const userMap = Object.fromEntries(usersRows.map((u) => [u.id, u]));
 
         const issuedList = [];
         const failedList = [];
-        let usageCount = 0;
 
-        const [usageRows] = await pool.query('SELECT COUNT(*) as c FROM user_coupons WHERE coupon_id = ?', [coupon_id]);
-        usageCount = usageRows[0].c;
-
+        // 회원마다 트랜잭션 하나. 한 명이 실패해도 나머지 지급은 진행된다.
         for (const uid of targetUserIds) {
-            const [existing] = await pool.query(
-                'SELECT id FROM user_coupons WHERE user_id = ? AND coupon_id = ? AND used_at IS NULL',
-                [uid, coupon_id]
-            );
-            if (existing.length > 0) {
-                failedList.push({ id: uid, reason: '이미 보유', user: userMap[uid] });
-                continue;
-            }
-            if (coupon.max_total_uses != null && usageCount >= coupon.max_total_uses) {
-                failedList.push({ id: uid, reason: '쿠폰 한도 소진', user: userMap[uid] });
-                continue;
-            }
+            const conn = await pool.getConnection();
+            try {
+                await conn.beginTransaction();
+                // issued_count 를 갱신하므로 최신 행을 다시 읽는다.
+                const [[fresh]] = await conn.query('SELECT * FROM coupons WHERE id = ? FOR UPDATE', [coupon.id]);
+                const result = await issueCoupon(conn, { userId: uid, coupon: fresh, issuedBy: 'ADMIN' });
+                await conn.commit();
 
-            await pool.query(
-                'INSERT INTO user_coupons (user_id, coupon_id, issued_by) VALUES (?, ?, ?)',
-                [uid, coupon_id, 'ADMIN']
-            );
-            usageCount++;
-            issuedList.push({ id: uid, user: userMap[uid] });
+                if (result.ok) issuedList.push({ id: uid, user: userMap[uid] });
+                else failedList.push({ id: uid, reason: ISSUE_FAIL_LABEL[result.reason] || result.reason, user: userMap[uid] });
+            } catch (e) {
+                await conn.rollback();
+                failedList.push({ id: uid, reason: '오류', user: userMap[uid] });
+                console.error('[Coupon] issue error:', e);
+            } finally {
+                conn.release();
+            }
         }
 
-        const result = {
-            couponName: coupon.name,
-            issued: issuedList,
-            failed: failedList
-        };
-        req.session.couponIssueResult = result;
-        req.session.save((err) => {
-            if (err) console.error(err);
-            res.redirect('/admin/coupons/issue');
-        });
+        req.session.couponIssueResult = { couponName: coupon.name, issued: issuedList, failed: failedList };
+        req.session.save(() => res.redirect('/admin/coupons/issue'));
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -308,22 +344,10 @@ exports.getUsage = async (req, res) => {
         `;
         const params = [];
 
-        if (user_id) {
-            sql += ' AND uc.user_id = ?';
-            params.push(user_id);
-        }
-        if (coupon_id) {
-            sql += ' AND uc.coupon_id = ?';
-            params.push(coupon_id);
-        }
-        if (from) {
-            sql += ' AND uc.issued_at >= ?';
-            params.push(from + ' 00:00:00');
-        }
-        if (to) {
-            sql += ' AND uc.issued_at <= ?';
-            params.push(to + ' 23:59:59');
-        }
+        if (user_id) { sql += ' AND uc.user_id = ?'; params.push(user_id); }
+        if (coupon_id) { sql += ' AND uc.coupon_id = ?'; params.push(coupon_id); }
+        if (from) { sql += ' AND uc.issued_at >= ?'; params.push(from + ' 00:00:00'); }
+        if (to) { sql += ' AND uc.issued_at <= ?'; params.push(to + ' 23:59:59'); }
 
         sql += ' ORDER BY uc.issued_at DESC LIMIT 500';
 
@@ -337,7 +361,7 @@ exports.getUsage = async (req, res) => {
             usages,
             coupons,
             users,
-            filters: { user_id, coupon_id, from, to }
+            filters: { user_id, coupon_id, from, to },
         });
     } catch (err) {
         console.error(err);

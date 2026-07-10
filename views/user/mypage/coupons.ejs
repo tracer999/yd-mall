@@ -1,56 +1,76 @@
+<%
+  /*
+   * 내 쿠폰함 — 보는 곳 (쿠폰 문서 §7-2). 받는 곳은 /coupon 이다.
+   * 상태 판정은 컨트롤러(mypageController.getCoupons)가 한다. 여기서 다시 계산하지 않는다.
+   *
+   * 죽은 `coupon.type === 'percent'` 분기를 제거했다(C6) — coupon_type enum 에 그 값이 없었다.
+   * 정률 할인은 2차의 benefit_type='PERCENT' 로 되살아난다.
+   */
+  const STATE = {
+    available: { text: '사용가능',      cls: 'bg-[var(--gh-primary)]' },
+    reserved:  { text: '주문 진행중',   cls: 'bg-blue-500' },
+    used:      { text: '사용완료',      cls: 'bg-gray-400' },
+    expired:   { text: '기간만료',      cls: 'bg-red-500' },
+  };
+  const day = (v) => new Date(v).toLocaleDateString('ko-KR');
+%>
 <%- include('./_shell_start') %>
 
     <div class="bg-white rounded-lg shadow border border-gray-100">
-        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <h3 class="text-lg font-bold text-gray-800">내 쿠폰함</h3>
+            <a href="/coupon" class="text-sm text-[var(--gh-primary)] hover:underline">쿠폰 받으러 가기 →</a>
         </div>
 
-        <% if (coupons.length===0) { %>
+        <% if (coupons.length === 0) { %>
             <div class="p-12 text-center text-gray-500">
                 보유한 쿠폰이 없습니다.
+                <a href="/coupon" class="block mt-2 text-sm text-[var(--gh-primary)] hover:underline">쿠폰존에서 받아보세요</a>
             </div>
-            <% } else { %>
-                <div class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <% coupons.forEach(coupon=> { %>
-                        <% const isUsed=!!coupon.used_at; const isExpired=coupon.expires_at && new
-                            Date(coupon.expires_at) < new Date(); const isAvailable=!isUsed && !isExpired; let
-                            statusClass='bg-[var(--gh-primary)]' ; let statusText='사용가능' ; if (isUsed) {
-                            statusClass='bg-gray-400' ; statusText='사용완료' ; } else if (isExpired) {
-                            statusClass='bg-red-500' ; statusText='기간만료' ; } %>
-                            <div
-                                class="relative flex items-stretch border rounded-lg overflow-hidden <%= isAvailable ? '' : 'opacity-60' %>">
-                                <div class="flex items-center justify-center w-24 <%= statusClass %> text-white font-bold text-lg transform -rotate-180"
-                                    style="writing-mode: vertical-rl;">
-                                    <%= statusText %>
-                                </div>
-                                <div class="p-5 flex-1">
-                                    <%# coupon.type 은 coupon_type(NEW_SIGNUP/EVENT/SEASON/SPECIAL) 이다.
-                                        'percent' 값이 존재한 적이 없어 죽은 분기였다(C6).
-                                        정률 할인은 2차의 benefit_type='PERCENT' 로 되살아난다. %>
-                                    <h4 class="text-xl font-bold text-gray-800">
-                                        <%= Number(coupon.discount_amount).toLocaleString() %>원 할인
-                                    </h4>
-                                    <p class="text-gray-600 mt-1">
-                                        <%= coupon.name %>
-                                    </p>
-                                    <p class="text-sm text-gray-500 mt-3">
-                                        <% if (coupon.min_purchase> 0) { %>
-                                            <%= Number(coupon.min_purchase).toLocaleString() %>원 이상 구매 시
-                                                <% } else { %>
-                                                    조건 없음
-                                                    <% } %>
-                                    </p>
-                                    <p class="text-sm text-gray-500 mt-1">
-                                        <% if (coupon.expires_at) { %>
-                                            유효기간: ~ <%= new Date(coupon.expires_at).toLocaleDateString() %>
-                                                <% } else { %>
-                                                    유효기간: 없음
-                                                    <% } %>
-                                    </p>
-                                </div>
-                            </div>
-                            <% }) %>
-                </div>
-                <% } %>
+        <% } else { %>
+            <div class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <% coupons.forEach(function (coupon) {
+                     const s = STATE[coupon.state];
+                     const isAvailable = coupon.state === 'available';
+                %>
+                    <div class="relative flex items-stretch border rounded-lg overflow-hidden <%= isAvailable ? '' : 'opacity-60' %>">
+                        <div class="flex items-center justify-center w-24 <%= s.cls %> text-white font-bold text-base transform -rotate-180"
+                             style="writing-mode: vertical-rl;">
+                            <%= s.text %>
+                        </div>
+                        <div class="p-5 flex-1 min-w-0">
+                            <h4 class="text-xl font-bold text-gray-800">
+                                <%= Number(coupon.discount_amount).toLocaleString() %>원 할인
+                            </h4>
+                            <p class="text-gray-600 mt-1 truncate"><%= coupon.name %></p>
+
+                            <p class="text-sm text-gray-500 mt-3">
+                                <% if (coupon.min_purchase > 0) { %>
+                                    <%= Number(coupon.min_purchase).toLocaleString() %>원 이상 구매 시
+                                <% } else { %>
+                                    조건 없음
+                                <% } %>
+                            </p>
+
+                            <p class="text-sm mt-1 <%= coupon.expiringSoon ? 'text-red-600 font-medium' : 'text-gray-500' %>">
+                                <% if (coupon.expires_at) { %>
+                                    유효기간: ~ <%= day(coupon.expires_at) %>
+                                    <% if (coupon.expiringSoon) { %> (곧 만료)<% } %>
+                                <% } else { %>
+                                    유효기간: 없음
+                                <% } %>
+                            </p>
+
+                            <% if (coupon.state === 'reserved' && coupon.reserved_order_number) { %>
+                                <p class="text-xs text-blue-600 mt-2">주문 <%= coupon.reserved_order_number %> 에 사용 중</p>
+                            <% } %>
+                            <% if (coupon.state === 'used' && coupon.used_order_number) { %>
+                                <p class="text-xs text-gray-400 mt-2">주문 <%= coupon.used_order_number %></p>
+                            <% } %>
+                        </div>
+                    </div>
+                <% }) %>
+            </div>
+        <% } %>
     </div>
-    <%- include('./_shell_end') %>
+<%- include('./_shell_end') %>

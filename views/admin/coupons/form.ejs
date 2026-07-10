@@ -1,3 +1,19 @@
+<%
+  /*
+   * 쿠폰 등록·수정 (쿠폰 문서 §8-2)
+   *
+   * 축이 셋이다 — 목적(coupon_type) · 발급 방식(issue_method) · 상태(status).
+   * 발급 방식에 따라 필드를 동적으로 노출한다: CODE → 쿠폰 코드 / DOWNLOAD → 수령기간·선착순 수량.
+   * 옛 폼은 `coupon_type='SPECIAL'` 일 때만 code 를 보여줬다. 그 조건을 issue_method 로 옮겼다.
+   */
+  const dtLocal = (v) => {
+    if (!v) return '';
+    const d = new Date(v);
+    // toISOString 은 UTC 로 민다. 로컬 시각을 그대로 보여주려면 오프셋을 빼야 한다.
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+  const method = coupon ? coupon.issue_method : 'ADMIN';
+%>
 <div class="flex justify-center">
     <div class="w-full lg:max-w-3xl">
         <div class="mb-6">
@@ -5,6 +21,8 @@
         </div>
 
         <form action="<%= coupon ? '/admin/coupons/edit/' + coupon.id : '/admin/coupons' %>" method="POST" class="space-y-6">
+
+            <!-- 기본 정보 -->
             <div class="bg-white shadow-sm rounded-xl border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-100">
                     <h3 class="text-lg font-semibold text-gray-800">기본 정보</h3>
@@ -16,64 +34,140 @@
                             value="<%= coupon ? coupon.name : '' %>" placeholder="예: 신규 가입 3,000원 할인">
                     </div>
 
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">목적 (분류)</label>
+                            <select name="coupon_type">
+                                <option value="NEW_SIGNUP" <%= (coupon && coupon.coupon_type === 'NEW_SIGNUP') ? 'selected' : '' %>>신규가입</option>
+                                <option value="EVENT" <%= (coupon && coupon.coupon_type === 'EVENT') ? 'selected' : '' %>>이벤트</option>
+                                <option value="SEASON" <%= (coupon && coupon.coupon_type === 'SEASON') ? 'selected' : '' %>>시즌</option>
+                                <option value="SPECIAL" <%= (coupon && coupon.coupon_type === 'SPECIAL') ? 'selected' : '' %>>특별</option>
+                            </select>
+                            <p class="text-xs text-gray-400 mt-1">분류 라벨입니다. 동작은 발급 방식이 결정합니다.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">몰</label>
+                            <select name="mall_id">
+                                <option value="">전 몰 공용</option>
+                                <% malls.forEach(function (m) { %>
+                                    <option value="<%= m.id %>" <%= (coupon && Number(coupon.mall_id) === Number(m.id)) ? 'selected' : '' %>><%= m.name %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">상태</label>
+                            <select name="status">
+                                <option value="DRAFT" <%= (coupon && coupon.status === 'DRAFT') ? 'selected' : '' %>>작성중 (노출 안 함)</option>
+                                <option value="ACTIVE" <%= (!coupon || coupon.status === 'ACTIVE') ? 'selected' : '' %>>진행중</option>
+                                <option value="PAUSED" <%= (coupon && coupon.status === 'PAUSED') ? 'selected' : '' %>>일시중지</option>
+                                <option value="ENDED" <%= (coupon && coupon.status === 'ENDED') ? 'selected' : '' %>>종료</option>
+                            </select>
+                            <p class="text-xs text-gray-400 mt-1">쿠폰은 삭제하지 않고 종료합니다.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 혜택 -->
+            <div class="bg-white shadow-sm rounded-xl border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-100">
+                    <h3 class="text-lg font-semibold text-gray-800">혜택</h3>
+                </div>
+                <div class="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">쿠폰 타입</label>
-                        <select name="coupon_type" id="couponType">
-                            <option value="NEW_SIGNUP" <%= (coupon && coupon.coupon_type === 'NEW_SIGNUP') ? 'selected' : '' %>>신규가입 (자동지급)</option>
-                            <option value="EVENT" <%= (coupon && coupon.coupon_type === 'EVENT') ? 'selected' : '' %>>이벤트</option>
-                            <option value="SEASON" <%= (coupon && coupon.coupon_type === 'SEASON') ? 'selected' : '' %>>시즌</option>
-                            <option value="SPECIAL" <%= (coupon && coupon.coupon_type === 'SPECIAL') ? 'selected' : '' %>>특별 (코드입력)</option>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">할인 금액 (원) <span class="text-red-500">*</span></label>
+                        <input type="text" name="discount_amount" required class="coupon-num-input text-right"
+                            value="<%= coupon ? Number(coupon.discount_amount || 0).toLocaleString() : '0' %>" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">최소 주문 금액 (원)</label>
+                        <input type="text" name="min_order_amount" class="coupon-num-input text-right"
+                            value="<%= coupon ? Number(coupon.min_order_amount || 0).toLocaleString() : '0' %>" placeholder="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 발급 -->
+            <div class="bg-white shadow-sm rounded-xl border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-100">
+                    <h3 class="text-lg font-semibold text-gray-800">발급</h3>
+                </div>
+                <div class="px-6 py-5 space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">발급 방식</label>
+                        <select name="issue_method" id="issueMethod">
+                            <option value="AUTO_SIGNUP" <%= method === 'AUTO_SIGNUP' ? 'selected' : '' %>>가입 시 자동지급</option>
+                            <option value="ADMIN" <%= method === 'ADMIN' ? 'selected' : '' %>>관리자 수동지급</option>
+                            <option value="CODE" <%= method === 'CODE' ? 'selected' : '' %>>쿠폰 코드 입력</option>
+                            <option value="DOWNLOAD" <%= method === 'DOWNLOAD' ? 'selected' : '' %>>쿠폰존 다운로드</option>
                         </select>
                     </div>
 
-                    <div id="codeField" class="<%= (coupon && coupon.coupon_type === 'SPECIAL') ? '' : 'hidden' %>">
+                    <div id="codeField" class="<%= method === 'CODE' ? '' : 'hidden' %>">
                         <label class="block text-sm font-medium text-gray-700 mb-2">쿠폰 코드</label>
-                        <p class="text-xs text-gray-500 mb-2">SPECIAL 타입일 때만 사용. 사용자가 결제 화면에서 입력하는 코드입니다.</p>
-                        <input type="text" name="code"
-                            value="<%= coupon && coupon.code ? coupon.code : '' %>" placeholder="예: WELCOME2024">
+                        <p class="text-xs text-gray-500 mb-2">고객이 쿠폰존에서 입력하는 코드입니다.</p>
+                        <input type="text" name="code" value="<%= coupon && coupon.code ? coupon.code : '' %>" placeholder="예: WELCOME2026">
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">할인 금액 (원) <span class="text-red-500">*</span></label>
-                            <input type="text" name="discount_amount" required
-                                class="coupon-num-input text-right"
-                                value="<%= coupon ? Number(coupon.discount_amount || 0).toLocaleString() : '0' %>" placeholder="0">
+                    <div id="downloadFields" class="<%= method === 'DOWNLOAD' ? '' : 'hidden' %> space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">수령 시작</label>
+                                <input type="datetime-local" name="download_start_at" value="<%= dtLocal(coupon && coupon.download_start_at) %>">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">수령 종료</label>
+                                <input type="datetime-local" name="download_end_at" value="<%= dtLocal(coupon && coupon.download_end_at) %>">
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">최소 주문 금액 (원)</label>
-                            <input type="text" name="min_order_amount"
-                                class="coupon-num-input text-right"
-                                value="<%= coupon ? Number(coupon.min_order_amount || 0).toLocaleString() : '0' %>" placeholder="0">
-                        </div>
+                        <p class="text-xs text-gray-500 -mt-2">수령 기간과 아래의 사용 기간은 다릅니다. "7월에 받아서 8월까지 쓴다"가 가능합니다.</p>
                     </div>
 
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">선착순 수령 수량</label>
+                        <p class="text-xs text-gray-500 mb-2">비우면 무제한. 이 한도를 넘으면 더 이상 <strong>발급</strong>되지 않습니다.</p>
+                        <input type="text" name="issue_limit" class="coupon-num-input text-right"
+                            value="<%= coupon && coupon.issue_limit ? Number(coupon.issue_limit).toLocaleString() : '' %>" placeholder="무제한">
+                        <% if (coupon) { %>
+                            <p class="text-xs text-gray-400 mt-1">현재 발급 수: <%= Number(coupon.issued_count || 0).toLocaleString() %></p>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 사용 조건 -->
+            <div class="bg-white shadow-sm rounded-xl border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-100">
+                    <h3 class="text-lg font-semibold text-gray-800">사용 조건</h3>
+                </div>
+                <div class="px-6 py-5 space-y-5">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">유효 시작일</label>
-                            <input type="datetime-local" name="valid_from"
-                                value="<%= coupon && coupon.valid_from ? new Date(coupon.valid_from).toISOString().slice(0,16) : '' %>">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">사용 시작일</label>
+                            <input type="datetime-local" name="valid_from" value="<%= dtLocal(coupon && coupon.valid_from) %>">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">유효 종료일</label>
-                            <input type="datetime-local" name="valid_to"
-                                value="<%= coupon && coupon.valid_to ? new Date(coupon.valid_to).toISOString().slice(0,16) : '' %>">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">사용 종료일</label>
+                            <input type="datetime-local" name="valid_to" value="<%= dtLocal(coupon && coupon.valid_to) %>">
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">총 발급 한도</label>
-                        <p class="text-xs text-gray-500 mb-2">비우면 무제한</p>
-                        <input type="text" name="max_total_uses"
-                            class="coupon-num-input text-right"
-                            value="<%= coupon && coupon.max_total_uses ? Number(coupon.max_total_uses).toLocaleString() : '' %>" placeholder="무제한">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">발급 후 N일 (상대 유효기간)</label>
+                        <p class="text-xs text-gray-500 mb-2">
+                            값이 있으면 "받은 날부터 N일"이 개인별 만료일이 됩니다. 비우면 위의 사용 종료일을 씁니다.
+                        </p>
+                        <input type="text" name="valid_days" class="coupon-num-input text-right"
+                            value="<%= coupon && coupon.valid_days ? coupon.valid_days : '' %>" placeholder="예: 7">
                     </div>
 
-                    <div class="flex items-center">
-                        <input type="checkbox" name="is_active" id="isActive" value="1"
-                            class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            <%= (!coupon) || (coupon && coupon.is_active) ? 'checked' : '' %>>
-                        <label class="ml-2 text-sm text-gray-700" for="isActive">활성화</label>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">전체 사용 한도</label>
+                        <p class="text-xs text-gray-500 mb-2">
+                            결제에 <strong>사용</strong>될 수 있는 총 횟수입니다. 위의 발급 수량과 다른 축입니다. 비우면 무제한.
+                        </p>
+                        <input type="text" name="max_total_uses" class="coupon-num-input text-right"
+                            value="<%= coupon && coupon.max_total_uses ? Number(coupon.max_total_uses).toLocaleString() : '' %>" placeholder="무제한">
                     </div>
                 </div>
             </div>
@@ -90,15 +184,16 @@
 
 <script>
 (function() {
-    const typeSelect = document.getElementById('couponType');
+    const methodSelect = document.getElementById('issueMethod');
     const codeField = document.getElementById('codeField');
-    if (typeSelect && codeField) {
-        typeSelect.addEventListener('change', function() {
-            codeField.classList.toggle('hidden', this.value !== 'SPECIAL');
+    const downloadFields = document.getElementById('downloadFields');
+    if (methodSelect) {
+        methodSelect.addEventListener('change', function() {
+            codeField.classList.toggle('hidden', this.value !== 'CODE');
+            downloadFields.classList.toggle('hidden', this.value !== 'DOWNLOAD');
         });
     }
 
-    // 천단위 구분 포맷
     function formatNumber(num) {
         if (num === '' || num === null || num === undefined) return '';
         var n = parseInt(String(num).replace(/[^0-9]/g, ''), 10);

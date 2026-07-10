@@ -19,6 +19,7 @@
                 <% if (error === 'stock') { %>재고가 부족합니다.<% } %>
                 <% if (error === 'coupon_min') { %>쿠폰 최소 주문금액을 만족하지 않습니다.<% } %>
                 <% if (error === 'coupon_limit') { %>이 쿠폰의 전체 사용 한도가 모두 소진되었습니다.<% } %>
+                <% if (error === 'coupon_reserved') { %>이미 다른 주문에 사용 중인 쿠폰입니다.<% } %>
             </span>
         </div>
     <% } %>

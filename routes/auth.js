@@ -3,6 +3,7 @@ const router = express.Router();
 const passport = require('passport');
 const pool = require('../config/db');
 const { loadSystemSettingsAndApplyEnv } = require('../config/systemSettings');
+const { issueCoupon } = require('../services/coupon/couponIssueService');
 
 function getOAuthCallbackUrl(provider) {
     const env = process.env.NODE_ENV === 'production' ? 'prod' : 'dev';
@@ -338,31 +339,35 @@ router.post('/signup-finish', async (req, res) => {
             );
         }
 
-        // NEW_SIGNUP 쿠폰 자동 지급
+        /*
+         * 가입 자동 지급.
+         *
+         * 트리거는 `coupon_type='NEW_SIGNUP'` 이 아니라 `issue_method='AUTO_SIGNUP'` 이다.
+         * coupon_type 은 목적 라벨로 강등됐다 — "이벤트 목적의 자동지급 쿠폰"이 표현 가능해야 한다.
+         * 선착순·유효기간은 couponIssueService 가 관장한다(발급 경로 다섯 곳이 같은 규칙을 쓴다).
+         */
         try {
             const [coupons] = await pool.query(
-                `SELECT id FROM coupons WHERE coupon_type = 'NEW_SIGNUP' AND is_active = 1
-                 AND (valid_from IS NULL OR valid_from <= NOW()) AND (valid_to IS NULL OR valid_to >= NOW())`
+                `SELECT * FROM coupons
+                  WHERE issue_method = 'AUTO_SIGNUP' AND status = 'ACTIVE'
+                    AND (valid_from IS NULL OR valid_from <= NOW())
+                    AND (valid_to IS NULL OR valid_to >= NOW())`
             );
-            for (const c of coupons) {
-                const [existing] = await pool.query(
-                    'SELECT id FROM user_coupons WHERE user_id = ? AND coupon_id = ? AND used_at IS NULL',
-                    [req.user.id, c.id]
-                );
-                if (existing.length > 0) continue;
-                const [usageCount] = await pool.query(
-                    'SELECT COUNT(*) as cnt FROM user_coupons WHERE coupon_id = ?',
-                    [c.id]
-                );
-                const [[couponRow]] = await pool.query('SELECT max_total_uses FROM coupons WHERE id = ?', [c.id]);
-                if (couponRow?.max_total_uses != null && usageCount[0].cnt >= couponRow.max_total_uses) continue;
-                await pool.query(
-                    'INSERT INTO user_coupons (user_id, coupon_id, issued_by) VALUES (?, ?, ?)',
-                    [req.user.id, c.id, 'AUTO']
-                );
+            for (const coupon of coupons) {
+                const conn = await pool.getConnection();
+                try {
+                    await conn.beginTransaction();
+                    await issueCoupon(conn, { userId: req.user.id, coupon, issuedBy: 'AUTO' });
+                    await conn.commit();
+                } catch (e) {
+                    await conn.rollback();
+                    throw e;
+                } finally {
+                    conn.release();
+                }
             }
         } catch (couponErr) {
-            console.error('[Auth] NEW_SIGNUP coupon issue error:', couponErr);
+            console.error('[Auth] AUTO_SIGNUP coupon issue error:', couponErr);
         }
 
         res.redirect('/auth/signup-success');

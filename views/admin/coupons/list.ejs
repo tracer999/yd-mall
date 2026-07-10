@@ -1,5 +1,23 @@
+<%
+  /* 쿠폰 목록 (쿠폰 문서 §8-1) — 몰 · 발급방식 · 상태 · 수령/사용률 */
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const day = (v) => (v ? new Date(v).toLocaleDateString('ko-KR') : '-');
+
+  const METHOD = {
+    AUTO_SIGNUP: { label: '가입 자동', cls: 'bg-blue-100 text-blue-800' },
+    ADMIN:       { label: '관리자',    cls: 'bg-gray-100 text-gray-700' },
+    CODE:        { label: '코드',      cls: 'bg-purple-100 text-purple-800' },
+    DOWNLOAD:    { label: '다운로드',  cls: 'bg-emerald-100 text-emerald-800' },
+  };
+  const STATUS = {
+    DRAFT:  { label: '작성중',   cls: 'bg-gray-100 text-gray-600' },
+    ACTIVE: { label: '진행중',   cls: 'bg-green-100 text-green-800' },
+    PAUSED: { label: '일시중지', cls: 'bg-amber-100 text-amber-800' },
+    ENDED:  { label: '종료',     cls: 'bg-red-100 text-red-700' },
+  };
+%>
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-    <p class="text-sm text-gray-500">쿠폰 발급, 지급, 사용 내역을 한 곳에서 관리합니다.</p>
+    <p class="text-sm text-gray-500">쿠폰 발급, 지급, 사용 내역을 한 곳에서 관리합니다. 쿠폰은 삭제하지 않고 <strong>종료</strong>합니다.</p>
     <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
         <a href="/admin/coupons/create"
             class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline uppercase tracking-widest">
@@ -16,58 +34,101 @@
     </div>
 </div>
 
+<form method="GET" action="/admin/coupons" class="mb-4 flex flex-wrap items-end gap-3 bg-white p-4 rounded-lg shadow-sm">
+    <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">상태</label>
+        <select name="status" class="text-sm border-gray-300 rounded-md">
+            <option value="">전체</option>
+            <% Object.keys(STATUS).forEach(function (k) { %>
+                <option value="<%= k %>" <%= filters.status === k ? 'selected' : '' %>><%= STATUS[k].label %></option>
+            <% }); %>
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">발급 방식</label>
+        <select name="issue_method" class="text-sm border-gray-300 rounded-md">
+            <option value="">전체</option>
+            <% Object.keys(METHOD).forEach(function (k) { %>
+                <option value="<%= k %>" <%= filters.issue_method === k ? 'selected' : '' %>><%= METHOD[k].label %></option>
+            <% }); %>
+        </select>
+    </div>
+    <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs font-medium text-gray-600 mb-1">쿠폰명 · 코드</label>
+        <input type="text" name="keyword" value="<%= filters.keyword %>" class="block w-full text-sm border-gray-300 rounded-md">
+    </div>
+    <button type="submit" class="h-[38px] px-4 text-sm font-medium rounded-md bg-gray-800 text-white hover:bg-gray-900">검색</button>
+    <a href="/admin/coupons" class="h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline inline-flex items-center">초기화</a>
+</form>
+
 <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+    <div class="overflow-x-auto">
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
             <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">쿠폰명</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">타입</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">코드</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">할인액</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">최소주문</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">유효기간</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">발행/지급/잔여</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">관리</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">쿠폰명</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">몰</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">혜택</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">발급 방식</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">수령</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">사용</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">관리</th>
             </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
             <% if (coupons.length === 0) { %>
-            <tr>
-                <td colspan="9" class="px-6 py-8 text-center text-gray-500">등록된 쿠폰이 없습니다.</td>
-            </tr>
+            <tr><td colspan="9" class="px-6 py-8 text-center text-gray-500">조건에 맞는 쿠폰이 없습니다.</td></tr>
             <% } else { %>
-            <% coupons.forEach(function(c) { %>
+            <% coupons.forEach(function(c) {
+                 const m = METHOD[c.issue_method] || METHOD.ADMIN;
+                 const s = STATUS[c.status] || STATUS.DRAFT;
+                 const issuedTotal = Number(c.issued_total || 0);
+                 const usedCount = Number(c.used_count || 0);
+                 const useRate = issuedTotal ? Math.round((usedCount / issuedTotal) * 1000) / 10 : 0;
+            %>
             <tr>
-                <td class="px-6 py-4 text-sm font-medium text-gray-900"><%= c.name %></td>
-                <td class="px-6 py-4 text-sm text-gray-500">
-                    <span class="px-2 py-0.5 rounded text-xs <%= c.coupon_type === 'NEW_SIGNUP' ? 'bg-blue-100 text-blue-800' : c.coupon_type === 'EVENT' ? 'bg-green-100 text-green-800' : c.coupon_type === 'SEASON' ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800' %>">
-                        <%= c.coupon_type === 'NEW_SIGNUP' ? '가입' : c.coupon_type === 'EVENT' ? '이벤트' : c.coupon_type === 'SEASON' ? '시즌' : '특별' %>
-                    </span>
+                <td class="px-4 py-4 text-sm font-medium text-gray-900">
+                    <%= c.name %>
+                    <% if (c.code) { %><span class="block text-xs font-mono text-gray-400"><%= c.code %></span><% } %>
                 </td>
-                <td class="px-6 py-4 text-sm text-gray-500"><%= c.code || '-' %></td>
-                <td class="px-6 py-4 text-sm font-medium text-gray-900"><%= Number(c.discount_amount).toLocaleString() %>원</td>
-                <td class="px-6 py-4 text-sm text-gray-500"><%= Number(c.min_order_amount || 0).toLocaleString() %>원</td>
-                <td class="px-6 py-4 text-sm text-gray-500">
-                    <%= c.valid_from ? new Date(c.valid_from).toLocaleDateString() : '-' %> ~ <%= c.valid_to ? new Date(c.valid_to).toLocaleDateString() : '-' %>
+                <td class="px-4 py-4 text-sm text-gray-500"><%= c.mall_id ? c.mall_name : '전 몰 공용' %></td>
+                <td class="px-4 py-4 text-sm font-medium text-gray-900">
+                    <%= won(c.discount_amount) %>원
+                    <% if (c.min_order_amount) { %>
+                        <span class="block text-xs font-normal text-gray-400"><%= won(c.min_order_amount) %>원 이상</span>
+                    <% } %>
                 </td>
-                <td class="px-6 py-4 text-sm text-gray-500">
-                    <% 
-                    var issuedMax = c.max_total_uses != null ? Number(c.max_total_uses) : null;
-                    var issuedCnt = Number(c.issued_count || 0);
-                    var remain = issuedMax != null ? Math.max(0, issuedMax - issuedCnt) : null;
-                    %>
-                    <%= issuedMax != null ? issuedMax.toLocaleString() : '무제한' %> / <%= issuedCnt.toLocaleString() %> / <%= remain != null ? remain.toLocaleString() : '무제한' %>
+                <td class="px-4 py-4 text-sm">
+                    <span class="px-2 py-0.5 rounded text-xs <%= m.cls %>"><%= m.label %></span>
                 </td>
-                <td class="px-6 py-4">
-                    <span class="px-2 py-0.5 text-xs rounded-full <%= c.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600' %>">
-                        <%= c.is_active ? '활성' : '비활성' %>
-                    </span>
+                <td class="px-4 py-4 text-sm text-gray-600">
+                    <%= won(c.issued_count) %><%= c.issue_limit ? ' / ' + won(c.issue_limit) : '' %>
+                    <% if (!c.issue_limit) { %><span class="text-xs text-gray-400">(무제한)</span><% } %>
                 </td>
-                <td class="px-6 py-4 text-right text-sm">
+                <td class="px-4 py-4 text-sm text-gray-600">
+                    <%= won(usedCount) %> / <%= won(issuedTotal) %>
+                    <span class="block text-xs text-gray-400"><%= useRate %>%<%= c.max_total_uses ? ' · 한도 ' + won(c.max_total_uses) : '' %></span>
+                </td>
+                <td class="px-4 py-4 text-xs text-gray-500">
+                    <% if (c.issue_method === 'DOWNLOAD' && (c.download_start_at || c.download_end_at)) { %>
+                        <span class="block">수령 <%= day(c.download_start_at) %> ~ <%= day(c.download_end_at) %></span>
+                    <% } %>
+                    <span class="block">사용 <%= day(c.valid_from) %> ~ <%= c.valid_days ? '발급 후 ' + c.valid_days + '일' : day(c.valid_to) %></span>
+                </td>
+                <td class="px-4 py-4">
+                    <span class="px-2 py-0.5 text-xs rounded-full <%= s.cls %>"><%= s.label %></span>
+                </td>
+                <td class="px-4 py-4 text-right text-sm">
                     <div class="flex justify-end gap-2">
-                        <a href="/admin/coupons/detail/<%= c.id %>" class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline">상세</a>
-                        <a href="/admin/coupons/edit/<%= c.id %>" class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
+                        <a href="/admin/coupons/detail/<%= c.id %>" class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline">상세</a>
+                        <a href="/admin/coupons/edit/<%= c.id %>" class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
+                        <% if (c.status !== 'ENDED') { %>
+                        <form method="POST" action="/admin/coupons/end/<%= c.id %>" onsubmit="return confirm('이 쿠폰을 종료합니다. 이미 발급된 쿠폰은 사용할 수 없게 됩니다.');">
+                            <button type="submit" class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">종료</button>
+                        </form>
+                        <% } %>
                     </div>
                 </td>
             </tr>
@@ -75,4 +136,5 @@
             <% } %>
         </tbody>
     </table>
+    </div>
 </div>

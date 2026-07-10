@@ -45,12 +45,13 @@ exports.getDashboard = async (req, res, next) => {
             }
         });
 
-        // 3. 보유 쿠폰 수 조회
+        // 3. 보유 쿠폰 수 조회 — 개인별 만료일(uc.expires_at)이 있으면 그것이 우선한다
         const [[{ coupon_count }]] = await pool.query(
             `SELECT COUNT(*) as coupon_count
              FROM user_coupons uc
              JOIN coupons c ON uc.coupon_id = c.id
-             WHERE uc.user_id = ? AND uc.used_at IS NULL AND (c.valid_to IS NULL OR c.valid_to > NOW())`,
+             WHERE uc.user_id = ? AND uc.used_at IS NULL
+               AND (COALESCE(uc.expires_at, c.valid_to) IS NULL OR COALESCE(uc.expires_at, c.valid_to) > NOW())`,
             [userId]
         ).catch(() => [[{ coupon_count: 0 }]]); // 쿠폰 관련 테이블이 없을 경우를 대비
 
@@ -258,22 +259,54 @@ exports.getCoupons = async (req, res, next) => {
     try {
         const userId = req.user.id;
 
-        // 실제 컬럼은 coupon_type / min_order_amount / valid_to 다.
-        // 뷰(user/mypage/coupons.ejs)가 쓰는 이름으로 별칭을 준다.
-        const [coupons] = await pool.query(
+        /*
+         * 보유 쿠폰 4구분 (쿠폰 문서 §7-2)
+         *   사용 가능 · 주문 진행 중(RESERVED) · 사용 완료 · 기간 만료
+         *
+         * 만료일은 `COALESCE(uc.expires_at, c.valid_to)` 다 — valid_days 로 발급된 쿠폰은
+         * 개인별 만료일(uc.expires_at)이 따로 있다.
+         *
+         * 30분 넘게 방치된 점유는 "주문 진행 중"이 아니다. 체크아웃 조회 기준과 같아야 한다.
+         */
+        const [rows] = await pool.query(
             `SELECT
                 c.name,
-                c.coupon_type      AS type,
                 c.discount_amount,
                 c.min_order_amount AS min_purchase,
-                c.valid_to         AS expires_at,
-                uc.used_at
+                COALESCE(uc.expires_at, c.valid_to) AS expires_at,
+                uc.used_at,
+                o.order_number AS used_order_number,
+                ro.order_number AS reserved_order_number,
+                (uc.used_at IS NULL AND uc.reserved_order_id IS NOT NULL
+                 AND uc.reserved_at >= NOW() - INTERVAL 30 MINUTE) AS is_reserved
              FROM user_coupons uc
              JOIN coupons c ON uc.coupon_id = c.id
+             LEFT JOIN orders o  ON o.id  = uc.order_id
+             LEFT JOIN orders ro ON ro.id = uc.reserved_order_id
              WHERE uc.user_id = ?
-             ORDER BY uc.used_at ASC, c.valid_to ASC, uc.created_at DESC`,
+             ORDER BY uc.used_at ASC, COALESCE(uc.expires_at, c.valid_to) ASC, uc.created_at DESC`,
             [userId]
         ).catch(() => [[]]); // 쿠폰 관련 테이블이 없을 경우를 대비
+
+        const now = Date.now();
+        const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+        const coupons = rows.map((c) => {
+            const expired = c.expires_at && new Date(c.expires_at).getTime() < now;
+            let state = 'available';
+            if (c.used_at) state = 'used';
+            else if (expired) state = 'expired';
+            else if (Number(c.is_reserved) === 1) state = 'reserved';
+            return {
+                ...c,
+                state,
+                expiringSoon: state === 'available' && c.expires_at
+                    && new Date(c.expires_at).getTime() - now <= THREE_DAYS,
+            };
+        });
+
+        // 사용가능(만료임박순) → 진행중 → 사용완료 → 만료
+        const order = { available: 0, reserved: 1, used: 2, expired: 3 };
+        coupons.sort((a, b) => order[a.state] - order[b.state]);
 
         res.render('user/mypage/coupons', {
             title: '내 쿠폰함',

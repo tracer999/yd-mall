@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const groupBuySvc = require('../services/groupBuy/groupBuyService');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
+const { redeemCouponCode, reserveCouponForOrder } = require('../services/coupon/couponIssueService');
 
 /*
  * ── 공동구매 연동 (docs/사이트개선/group_buy_design_and_development.md §9) ──
@@ -104,8 +105,9 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
             const userCouponId = orderRow.user_coupon_id;
 
             if (userCouponId) {
+                // 점유(RESERVED) → 사용(USED). 점유 흔적을 지운다.
                 await conn.query(
-                    'UPDATE user_coupons SET used_at = NOW(), order_id = ? WHERE id = ?',
+                    'UPDATE user_coupons SET used_at = NOW(), order_id = ?, reserved_order_id = NULL, reserved_at = NULL WHERE id = ?',
                     [orderId, userCouponId]
                 );
             }
@@ -255,13 +257,20 @@ exports.getForm = async (req, res) => {
     let pointsBalance = 0;
     let pointMinUse = 1000;
     if (user) {
+        /*
+         * 사용 가능한 쿠폰: 미사용 + 미점유 + 유효기간 내.
+         *  · 유효기간은 `COALESCE(uc.expires_at, c.valid_to)` — valid_days 로 발급된 쿠폰은 개인별 만료일이 있다.
+         *  · 다른 PENDING 주문이 점유 중인 쿠폰은 제외한다(C2). 30분 넘게 방치된 점유는 무시한다
+         *    — 점유 해제 배치가 없으므로 조회 시 나이로 거른다(§6-2 각주).
+         */
         const [ucRows] = await pool.query(
             `SELECT uc.id, uc.coupon_id, c.name, c.discount_amount, c.min_order_amount
              FROM user_coupons uc
              JOIN coupons c ON uc.coupon_id = c.id
-             WHERE uc.user_id = ? AND uc.used_at IS NULL AND c.is_active = 1
+             WHERE uc.user_id = ? AND uc.used_at IS NULL AND c.status = 'ACTIVE'
+               AND (uc.reserved_order_id IS NULL OR uc.reserved_at < NOW() - INTERVAL 30 MINUTE)
                AND (c.valid_from IS NULL OR c.valid_from <= NOW())
-               AND (c.valid_to IS NULL OR c.valid_to >= NOW())`,
+               AND (COALESCE(uc.expires_at, c.valid_to) IS NULL OR COALESCE(uc.expires_at, c.valid_to) >= NOW())`,
             [user.id]
         );
         userCoupons = ucRows;
@@ -364,37 +373,12 @@ exports.postApplyCouponCode = async (req, res) => {
     }
 
     try {
-        const [couponRows] = await pool.query(
-            'SELECT * FROM coupons WHERE code = ? AND coupon_type = ? AND is_active = 1 AND valid_to >= NOW()',
-            [code, 'SPECIAL']
-        );
-        if (couponRows.length === 0) {
-            return res.redirect('/checkout?error=coupon_code_invalid&' + qs);
+        // 코드 입력형은 `coupon_type='SPECIAL'` 이 아니라 `issue_method='CODE'` 로 식별한다.
+        const result = await redeemCouponCode(req.user.id, code);
+        if (!result.ok) {
+            const map = { not_found: 'coupon_code_invalid', already_held: 'coupon_code_duplicate', issue_limit: 'coupon_code_limit' };
+            return res.redirect(`/checkout?error=${map[result.reason] || 'coupon_code_error'}&` + qs);
         }
-        const coupon = couponRows[0];
-
-        const [existing] = await pool.query(
-            'SELECT id FROM user_coupons WHERE user_id = ? AND coupon_id = ? AND used_at IS NULL',
-            [req.user.id, coupon.id]
-        );
-        if (existing.length > 0) {
-            return res.redirect('/checkout?error=coupon_code_duplicate&' + qs);
-        }
-
-        if (coupon.max_total_uses != null) {
-            const [usageCount] = await pool.query(
-                'SELECT COUNT(*) as c FROM user_coupons WHERE coupon_id = ?',
-                [coupon.id]
-            );
-            if (usageCount[0].c >= coupon.max_total_uses) {
-                return res.redirect('/checkout?error=coupon_code_limit&' + qs);
-            }
-        }
-
-        await pool.query(
-            'INSERT INTO user_coupons (user_id, coupon_id, issued_by) VALUES (?, ?, ?)',
-            [req.user.id, coupon.id, 'CODE']
-        );
         return res.redirect('/checkout?success=coupon_applied&' + qs);
     } catch (err) {
         console.error('[Checkout] apply coupon code error:', err);
@@ -479,9 +463,9 @@ exports.postForm = async (req, res) => {
                 `SELECT uc.id, uc.coupon_id, c.discount_amount, c.min_order_amount, c.max_total_uses
                  FROM user_coupons uc
                  JOIN coupons c ON uc.coupon_id = c.id
-                 WHERE uc.id = ? AND uc.user_id = ? AND uc.used_at IS NULL AND c.is_active = 1
+                 WHERE uc.id = ? AND uc.user_id = ? AND uc.used_at IS NULL AND c.status = 'ACTIVE'
                    AND (c.valid_from IS NULL OR c.valid_from <= NOW())
-                   AND (c.valid_to IS NULL OR c.valid_to >= NOW())`,
+                   AND (COALESCE(uc.expires_at, c.valid_to) IS NULL OR COALESCE(uc.expires_at, c.valid_to) >= NOW())`,
                 [user_coupon_id, req.user.id]
             );
             if (ucRows.length === 0) {
@@ -571,6 +555,21 @@ exports.postForm = async (req, res) => {
             ]
         );
         const orderId = (await connection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
+
+        /*
+         * 쿠폰 점유 (C2). 같은 쿠폰을 두 개의 PENDING 주문이 물면, 먼저 결제되는 쪽만 살고
+         * 나머지는 "할인은 받았는데 쿠폰은 안 쓰인" 상태가 된다. 조건부 UPDATE 로 잡는다.
+         */
+        if (userCouponId) {
+            const reserved = await reserveCouponForOrder(connection, {
+                userCouponId, userId: req.user.id, orderId,
+            });
+            if (!reserved) {
+                await connection.rollback();
+                connection.release();
+                return res.redirect('/checkout?error=coupon_reserved&' + new URLSearchParams(req.query).toString());
+            }
+        }
 
         for (const item of items) {
             const lineTotal = item.price * item.quantity;

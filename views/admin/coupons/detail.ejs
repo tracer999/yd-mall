@@ -5,6 +5,34 @@
         </div>
 
         <div class="space-y-6">
+            <%# 발급·사용 통계 (§8-4). getList 가 이미 집계하고 있었으나 화면에 띄우지 않았다. %>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white shadow-sm rounded-xl border border-gray-200 px-5 py-4">
+                    <div class="text-xs font-medium text-gray-500">수령</div>
+                    <div class="mt-1 text-xl font-bold text-gray-900">
+                        <%= Number(coupon.issued_count || 0).toLocaleString() %><% if (coupon.issue_limit) { %>
+                            <span class="text-sm font-normal text-gray-400">/ <%= Number(coupon.issue_limit).toLocaleString() %></span>
+                        <% } %>
+                    </div>
+                    <div class="mt-0.5 text-xs text-gray-400">
+                        <%= stats.claimRate != null ? stats.claimRate + '%' : '수령 한도 없음' %>
+                    </div>
+                </div>
+                <div class="bg-white shadow-sm rounded-xl border border-gray-200 px-5 py-4">
+                    <div class="text-xs font-medium text-gray-500">사용</div>
+                    <div class="mt-1 text-xl font-bold text-gray-900">
+                        <%= stats.usedCount.toLocaleString() %>
+                        <span class="text-sm font-normal text-gray-400">/ <%= stats.issuedTotal.toLocaleString() %></span>
+                    </div>
+                    <div class="mt-0.5 text-xs text-gray-400"><%= stats.useRate %>%</div>
+                </div>
+                <div class="bg-white shadow-sm rounded-xl border border-gray-200 px-5 py-4">
+                    <div class="text-xs font-medium text-gray-500">총 할인액</div>
+                    <div class="mt-1 text-xl font-bold text-gray-900"><%= stats.totalDiscount.toLocaleString() %>원</div>
+                    <div class="mt-0.5 text-xs text-gray-400">이 쿠폰이 실제로 깎아준 금액</div>
+                </div>
+            </div>
+
             <div class="bg-white shadow-sm rounded-xl border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-100">
                     <h3 class="text-lg font-semibold text-gray-800">등록 내용</h3>
@@ -22,10 +50,17 @@
                             </span>
                         </div>
                     </div>
-                    <% if (coupon.coupon_type === 'SPECIAL' && coupon.code) { %>
+                    <div>
+                        <div class="text-sm font-medium text-gray-500 mb-1">발급 방식</div>
+                        <div class="text-base text-gray-900">
+                            <%= { AUTO_SIGNUP: '가입 시 자동지급', ADMIN: '관리자 수동지급', CODE: '쿠폰 코드 입력', DOWNLOAD: '쿠폰존 다운로드' }[coupon.issue_method] || coupon.issue_method %>
+                            <span class="ml-2 text-sm text-gray-400"><%= coupon.mall_id ? coupon.mall_name : '전 몰 공용' %></span>
+                        </div>
+                    </div>
+                    <% if (coupon.code) { %>
                     <div>
                         <div class="text-sm font-medium text-gray-500 mb-1">쿠폰 코드</div>
-                        <div class="text-base text-gray-900"><%= coupon.code %></div>
+                        <div class="text-base text-gray-900 font-mono"><%= coupon.code %></div>
                     </div>
                     <% } %>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -48,14 +83,20 @@
                             <div class="text-base text-gray-900"><%= coupon.valid_to ? new Date(coupon.valid_to).toLocaleString() : '-' %></div>
                         </div>
                     </div>
-                    <div>
-                        <div class="text-sm font-medium text-gray-500 mb-1">총 발급 한도</div>
-                        <div class="text-base text-gray-900"><%= coupon.max_total_uses != null ? Number(coupon.max_total_uses).toLocaleString() + '장' : '무제한' %></div>
+                    <%# 수령 한도(issue_limit)와 사용 한도(max_total_uses)는 다른 축이다 (§5-2) %>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-sm font-medium text-gray-500 mb-1">선착순 수령 수량</div>
+                            <div class="text-base text-gray-900"><%= coupon.issue_limit != null ? Number(coupon.issue_limit).toLocaleString() + '장' : '무제한' %></div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-medium text-gray-500 mb-1">전체 사용 한도</div>
+                            <div class="text-base text-gray-900"><%= coupon.max_total_uses != null ? Number(coupon.max_total_uses).toLocaleString() + '회' : '무제한' %></div>
+                        </div>
                     </div>
+                    <% const _s = { DRAFT: ['작성중','bg-gray-100 text-gray-600'], ACTIVE: ['진행중','bg-green-100 text-green-800'], PAUSED: ['일시중지','bg-amber-100 text-amber-800'], ENDED: ['종료','bg-red-100 text-red-700'] }[coupon.status] || ['작성중','bg-gray-100 text-gray-600']; %>
                     <div>
-                        <span class="px-2 py-0.5 text-sm rounded-full <%= coupon.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600' %>">
-                            <%= coupon.is_active ? '활성' : '비활성' %>
-                        </span>
+                        <span class="px-2 py-0.5 text-sm rounded-full <%= _s[1] %>"><%= _s[0] %></span>
                     </div>
                 </div>
             </div>

@@ -49,12 +49,19 @@ async function restoreOrderResources(conn, order) {
         }
     }
 
-    // 2) 쿠폰
-    //    만료된 쿠폰도 복원한다. 다만 조회 시 유효기간으로 걸러지므로 되살아나지는 않는다(문서 §6-2).
+    /*
+     * 2) 쿠폰 — 사용(order_id)과 점유(reserved_order_id) 양쪽을 푼다.
+     *    PENDING 주문을 취소하면 쿠폰은 `used_at` 이 아니라 `reserved_order_id` 로만 묶여 있다.
+     *    `order_id` 만 보고 풀면 그 쿠폰은 영영 잠긴다.
+     *
+     *    만료된 쿠폰도 복원한다. 다만 조회 시 유효기간으로 걸러지므로 되살아나지는 않는다(§6-2).
+     */
     if (isCouponRestoreEnabled()) {
         await conn.query(
-            'UPDATE user_coupons SET used_at = NULL, order_id = NULL WHERE order_id = ?',
-            [orderId]
+            `UPDATE user_coupons
+                SET used_at = NULL, order_id = NULL, reserved_order_id = NULL, reserved_at = NULL
+              WHERE order_id = ? OR reserved_order_id = ?`,
+            [orderId, orderId]
         );
     }
 

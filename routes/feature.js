@@ -143,10 +143,13 @@ function comingSoon(key) {
 // '/group-buy' 도 마찬가지로 routes/group-buy.js 가 렌더한다.
 // ⚠️ 여기에 `router.get('/group-buy', ...)` 를 남겨두면 안 된다 — featureRoutes 가 app.js 에서
 //    '/' 에 **먼저** 마운트되므로, 뒤에 오는 app.use('/group-buy', ...) 가 영영 닿지 못한다.
+//
+// '/coupon' 도 routes/coupon.js 가 렌더한다. 다운로드 쿠폰이 0건이면 couponController 가
+// COMING_SOON.coupon 랜딩으로 되돌린다. 여기에 `router.get('/coupon', ...)` 를 남겨두면
+// featureRoutes 가 '/' 에 먼저 마운트되므로 뒤의 app.use('/coupon', ...) 가 영영 닿지 못한다.
 router.get('/live', comingSoon('live'));
 router.get('/ranking', comingSoon('ranking'));
 router.get('/outlet', comingSoon('outlet'));
-router.get('/coupon', comingSoon('coupon'));
 router.get('/membership', comingSoon('membership'));
 
 module.exports = router;
