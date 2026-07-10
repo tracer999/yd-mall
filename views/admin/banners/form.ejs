@@ -6,6 +6,8 @@
 
     <form action="<%= banner ? '/admin/banners/edit/' + banner.id : '/admin/banners/add' %>" method="POST"
       enctype="multipart/form-data" class="space-y-6">
+      <%# 이 화면과 무관한 group_key(예: 홈 프로모션 'home_promo')를 편집 시 보존하기 위한 hidden. %>
+      <input type="hidden" name="existing_group_key" value="<%= banner && banner.group_key ? banner.group_key : '' %>">
       <div class="bg-white shadow-sm rounded-xl border border-gray-200">
         <div class="px-6 py-4 border-b border-gray-100">
           <h3 class="text-lg font-semibold text-gray-800">기본 정보</h3>
@@ -16,29 +18,41 @@
             <div class="flex flex-wrap gap-4">
               <label class="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input type="radio" name="banner_type" value="MAIN"
-                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(!banner && currentType==='MAIN' ) ||
-                  (banner && banner.banner_type==='MAIN' ) ? 'checked' : '' %>>
+                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(currentType==='MAIN') ? 'checked' : '' %>>
                 <span>메인 배너</span>
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input type="radio" name="banner_type" value="CATEGORY"
-                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(!banner && currentType==='CATEGORY' ) ||
-                  (banner && banner.banner_type==='CATEGORY' ) ? 'checked' : '' %>>
+                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(currentType==='CATEGORY') ? 'checked' : '' %>>
                 <span>카테고리 배너</span>
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input type="radio" name="banner_type" value="POPUP"
-                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(!banner && currentType==='POPUP' ) ||
-                  (banner && banner.banner_type==='POPUP' ) ? 'checked' : '' %>>
+                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(currentType==='POPUP') ? 'checked' : '' %>>
                 <span>팝업 배너</span>
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input type="radio" name="banner_type" value="BRAND"
-                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(!banner && currentType==='BRAND' ) ||
-                  (banner && banner.banner_type==='BRAND' ) ? 'checked' : '' %>>
+                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(currentType==='BRAND') ? 'checked' : '' %>>
                 <span>브랜드 배너</span>
               </label>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input type="radio" name="banner_type" value="MENU"
+                  class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(currentType==='MENU') ? 'checked' : '' %>>
+                <span>메뉴별 배너</span>
+              </label>
             </div>
+          </div>
+
+          <div id="menuTargetField" class="hidden">
+            <label class="block text-sm font-medium text-gray-700 mb-2">노출 메뉴</label>
+            <select name="menu_target" id="menuTargetSelect"
+              class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+              <% (menuTargets || []).forEach(function(t) { %>
+                <option value="<%= t.key %>" <%= currentMenuKey === t.key ? 'selected' : '' %>><%= t.label %></option>
+              <% }) %>
+            </select>
+            <p class="mt-1 text-xs text-gray-400">선택한 프론트 메뉴 목록 페이지 상단에 이 배너가 노출됩니다.</p>
           </div>
 
           <div id="categoryField" class="hidden">
@@ -135,12 +149,17 @@
     const maxUploadBytes = maxUploadMb * 1024 * 1024;
     const typeRadios = document.querySelectorAll('input[name="banner_type"]');
     const categoryField = document.getElementById('categoryField');
+    const menuTargetField = document.getElementById('menuTargetField');
     const sizeGuide = document.getElementById('bannerSizeGuide');
 
     const categoryIdSelect = document.getElementById('categoryIdSelect');
 
     function updateCategoryVisibility() {
       const selected = document.querySelector('input[name="banner_type"]:checked');
+      // 메뉴별 배너 선택 필드 토글
+      if (menuTargetField) {
+        menuTargetField.classList.toggle('hidden', !(selected && selected.value === 'MENU'));
+      }
       if (selected && (selected.value === 'CATEGORY' || selected.value === 'BRAND')) {
         categoryField.classList.remove('hidden');
 
@@ -216,6 +235,13 @@
           기본: <span class="font-mono">900 × 200px</span> (가로:세로 <span class="font-mono">4.5 : 1</span> 내외)<br>
           2배 해상도 작업 시: <span class="font-mono">1800 × 400px</span><br>
           <span class="text-[11px] text-gray-400">브랜드 상세 페이지 최상단에 노출되는 맞춤 배너입니다.</span>
+        `;
+      } else if (selected.value === 'MENU') {
+        sizeGuide.innerHTML = `
+          <span class="font-medium text-gray-700">메뉴별 배너 권장 사이즈</span><br>
+          기본: <span class="font-mono">1200 × 260px</span> (가로:세로 <span class="font-mono">4.6 : 1</span> 내외)<br>
+          2배 해상도 작업 시: <span class="font-mono">2400 × 520px</span><br>
+          <span class="text-[11px] text-gray-400">선택한 메뉴(베스트·신상품 등) 목록 페이지 상단에 노출됩니다.</span>
         `;
       } else {
         sizeGuide.textContent = '배너 타입을 선택하면 권장 이미지 사이즈가 표시됩니다.';

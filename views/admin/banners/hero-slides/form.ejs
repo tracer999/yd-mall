@@ -1,0 +1,149 @@
+<div class="flex justify-center">
+  <div class="w-full lg:max-w-3xl">
+    <div class="mb-6">
+      <p class="mt-1 text-sm text-gray-500">
+        메인 히어로(상품 쇼케이스) 슬라이드를 등록합니다.
+        라벨·헤드라인·이미지·링크를 비워두면 연결된 상품 정보로 자동 표시됩니다.
+      </p>
+    </div>
+
+    <form action="<%= slide ? '/admin/banners/hero-slides/edit/' + slide.id : '/admin/banners/hero-slides/add' %>" method="POST"
+      enctype="multipart/form-data" class="space-y-6">
+      <div class="bg-white shadow-sm rounded-xl border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-100">
+          <h3 class="text-lg font-semibold text-gray-800">슬라이드 정보</h3>
+        </div>
+        <div class="px-6 py-5 space-y-5">
+
+          <!-- 슬롯 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">노출 위치(슬롯)</label>
+            <div class="flex flex-wrap gap-4">
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input type="radio" name="slot" value="MAIN" class="text-blue-600 border-gray-300 focus:ring-blue-500"
+                  <%= (!slide && currentSlot === 'MAIN') || (slide && slide.slot === 'MAIN') ? 'checked' : '' %>>
+                <span>중앙 슬라이더 (MAIN)</span>
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input type="radio" name="slot" value="FEATURE" class="text-blue-600 border-gray-300 focus:ring-blue-500"
+                  <%= (slide && slide.slot === 'FEATURE') ? 'checked' : '' %>>
+                <span>우측 추천 카드 (FEATURE)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 연결 상품 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">연결 상품 ID</label>
+            <input type="number" name="product_id" placeholder="예: 293"
+              value="<%= slide && slide.product_id ? slide.product_id : '' %>"
+              class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+            <% if (slide && slide.product_id) { %>
+              <p class="mt-1 text-xs text-gray-500">현재 연결: #<%= slide.product_id %> <span class="font-medium"><%= slide.product_name || '(삭제된 상품)' %></span></p>
+            <% } else { %>
+              <p class="mt-1 text-xs text-gray-400">상품 상세의 URL(/products/view/<b>293</b>) 또는 상품 목록에서 상품 ID를 확인해 입력하세요. 가격·할인율·대표이미지는 이 상품에서 가져옵니다.</p>
+            <% } %>
+          </div>
+
+          <!-- 라벨 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">라벨 <span class="text-gray-400 font-normal">(선택)</span></label>
+            <input type="text" name="label" placeholder="예: [베스트]" value="<%= slide && slide.label ? slide.label : '' %>"
+              class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+            <p class="mt-1 text-xs text-gray-400">슬라이드 상단/썸네일에 표시되는 작은 태그. 비우면 상품 공급사명으로 대체됩니다.</p>
+          </div>
+
+          <!-- 헤드라인 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">헤드라인 <span class="text-gray-400 font-normal">(선택)</span></label>
+            <input type="text" name="headline" placeholder="비우면 상품명이 표시됩니다" value="<%= slide && slide.headline ? slide.headline : '' %>"
+              class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+          </div>
+
+          <!-- 이미지 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">프로모션 이미지 <span class="text-gray-400 font-normal">(선택)</span></label>
+            <input type="file" name="slide_image" id="slideImageInput" accept="image/*"
+              class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-gray-300" />
+            <p class="mt-1 text-xs text-gray-400">비우면 연결 상품의 대표이미지를 사용합니다. 중앙 슬라이더는 원형으로 노출되므로 정사각형(1:1) 이미지를 권장합니다.</p>
+            <p class="mt-1 text-xs text-blue-700">최대 업로드 용량: <%= maxUploadFileMb || 20 %>MB</p>
+            <% if (slide && slide.image_url) { %>
+              <input type="hidden" name="existing_image" value="<%= slide.image_url %>">
+            <% } %>
+            <div id="previewContainer" class="mt-4 <%= slide && slide.image_url ? '' : 'hidden' %>">
+              <p class="text-sm text-gray-700 mb-2 font-medium">미리보기</p>
+              <div class="border rounded-lg overflow-hidden bg-gray-50 inline-block">
+                <img id="previewImage" src="<%= slide && slide.image_url ? slide.image_url : '' %>" alt="Preview"
+                  class="max-w-full h-auto object-contain" style="max-height: 240px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- 링크 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">연결 링크 <span class="text-gray-400 font-normal">(선택)</span></label>
+            <input type="text" name="link_url" placeholder="비우면 연결 상품 상세로 이동" value="<%= slide && slide.link_url ? slide.link_url : '' %>"
+              class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">노출 순서</label>
+              <input type="number" name="sort_order" value="<%= slide ? slide.sort_order : 0 %>"
+                class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div class="flex items-end pb-2">
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" name="is_active" id="isActive" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  <%= (!slide) || (slide && slide.is_active) ? 'checked' : '' %>>
+                <span>노출 활성화</span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 gap-3">
+        <a href="/admin/banners/hero-slides"
+          class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+        <button type="submit"
+          class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">저장하기</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const maxUploadMb = Number('<%= maxUploadFileMb || 20 %>');
+    const maxUploadBytes = maxUploadMb * 1024 * 1024;
+    const imageInput = document.getElementById('slideImageInput');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewImage = document.getElementById('previewImage');
+
+    if (imageInput) {
+      imageInput.addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (!file) {
+          previewImage.src = '';
+          previewContainer.classList.add('hidden');
+          return;
+        }
+        if (file.size > maxUploadBytes) {
+          alert(`파일 크기는 ${maxUploadMb}MB를 초과할 수 없습니다.`);
+          imageInput.value = '';
+          previewImage.src = '';
+          previewContainer.classList.add('hidden');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+          previewImage.src = ev.target.result;
+          previewContainer.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  })();
+</script>

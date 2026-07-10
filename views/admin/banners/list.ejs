@@ -9,9 +9,13 @@
 
 <div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">
     <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <a href="/admin/banners/hero-slides"
+            class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            메인 슬라이더
+        </a>
         <a href="/admin/banners?type=MAIN"
             class="<%= currentType === 'MAIN' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-            메인 배너
+            메인 배너(레거시)
         </a>
         <a href="/admin/banners?type=CATEGORY"
             class="<%= currentType === 'CATEGORY' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
@@ -25,11 +29,19 @@
             class="<%= currentType === 'BRAND' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
             브랜드 배너
         </a>
+        <a href="/admin/banners?type=MENU"
+            class="<%= currentType === 'MENU' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            메뉴별 배너
+        </a>
     </nav>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <% banners.forEach(banner=> { %>
+    <% banners.forEach(banner=> {
+        const isMenuBanner = banner.group_key && banner.group_key.indexOf('menu:') === 0;
+        const menuKey = isMenuBanner ? banner.group_key.slice('menu:'.length) : '';
+        const menuLabel = isMenuBanner ? ((menuTargets || []).find(t => t.key === menuKey) || {}).label || menuKey : '';
+    %>
         <div class="bg-white overflow-hidden shadow-sm rounded-lg flex flex-col h-full">
             <img src="<%= banner.image_url %>" class="w-full h-40 object-cover" alt="<%= banner.title %>">
             <div class="p-6 flex-1 flex flex-col">
@@ -39,13 +51,15 @@
                     </h5>
                     <span
                         class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full
-                                        <%= banner.banner_type === 'CATEGORY' ? 'bg-indigo-100 text-indigo-800' : banner.banner_type === 'BRAND' ? 'bg-purple-100 text-purple-800' : banner.banner_type === 'POPUP' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800' %>">
-                        <%= banner.banner_type==='CATEGORY' ? '카테고리 배너' : banner.banner_type==='BRAND' ? '브랜드 배너' :
+                                        <%= isMenuBanner ? 'bg-teal-100 text-teal-800' : banner.banner_type === 'CATEGORY' ? 'bg-indigo-100 text-indigo-800' : banner.banner_type === 'BRAND' ? 'bg-purple-100 text-purple-800' : banner.banner_type === 'POPUP' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800' %>">
+                        <%= isMenuBanner ? '메뉴별 배너' : banner.banner_type==='CATEGORY' ? '카테고리 배너' : banner.banner_type==='BRAND' ? '브랜드 배너' :
                             banner.banner_type==='POPUP' ? '팝업 배너' : '메인 배너' %>
                     </span>
                 </div>
                 <p class="text-xs text-gray-500 mb-1">
-                    <% if ((banner.banner_type==='CATEGORY' || banner.banner_type==='BRAND' ) && banner.category_name) {
+                    <% if (isMenuBanner) { %>
+                        대상 메뉴: <span class="font-medium"><%= menuLabel %></span>
+                    <% } else if ((banner.banner_type==='CATEGORY' || banner.banner_type==='BRAND' ) && banner.category_name) {
                         %>
                         대상 <%= banner.banner_type==='BRAND' ? '브랜드' : '카테고리' %>: <span class="font-medium">
                                 <%= banner.category_name %>

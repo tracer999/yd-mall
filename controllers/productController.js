@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const navigationService = require('../services/menu/navigationService');
+const bannerService = require('../services/display/bannerService');
 
 /**
  * 카테고리 목록 정렬 6종.
@@ -78,8 +79,17 @@ exports.getList = async (req, res) => {
     let pageTitle = '전체상품';
     let categoryBanner = null;
     let categoryNav = null;
+    // 메뉴별 배너 (파트2 틀) — 기능 메뉴(routes/feature.js)가 preset 으로 menuKey 를 주입한다.
+    // group_key='menu:{key}' 배너를 조회해 목록 상단에 노출한다. (bannerService: is_active·기간 필터 적용)
+    let menuBanner = null;
 
     try {
+        const menuKey = q.menuKey || null;
+        if (menuKey) {
+            const menuBanners = await bannerService.getByGroup(`menu:${menuKey}`, { limit: 1 });
+            if (menuBanners.length > 0) menuBanner = menuBanners[0];
+        }
+
         if (selectedCategoryId) {
             const [catRows] = await pool.query('SELECT id, name, type FROM categories WHERE id = ?', [selectedCategoryId]);
             if (catRows.length > 0) {
@@ -249,6 +259,7 @@ exports.getList = async (req, res) => {
             currentUser: req.user,
             likedProductIds,
             categoryBanner,
+            menuBanner,
             categoryNav,
             sortTabs: SORT_TABS,
             seo,
