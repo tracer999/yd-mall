@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { transition, log } = require('../../services/order/orderStatusService');
 
 exports.getList = async (req, res) => {
     try {
@@ -33,29 +34,59 @@ exports.getList = async (req, res) => {
 
 exports.postTracking = async (req, res) => {
     const { order_id, courier_company, tracking_number } = req.body;
+    const adminId = req.session.admin ? req.session.admin.id : null;
+    const conn = await pool.getConnection();
     try {
-        // Check if shipment exists
-        const [start] = await pool.query('SELECT id FROM shipments WHERE order_id = ?', [order_id]);
+        await conn.beginTransaction();
 
+        const [start] = await conn.query('SELECT id FROM shipments WHERE order_id = ?', [order_id]);
         if (start.length > 0) {
-            await pool.query(`
-                UPDATE shipments 
-                SET courier_company = ?, tracking_number = ?, status = 'IN_TRANSIT', shipped_at = NOW() 
-                WHERE order_id = ?
-            `, [courier_company, tracking_number, order_id]);
+            await conn.query(
+                `UPDATE shipments SET courier_company = ?, tracking_number = ?, status = 'IN_TRANSIT', shipped_at = NOW() WHERE order_id = ?`,
+                [courier_company, tracking_number, order_id]
+            );
         } else {
-            await pool.query(`
-                INSERT INTO shipments (order_id, courier_company, tracking_number, status, shipped_at) 
-                VALUES (?, ?, ?, 'IN_TRANSIT', NOW())
-            `, [order_id, courier_company, tracking_number]);
+            await conn.query(
+                `INSERT INTO shipments (order_id, courier_company, tracking_number, status, shipped_at) VALUES (?, ?, ?, 'IN_TRANSIT', NOW())`,
+                [order_id, courier_company, tracking_number]
+            );
         }
 
-        // Update order status to SHIPPED
-        await pool.query("UPDATE orders SET status = 'SHIPPED' WHERE id = ?", [order_id]);
+        // 이미 배송완료/취소된 주문은 건드리지 않는다.
+        await transition(conn, Number(order_id), { status: 'SHIPPED' },
+            { actorType: 'ADMIN', actorId: adminId, memo: `송장 등록 (${courier_company} ${tracking_number})` });
 
+        await conn.commit();
         res.redirect('/admin/shipping');
     } catch (err) {
+        await conn.rollback();
         console.error(err);
         res.status(500).send('Server Error');
+    } finally {
+        conn.release();
+    }
+};
+
+/** 배송완료 처리 — SHIPPED → DELIVERED. delivered_at 이 반품 가능 기간의 기준이 된다. */
+exports.postDelivered = async (req, res) => {
+    const { order_id } = req.body;
+    const adminId = req.session.admin ? req.session.admin.id : null;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        await conn.query(
+            "UPDATE shipments SET status = 'DELIVERED', delivered_at = NOW() WHERE order_id = ?",
+            [order_id]
+        );
+        await transition(conn, Number(order_id), { status: 'DELIVERED' },
+            { actorType: 'ADMIN', actorId: adminId, memo: '배송완료 처리' });
+        await conn.commit();
+        res.redirect('/admin/shipping');
+    } catch (err) {
+        await conn.rollback();
+        console.error(err);
+        res.status(500).send('Server Error');
+    } finally {
+        conn.release();
     }
 };

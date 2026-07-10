@@ -1,0 +1,57 @@
+<%
+  /* 취소·반품 내역 (주문/클레임 문서 §5-1) */
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const dt = (v) => (v ? new Date(v).toLocaleDateString('ko-KR') : '-');
+  const TYPE = { CANCEL: '취소', RETURN: '반품', EXCHANGE: '교환' };
+  const STATUS = {
+    REQUESTED: ['처리 중', 'bg-amber-100 text-amber-800'],
+    APPROVED:  ['승인', 'bg-blue-100 text-blue-800'],
+    COMPLETED: ['완료', 'bg-green-100 text-green-800'],
+    REJECTED:  ['반려', 'bg-red-100 text-red-700'],
+    WITHDRAWN: ['철회', 'bg-gray-100 text-gray-500'],
+  };
+%>
+<%- include('./_shell_start') %>
+
+    <div class="bg-white rounded-lg shadow border border-gray-100">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            <h3 class="text-lg font-bold text-gray-800">취소·반품 내역</h3>
+        </div>
+
+        <% if (!claims.length) { %>
+            <div class="p-12 text-center text-gray-500">취소·반품 내역이 없습니다.</div>
+        <% } else { %>
+            <ul class="divide-y divide-gray-100">
+                <% claims.forEach(function (c) {
+                     const s = STATUS[c.status] || STATUS.REQUESTED;
+                %>
+                    <li class="p-5 flex items-center justify-between gap-4">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-semibold text-gray-900"><%= TYPE[c.claim_type] %></span>
+                                <span class="px-2 py-0.5 rounded-full text-xs <%= s[1] %>"><%= s[0] %></span>
+                            </div>
+                            <a href="/mypage/orders/<%= c.order_id %>" class="block mt-1 text-sm text-gray-500 hover:underline">
+                                주문 <%= c.order_number %> · <%= dt(c.requested_at) %>
+                            </a>
+                            <% if (c.status === 'COMPLETED' && c.refund_amount != null) { %>
+                                <p class="mt-1 text-sm text-gray-700">
+                                    환불 <%= won(c.refund_amount) %>원
+                                    <% if (c.return_shipping_fee_deducted > 0) { %>
+                                        <span class="text-gray-400">(반품비 -<%= won(c.return_shipping_fee_deducted) %>원 차감)</span>
+                                    <% } %>
+                                </p>
+                            <% } %>
+                        </div>
+                        <% if (c.status === 'REQUESTED') { %>
+                            <form method="POST" action="/mypage/claims/<%= c.id %>/withdraw"
+                                  onsubmit="return confirm('신청을 철회할까요?');">
+                                <button type="submit" class="text-xs px-3 py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">철회</button>
+                            </form>
+                        <% } %>
+                    </li>
+                <% }); %>
+            </ul>
+        <% } %>
+    </div>
+<%- include('./_shell_end') %>

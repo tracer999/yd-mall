@@ -1,5 +1,7 @@
 const pool = require('../../config/db');
 const { restoreOrderResources } = require('../../services/order/orderCancelService');
+const { refundOrder } = require('../../services/order/refundService');
+const { transition, history } = require('../../services/order/orderStatusService');
 
 exports.getList = async (req, res) => {
     try {
@@ -73,6 +75,11 @@ exports.getDetail = async (req, res) => {
         const usedCoupon = await loadCoupon(order.user_coupon_id);
         const shippingCoupon = await loadCoupon(order.shipping_coupon_id);
 
+        // 상태 변경 이력 + 클레임/환불 (주문/클레임 문서 §5-2)
+        const logs = await history(pool, id);
+        const [claims] = await pool.query('SELECT * FROM order_claims WHERE order_id = ? ORDER BY created_at DESC', [id]);
+        const [refunds] = await pool.query('SELECT * FROM order_refunds WHERE order_id = ? ORDER BY created_at DESC', [id]);
+
         res.render('admin/sales/detail', {
             layout: 'layouts/admin_layout',
             title: '주문 상세',
@@ -80,7 +87,10 @@ exports.getDetail = async (req, res) => {
             items,
             shipment: shipment[0] || null,
             usedCoupon,
-            shippingCoupon
+            shippingCoupon,
+            logs,
+            claims,
+            refunds
         });
     } catch (err) {
         console.error(err);
@@ -92,8 +102,11 @@ const ORDER_STATUSES = ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 
 const CANCEL_STATUSES = ['CANCELLED', 'REFUNDED'];
 
 /*
- * 상태 변경. 취소·환불로 넘어갈 때는 재고·쿠폰·적립금을 함께 되돌린다(C1).
- * 이 화면(/admin/sales)이 운영자가 실제로 쓰는 유일한 주문 취소 경로다
+ * 상태 변경. 취소·환불로 넘어갈 때는 재고·쿠폰·적립금을 함께 되돌리고(C1) PG 결제도 취소한다.
+ * 복원은 멱등하다 — 클레임 승인이 이미 되돌린 주문을 여기서 또 눌러도 재고가 두 번 늘지 않는다.
+ * 모든 변경은 order_status_logs 에 남는다.
+ *
+ * 이 화면(/admin/sales)이 운영자가 실제로 쓰는 유일한 주문 상태 변경 경로다
  * — routes/admin/orders.js 는 마운트돼 있지 않다.
  */
 exports.postStatus = async (req, res) => {
@@ -101,13 +114,15 @@ exports.postStatus = async (req, res) => {
     if (!ORDER_STATUSES.includes(status)) {
         return res.redirect(`/admin/sales/${id}`);
     }
+    const adminId = req.session.admin ? req.session.admin.id : null;
 
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
 
         const [[order]] = await connection.query(
-            'SELECT id, user_id, status, point_used FROM orders WHERE id = ? FOR UPDATE',
+            `SELECT id, user_id, status, point_used, total_amount, shipping_fee, shipping_discount, payment_key
+               FROM orders WHERE id = ? FOR UPDATE`,
             [id]
         );
         if (!order) {
@@ -116,11 +131,21 @@ exports.postStatus = async (req, res) => {
         }
 
         const becomingCancelled = CANCEL_STATUSES.includes(status) && !CANCEL_STATUSES.includes(order.status);
+        let refund = null;
         if (becomingCancelled) {
             await restoreOrderResources(connection, order);
+            refund = await refundOrder(connection, { order, reason: '관리자 취소' });
         }
 
-        await connection.query('UPDATE orders SET status = ? WHERE id = ?', [status, id]);
+        await transition(connection, order.id, Object.assign(
+            { status },
+            becomingCancelled ? {
+                payment_status: refund && refund.ok ? 'REFUNDED' : 'CANCELLED',
+                claim_status: 'COMPLETED',
+                refund_status: refund && refund.ok ? 'COMPLETED' : (refund ? 'FAILED' : 'NONE'),
+            } : {}
+        ), { actorType: 'ADMIN', actorId: adminId, memo: '관리자 상태 변경' });
+
         await connection.commit();
         res.redirect(`/admin/sales/${id}`);
     } catch (err) {

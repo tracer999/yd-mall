@@ -1,8 +1,8 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 const emailService = require('../services/emailService');
-const { restoreOrderResources } = require('../services/order/orderCancelService');
 const { benefitLabel } = require('../services/coupon/discountCalculator');
+const claimService = require('../services/order/claimService');
 
 exports.getDashboard = async (req, res, next) => {
     try {
@@ -177,6 +177,34 @@ exports.getOrders = async (req, res, next) => {
     }
 };
 
+exports.getClaims = async (req, res, next) => {
+    try {
+        const [claims] = await pool.query(
+            `SELECT c.*, o.order_number, o.total_amount,
+                    r.refund_amount, r.status AS refund_status, r.return_shipping_fee_deducted
+               FROM order_claims c
+               JOIN orders o ON o.id = c.order_id
+               LEFT JOIN order_refunds r ON r.claim_id = c.id
+              WHERE o.user_id = ?
+              ORDER BY c.created_at DESC`,
+            [req.user.id]
+        );
+        res.render('user/mypage/claims', { title: '취소·반품 내역', claims });
+    } catch (err) {
+        next(err);
+    }
+};
+
+exports.withdrawClaim = async (req, res, next) => {
+    try {
+        const result = await claimService.withdrawClaim({ claimId: Number(req.params.id), userId: req.user.id });
+        if (!result.ok) return res.redirect('/mypage/claims?error=' + encodeURIComponent(result.reason));
+        res.redirect('/mypage/claims');
+    } catch (err) {
+        next(err);
+    }
+};
+
 exports.getOrderDetail = async (req, res, next) => {
     try {
         const userId = req.user.id;
@@ -208,11 +236,26 @@ exports.getOrderDetail = async (req, res, next) => {
             [orderId]
         );
 
+        // 클레임 내역 (취소·반품)
+        const [claims] = await pool.query(
+            'SELECT * FROM order_claims WHERE order_id = ? ORDER BY created_at DESC',
+            [orderId]
+        );
+
+        const claimMsg = {
+            cancel_done: '주문이 취소되었습니다.',
+            cancel_requested: '취소 신청이 접수되었습니다. 처리 결과를 기다려 주세요.',
+            return_requested: '반품 신청이 접수되었습니다. 처리 결과를 기다려 주세요.',
+        }[req.query.claim] || null;
+
         res.render('user/mypage/order_detail', {
             title: '주문 상세',
             order,
             items,
-            shipment: shipments[0] || null
+            shipment: shipments[0] || null,
+            claims,
+            claimMsg,
+            claimError: req.query.claim_error || null
         });
     } catch (err) {
         next(err);
@@ -458,42 +501,39 @@ exports.getPoints = async (req, res, next) => {
 };
 
 exports.cancelOrder = async (req, res, next) => {
-    const connection = await pool.getConnection();
     try {
-        await connection.beginTransaction();
-
         const userId = req.user.id;
         const orderId = req.params.id;
-        const { reason } = req.body;
+        const { reason, reasonType } = req.body;
 
-        // 주문 조회 및 상태 확인 (Lock)
-        const [orders] = await connection.query(
-            'SELECT id, user_id, status, point_used, buyer_email FROM orders WHERE id = ? AND user_id = ? FOR UPDATE',
-            [orderId, userId]
-        );
+        /*
+         * 취소·반품 신청은 claimService 하나로 모은다.
+         * 출고 전(PENDING·PAID)이면 즉시 승인·환불까지 끝나고, 준비 시작 후에는 관리자 승인을 기다린다.
+         * 출고 후에는 이 경로가 '취소'가 아니라 '반품'으로 처리된다.
+         *
+         * (과거엔 여기서 orders.cancel_reason 을 UPDATE 했는데 그 컬럼이 없어 **항상 500** 이었다.)
+         */
+        const [[order]] = await pool.query('SELECT status FROM orders WHERE id = ? AND user_id = ?', [orderId, userId]);
+        if (!order) return res.status(404).send('주문을 찾을 수 없습니다.');
 
-        if (orders.length === 0) {
-            await connection.rollback();
-            return res.status(404).send('주문을 찾을 수 없습니다.');
+        const claimType = ['SHIPPED', 'DELIVERED'].includes(order.status) ? 'RETURN' : 'CANCEL';
+        const result = await claimService.requestClaim({
+            orderId: Number(orderId),
+            userId,
+            claimType,
+            reasonType: reasonType || 'CHANGE_OF_MIND',
+            reasonDetail: reason,
+            requestedBy: 'CUSTOMER',
+            mallId: req.mallId || 1,
+        });
+
+        if (!result.ok) {
+            return res.redirect(`/mypage/orders/${orderId}?claim_error=` + encodeURIComponent(result.reason));
         }
 
-        const order = orders[0];
-        if (order.status !== 'PENDING' && order.status !== 'PAID') {
-            await connection.rollback();
-            return res.status(400).send('취소할 수 없는 주문 상태입니다.');
-        }
-
-        // 재고·쿠폰·적립금을 같은 트랜잭션에서 되돌린다 (C1). status 는 취소 전 값이어야 한다.
-        await restoreOrderResources(connection, order);
-
-        await connection.query(
-            'UPDATE orders SET status = ?, cancel_reason = ? WHERE id = ?',
-            ['CANCELLED', reason, orderId]
-        );
-
-        await connection.commit();
-
-        // 관리자에게 취소 알림 이메일 발송
+        // 알림 이메일 — 실패해도 취소 흐름을 막지 않는다.
+        const [[emailRow]] = await pool.query('SELECT buyer_email FROM orders WHERE id = ?', [orderId]);
+        const order2 = { buyer_email: emailRow && emailRow.buyer_email };
         const adminEmail = process.env.ADMIN_EMAIL;
         if (adminEmail) {
             emailService.sendEmail({
@@ -503,22 +543,21 @@ exports.cancelOrder = async (req, res, next) => {
             }).catch(err => console.error('관리자 알림 이메일 발송 실패:', err));
         }
 
-        // 사용자에게 취소 알림 이메일 발송
-        const userEmail = order.buyer_email || req.user.email;
+        // 사용자에게 취소/반품 접수 알림
+        const userEmail = order2.buyer_email || req.user.email;
+        const label = claimType === 'RETURN' ? '반품 신청이 접수' : (result.autoApproved ? '취소가 완료' : '취소 신청이 접수');
         if (userEmail) {
             emailService.sendEmail({
                 to: userEmail,
-                subject: `[와이디몰] 주문번호 ${orderId} 취소가 완료되었습니다.`,
-                text: `안녕하세요.\n주문번호 ${orderId}의 주문 취소가 정상적으로 처리되었습니다.\n\n취소사유: ${reason}\n\n이용해 주셔서 감사합니다.`
-            }).catch(err => console.error('사용자 취소 알림 이메일 발송 실패:', err));
+                subject: `[와이디몰] 주문번호 ${orderId} ${label}되었습니다.`,
+                text: `안녕하세요.\n주문번호 ${orderId}의 ${label}되었습니다.\n\n사유: ${reason || ''}\n\n이용해 주셔서 감사합니다.`
+            }).catch(err => console.error('사용자 알림 이메일 발송 실패:', err));
         }
 
-        res.redirect(`/mypage/orders/${orderId}`);
+        const msg = result.autoApproved ? 'cancel_done' : (claimType === 'RETURN' ? 'return_requested' : 'cancel_requested');
+        res.redirect(`/mypage/orders/${orderId}?claim=${msg}`);
     } catch (err) {
-        await connection.rollback();
         next(err);
-    } finally {
-        connection.release();
     }
 };
 

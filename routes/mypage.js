@@ -18,6 +18,10 @@ router.get('/orders', mypageController.getOrders);
 router.get('/orders/:id', mypageController.getOrderDetail);
 router.post('/orders/:id/cancel', mypageController.cancelOrder);
 
+// 취소·반품 내역
+router.get('/claims', mypageController.getClaims);
+router.post('/claims/:id/withdraw', mypageController.withdrawClaim);
+
 router.get('/profile', mypageController.getProfile);
 router.post('/profile/update', mypageController.updateProfile);
 

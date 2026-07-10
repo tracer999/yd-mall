@@ -31,12 +31,25 @@ function isCouponRestoreEnabled() {
  * 호출측이 트랜잭션을 열고 `orders` 행을 `FOR UPDATE` 로 잠근 뒤 부른다.
  * `orders.status` 는 **취소 전 상태**를 넘겨야 한다(재고 복원 여부를 이걸로 판정한다).
  *
+ * ⚠️ **멱등하다.** `orders.resources_restored_at` 이 채워져 있으면 아무것도 하지 않는다.
+ *    복원 경로가 둘(관리자 상태 변경 · 클레임 승인)이 된 이상, 재고 `stock = stock + qty` 는
+ *    가드 없이는 두 번 더해진다. 적립금 이력 검사만으로는 재고를 막지 못한다.
+ *
  * @param {import('mysql2/promise').PoolConnection} conn
  * @param {{id:number, user_id:number|null, status:string, point_used:number}} order
+ * @returns {Promise<boolean>} 실제로 복원했으면 true, 이미 복원된 주문이면 false
  */
 async function restoreOrderResources(conn, order) {
     const orderId = order.id;
     const wasPaid = PAYMENT_CONFIRMED.has(order.status);
+
+    // 0) 멱등 가드 — 조건부 UPDATE 의 affectedRows 로 "내가 첫 번째"임을 확보한다.
+    //    호출측이 주문 행을 FOR UPDATE 로 잠갔더라도, 이 한 줄이 계약을 코드로 남긴다.
+    const [claimed] = await conn.query(
+        'UPDATE orders SET resources_restored_at = NOW() WHERE id = ? AND resources_restored_at IS NULL',
+        [orderId]
+    );
+    if (claimed.affectedRows === 0) return false;
 
     // 1) 재고
     if (wasPaid) {
@@ -66,14 +79,16 @@ async function restoreOrderResources(conn, order) {
     }
 
     // 3) 적립금 — PENDING 주문은 아직 정산되지 않았다
-    if (!wasPaid || !order.user_id) return;
+    if (!wasPaid || !order.user_id) return true;
 
+    // 이력 검사는 위의 멱등 가드와 겹친다. 남겨 둔다 — 이 함수를 우회해 적립금만 되돌리는
+    // 운영 스크립트가 생겨도 중복 환급을 막는다.
     const [[dup]] = await conn.query(
         `SELECT COUNT(*) AS c FROM point_transactions
           WHERE order_id = ? AND transaction_type IN ('ORDER_CANCEL_RESTORE','ORDER_CANCEL_REVOKE')`,
         [orderId]
     );
-    if (Number(dup.c) > 0) return; // 이미 되돌린 주문
+    if (Number(dup.c) > 0) return true; // 이미 되돌린 주문
 
     const userId = order.user_id;
     const pointUsed = Number(order.point_used) || 0;
@@ -104,6 +119,7 @@ async function restoreOrderResources(conn, order) {
             );
         }
     }
+    return true;
 }
 
 module.exports = { restoreOrderResources, PAYMENT_CONFIRMED };

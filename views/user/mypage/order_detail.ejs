@@ -1,5 +1,12 @@
 <%- include('./_shell_start') %>
 
+    <% if (typeof claimMsg !== 'undefined' && claimMsg) { %>
+        <div class="mb-4 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800"><%= claimMsg %></div>
+    <% } %>
+    <% if (typeof claimError !== 'undefined' && claimError) { %>
+        <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"><%= claimError %></div>
+    <% } %>
+
     <div class="bg-white rounded-lg shadow border border-gray-100 mb-6">
         <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
             <h3 class="text-lg font-bold text-gray-800">주문 상세 정보</h3>
@@ -125,55 +132,70 @@
                 class="inline-block px-6 py-2 ml-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">배송
                 조회</button>
             <% } %>
-                <% if (order.status==='PENDING' || order.status==='PAID' ) { %>
+                <%
+                  // 취소(출고 전) vs 반품(출고 후). claim_status 가 진행 중이면 버튼을 감춘다.
+                  const canCancel = ['PENDING', 'PAID', 'PREPARING'].includes(order.status) && order.claim_status === 'NONE';
+                  const canReturn = ['SHIPPED', 'DELIVERED'].includes(order.status) && order.claim_status === 'NONE';
+                  const isReturn = canReturn;
+                %>
+                <% if (canCancel || canReturn) { %>
                     <button type="button" onclick="openCancelModal()"
-                        class="inline-block px-6 py-2 ml-2 border border-red-300 bg-red-50 rounded-lg text-red-700 hover:bg-red-100 transition">주문
-                        취소</button>
+                        class="inline-block px-6 py-2 ml-2 border border-red-300 bg-red-50 rounded-lg text-red-700 hover:bg-red-100 transition">
+                        <%= isReturn ? '반품 신청' : '주문 취소' %></button>
 
-                    <!-- 취소 모달 -->
                     <div id="cancelModal"
                         class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50"
                         style="display: none;">
                         <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
                             <div class="mt-3 text-center">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900">주문 취소</h3>
+                                <h3 class="text-lg leading-6 font-medium text-gray-900"><%= isReturn ? '반품 신청' : '주문 취소' %></h3>
+                                <% if (isReturn) { %>
+                                    <p class="mt-1 text-xs text-gray-500">단순 변심은 왕복 배송비가 부과됩니다. 불량·오배송은 무료입니다.</p>
+                                <% } %>
                                 <div class="mt-2 px-2 py-3">
                                     <form id="cancelForm" action="/mypage/orders/<%= order.id %>/cancel" method="POST">
+                                        <input type="hidden" name="reasonType" id="reasonType" value="CHANGE_OF_MIND">
                                         <div class="mb-4 text-left">
-                                            <label class="block text-gray-700 text-sm font-bold mb-2"
-                                                for="cancelReasonSelect">취소 사유</label>
+                                            <label class="block text-gray-700 text-sm font-bold mb-2" for="cancelReasonSelect"><%= isReturn ? '반품' : '취소' %> 사유</label>
                                             <select id="cancelReasonSelect"
-                                                class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                                onchange="toggleEtcReason(this)">
-                                                <option value="">사유를 선택하세요</option>
-                                                <option value="단순변심">단순변심</option>
-                                                <option value="주문실수">주문실수</option>
-                                                <option value="배송지연">배송지연</option>
-                                                <option value="서비스불만">서비스불만</option>
-                                                <option value="기타">기타 (직접입력)</option>
+                                                class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none"
+                                                onchange="onReasonChange(this)">
+                                                <% if (isReturn) { %>
+                                                    <option value="CHANGE_OF_MIND|단순변심">단순 변심</option>
+                                                    <option value="DEFECT|상품 불량">상품 불량</option>
+                                                    <option value="WRONG_DELIVERY|오배송">오배송</option>
+                                                    <option value="OTHER|기타">기타 (직접입력)</option>
+                                                <% } else { %>
+                                                    <option value="CHANGE_OF_MIND|단순변심">단순변심</option>
+                                                    <option value="CHANGE_OF_MIND|주문실수">주문실수</option>
+                                                    <option value="OTHER|배송지연">배송지연</option>
+                                                    <option value="OTHER|기타">기타 (직접입력)</option>
+                                                <% } %>
                                             </select>
                                         </div>
                                         <div id="etcReasonContainer" class="mb-4 text-left hidden">
-                                            <label class="block text-gray-700 text-sm font-bold mb-2"
-                                                for="cancelReasonDetail">상세 사유</label>
+                                            <label class="block text-gray-700 text-sm font-bold mb-2" for="cancelReasonDetail">상세 사유</label>
                                             <textarea id="cancelReasonDetail"
-                                                class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                                placeholder="취소 사유를 입력해주세요."></textarea>
+                                                class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none"
+                                                placeholder="사유를 입력해주세요."></textarea>
                                         </div>
                                         <input type="hidden" name="reason" id="finalReason">
                                         <div class="flex gap-2 justify-center mt-4">
                                             <button type="button" onclick="closeCancelModal()"
-                                                class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">닫기</button>
+                                                class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md hover:bg-gray-300">닫기</button>
                                             <button type="button" onclick="submitCancel()"
-                                                class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300">취소
-                                                확정</button>
+                                                class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md hover:bg-red-700"><%= isReturn ? '반품 신청' : '취소 확정' %></button>
                                         </div>
                                     </form>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <% } %>
+                <% } else if (order.claim_status && order.claim_status !== 'NONE') { %>
+                    <span class="inline-block px-6 py-2 ml-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-500">
+                        <%= { REQUESTED:'취소·반품 처리 중', APPROVED:'승인됨', COMPLETED:'처리 완료', REJECTED:'반려됨' }[order.claim_status] || '' %>
+                    </span>
+                <% } %>
     </div>
 
     <script>
@@ -185,38 +207,28 @@
             document.getElementById('cancelModal').style.display = 'none';
         }
 
-        function toggleEtcReason(select) {
-            const etcContainer = document.getElementById('etcReasonContainer');
-            if (select.value === '기타') {
-                etcContainer.classList.remove('hidden');
-            } else {
-                etcContainer.classList.add('hidden');
-            }
+        // 옵션 값은 "REASON_TYPE|표시라벨" 형식이다. 유형은 서버가 귀책 판정에 쓴다.
+        function onReasonChange(select) {
+            const [type, label] = select.value.split('|');
+            document.getElementById('reasonType').value = type;
+            document.getElementById('etcReasonContainer').classList.toggle('hidden', type !== 'OTHER');
         }
 
         function submitCancel() {
             const select = document.getElementById('cancelReasonSelect');
             const detail = document.getElementById('cancelReasonDetail');
             const finalInput = document.getElementById('finalReason');
+            if (!select.value) { alert('사유를 선택해주세요.'); return; }
 
-            if (!select.value) {
-                alert('취소 사유를 선택해주세요.');
-                return;
-            }
-
-            let reason = select.value;
-            if (reason === '기타') {
-                if (!detail.value.trim()) {
-                    alert('상세 사유를 입력해주세요.');
-                    return;
-                }
+            const [type, label] = select.value.split('|');
+            let reason = label;
+            if (type === 'OTHER') {
+                if (!detail.value.trim()) { alert('상세 사유를 입력해주세요.'); return; }
                 reason = detail.value.trim();
             }
-
-            if (confirm('정말로 주문을 취소하시겠습니까?')) {
-                finalInput.value = reason;
-                document.getElementById('cancelForm').submit();
-            }
+            document.getElementById('reasonType').value = type;
+            finalInput.value = reason;
+            document.getElementById('cancelForm').submit();
         }
 
         function trackShipment(courier, trackingNumber) {
@@ -247,9 +259,5 @@
             }
         }
     </script>
-    }
-    }
-    </script>
-    <% } %>
         </div>
         <%- include('./_shell_end') %>

@@ -54,6 +54,8 @@ router.use('/sales', requireMenuAccess('/admin/sales'), require('./admin/sales')
 router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/shipping'));
 // 배송비 정책(몰별 기본료·무료배송 기준·지역 할증). /admin/shipping 은 송장 관리다 — 별개 화면.
 router.use('/shipping-policy', requireMenuAccess('/admin/shipping-policy'), require('./admin/shipping-policy'));
+// 클레임 관리(취소·반품·환불). 화면 메뉴는 하나, 내부는 order_claims 가 유형으로 구분한다.
+router.use('/claims', requireMenuAccess('/admin/claims'), require('./admin/claims'));
 router.use('/visitors', requireMenuAccess('/admin/visitors'), require('./admin/visitors'));
 router.use('/settings', requireMenuAccess('/admin/settings'), require('./admin/settings'));
 router.use('/site-settings', requireMenuAccess('/admin/site-settings'), require('./admin/siteSettings'));

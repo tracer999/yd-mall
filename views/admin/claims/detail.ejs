@@ -1,0 +1,155 @@
+<%
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR') : '-');
+  const TYPE = { CANCEL: '취소', RETURN: '반품', EXCHANGE: '교환' };
+  const REASON = { CHANGE_OF_MIND: '단순 변심', DEFECT: '불량', WRONG_DELIVERY: '오배송', OTHER: '기타' };
+  const isOpen = claim.status === 'REQUESTED';
+  const refundPreview = Math.max(0, Number(claim.total_amount) - (claim.responsible === 'CUSTOMER' && claim.claim_type === 'RETURN' ? suggestedReturnFee : 0));
+%>
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <a href="/admin/claims" class="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-block">← 클레임 목록</a>
+
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"><%= error %></div>
+  <% } %>
+  <% if (typeof refund_failed !== 'undefined' && refund_failed) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-800">
+      승인은 처리됐으나 <strong>PG 환불에 실패</strong>했습니다. 아래 환불 내역에서 수동 환불로 마감하세요.
+    </div>
+  <% } %>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- 클레임 정보 -->
+    <div class="lg:col-span-2 space-y-6">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-gray-900"><%= TYPE[claim.claim_type] %> 신청</h2>
+          <span class="text-sm text-gray-400 font-mono"><%= claim.order_number %></span>
+        </div>
+        <dl class="grid grid-cols-2 gap-y-3 text-sm">
+          <dt class="text-gray-500">신청자</dt><dd class="text-gray-900"><%= claim.requested_by === 'ADMIN' ? '관리자' : (claim.customer_name || '비회원') %></dd>
+          <dt class="text-gray-500">신청일</dt><dd class="text-gray-900"><%= dt(claim.requested_at) %></dd>
+          <dt class="text-gray-500">사유</dt><dd class="text-gray-900"><%= REASON[claim.reason_type] %></dd>
+          <dt class="text-gray-500">주문 상태</dt><dd class="text-gray-900"><%= claim.order_status %></dd>
+        </dl>
+        <% if (claim.reason_detail) { %>
+          <div class="mt-3 p-3 bg-gray-50 rounded text-sm text-gray-700"><%= claim.reason_detail %></div>
+        <% } %>
+        <% if (claim.admin_memo) { %>
+          <div class="mt-3 p-3 bg-blue-50 rounded text-sm text-blue-800">관리자 메모: <%= claim.admin_memo %></div>
+        <% } %>
+      </div>
+
+      <!-- 주문 상품 -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">주문 상품</h3>
+        <ul class="divide-y divide-gray-100">
+          <% items.forEach(function (i) { %>
+            <li class="py-2 flex justify-between text-sm">
+              <span class="text-gray-700"><%= i.product_name %> × <%= i.quantity %></span>
+              <span class="text-gray-900"><%= won(i.total_price) %>원</span>
+            </li>
+          <% }); %>
+        </ul>
+        <div class="mt-3 pt-3 border-t border-gray-100 space-y-1 text-sm">
+          <div class="flex justify-between"><span class="text-gray-500">상품금액</span><span><%= won(claim.subtotal_amount) %>원</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">배송비</span><span><%= won(claim.shipping_fee) %>원</span></div>
+          <div class="flex justify-between font-bold"><span>결제금액</span><span><%= won(claim.total_amount) %>원</span></div>
+        </div>
+      </div>
+
+      <!-- 환불 내역 -->
+      <% if (refunds.length) { %>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">환불 내역</h3>
+          <% refunds.forEach(function (r) { %>
+            <div class="flex items-center justify-between py-2 text-sm border-b border-gray-50 last:border-0">
+              <div>
+                <span class="font-medium"><%= won(r.refund_amount) %>원</span>
+                <span class="text-gray-400 ml-2"><%= { PG:'PG 취소', MANUAL:'수동 환불', NONE:'결제 없음' }[r.method] %></span>
+                <% if (r.return_shipping_fee_deducted > 0) { %>
+                  <span class="text-gray-400 ml-1">(반품비 -<%= won(r.return_shipping_fee_deducted) %>)</span>
+                <% } %>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 rounded text-xs <%= r.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : r.status === 'FAILED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800' %>">
+                  <%= { REQUESTED:'요청', COMPLETED:'완료', FAILED:'실패' }[r.status] %>
+                </span>
+                <% if (r.status === 'FAILED') { %>
+                  <form method="POST" action="/admin/claims/<%= claim.id %>/manual-refund" class="flex items-center gap-1">
+                    <input type="hidden" name="refund_id" value="<%= r.id %>">
+                    <input type="hidden" name="order_id" value="<%= claim.order_id %>">
+                    <input type="text" name="memo" placeholder="처리 메모" class="text-xs border-gray-300 rounded w-28">
+                    <button class="text-xs px-2 py-1 rounded bg-gray-800 text-white">수동 완료</button>
+                  </form>
+                <% } %>
+              </div>
+            </div>
+            <% if (r.failed_reason) { %><p class="text-xs text-red-500 mt-1"><%= r.failed_reason %></p><% } %>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- 처리 패널 -->
+    <div class="lg:col-span-1">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sticky top-4">
+        <% if (isOpen) { %>
+          <h3 class="text-base font-bold text-gray-900 mb-4">클레임 처리</h3>
+
+          <form method="POST" action="/admin/claims/<%= claim.id %>/approve" class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">귀책</label>
+              <select name="responsible" id="responsible" class="w-full text-sm border-gray-300 rounded-md">
+                <option value="CUSTOMER" <%= claim.responsible === 'CUSTOMER' ? 'selected' : '' %>>고객 (단순 변심 — 반품비 청구)</option>
+                <option value="SELLER" <%= claim.responsible === 'SELLER' ? 'selected' : '' %>>판매자 (불량·오배송 — 전액 환불)</option>
+              </select>
+            </div>
+            <% if (claim.claim_type === 'RETURN') { %>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">반품 배송비 (원)</label>
+                <input type="number" name="return_shipping_fee" min="0" value="<%= claim.responsible === 'CUSTOMER' ? suggestedReturnFee : 0 %>"
+                       class="w-full text-sm border-gray-300 rounded-md">
+                <p class="text-xs text-gray-400 mt-1">환불액에서 차감됩니다. 판매자 귀책이면 0.</p>
+              </div>
+            <% } %>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">메모</label>
+              <textarea name="memo" rows="2" class="w-full text-sm border-gray-300 rounded-md"></textarea>
+            </div>
+            <div class="p-3 bg-green-50 rounded text-sm">
+              <div class="flex justify-between"><span class="text-gray-600">예상 환불액</span><span class="font-bold text-green-700"><%= won(refundPreview) %>원</span></div>
+              <% if (!claim.payment_key) { %>
+                <p class="text-xs text-gray-500 mt-1">PG 결제 내역이 없어 실제 환불은 발생하지 않습니다(재고·쿠폰·적립금만 복원).</p>
+              <% } %>
+            </div>
+            <button type="submit" class="w-full py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
+              승인 (복원 + 환불)
+            </button>
+          </form>
+
+          <form method="POST" action="/admin/claims/<%= claim.id %>/reject" class="mt-3 pt-3 border-t border-gray-100 space-y-2"
+                onsubmit="return confirm('이 클레임을 거절할까요?');">
+            <textarea name="memo" rows="2" placeholder="거절 사유" class="w-full text-sm border-gray-300 rounded-md"></textarea>
+            <button type="submit" class="w-full py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100">거절</button>
+          </form>
+        <% } else { %>
+          <h3 class="text-base font-bold text-gray-900 mb-2">처리 완료</h3>
+          <p class="text-sm text-gray-500">
+            상태: <strong><%= { APPROVED:'승인', COMPLETED:'완료', REJECTED:'거절', WITHDRAWN:'철회' }[claim.status] %></strong><br>
+            처리일: <%= dt(claim.processed_at) %>
+          </p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 귀책을 판매자로 바꾸면 반품 배송비를 0으로 제안한다.
+  var resp = document.getElementById('responsible');
+  if (resp) resp.addEventListener('change', function () {
+    var fee = document.querySelector('input[name="return_shipping_fee"]');
+    if (fee) fee.value = this.value === 'SELLER' ? 0 : '<%= suggestedReturnFee %>';
+  });
+</script>
