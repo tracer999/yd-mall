@@ -15,11 +15,16 @@
   3. **디자인 트랙 §12 1차 완료** — 히어로 전환 · GNB 드롭다운 restyle · 우측 레일 개선.
   4. **미구현 모듈 4종 랜딩**(랭킹·아울렛·쿠폰·멤버십) + **테스트 카테고리 트리·상품 시드**(3뎁스, 존치).
   5. **멀티몰(P5) 기반 + 종합관(mall 2) 신설** — `mall` 정의 테이블, `products.mall_id`, 몰 해석기(`?mall=`), 스토어프론트 몰 스코프. mall 2 종합몰 데이터(카테고리 74·상품 205·3뎁스·GNB·홈) 시드.
+  6. **관리자 멀티몰 관리(P5 관리자편 Phase 1)** — 편집 몰 선택기(`?adminMall=`), 관리자 컨트롤러 몰 스코프. 관리자 카테고리/상품 목록의 mall 1·2 혼재 버그 수정.
 - **현재 상태**: `main` 푸시·배포 완료, 운영 검증 완료. 작업 트리 clean.
-- **다음 할 일**: 아래 "이번 트랙 밖" 목록 참고. 큰 트랙은 모두 닫혔다.
+- **다음 할 일**: **P5 관리자편 Phase 2**(`/admin/malls` 몰 CRUD 화면) — 아래 참고. 또는 "이번 트랙 밖" 목록.
 
-### 멀티몰 접속법 (중요)
-- `https://dev-mall.ydata.co.kr/?mall=2` → 종합관, `?mall=1`(또는 파라미터 없음) → 건강식품몰(기본). 세션에 유지된다.
+### 멀티몰 접속·관리법 (중요)
+- **스토어프론트**: `https://dev-mall.ydata.co.kr/?mall=2` → 종합관, `?mall=1`(또는 파라미터 없음) → 건강식품몰(기본). 세션 유지. 손님 세션 키 = `mallId`.
+- **관리자**: 우측 상단 **몰 선택기** 드롭다운(또는 `?adminMall=2`) → 편집 대상 몰 전환. 관리자 세션 키 = `adminMallId`(스토어와 **독립** — 미리보기해도 편집 몰 안 바뀜).
+- **관리자 멀티몰 스코프 대상**: 카테고리·상품(목록+생성 mall_id 상속)·일반/시스템 메뉴·Header 설정·테마·상품그룹·FAQ·메뉴 미리보기·페이지 빌더. `req.adminMallId` 사용.
+- **스코프 밖(전역)**: `admin_menus`(사이드바)·banners·orders/users/sales/dashboard·레거시 display.
+- **새 몰 대응**: theme-settings 는 그 몰에 테마가 없으면 기본 테마를 자동 생성한다.
 - **CJ온스타일 스크래핑은 거부함** — robots.txt `Disallow: /`(전 봇 차단) + 문서(`docs/사이트개선/상품정보 수집.md`)의 방법이 UA 위장·WAF 우회(detection-evasion)라 안 함. 대신 종합몰 데이터를 **생성**해서 넣음.
 
 ---
@@ -164,6 +169,18 @@ Node 22 · 브랜치 `main` 단독 · 테이블 51개 · Shopify API 버전 3층
 테마 설정은 `themeService.TOKENS[].test` / `CARD_STYLES` 를 그대로 쓴다.
 저장 검증과 렌더 검증이 어긋나면 "저장은 됐는데 반영이 안 되는" 상태가 된다.
 `themeService` 는 렌더 시 조용히 폴백하지만, 관리자는 **거부하고 사유를 표시**한다.
+
+### 멀티몰 스코프 (P5)
+
+두 개의 세션 키가 **독립**이다: 손님이 보는 몰 `req.mallId`(mallContext) / 관리자가 편집하는 몰 `req.adminMallId`(adminMallContext, adminAuth 뒤 마운트). 섞지 말 것.
+
+**상품 목록·검색은 반드시 `mall_id` 필터를 건다.** `getList`/`searchPage`/product group `resolve`/`loadHomeCategories` — 카테고리 필터가 없는 경로(`/products`·검색)에 몰 필터가 없으면 다른 몰 상품이 샌다. 관리자 카테고리/상품 목록도 마찬가지(안 걸면 mall 1·2 혼재).
+
+**생성 경로는 `adminMallId` 를 상속**한다 — 관리자에서 카테고리·상품을 새로 만들 때 `mall_id` 를 명시. 안 하면 DEFAULT 1 로 엉뚱한 몰에 들어간다.
+
+새 몰을 추가하면 그 몰의 `navigation_config`·`mall_feature_menu`·(홈)`page`·`theme` 행이 있어야 스토어/관리자가 정상 동작한다. `scripts/seed_mall2_general.js` 참고. theme 는 없으면 admin 이 자동 생성.
+
+---
 
 ### Express 5 라우트
 
