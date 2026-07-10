@@ -74,12 +74,16 @@ module.exports = async (req, res, next) => {
         req.mallId = mallId;
         res.locals.mallId = mallId;
         res.locals.mall = malls.byId.get(mallId) || null;
+        // 헤더 Top Bar 의 몰 선택 셀렉트가 쓴다. 활성 몰만, 기본 몰이 먼저.
+        res.locals.malls = [...malls.byId.values()]
+            .sort((a, b) => Number(b.is_default || 0) - Number(a.is_default || 0) || Number(a.id) - Number(b.id));
     } catch (err) {
         // 해석 실패해도 화면은 떠야 한다 → 기본 몰 1
         console.warn('[mallContext] 해석 실패, mall 1 폴백:', err.message);
         req.mallId = 1;
         res.locals.mallId = 1;
         res.locals.mall = null;
+        res.locals.malls = [];
     }
     next();
 };
