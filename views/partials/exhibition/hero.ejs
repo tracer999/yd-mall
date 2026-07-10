@@ -20,10 +20,15 @@
 
 <section class="bg-white">
   <% if (pc) { %>
+    <%#
+      높이를 제한하고 object-cover 로 중앙 크롭한다. h-auto 로 두면 운영자가 세로로 긴
+      이미지(상품 사진 등)를 올렸을 때 배너 하나가 화면을 통째로 덮는다.
+    %>
     <div class="w-full bg-gray-50">
       <picture>
         <source media="(max-width: 640px)" srcset="<%= mo %>">
-        <img src="<%= pc %>" alt="<%= e.title %>" class="w-full h-auto object-cover">
+        <img src="<%= pc %>" alt="<%= e.title %>"
+             class="w-full h-56 sm:h-72 lg:h-96 object-cover object-center">
       </picture>
     </div>
   <% } %>
