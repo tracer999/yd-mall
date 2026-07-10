@@ -1,12 +1,12 @@
 <%
   /*
    * 히어로 섹션 래퍼 — config.variant 로 전체폭 배너 / 상품 쇼케이스 분기.
-   * locals: variant, heroMainSlides, heroFeature, lnbCategories, heroBanners, mobileHeroBanners
+   * locals: variant, heroMainSlides, heroFeature, heroBanners, mobileHeroBanners
    */
   var _variant = (typeof variant !== 'undefined' && variant) ? variant : 'full_banner';
 %>
 <% if (_variant === 'product_showcase') { %>
-  <%- include('./hero_showcase', { mainSlides: heroMainSlides, feature: heroFeature, lnbCategories }) %>
+  <%- include('./hero_showcase', { mainSlides: heroMainSlides, feature: heroFeature }) %>
 <% } else { %>
   <%- include('./hero_banner', { heroBanners, mobileHeroBanners }) %>
 <% } %>

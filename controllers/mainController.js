@@ -36,7 +36,6 @@ async function buildHomeContext(req, res) {
     const heroVariant = (req.query.hero || _settings.hero_variant || 'full_banner');
     let heroMainSlides = [];
     let heroFeature = null;
-    let lnbCategories = [];
     if (heroVariant === 'product_showcase') {
         const [slides] = await pool.query(`
             SELECT hs.id, hs.slot, hs.label, hs.headline, hs.image_url, hs.link_url, hs.sort_order,
@@ -49,10 +48,6 @@ async function buildHomeContext(req, res) {
         `, [mallId]);
         heroMainSlides = slides.filter(s => s.slot === 'MAIN');
         heroFeature = slides.find(s => s.slot === 'FEATURE') || null;
-        [lnbCategories] = await pool.query(
-            "SELECT id, name FROM categories WHERE type = 'NORMAL' AND parent_id IS NULL AND mall_id = ? ORDER BY display_order ASC, id ASC",
-            [mallId]
-        );
     }
 
     // 5. 팝업 배너
@@ -104,7 +99,6 @@ async function buildHomeContext(req, res) {
             variant: heroVariant,
             heroMainSlides,
             heroFeature,
-            lnbCategories,
             heroBanners,
             mobileHeroBanners
         }

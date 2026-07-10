@@ -4,7 +4,6 @@
    * locals:
    *   mainSlides    : 중앙 슬라이더용 슬라이드 배열 (hero_slide slot=MAIN + 상품 조인)
    *   feature       : 우측 피처 카드 슬라이드 (slot=FEATURE) 또는 null
-   *   lnbCategories : 좌측 카테고리 LNB 목록 (NORMAL 최상위)
    * Swiper 번들은 페이지에서 이미 로드됨. 하단에 thumbs 연동 초기화 스크립트 포함.
    */
   const won = n => Number(n || 0).toLocaleString();
@@ -29,28 +28,9 @@
   <div class="max-w-[1400px] mx-auto px-4 py-4">
     <div class="flex gap-3">
 
-      <!-- 좌측 카테고리 LNB -->
-      <aside class="hidden lg:block w-48 shrink-0 border border-gray-200 rounded-xl overflow-hidden self-start">
-        <div class="bg-[var(--gh-primary)] text-white px-4 py-3 text-sm font-bold flex items-center gap-2">
-          <i class="bi bi-list text-base"></i> 카테고리
-        </div>
-        <ul class="py-1 max-h-[430px] overflow-y-auto">
-          <% (lnbCategories || []).forEach(c => { %>
-            <li>
-              <a href="/products/category/<%= c.id %>"
-                 class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 no-underline hover:bg-[var(--gh-light)] hover:text-[var(--gh-primary)] transition-colors">
-                <i class="bi bi-caret-right-fill text-[10px] text-gray-300"></i>
-                <span class="truncate"><%= c.name %></span>
-              </a>
-            </li>
-          <% }); %>
-          <% if ((lnbCategories || []).length === 0) { %>
-            <li class="px-4 py-3 text-xs text-gray-400">카테고리가 없습니다.</li>
-          <% } %>
-        </ul>
-      </aside>
+      <%# 좌측 카테고리 LNB 제거 — GNB 카테고리 드롭다운이 전체 트리를 이미 노출하므로 중복이었다. %>
 
-      <!-- 중앙: 메인 슬라이더 + 썸네일 -->
+      <!-- 메인 슬라이더 + 썸네일 -->
       <div class="flex-1 min-w-0">
         <div class="hero-main swiper relative rounded-2xl overflow-hidden bg-[var(--gh-light)] border border-gray-100">
           <div class="swiper-wrapper">
