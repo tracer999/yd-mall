@@ -1,0 +1,77 @@
+<%
+  /*
+   * 기획전 상세 대표 비주얼
+   * locals: exhibition, descriptionHtml
+   *
+   * PC/모바일 이미지는 <picture> 로 분기한다 — 모바일 전용 이미지가 없으면 PC 것을 그대로 쓴다.
+   * descriptionHtml 은 이미 새니타이즈된 문자열이다(컨트롤러에서 처리).
+   */
+  const e = exhibition;
+  const pc = e.pc_hero_image_url;
+  const mo = e.mobile_hero_image_url || pc;
+  const fmtFull = (d) => d ? new Date(d).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+
+  const PHASE_CLS = {
+    UPCOMING: 'bg-blue-50 text-blue-700 border-blue-200',
+    ONGOING: 'brand-chip',
+    ENDED: 'bg-gray-100 text-gray-600 border-gray-200',
+  };
+%>
+
+<section class="bg-white">
+  <% if (pc) { %>
+    <div class="w-full bg-gray-50">
+      <picture>
+        <source media="(max-width: 640px)" srcset="<%= mo %>">
+        <img src="<%= pc %>" alt="<%= e.title %>" class="w-full h-auto object-cover">
+      </picture>
+    </div>
+  <% } %>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 <%= pc ? 'pt-8' : 'pt-12' %> pb-8">
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full border <%= PHASE_CLS[e.phase] %>">
+        <%= e.phaseLabel %>
+      </span>
+      <span class="text-xs text-gray-400">
+        <i class="bi bi-calendar3"></i>
+        <%= fmtFull(e.start_at) %> ~ <%= fmtFull(e.end_at) || '상시' %>
+      </span>
+    </div>
+
+    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 leading-tight"><%= e.title %></h1>
+
+    <% if (e.summary) { %>
+      <p class="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed"><%= e.summary %></p>
+    <% } %>
+
+    <% if (descriptionHtml) { %>
+      <div class="mt-6 prose text-sm text-gray-600 leading-relaxed"><%- descriptionHtml %></div>
+    <% } %>
+
+    <% if (e.phase === 'ENDED') { %>
+      <div class="mt-6 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-600 flex items-start gap-2">
+        <i class="bi bi-info-circle-fill mt-0.5 text-gray-400"></i>
+        <span>
+          종료된 기획전입니다.
+          <% if (e.purchaseBlocked) { %>기획전가로는 구매할 수 없으며, 상품 상세에서 정상가로 구매할 수 있습니다.<% } %>
+        </span>
+      </div>
+    <% } else if (e.phase === 'UPCOMING') { %>
+      <div class="mt-6 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex items-start gap-2">
+        <i class="bi bi-clock-fill mt-0.5"></i>
+        <span><%= fmtFull(e.start_at) %>에 시작합니다.</span>
+      </div>
+    <% } %>
+
+    <% if (e.share_enabled) { %>
+      <div class="mt-6">
+        <button type="button" id="exhShareBtn"
+                class="brand-pill--ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold">
+          <i class="bi bi-share"></i> 공유하기
+        </button>
+        <span id="exhShareToast" class="ml-2 text-xs text-gray-400 hidden">링크를 복사했습니다.</span>
+      </div>
+    <% } %>
+  </div>
+</section>

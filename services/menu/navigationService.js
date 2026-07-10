@@ -52,7 +52,10 @@ const LINK_RESOLVERS = {
     EXTERNAL_URL: (m) => m.linkUrl || null,
     CATEGORY: (m) => (m.linkTarget ? `/products/category/${m.linkTarget}` : null),
     BRAND: (m) => (m.linkTarget ? `/products/brand/${m.linkTarget}` : null),
-    // EXHIBITION, PRODUCT_GROUP: 모듈 미구현 → 의도적으로 미등록
+    // id URL 로 보내고 상세 라우트가 slug 로 301 한다 — 메뉴를 그릴 때마다 exhibition 을
+    // 조인해 slug 를 끌어오지 않기 위함이다(products 가 이미 쓰는 방식).
+    EXHIBITION: (m) => (m.linkTarget ? `/exhibition/view/${m.linkTarget}` : null),
+    // PRODUCT_GROUP: 모듈 미구현 → 의도적으로 미등록
 };
 
 function normalizeBadge(v) {

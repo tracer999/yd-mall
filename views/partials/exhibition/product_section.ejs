@@ -1,0 +1,69 @@
+<%
+  /*
+   * 기획전 섹션 (상품 그리드 / 캐러셀 / HTML)
+   * locals: group = { section, products, html }, exhibition
+   *
+   * 상품 카드는 공용 `partials/product_card.ejs` 를 그대로 재사용한다.
+   * `display_badge`·`display_comment` 는 기획전 전용이므로 **카드 바깥에서 덧그린다** —
+   * 공용 파티셜을 기획전 전용 필드로 오염시키지 않는다.
+   */
+  const _sec = group.section;
+  const _items = group.products || [];
+  const _html = group.html || '';
+  const isCarousel = _sec && _sec.section_type === 'PRODUCT_CAROUSEL';
+
+  // 종료 후 구매차단이거나 매핑에서 구매를 끈 상품은 '구매 불가'로 표시한다.
+  const noPurchase = (p) => exhibition.purchaseBlocked || !Number(p.purchase_enabled);
+%>
+
+<section class="py-8 sm:py-10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <% if (_sec) { %>
+      <div class="mb-5 flex items-baseline gap-3">
+        <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900"><%= _sec.section_name %></h2>
+        <% if (_items.length) { %>
+          <span class="text-sm text-gray-400"><%= _items.length %>개</span>
+        <% } %>
+      </div>
+    <% } %>
+
+    <% if (_html) { %>
+      <div class="prose text-sm text-gray-600 leading-relaxed mb-6"><%- _html %></div>
+    <% } %>
+
+    <% if (_items.length) { %>
+      <div class="<%= isCarousel
+            ? 'flex gap-4 overflow-x-auto snap-x scrollbar-none pb-2'
+            : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4' %>">
+        <% _items.forEach(function (p) { %>
+          <div class="<%= isCarousel ? 'shrink-0 w-44 sm:w-56 snap-start' : '' %>">
+            <div class="relative">
+              <%- include('../product_card', { product: p, opts: { showBrand: true, showDiscountBadge: true } }) %>
+
+              <% if (p.display_badge) { %>
+                <span class="absolute top-2 right-2 z-30 text-[10px] font-bold text-white px-2 py-1 rounded shadow-sm"
+                      style="background: var(--gh-primary);"><%= p.display_badge %></span>
+              <% } %>
+
+              <% if (noPurchase(p)) { %>
+                <span class="absolute bottom-2 left-2 z-30 text-[10px] font-semibold px-2 py-1 rounded bg-gray-800/85 text-white">
+                  구매 불가
+                </span>
+              <% } %>
+            </div>
+
+            <% if (p.display_comment) { %>
+              <p class="mt-1.5 px-1 text-xs text-gray-500 line-clamp-2">
+                <i class="bi bi-chat-quote text-gray-300"></i> <%= p.display_comment %>
+              </p>
+            <% } %>
+          </div>
+        <% }); %>
+      </div>
+    <% } else if (!_html) { %>
+      <p class="py-10 text-center text-sm text-gray-400">준비된 상품이 없습니다.</p>
+    <% } %>
+
+  </div>
+</section>

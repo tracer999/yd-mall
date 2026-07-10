@@ -13,6 +13,14 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+/** 기획전 이미지 4종 — exhibition 테이블의 *_url 컬럼과 1:1 */
+const EXHIBITION_IMAGE_FIELDS = new Set([
+    'list_thumbnail',
+    'pc_hero_image',
+    'mobile_hero_image',
+    'og_image',
+]);
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         let uploadPath = 'public/uploads/products';
@@ -26,6 +34,8 @@ const storage = multer.diskStorage({
             uploadPath = 'public/uploads/og';
         } else if (file.fieldname === 'favicon') {
             uploadPath = 'public/uploads/favicon';
+        } else if (EXHIBITION_IMAGE_FIELDS.has(file.fieldname)) {
+            uploadPath = 'public/uploads/exhibitions';
         }
 
         if (!fs.existsSync(uploadPath)) {
@@ -49,7 +59,8 @@ const imageOnlyFields = new Set([
     'logo_image',
     'kakao_share_image',
     'favicon',
-    'file'
+    'file',
+    ...EXHIBITION_IMAGE_FIELDS,
 ]);
 
 const fileFilter = (req, file, cb) => {

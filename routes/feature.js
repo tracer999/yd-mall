@@ -127,7 +127,8 @@ function comingSoon(key) {
     };
 }
 
-router.get('/exhibition', comingSoon('exhibition'));
+// '/exhibition' 은 routes/exhibition.js 가 실제 목록을 렌더한다.
+// 다만 발행된 기획전이 0건이면 exhibitionController 가 COMING_SOON.exhibition 랜딩으로 되돌린다.
 router.get('/group-buy', comingSoon('group-buy'));
 router.get('/live', comingSoon('live'));
 router.get('/ranking', comingSoon('ranking'));
@@ -136,3 +137,5 @@ router.get('/coupon', comingSoon('coupon'));
 router.get('/membership', comingSoon('membership'));
 
 module.exports = router;
+// 기획전 컨트롤러가 '발행 0건' 폴백에서 같은 랜딩을 렌더한다(mallContext 의 invalidate 노출과 같은 패턴).
+module.exports.COMING_SOON = COMING_SOON;

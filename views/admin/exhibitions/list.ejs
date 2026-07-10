@@ -1,0 +1,162 @@
+<%
+  /*
+   * 기획전 관리 — 목록
+   *
+   * 상태 컬럼이 둘이다. 헷갈리지 말 것(§7-1).
+   *   status : 운영자가 정한다 (임시저장/발행/숨김)
+   *   phase  : 기간에서 파생된다 (예정/진행중/종료). 저장되지 않는다.
+   *
+   * `custom_menu.link_target` 에는 FK 가 없다. 연결된 메뉴가 있으면 삭제를 막는다.
+   */
+  const _items = exhibitions || [];
+  const typeLabel = (v) => (types.find(t => t.value === v) || {}).label || v;
+  const fmt = (d) => d ? new Date(d).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }) : '무기한';
+
+  const STATUS_CLS = {
+    DRAFT: 'bg-gray-100 text-gray-600',
+    PUBLISHED: 'bg-green-50 text-green-700',
+    HIDDEN: 'bg-amber-50 text-amber-700',
+  };
+  const PHASE_CLS = {
+    UPCOMING: 'bg-blue-50 text-blue-700',
+    ONGOING: 'bg-indigo-50 text-indigo-700',
+    ENDED: 'bg-gray-100 text-gray-500',
+  };
+  const statusLabel = (v) => (statuses.find(s => s.value === v) || {}).label || v;
+%>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+      <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
+    </div>
+    <a href="/admin/exhibitions/add"
+       class="inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline">
+      <i class="bi bi-plus-lg mr-1.5"></i> 기획전 등록
+    </a>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <%# ── 검색 · 상태 필터 ──────────────────────────────── %>
+  <form method="GET" action="/admin/exhibitions" class="mb-5 flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="<%= q %>" placeholder="기획전명 또는 slug 검색"
+           class="h-[38px] px-3 rounded-md border border-gray-200 text-sm w-64">
+    <select name="status" class="h-[38px] px-3 rounded-md border border-gray-200 text-sm">
+      <option value="">전체 상태</option>
+      <% statuses.forEach(function (s) { %>
+        <option value="<%= s.value %>" <%= status === s.value ? 'selected' : '' %>><%= s.label %></option>
+      <% }); %>
+    </select>
+    <button type="submit" class="h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50">
+      검색
+    </button>
+    <% if (q || status) { %>
+      <a href="/admin/exhibitions" class="h-[38px] inline-flex items-center px-3 text-sm text-gray-500 hover:text-gray-700 no-underline">초기화</a>
+    <% } %>
+  </form>
+
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs font-semibold text-gray-500 bg-gray-50/60">
+            <th class="px-4 py-2.5 w-14">ID</th>
+            <th class="px-4 py-2.5 w-20">썸네일</th>
+            <th class="px-4 py-2.5">기획전명</th>
+            <th class="px-4 py-2.5 w-24">유형</th>
+            <th class="px-4 py-2.5 w-24">상태</th>
+            <th class="px-4 py-2.5 w-24">노출</th>
+            <th class="px-4 py-2.5 w-44">기간</th>
+            <th class="px-4 py-2.5 w-20 text-center">상품</th>
+            <th class="px-4 py-2.5 w-24 text-center">메뉴 연결</th>
+            <th class="px-4 py-2.5 w-28 text-center">관리</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% if (_items.length === 0) { %>
+            <tr><td colspan="10" class="px-6 py-16 text-center text-gray-500">
+              <%= (q || status) ? '조건에 맞는 기획전이 없습니다.' : '등록된 기획전이 없습니다.' %>
+            </td></tr>
+          <% } %>
+          <% _items.forEach(function (e) { %>
+            <tr class="<%= e.status === 'PUBLISHED' ? '' : 'bg-gray-50/60' %>">
+              <td class="px-4 py-3 text-gray-400"><%= e.id %></td>
+              <td class="px-4 py-3">
+                <% if (e.list_thumbnail_url) { %>
+                  <img src="<%= e.list_thumbnail_url %>" alt="" class="w-12 h-12 rounded object-cover bg-gray-100">
+                <% } else { %>
+                  <div class="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-gray-300">
+                    <i class="bi bi-image"></i>
+                  </div>
+                <% } %>
+              </td>
+              <td class="px-4 py-3">
+                <a href="/admin/exhibitions/<%= e.id %>/edit" class="font-medium text-gray-900 hover:text-indigo-600 no-underline">
+                  <%= e.title %>
+                </a>
+                <div class="text-xs text-gray-400 mt-0.5">/exhibition/<%= e.slug %></div>
+              </td>
+              <td class="px-4 py-3 text-gray-600 text-xs"><%= typeLabel(e.exhibition_type) %></td>
+              <td class="px-4 py-3">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded <%= STATUS_CLS[e.status] || '' %>">
+                  <%= statusLabel(e.status) %>
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded <%= PHASE_CLS[e.phase] %>"><%= e.phaseLabel %></span>
+                <% if (!e.list_visible) { %>
+                  <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" title="기획전 목록에 표시하지 않음">목록숨김</span>
+                <% } %>
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-500">
+                <%= fmt(e.start_at) %> ~ <%= fmt(e.end_at) %>
+              </td>
+              <td class="px-4 py-3 text-center text-gray-600"><%= e.product_count %></td>
+              <td class="px-4 py-3 text-center">
+                <% if (Number(e.menu_count) > 0) { %>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700"
+                        title="커스텀 메뉴가 이 기획전을 연결하고 있어 삭제할 수 없습니다"><%= e.menu_count %>개</span>
+                <% } else { %>
+                  <span class="text-xs text-gray-300">-</span>
+                <% } %>
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-center gap-1.5">
+                  <a href="/admin/exhibitions/<%= e.id %>/edit"
+                     class="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">수정</a>
+                  <% if (Number(e.menu_count) === 0) { %>
+                    <form method="POST" action="/admin/exhibitions/<%= e.id %>/delete"
+                          onsubmit="return confirm('기획전 &quot;<%= e.title %>&quot; 을(를) 삭제합니다. 섹션과 상품 연결도 함께 지워집니다.');">
+                      <button type="submit" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">삭제</button>
+                    </form>
+                  <% } else { %>
+                    <span class="text-xs px-2 py-1 rounded border border-gray-100 text-gray-300 cursor-not-allowed"
+                          title="커스텀 메뉴가 연결돼 있어 삭제할 수 없습니다">삭제</span>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="mt-4 text-xs text-gray-400">
+    <strong>상태</strong>는 운영자가 정합니다(임시저장/발행/숨김). <strong>노출</strong>(예정·진행중·종료)은
+    시작일·종료일에서 자동으로 파생되며 따로 저장되지 않습니다. 고객 화면에는
+    <code>발행 + 목록노출</code> 인 기획전만 나타납니다.
+  </p>
+</div>

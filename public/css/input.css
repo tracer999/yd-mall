@@ -87,3 +87,10 @@
   .prose pre { @apply bg-gray-100 rounded p-3 overflow-x-auto text-sm my-3; }
   .prose code { @apply bg-gray-100 px-1 py-0.5 rounded text-sm; }
 }
+
+/* 가로 스크롤 캐러셀의 스크롤바 숨김 (기획전 PRODUCT_CAROUSEL 섹션) */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar { display: none; }
+}

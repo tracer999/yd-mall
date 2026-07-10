@@ -1,0 +1,67 @@
+<%
+  /*
+   * 기획전 상세 — TAB_SHOP 템플릿
+   *
+   * 이미지 한 장짜리 랜딩이 아니라 **상품 전시와 구매 전환**이 중심이다(§2-2).
+   *   대표 배너 → 내부 탭 → 섹션별 상품 그리드 → 안내
+   *
+   * STORY/CATEGORY_SHOP/BRAND_SHOP 템플릿은 2차. 지금은 전부 이 화면으로 폴백된다.
+   */
+  const e = exhibition;
+%>
+
+<%- include('../../partials/exhibition/hero', { exhibition: e, descriptionHtml }) %>
+
+<%- include('../../partials/exhibition/tab_nav', { exhibition: e, tabs, activeCode, productCount }) %>
+
+<div class="bg-white divide-y divide-gray-100">
+  <% if (groups.length === 0) { %>
+    <div class="max-w-6xl mx-auto px-4 py-24 text-center">
+      <i class="bi bi-box-seam text-4xl text-gray-200"></i>
+      <p class="mt-4 text-sm text-gray-500">아직 등록된 상품이 없습니다.</p>
+      <a href="/products" class="mt-4 inline-block text-sm text-gray-600 hover:text-gray-900">전체 상품 보러가기</a>
+    </div>
+  <% } %>
+  <% groups.forEach(function (g) { %>
+    <%- include('../../partials/exhibition/product_section', { group: g, exhibition: e }) %>
+  <% }); %>
+</div>
+
+<% if (noticeHtml) { %>
+  <%- include('../../partials/exhibition/notice', { noticeHtml }) %>
+<% } %>
+
+<div class="bg-white py-10 border-t border-gray-100">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <a href="/exhibition" class="brand-pill--ghost inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold no-underline">
+      <i class="bi bi-chevron-left text-xs"></i> 기획전 목록
+    </a>
+  </div>
+</div>
+
+<% if (e.share_enabled) { %>
+<script>
+(function () {
+  const btn = document.getElementById('exhShareBtn');
+  const toast = document.getElementById('exhShareToast');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    const url = window.location.href;
+    const title = <%- JSON.stringify(e.title) %>;
+
+    // 모바일은 OS 공유 시트, 데스크톱은 클립보드 복사로 갈린다.
+    if (navigator.share) {
+      try { await navigator.share({ title, url }); return; } catch (_) { /* 사용자가 취소 */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2000);
+    } catch (_) {
+      window.prompt('아래 주소를 복사하세요', url);
+    }
+  });
+})();
+</script>
+<% } %>

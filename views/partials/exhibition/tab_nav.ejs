@@ -1,0 +1,35 @@
+<%
+  /*
+   * 기획전 내부 탭
+   * locals: exhibition, tabs (is_tab 이고 내용이 있는 섹션), activeCode, productCount
+   *
+   * 서버 렌더 + 링크다. JS 없이도 동작한다(?tab=section_code).
+   * '전체' 탭은 항상 맨 앞에 자동으로 붙는다(section_code 예약어 'all').
+   */
+  const base = `/exhibition/${encodeURIComponent(exhibition.slug)}`;
+  const isAll = activeCode === 'all';
+  const cls = (on) => on
+    ? 'border-[color:var(--gh-primary)] text-[color:var(--gh-primary)] font-bold'
+    : 'border-transparent text-gray-500 hover:text-gray-800';
+%>
+<% if (tabs && tabs.length) { %>
+  <nav class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <ul class="flex items-center gap-1 overflow-x-auto scrollbar-none -mb-px">
+        <li>
+          <a href="<%= base %>" class="inline-block whitespace-nowrap px-4 py-3.5 text-sm border-b-2 no-underline <%= cls(isAll) %>">
+            전체 <span class="text-xs font-normal text-gray-400">(<%= productCount %>)</span>
+          </a>
+        </li>
+        <% tabs.forEach(function (s) { %>
+          <li>
+            <a href="<%= base %>?tab=<%= encodeURIComponent(s.section_code) %>"
+               class="inline-block whitespace-nowrap px-4 py-3.5 text-sm border-b-2 no-underline <%= cls(activeCode === s.section_code) %>">
+              <%= s.section_name %>
+            </a>
+          </li>
+        <% }); %>
+      </ul>
+    </div>
+  </nav>
+<% } %>

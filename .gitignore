@@ -34,3 +34,6 @@ _*tmp*.js
 
 # 루트의 작업용 임시 스크립트 전부 무시 (_c2.sh, _m1_tmp.sh 등)
 /_*
+
+# Playwright MCP 산출물(스냅샷·스크린샷)
+/.playwright-mcp/

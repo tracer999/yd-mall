@@ -1,0 +1,50 @@
+<%
+  /*
+   * 기획전 목록 카드
+   * locals: exhibition (svc.decorate 를 거친 행 — phase/phaseLabel/detailPath 포함)
+   */
+  const e = exhibition;
+  const PHASE_CLS = {
+    UPCOMING: 'bg-blue-600/90',
+    ONGOING: 'bg-[color:var(--gh-primary)]',
+    ENDED: 'bg-gray-700/80',
+  };
+  const fmt = (d) => d ? new Date(d).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' }) : null;
+  const period = fmt(e.end_at)
+    ? `${fmt(e.start_at)} ~ ${fmt(e.end_at)}`
+    : `${fmt(e.start_at)} ~ 상시`;
+%>
+<a href="<%= e.detailPath %>"
+   class="product-card-surface group block bg-white overflow-hidden hover:shadow-md transition-shadow no-underline">
+  <div class="relative w-full aspect-[16/9] bg-gray-100 overflow-hidden">
+    <% if (e.list_thumbnail_url) { %>
+      <img src="<%= e.list_thumbnail_url %>" alt="<%= e.title %>"
+           loading="lazy"
+           class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03] <%= e.phase === 'ENDED' ? 'grayscale-[0.6] opacity-70' : '' %>">
+    <% } else { %>
+      <div class="w-full h-full flex items-center justify-center text-gray-300">
+        <i class="bi bi-stars text-4xl"></i>
+      </div>
+    <% } %>
+
+    <span class="absolute top-3 left-3 z-10 text-[11px] font-bold text-white px-2 py-1 rounded <%= PHASE_CLS[e.phase] %>">
+      <%= e.phaseLabel %>
+    </span>
+
+    <% if (Number(e.product_count) > 0) { %>
+      <span class="absolute bottom-3 right-3 z-10 text-[11px] font-semibold text-white bg-black/55 px-2 py-1 rounded backdrop-blur-sm">
+        상품 <%= e.product_count %>
+      </span>
+    <% } %>
+  </div>
+
+  <div class="px-4 py-4">
+    <h3 class="text-sm sm:text-base font-bold text-gray-900 truncate"><%= e.title %></h3>
+    <% if (e.summary) { %>
+      <p class="mt-1 text-xs sm:text-sm text-gray-500 line-clamp-2"><%= e.summary %></p>
+    <% } %>
+    <p class="mt-2.5 text-[11px] text-gray-400">
+      <i class="bi bi-calendar3"></i> <%= period %>
+    </p>
+  </div>
+</a>

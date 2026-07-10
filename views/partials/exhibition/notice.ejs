@@ -1,0 +1,14 @@
+<%
+  /*
+   * 기획전 안내 · 유의사항
+   * locals: noticeHtml (새니타이즈 완료된 HTML. 빈 문자열이면 이 파티셜을 부르지 않는다)
+   */
+%>
+<section class="py-10 bg-gray-50 border-t border-gray-100">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 class="text-base font-bold text-gray-800 mb-3">
+      <i class="bi bi-info-circle"></i> 안내 · 유의사항
+    </h2>
+    <div class="prose text-sm text-gray-500 leading-relaxed"><%- noticeHtml %></div>
+  </div>
+</section>

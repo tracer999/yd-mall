@@ -1,0 +1,584 @@
+<%
+  /*
+   * 기획전 등록/수정
+   *
+   * 폼이 3개다. HTML 은 form 중첩을 허용하지 않으므로 반드시 형제로 둔다.
+   *   #basicForm    기본정보·이미지·전시설정  → POST /admin/exhibitions/{add|:id/edit}  (multipart)
+   *   #sectionsForm 내부 탭(섹션) 일괄 저장    → POST /admin/exhibitions/:id/sections
+   *   #productsForm 상품 매핑 일괄 저장        → POST /admin/exhibitions/:id/products
+   *
+   * 상품 개별 삭제는 #productsForm 안에서 `formaction` 으로 목적지만 바꿔 보낸다
+   * (form 을 중첩하지 않기 위한 표준 우회).
+   *
+   * 신규 등록 시에는 섹션·상품 패널을 숨긴다 — exhibition_id 가 없으면 매달 곳이 없다.
+   */
+  const isNew = !exhibition.id;
+  const action = isNew ? '/admin/exhibitions/add' : `/admin/exhibitions/${exhibition.id}/edit`;
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const _cfg = config || {};
+
+  const PHASE_CLS = {
+    UPCOMING: 'bg-blue-50 text-blue-700',
+    ONGOING: 'bg-indigo-50 text-indigo-700',
+    ENDED: 'bg-gray-100 text-gray-500',
+  };
+
+  const IMAGES = [
+    { field: 'list_thumbnail',   column: 'list_thumbnail_url',    label: '목록 썸네일',      hint: '기획전 목록 카드에 쓰입니다. 정사각형 권장.' },
+    { field: 'pc_hero_image',    column: 'pc_hero_image_url',     label: 'PC 대표 이미지',   hint: '상세 상단 배너 (와이드).' },
+    { field: 'mobile_hero_image',column: 'mobile_hero_image_url', label: '모바일 대표 이미지', hint: '없으면 PC 이미지를 그대로 씁니다.' },
+    { field: 'og_image',         column: 'og_image_url',          label: 'OG 이미지',        hint: '카카오·페이스북 공유 미리보기.' },
+  ];
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <a href="/admin/exhibitions" class="text-sm text-gray-500 hover:text-gray-700 no-underline">
+      <i class="bi bi-chevron-left"></i> 기획전 목록
+    </a>
+    <div class="mt-2 flex flex-wrap items-center gap-3">
+      <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+      <% if (!isNew && phase) { %>
+        <span class="text-[11px] font-bold px-2 py-1 rounded <%= PHASE_CLS[phase] %>"><%= phaseLabels[phase] %></span>
+      <% } %>
+      <% if (!isNew && exhibition.status === 'PUBLISHED') { %>
+        <a href="/exhibition/<%= encodeURIComponent(exhibition.slug) %>" target="_blank" rel="noopener"
+           class="text-xs text-indigo-600 hover:text-indigo-800 no-underline">
+          고객 화면에서 보기 <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <%# ══════════ 1. 기본정보 · 이미지 · 전시설정 ══════════ %>
+  <form id="basicForm" method="POST" action="<%= action %>" enctype="multipart/form-data" class="space-y-6">
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">기본 정보</h2>
+      </div>
+      <div class="p-5 space-y-5">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">기획전명 <span class="text-red-500">*</span></label>
+            <input type="text" name="title" value="<%= exhibition.title %>" maxlength="200" required
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+              slug <span class="text-xs font-normal text-gray-400">(비우면 기획전명에서 자동 생성)</span>
+            </label>
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-gray-400 shrink-0">/exhibition/</span>
+              <input type="text" name="slug" value="<%= exhibition.slug %>" maxlength="200"
+                     class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">짧은 설명</label>
+          <input type="text" name="summary" value="<%= exhibition.summary || '' %>" maxlength="500"
+                 placeholder="목록 카드와 상세 헤더에 한 줄로 노출됩니다."
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">
+            상세 설명 <span class="text-xs font-normal text-gray-400">(HTML 허용 — 저장 시 위험 태그는 제거됩니다)</span>
+          </label>
+          <textarea name="description" rows="5"
+                    class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono"><%= exhibition.description || '' %></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">기획전 유형</label>
+            <select name="exhibition_type" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <% types.forEach(function (t) { %>
+                <option value="<%= t.value %>" <%= exhibition.exhibition_type === t.value ? 'selected' : '' %>><%= t.label %></option>
+              <% }); %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">상태</label>
+            <select name="status" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <% statuses.forEach(function (s) { %>
+                <option value="<%= s.value %>" <%= exhibition.status === s.value ? 'selected' : '' %>><%= s.label %></option>
+              <% }); %>
+            </select>
+            <p class="mt-1 text-xs text-gray-400">고객 화면에는 <strong>발행</strong>만 노출됩니다.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">상세 템플릿</label>
+            <select name="detail_template_type" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <% templates.forEach(function (t) { %>
+                <option value="<%= t.value %>" <%= exhibition.detail_template_type === t.value ? 'selected' : '' %>><%= t.label %></option>
+              <% }); %>
+            </select>
+            <p class="mt-1 text-xs text-gray-400">현재는 기본 탭형만 렌더됩니다.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">시작일 <span class="text-red-500">*</span></label>
+            <input type="datetime-local" name="start_at" value="<%= exhibition.start_at_input %>" required
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+              종료일 <span class="text-xs font-normal text-gray-400">(비우면 무기한)</span>
+            </label>
+            <input type="datetime-local" name="end_at" value="<%= exhibition.end_at_input %>"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 -mt-2">
+          예정 · 진행중 · 종료 배지는 이 기간에서 자동으로 계산됩니다. 따로 지정하지 않습니다.
+        </p>
+
+        <div class="flex flex-wrap gap-5">
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="list_visible" value="1" <%= exhibition.list_visible ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300">
+            기획전 목록에 노출
+          </label>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="search_visible" value="1" <%= exhibition.search_visible ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300">
+            사이트 검색 노출
+          </label>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="share_enabled" value="1" <%= exhibition.share_enabled ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300">
+            공유 버튼 노출
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <%# ── 이미지 ─────────────────────────────────────── %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">이미지</h2>
+      </div>
+      <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <% IMAGES.forEach(function (img) { %>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5"><%= img.label %></label>
+            <% if (exhibition[img.column]) { %>
+              <div class="mb-2 flex items-center gap-3">
+                <img src="<%= exhibition[img.column] %>" alt="" class="h-20 rounded border border-gray-100 object-contain bg-gray-50">
+                <label class="inline-flex items-center gap-1.5 text-xs text-red-600">
+                  <input type="checkbox" name="<%= img.field %>_clear" value="1" class="w-3.5 h-3.5 rounded border-gray-300">
+                  삭제
+                </label>
+              </div>
+            <% } %>
+            <input type="file" name="<%= img.field %>" accept="image/*"
+                   class="w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:rounded file:border-0 file:text-xs file:bg-gray-100 file:text-gray-700">
+            <p class="mt-1 text-xs text-gray-400"><%= img.hint %></p>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+    <%# ── 전시 설정 ──────────────────────────────────── %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">전시 설정</h2>
+      </div>
+      <div class="p-5 space-y-5">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">종료 후 접근</label>
+            <select name="ended_access_policy" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <% endedAccessPolicies.forEach(function (p) { %>
+                <option value="<%= p.value %>" <%= exhibition.ended_access_policy === p.value ? 'selected' : '' %>><%= p.label %></option>
+              <% }); %>
+            </select>
+            <p class="mt-1 text-xs text-gray-400">차단을 고르면 종료 후 목록에서도 사라집니다.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">종료 후 구매</label>
+            <select name="ended_purchase_policy" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <% endedPurchasePolicies.forEach(function (p) { %>
+                <option value="<%= p.value %>" <%= exhibition.ended_purchase_policy === p.value ? 'selected' : '' %>><%= p.label %></option>
+              <% }); %>
+            </select>
+          </div>
+        </div>
+
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="hide_sold_out" value="1" <%= _cfg.hide_sold_out ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300">
+          품절 상품 숨김 <span class="text-xs text-gray-400">(끄면 SOLD OUT 표시로 노출)</span>
+        </label>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">
+            안내 · 유의사항 <span class="text-xs font-normal text-gray-400">(HTML 허용 — 상세 하단에 노출)</span>
+          </label>
+          <textarea name="notice" rows="4"
+                    class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono"><%= _cfg.notice || '' %></textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="flex items-center justify-end gap-2">
+      <a href="/admin/exhibitions" class="px-4 py-2 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+      <button type="submit" class="px-5 py-2 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <%= isNew ? '등록하고 계속 편집' : '기본 정보 저장' %>
+      </button>
+    </div>
+  </form>
+
+  <% if (isNew) { %>
+    <div class="mt-8 px-5 py-6 rounded-xl border border-dashed border-gray-300 bg-gray-50 text-center">
+      <p class="text-sm text-gray-500">
+        <i class="bi bi-info-circle"></i>
+        먼저 기본 정보를 저장하면 <strong>내부 탭(섹션)</strong>과 <strong>상품 연결</strong>을 편집할 수 있습니다.
+      </p>
+    </div>
+  <% } else { %>
+
+  <%# ══════════ 2. 내부 탭(섹션) ══════════ %>
+  <div class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-gray-800">내부 탭 (섹션)</h2>
+        <p class="mt-0.5 text-xs text-gray-500">
+          상세 화면의 탭입니다. <strong>전체</strong> 탭은 항상 자동으로 맨 앞에 붙습니다.
+        </p>
+      </div>
+      <button type="button" id="addSectionBtn"
+              class="text-xs px-3 py-1.5 rounded border border-gray-200 text-gray-700 hover:bg-gray-50">
+        <i class="bi bi-plus-lg"></i> 섹션 추가
+      </button>
+    </div>
+
+    <form id="sectionsForm" method="POST" action="/admin/exhibitions/<%= exhibition.id %>/sections">
+      <div class="p-5">
+        <div id="sectionList" class="space-y-3">
+          <% sections.forEach(function (s, i) { %>
+            <div class="section-row rounded-lg border border-gray-200 p-4" data-index="<%= i %>">
+              <input type="hidden" name="sections[<%= i %>][id]" value="<%= s.id %>">
+              <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                <div class="sm:col-span-3">
+                  <label class="block text-xs text-gray-500 mb-1">표시명</label>
+                  <input type="text" name="sections[<%= i %>][section_name]" value="<%= s.section_name %>" maxlength="100"
+                         class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+                </div>
+                <div class="sm:col-span-3">
+                  <label class="block text-xs text-gray-500 mb-1">코드 <span class="text-gray-300">(?tab= 값)</span></label>
+                  <input type="text" name="sections[<%= i %>][section_code]" value="<%= s.section_code %>" maxlength="100"
+                         class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs text-gray-500 mb-1">유형</label>
+                  <select name="sections[<%= i %>][section_type]" data-section-type
+                          class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+                    <% sectionTypes.forEach(function (t) { %>
+                      <option value="<%= t.value %>" <%= s.section_type === t.value ? 'selected' : '' %>><%= t.label %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="sm:col-span-3 flex items-center gap-3 pt-5">
+                  <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                    <input type="checkbox" name="sections[<%= i %>][is_tab]" value="1" <%= s.is_tab ? 'checked' : '' %> class="w-3.5 h-3.5 rounded border-gray-300">
+                    탭 노출
+                  </label>
+                  <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                    <input type="checkbox" name="sections[<%= i %>][is_active]" value="1" <%= s.is_active ? 'checked' : '' %> class="w-3.5 h-3.5 rounded border-gray-300">
+                    사용
+                  </label>
+                </div>
+                <div class="sm:col-span-1 pt-5 text-right">
+                  <label class="inline-flex items-center gap-1 text-xs text-red-600">
+                    <input type="checkbox" name="sections[<%= i %>][_delete]" value="1" class="w-3.5 h-3.5 rounded border-gray-300">
+                    삭제
+                  </label>
+                </div>
+              </div>
+              <div class="mt-3 <%= s.section_type === 'HTML' ? '' : 'hidden' %>" data-html-panel>
+                <label class="block text-xs text-gray-500 mb-1">HTML 내용 <span class="text-gray-300">(위험 태그는 저장 시 제거)</span></label>
+                <textarea name="sections[<%= i %>][html]" rows="3"
+                          class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm font-mono"><%= (s.config && s.config.html) || '' %></textarea>
+              </div>
+            </div>
+          <% }); %>
+        </div>
+
+        <% if (sections.length === 0) { %>
+          <p id="sectionEmpty" class="py-8 text-center text-sm text-gray-500">
+            섹션이 없습니다. 섹션 없이도 상품을 담으면 <strong>전체</strong> 탭 하나로 노출됩니다.
+          </p>
+        <% } %>
+
+        <div class="mt-4 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          섹션을 삭제하면 <strong>그 섹션에 배정된 상품 연결도 함께 사라집니다</strong>. 상품을 남기려면
+          먼저 아래 상품 목록에서 섹션을 <em>전체 탭</em> 으로 옮기세요.
+        </div>
+      </div>
+
+      <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 text-right">
+        <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900">
+          섹션 저장
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <%# ══════════ 3. 상품 연결 ══════════ %>
+  <div class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+      <h2 class="text-base font-bold text-gray-800">상품 연결 <span class="text-gray-400 font-normal">(<%= products.length %>개)</span></h2>
+      <p class="mt-0.5 text-xs text-gray-500">
+        섹션을 지정하지 않은 상품은 <strong>전체</strong> 탭에만 노출됩니다.
+      </p>
+    </div>
+
+    <%# 상품 검색 · 담기 — 독립 폼(중첩 금지) %>
+    <div class="p-5 border-b border-gray-100 bg-gray-50/40">
+      <label class="block text-sm font-medium text-gray-700 mb-1.5">상품 검색해서 담기</label>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input type="text" id="exhProductSearch" placeholder="상품명 2글자 이상 입력"
+               class="flex-1 px-3 py-2 rounded-md border border-gray-200 text-sm">
+        <select id="exhTargetSection" class="px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <option value="">전체 탭 (섹션 미배정)</option>
+          <% sections.filter(s => s.is_active).forEach(function (s) { %>
+            <option value="<%= s.id %>"><%= s.section_name %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div id="exhSearchResults" class="mt-2 space-y-1"></div>
+    </div>
+
+    <form id="productsForm" method="POST" action="/admin/exhibitions/<%= exhibition.id %>/products">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-semibold text-gray-500 bg-gray-50/60">
+              <th class="px-3 py-2.5 w-16">순서</th>
+              <th class="px-3 py-2.5 w-16">이미지</th>
+              <th class="px-3 py-2.5">상품명</th>
+              <th class="px-3 py-2.5 w-40">섹션</th>
+              <th class="px-3 py-2.5 w-28">배지</th>
+              <th class="px-3 py-2.5 w-52">MD 코멘트</th>
+              <th class="px-3 py-2.5 w-32 text-center">노출 / 구매 / 고정</th>
+              <th class="px-3 py-2.5 w-16 text-center">삭제</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <% if (products.length === 0) { %>
+              <tr><td colspan="8" class="px-6 py-12 text-center text-gray-500">담긴 상품이 없습니다.</td></tr>
+            <% } %>
+            <% products.forEach(function (p, i) { %>
+              <tr>
+                <td class="px-3 py-2.5">
+                  <%# hidden input 을 tr 직속에 두면 브라우저가 테이블 밖으로 밀어낸다. 반드시 td 안. %>
+                  <input type="hidden" name="products[<%= i %>][mapping_id]" value="<%= p.id %>">
+                  <input type="number" name="products[<%= i %>][sort_order]" value="<%= p.sort_order %>" min="0"
+                         class="w-16 px-2 py-1 rounded border border-gray-200 text-sm">
+                </td>
+                <td class="px-3 py-2.5">
+                  <img src="<%= p.main_image || '/images/placeholder.png' %>" alt=""
+                       class="w-10 h-10 rounded object-cover bg-gray-100">
+                </td>
+                <td class="px-3 py-2.5">
+                  <div class="text-gray-900 truncate max-w-xs" title="<%= p.name %>"><%= p.name %></div>
+                  <div class="text-xs text-gray-400">
+                    <%= won(p.price) %>원
+                    <% if (p.product_status !== 'ON') { %>
+                      <span class="ml-1 px-1 rounded bg-gray-100 text-gray-500"><%= p.product_status %></span>
+                    <% } %>
+                  </div>
+                </td>
+                <td class="px-3 py-2.5">
+                  <select name="products[<%= i %>][section_id]" class="w-full px-2 py-1 rounded border border-gray-200 text-sm">
+                    <option value="">전체 탭</option>
+                    <% sections.forEach(function (s) { %>
+                      <option value="<%= s.id %>" <%= Number(p.section_id) === Number(s.id) ? 'selected' : '' %>><%= s.section_name %></option>
+                    <% }); %>
+                  </select>
+                </td>
+                <td class="px-3 py-2.5">
+                  <input type="text" name="products[<%= i %>][display_badge]" value="<%= p.display_badge || '' %>" maxlength="50"
+                         placeholder="단독" class="w-full px-2 py-1 rounded border border-gray-200 text-sm">
+                </td>
+                <td class="px-3 py-2.5">
+                  <input type="text" name="products[<%= i %>][display_comment]" value="<%= p.display_comment || '' %>" maxlength="200"
+                         placeholder="MD 한마디" class="w-full px-2 py-1 rounded border border-gray-200 text-sm">
+                </td>
+                <td class="px-3 py-2.5">
+                  <div class="flex items-center justify-center gap-2">
+                    <label title="노출"><input type="checkbox" name="products[<%= i %>][visible]" value="1" <%= p.visible ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300"></label>
+                    <label title="구매 허용"><input type="checkbox" name="products[<%= i %>][purchase_enabled]" value="1" <%= p.purchase_enabled ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300"></label>
+                    <label title="상단 고정"><input type="checkbox" name="products[<%= i %>][is_fixed]" value="1" <%= p.is_fixed ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300"></label>
+                  </div>
+                </td>
+                <td class="px-3 py-2.5 text-center">
+                  <%# form 중첩 대신 formaction 으로 목적지만 바꾼다 %>
+                  <button type="submit"
+                          formaction="/admin/exhibitions/<%= exhibition.id %>/products/<%= p.id %>/delete"
+                          formnovalidate
+                          onclick="return confirm('이 상품을 기획전에서 제외합니다.');"
+                          class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">제외</button>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <% if (products.length > 0) { %>
+        <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 text-right">
+          <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900">
+            상품 설정 저장
+          </button>
+        </div>
+      <% } %>
+    </form>
+  </div>
+
+  <% } %>
+</div>
+
+<script>
+(function () {
+  const exhibitionId = <%- JSON.stringify(exhibition.id) %>;
+
+  /* HTML 유형 섹션에서만 HTML 입력창을 보인다. */
+  function bindSectionType(row) {
+    const sel = row.querySelector('[data-section-type]');
+    const panel = row.querySelector('[data-html-panel]');
+    if (!sel || !panel) return;
+    const sync = () => panel.classList.toggle('hidden', sel.value !== 'HTML');
+    sel.addEventListener('change', sync);
+    sync();
+  }
+  document.querySelectorAll('.section-row').forEach(bindSectionType);
+
+  /* 섹션 행 추가 — 인덱스는 기존 행 수부터 이어 붙인다(서버는 배열 순서를 sort_order 로 쓴다). */
+  const addBtn = document.getElementById('addSectionBtn');
+  const list = document.getElementById('sectionList');
+  addBtn && addBtn.addEventListener('click', () => {
+    const i = list.querySelectorAll('.section-row').length + 1000; // 기존 인덱스와 충돌하지 않게
+    const row = document.createElement('div');
+    row.className = 'section-row rounded-lg border border-indigo-200 bg-indigo-50/30 p-4';
+    row.innerHTML = `
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+        <div class="sm:col-span-3">
+          <label class="block text-xs text-gray-500 mb-1">표시명</label>
+          <input type="text" name="sections[${i}][section_name]" maxlength="100" placeholder="MD추천"
+                 class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+        </div>
+        <div class="sm:col-span-3">
+          <label class="block text-xs text-gray-500 mb-1">코드 <span class="text-gray-300">(비우면 자동)</span></label>
+          <input type="text" name="sections[${i}][section_code]" maxlength="100" placeholder="md-pick"
+                 class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs text-gray-500 mb-1">유형</label>
+          <select name="sections[${i}][section_type]" data-section-type class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+            <% sectionTypes.forEach(function (t) { %>
+              <option value="<%= t.value %>"><%= t.label %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="sm:col-span-3 flex items-center gap-3 pt-5">
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <input type="checkbox" name="sections[${i}][is_tab]" value="1" checked class="w-3.5 h-3.5 rounded border-gray-300"> 탭 노출
+          </label>
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <input type="checkbox" name="sections[${i}][is_active]" value="1" checked class="w-3.5 h-3.5 rounded border-gray-300"> 사용
+          </label>
+        </div>
+        <div class="sm:col-span-1 pt-5 text-right">
+          <button type="button" class="text-xs text-gray-400 hover:text-red-600" data-remove-row>제거</button>
+        </div>
+      </div>
+      <div class="mt-3 hidden" data-html-panel>
+        <label class="block text-xs text-gray-500 mb-1">HTML 내용</label>
+        <textarea name="sections[${i}][html]" rows="3" class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm font-mono"></textarea>
+      </div>`;
+    list.appendChild(row);
+    bindSectionType(row);
+    const empty = document.getElementById('sectionEmpty');
+    if (empty) empty.style.display = 'none';
+  });
+
+  list && list.addEventListener('click', (e) => {
+    if (e.target.closest('[data-remove-row]')) e.target.closest('.section-row').remove();
+  });
+
+  /* 상품 검색 → 담기. 결과 행은 각각 독립 form 이라 #productsForm 과 중첩되지 않는다. */
+  if (!exhibitionId) return;
+  const search = document.getElementById('exhProductSearch');
+  const results = document.getElementById('exhSearchResults');
+  const targetSection = document.getElementById('exhTargetSection');
+  let timer;
+
+  search && search.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = search.value.trim();
+    if (q.length < 2) { results.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const res = await fetch(`/admin/exhibitions/product-search?q=${encodeURIComponent(q)}`);
+      const { products } = await res.json();
+      results.innerHTML = products.length ? '' : '<p class="text-xs text-gray-400 px-1 py-2">검색 결과가 없습니다.</p>';
+      products.forEach(p => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/exhibitions/${exhibitionId}/products/add`;
+        form.className = 'flex items-center gap-2 px-2 py-1.5 rounded border border-gray-100 bg-white hover:bg-gray-50';
+
+        const img = document.createElement('img');
+        img.src = p.main_image || '/images/placeholder.png';
+        img.className = 'w-8 h-8 rounded object-cover bg-gray-100';
+
+        const span = document.createElement('span');
+        span.className = 'flex-1 text-sm text-gray-800 truncate';
+        span.textContent = p.name; // textContent — 상품명이 마크업으로 해석되지 않도록
+
+        const price = document.createElement('span');
+        price.className = 'text-xs text-gray-400';
+        price.textContent = Number(p.price || 0).toLocaleString('ko-KR') + '원';
+
+        const pid = document.createElement('input');
+        pid.type = 'hidden'; pid.name = 'product_id'; pid.value = p.id;
+
+        const sid = document.createElement('input');
+        sid.type = 'hidden'; sid.name = 'section_id'; sid.value = targetSection ? targetSection.value : '';
+
+        const btn = document.createElement('button');
+        btn.type = 'submit';
+        btn.className = 'text-xs px-2 py-1 rounded bg-indigo-600 text-white';
+        btn.textContent = '담기';
+
+        form.append(img, span, price, pid, sid, btn);
+        results.append(form);
+      });
+    }, 250);
+  });
+
+  // 섹션 선택을 바꾸면 이미 그려진 결과의 hidden section_id 도 따라간다.
+  targetSection && targetSection.addEventListener('change', () => {
+    results.querySelectorAll('input[name="section_id"]').forEach(i => { i.value = targetSection.value; });
+  });
+})();
+</script>
