@@ -49,7 +49,7 @@ exports.getDashboard = async (req, res, next) => {
             `SELECT COUNT(*) as coupon_count
              FROM user_coupons uc
              JOIN coupons c ON uc.coupon_id = c.id
-             WHERE uc.user_id = ? AND uc.used_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > NOW())`,
+             WHERE uc.user_id = ? AND uc.used_at IS NULL AND (c.valid_to IS NULL OR c.valid_to > NOW())`,
             [userId]
         ).catch(() => [[{ coupon_count: 0 }]]); // 쿠폰 관련 테이블이 없을 경우를 대비
 
@@ -257,18 +257,20 @@ exports.getCoupons = async (req, res, next) => {
     try {
         const userId = req.user.id;
 
+        // 실제 컬럼은 coupon_type / min_order_amount / valid_to 다.
+        // 뷰(user/mypage/coupons.ejs)가 쓰는 이름으로 별칭을 준다.
         const [coupons] = await pool.query(
             `SELECT
                 c.name,
-                c.type,
+                c.coupon_type      AS type,
                 c.discount_amount,
-                c.min_purchase,
-                c.expires_at,
+                c.min_order_amount AS min_purchase,
+                c.valid_to         AS expires_at,
                 uc.used_at
              FROM user_coupons uc
              JOIN coupons c ON uc.coupon_id = c.id
              WHERE uc.user_id = ?
-             ORDER BY uc.used_at ASC, c.expires_at ASC, uc.created_at DESC`,
+             ORDER BY uc.used_at ASC, c.valid_to ASC, uc.created_at DESC`,
             [userId]
         ).catch(() => [[]]); // 쿠폰 관련 테이블이 없을 경우를 대비
 

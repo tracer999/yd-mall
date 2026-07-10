@@ -211,7 +211,10 @@ SELECT c.id, c.name, c.display_order, c.logo_image_path
 FROM categories c
 WHERE c.type = 'BRAND'
 ```
-종합관(mall=2)에서 `/brands` 를 열면 건강식품관 브랜드 25개(백세식품·휴럼·일양약품…)가 그대로 나온다. 클릭하면 `/brands/11` → `/products?brandId=11` → mall=2 에 해당 브랜드 상품이 0건이라 **빈 목록**. `services/display/resolvers/brand_carousel.js:24` 도 같은 결함이라 홈 브랜드 캐러셀에도 샌다.
+종합관(mall=2)에서 `/brands` 를 열면 건강식품관 브랜드 25개(백세식품·휴럼·일양약품…)가 그대로 나온다. 클릭하면 `/brands/11` → `/products/brand/11` → mall=2 에 해당 브랜드 상품이 0건이라 **빈 목록**.
+
+> 홈의 브랜드 캐러셀(`services/display/resolvers/brand_carousel.js:26`)에는 **이미 `mall_id` 필터가 있다**.
+> 새는 곳은 `/brands` 목록 페이지 하나다.
 
 **필요한 것** `WHERE c.type='BRAND' AND c.mall_id = ?` (스토어프론트 `req.mallId`).
 mall=2 에는 BRAND 카테고리가 0개이므로, 수정 후에는 빈 상태 화면이 필요하다. 종합관 브랜드를 만들 생각이면 별도 작업이다(상품 9,677건의 `provider` 에 브랜드명 1,394종이 이미 들어 있다).
@@ -321,14 +324,18 @@ c.type, c.min_purchase, c.expires_at
 
 아래는 "나중에 고칠 것"이 아니라 **해당 메뉴가 출시될 수 없는 조건**이다.
 
-| # | 버그 | 위치 | 막는 메뉴 | 증상 |
-|---|---|---|---|---|
-| B1 | 브랜드 목록에 `mall_id` 필터 없음 | `controllers/brandController.js:8`, `services/display/resolvers/brand_carousel.js:24` | **브랜드** | mall=2 에 mall=1 브랜드 25개 노출 → 클릭 시 빈 목록 |
-| B2 | 마이페이지 쿠폰함이 없는 컬럼 조회 | `controllers/mypageController.js:52,263-271` | **쿠폰** | `.catch` 폴백으로 항상 빈 쿠폰함 |
-| B3 | `badge_expire_date` 미적용 | `controllers/productController.js:169` | **오늘특가** | 만료 3주 지난 상품(id 106)이 특가에 노출 |
-| B4 | `HEADER_CS` 가 `/cs` 가 아닌 `/boards/notice` | `feature_menu` 데이터 | **이벤트&혜택** | 고객센터·이벤트가 같은 화면을 가리킴 |
+| # | 버그 | 위치 | 막는 메뉴 | 증상 | 상태 |
+|---|---|---|---|---|---|
+| B1 | 브랜드 목록에 `mall_id` 필터 없음 | `controllers/brandController.js:8` | **브랜드** | mall=2 에 mall=1 브랜드 25개 노출 | ✅ 수정됨 (`a7e7861`) |
+| B2 | 마이페이지 쿠폰함이 없는 컬럼 조회 | `controllers/mypageController.js:52,263-271` | **쿠폰** | `.catch` 폴백으로 항상 빈 쿠폰함 | 미수정 |
+| B3 | `badge_expire_date` 미적용 | `controllers/productController.js` DEADLINE_SALE 분기 | **오늘특가** | 만료 3주 지난 상품(id 106)이 특가에 노출 | 미수정 |
+| B4 | `HEADER_CS` 가 `/cs` 가 아닌 `/boards/notice` | `feature_menu` 데이터 | **이벤트&혜택** | 고객센터·이벤트가 같은 화면을 가리킴 | 미수정 |
 
-B1·B2·B3 는 코드 수정, B4 는 데이터(`feature_menu.default_path`) 수정이다.
+B2·B3 는 코드 수정, B4 는 데이터(`feature_menu.default_path`) 수정이다.
+
+> **B1 후속.** 별도 작업으로 mall=2 에 브랜드 카테고리 **1,354건**이 생성되고 상품 **6,739건**이
+> 연결됐다(`a7e7861`). 따라서 아래 "브랜드 mall=2 = 0건" 기술은 더 이상 유효하지 않다.
+> 브랜드 메뉴는 이제 두 몰 모두에서 실기능이다.
 
 ---
 
@@ -361,11 +368,11 @@ GNB 12개가 **이미 전부 `module_ready=1`** 이고 **개발 DB = 운영 DB**
 |---|---:|---:|
 | 오늘특가(DEADLINE_SALE) | 4 | 240 |
 | 아울렛(discount>0) | **0** | 4,499 |
-| 브랜드(BRAND 카테고리) | 25 | **0** |
+| 브랜드(BRAND 카테고리) | 25 | 1,354 |
 | 신상품(NEW 뱃지) | 10 | 200 |
 | 베스트(BEST 뱃지) | 31 | 151 |
 
-모든 목록형 메뉴는 0건일 때의 화면을 반드시 정의한다.
+모든 목록형 메뉴는 0건일 때의 화면을 반드시 정의한다. 특히 **아울렛은 mall=1 에서 항상 0건**이다.
 
 ---
 
@@ -419,14 +426,37 @@ B2  mypageController 쿠폰 컬럼명 교정                  (쿠폰함 복구)
 
 ---
 
-## 7. 이 문서가 남긴 결정 사항
+## 7. 확정된 결정 사항 (2026-07-10)
 
-구현 착수 전에 답이 필요하다.
+| # | 항목 | 결정 | 비고 |
+|---|---|---|---|
+| 1 | 개발 순서 | **0차 버그 4건 우선** | B1~B4 수정이 모든 메뉴의 전제 |
+| 2 | 신상품 판정 | **`product_badge='NEW'`** | 기간 필터는 시드 `created_at` 동일 문제로 배제 |
+| 3 | 베스트 판정 | **조회수 상위 100** | 전체 카탈로그 정렬 금지 |
+| 4 | 이벤트 1차 범위 | **참여형까지 포함** | `event_participant` + 중복참여 방지 + 선착순 수량 경쟁조건 처리 필요 |
+| 5 | 쿠폰 메뉴 | **실기능(다운로드 수령)** | `issued_by='DOWNLOAD'` 신설. 선행: B2 |
+| 6 | 멤버십 | **제도 소개 페이지(안 A)** | 주문 21건으로 등급 산정 불가. 데이터 축적 후 안 B 승격 |
+| 7 | 아울렛/오늘특가 경계 | 미정 | 아울렛에서 `DEADLINE_SALE` 제외 여부는 구현 시 결정 |
+| 8 | `banners`/`coupons` `mall_id` | 미정 | 쿠폰 실기능이 몰 분리를 요구하면 그때 ALTER |
 
-1. **신상품 판정** — `created_at` 30일 vs `product_badge='NEW'` → 권장: 뱃지
-2. **베스트 상한** — 상위 100개 vs 조회수 임계값 → 권장: 상한 100
-3. **아울렛과 오늘특가 경계** — 아울렛에서 `DEADLINE_SALE` 제외 여부
-4. **쿠폰 메뉴** — 수령 화면 신설 vs 마이페이지로 보내고 GNB 제거 → 권장: 후자 선행
-5. **멤버십** — 소개 페이지(A) vs 등급 시스템(B) → 권장: A
-6. **이벤트 1차 범위** — 소개형 vs 참여형 → 권장: 소개형
-7. **`banners`/`coupons` 에 `mall_id` 추가 여부** — 이벤트·쿠폰의 몰 분리가 필요한가
+### 7-1. 결정 4(참여형 이벤트)가 끌고 오는 것
+
+소개형과 달리 참여형은 아래를 **반드시** 함께 설계해야 한다. 구현 착수 시 별도 절로 확장한다.
+
+```text
+중복 참여 방지     UNIQUE (event_id, user_id)  — DB 제약으로 막는다. 앱 체크만으로는 경쟁조건에 진다
+선착순 수량        UPDATE ... SET issued = issued + 1 WHERE issued < limit  (affectedRows 로 판정)
+                   또는 SELECT ... FOR UPDATE. 애플리케이션 카운트 후 INSERT 는 초과 발급된다
+로그인 요구        참여 액션은 ensureAuthenticated. 비로그인은 목록·상세까지만
+부정 방지          출석체크는 서버 시각 기준(클라이언트 날짜 신뢰 금지)
+쿠폰팩 지급        couponController 의 issued_by='ADMIN' 경로 재사용, event_id 를 남긴다
+```
+
+### 7-2. 결정 5(쿠폰 실기능)가 끌고 오는 것
+
+```text
+스키마      coupons 에 download_enabled / download_start_at / download_end_at / issue_limit / issued_count
+            user_coupons.issued_by 에 'DOWNLOAD' 추가 (현재 enum: AUTO/ADMIN/CODE)
+제약        UNIQUE (user_id, coupon_id)  — 중복 수령 방지. 현재 이 제약이 없다
+선행        B2 (마이페이지 쿠폰함이 깨져 있어, 받아도 보이지 않는다)
+```

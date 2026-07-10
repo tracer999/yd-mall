@@ -171,7 +171,10 @@ exports.getList = async (req, res) => {
             query += " AND FIND_IN_SET('RECOMMEND', product_badge)";
             if (pageTitle === '전체상품') pageTitle = '추천 상품';
         } else if (productBadge === 'DEADLINE_SALE') {
+            // 기간임박할인은 만료일이 지나면 노출을 멈춘다. 관리자가 badge_expire_date 를
+            // 저장하지만 고객 화면이 검사하지 않아, 만료된 특가가 계속 걸려 있었다.
             query += " AND FIND_IN_SET('DEADLINE_SALE', product_badge)";
+            query += " AND (badge_expire_date IS NULL OR badge_expire_date >= CURDATE())";
             if (pageTitle === '전체상품') pageTitle = '기간임박할인';
         } else if (productBadge === 'GREENHUB_SPECIAL') {
             query += " AND FIND_IN_SET('GREENHUB_SPECIAL', product_badge)";
