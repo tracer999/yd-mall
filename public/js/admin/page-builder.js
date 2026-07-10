@@ -114,13 +114,7 @@
     // config 필드
     (s.fields || []).forEach(function (f) {
       var val = (s.config && s.config[f.key] != null) ? s.config[f.key] : (f.default != null ? f.default : '');
-      var input;
-      if (f.type === 'number') {
-        input = '<input type="number" data-c="' + f.key + '" value="' + esc(val) + '" ' +
-          (f.min != null ? 'min="' + f.min + '" ' : '') + (f.max != null ? 'max="' + f.max + '" ' : '') + 'class="pb-input">';
-      } else {
-        input = '<input type="text" data-c="' + f.key + '" value="' + esc(val) + '" class="pb-input">';
-      }
+      var input = renderConfigInput(f, val);
       html += field(f.label, input);
     });
 
@@ -141,6 +135,30 @@
     settingsEl.innerHTML = html;
     document.getElementById('pb-save-btn').addEventListener('click', function () { saveSettings(s.id); });
   }
+  function renderConfigInput(f, val) {
+    if (f.type === 'number') {
+      return '<input type="number" data-c="' + f.key + '" value="' + esc(val) + '" ' +
+        (f.min != null ? 'min="' + f.min + '" ' : '') + (f.max != null ? 'max="' + f.max + '" ' : '') + 'class="pb-input">';
+    }
+    if (f.type === 'select') {
+      var options = Array.isArray(f.options) ? f.options : [];
+      return '<select data-c="' + f.key + '" class="pb-input">' + options.map(function (opt) {
+        var selected = String(val) === String(opt) ? ' selected' : '';
+        return '<option value="' + esc(opt) + '"' + selected + '>' + esc(opt) + '</option>';
+      }).join('') + '</select>';
+    }
+    if (f.type === 'textarea') {
+      return '<textarea data-c="' + f.key + '" rows="8" class="pb-input">' + esc(val) + '</textarea>';
+    }
+    if (f.type === 'json') {
+      var jsonText = '';
+      if (val != null && val !== '') {
+        jsonText = typeof val === 'string' ? val : JSON.stringify(val, null, 2);
+      }
+      return '<textarea data-c="' + f.key + '" data-json="1" rows="10" class="pb-input font-mono text-sm">' + esc(jsonText) + '</textarea>';
+    }
+    return '<input type="text" data-c="' + f.key + '" value="' + esc(val) + '" class="pb-input">';
+  }
   function field(label, input) {
     return '<div><label class="block text-xs font-medium text-gray-600 mb-1">' + label + '</label>' + input + '</div>';
   }
@@ -157,14 +175,26 @@
   }
 
   async function saveSettings(id) {
-    var body = { config: {} };
-    settingsEl.querySelectorAll('[data-f]').forEach(function (el) { body[el.dataset.f] = el.value; });
-    settingsEl.querySelectorAll('[data-c]').forEach(function (el) {
-      var v = el.value;
-      body.config[el.dataset.c] = (el.type === 'number' && v !== '') ? Number(v) : v;
-    });
-    settingsEl.querySelectorAll('[data-chk]').forEach(function (el) { body[el.dataset.chk] = el.checked; });
     try {
+      var body = { config: {} };
+      settingsEl.querySelectorAll('[data-f]').forEach(function (el) { body[el.dataset.f] = el.value; });
+      settingsEl.querySelectorAll('[data-c]').forEach(function (el) {
+        var v = el.value;
+        if (el.dataset.json === '1') {
+          if (!v.trim()) {
+            body.config[el.dataset.c] = null;
+            return;
+          }
+          try {
+            body.config[el.dataset.c] = JSON.parse(v);
+          } catch (e) {
+            throw new Error('JSON 형식이 올바르지 않습니다: ' + el.dataset.c);
+          }
+          return;
+        }
+        body.config[el.dataset.c] = (el.type === 'number' && v !== '') ? Number(v) : v;
+      });
+      settingsEl.querySelectorAll('[data-chk]').forEach(function (el) { body[el.dataset.chk] = el.checked; });
       await api('/admin/page-builder/sections/' + id + '/update', body);
       // 로컬 상태 갱신
       var s = findSection(id);
