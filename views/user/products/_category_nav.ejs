@@ -1,0 +1,100 @@
+<%
+/*
+ * 카테고리 목록 페이지 상단 내비 (브레드크럼 + 카테고리 패널)
+ *
+ * categoryNav 가 있을 때만 include 한다 (NORMAL 카테고리 경로).
+ * 브랜드·테마·전체 경로는 기존 사이드바 레이아웃을 쓴다.
+ *
+ * 패널 규칙: 자식이 있으면 자식, 리프면 형제(현재 강조).
+ *   리프에서 자식을 깔면 패널이 통째로 빈다.
+ */
+const _nav = categoryNav;
+const _brandQs = currentBrand ? ('?brandId=' + encodeURIComponent(currentBrand)) : '';
+const _catUrl = (id) => `/products/category/${id}${_brandQs}`;
+const _parent = _nav.ancestors.length ? _nav.ancestors[_nav.ancestors.length - 1] : null;
+const _trail = [..._nav.ancestors, _nav.current];
+%>
+
+<!-- 브레드크럼 -->
+<nav class="flex text-sm text-gray-500 mb-4" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center flex-wrap gap-y-1">
+        <li class="inline-flex items-center">
+            <a href="/" class="hover:text-gray-900">홈</a>
+        </li>
+        <% _trail.forEach((node, i) => { %>
+            <li class="inline-flex items-center">
+                <i class="bi bi-chevron-right text-gray-300 text-xs mx-2"></i>
+                <% if (i === _trail.length - 1) { %>
+                    <span class="text-gray-900 font-medium"><%= node.name %></span>
+                <% } else { %>
+                    <a href="<%= _catUrl(node.id) %>" class="hover:text-gray-900"><%= node.name %></a>
+                <% } %>
+            </li>
+        <% }) %>
+    </ol>
+</nav>
+
+<!-- 카테고리 패널 -->
+<div class="hidden md:flex border border-gray-200 bg-white mb-6">
+    <!-- 좌측 라벨 -->
+    <div class="w-40 shrink-0 bg-gray-600 text-white flex items-start px-5 py-4">
+        <span class="text-sm font-bold">카테고리</span>
+    </div>
+
+    <!-- 우측 -->
+    <div class="flex-1 min-w-0">
+        <!-- 헤더: 현재 위치. 하위가 있으면 이름만, 하위로 내려왔으면 ← 로 부모 복귀 -->
+        <div class="flex items-center gap-2 px-6 py-4 <%= _nav.panelItems.length ? 'border-b border-gray-200' : '' %>">
+            <% if (_parent) { %>
+                <a href="<%= _catUrl(_parent.id) %>"
+                   class="text-gray-500 hover:text-gray-900 shrink-0" aria-label="<%= _parent.name %> 로 이동">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+            <% } %>
+            <span class="text-sm text-gray-800">
+                <% _trail.forEach((node, i) => { %><%
+                    %><% if (i > 0) { %><span class="text-gray-300 mx-1.5">&gt;</span><% } %><%
+                    %><span class="<%= i === _trail.length - 1 ? 'font-bold' : '' %>"><%= node.name %></span><%
+                %><% }) %>
+            </span>
+        </div>
+
+        <!-- 하위(또는 형제) 카테고리 그리드 -->
+        <% if (_nav.panelItems.length) { %>
+            <div class="px-6 py-4 bg-gray-50">
+                <ul class="grid grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-3">
+                    <% _nav.panelItems.forEach(item => {
+                        const _isCurrent = String(item.id) === String(_nav.current.id); %>
+                        <li>
+                            <a href="<%= _catUrl(item.id) %>"
+                               class="block text-sm truncate hover:underline <%= _isCurrent
+                                   ? 'text-[color:var(--gh-primary)] font-bold'
+                                   : 'text-gray-600 hover:text-gray-900' %>"
+                               title="<%= item.name %>"><%= item.name %></a>
+                        </li>
+                    <% }) %>
+                </ul>
+            </div>
+        <% } %>
+    </div>
+</div>
+
+<!-- 모바일: 패널 대신 가로 스크롤 칩 -->
+<div class="md:hidden -mx-4 px-4 mb-4">
+    <% if (_parent) { %>
+        <a href="<%= _catUrl(_parent.id) %>" class="inline-flex items-center gap-1 text-xs text-gray-500 mb-2">
+            <i class="bi bi-arrow-left"></i> <%= _parent.name %>
+        </a>
+    <% } %>
+    <% if (_nav.panelItems.length) { %>
+        <div class="flex gap-2 overflow-x-auto pb-1">
+            <% _nav.panelItems.forEach(item => {
+                const _isCurrent = String(item.id) === String(_nav.current.id); %>
+                <a href="<%= _catUrl(item.id) %>"
+                   class="shrink-0 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap <%= _isCurrent
+                       ? 'bg-[var(--gh-primary)] text-white border-[var(--gh-primary)] font-semibold'
+                       : 'bg-white text-gray-600 border-gray-200' %>"><%= item.name %></a>
+            <% }) %>
+        </div>
+    <% } %>
+</div>

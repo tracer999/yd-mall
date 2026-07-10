@@ -97,6 +97,15 @@ const _buildPageUrl = (pageNum, pp) => {
   const basePath = currentCategory ? `/products/category/${currentCategory}` : (currentBrand ? `/products/brand/${currentBrand}` : '/products');
   return basePath + (p.length ? '?' + p.join('&') : '');
 };
+
+// NORMAL 카테고리 경로에서만 카테고리 패널을 쓴다.
+// 브랜드/테마/전체 경로는 categoryNav 가 null 이라 기존 사이드바 레이아웃으로 폴백한다.
+const _hasCatNav = (typeof categoryNav !== 'undefined') && categoryNav;
+const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
+  { value: 'best', label: '인기상품' }, { value: 'price_asc', label: '낮은가격' },
+  { value: 'price_desc', label: '높은가격' }, { value: 'sales', label: '판매량' },
+  { value: 'new', label: '최근등록' }, { value: 'review', label: '상품평' },
+];
 %>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -107,28 +116,32 @@ const _buildPageUrl = (pageNum, pp) => {
             </button>
         </div>
 
-        <!-- Breadcrumb -->
-        <nav class="flex text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
-            <ol class="inline-flex items-center space-x-1 md:space-x-3">
-                <li class="inline-flex items-center">
-                    <a href="/" class="inline-flex items-center hover:text-gray-900">Home</a>
-                </li>
-                <li>
-                    <div class="flex items-center">
-                        <i class="bi bi-chevron-right text-gray-400 mx-1"></i>
-                        <span class="text-gray-900 font-medium">
-                            <%= title %>
-                        </span>
-                    </div>
-                </li>
-            </ol>
-        </nav>
+        <% if (_hasCatNav) { %>
+            <%- include('./_category_nav', { categoryNav, currentBrand }) %>
+        <% } else { %>
+            <!-- Breadcrumb -->
+            <nav class="flex text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+                <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                    <li class="inline-flex items-center">
+                        <a href="/" class="inline-flex items-center hover:text-gray-900">Home</a>
+                    </li>
+                    <li>
+                        <div class="flex items-center">
+                            <i class="bi bi-chevron-right text-gray-400 mx-1"></i>
+                            <span class="text-gray-900 font-medium">
+                                <%= title %>
+                            </span>
+                        </div>
+                    </li>
+                </ol>
+            </nav>
+        <% } %>
 
         <!-- 모바일: 필터 바텀시트 구조는 리스트 하단에 배치 -->
 
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <!-- Sidebar Filter (Desktop only) -->
-            <div class="hidden lg:block lg:col-span-1">
+        <div class="<%= _hasCatNav ? '' : 'grid grid-cols-1 lg:grid-cols-4 gap-8' %>">
+            <!-- Sidebar Filter (Desktop only) — 카테고리 패널이 있으면 대체된다 -->
+            <div class="<%= _hasCatNav ? 'hidden' : 'hidden lg:block lg:col-span-1' %>">
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-800">Category</div>
                     <div class="divide-y divide-gray-100">
@@ -162,7 +175,7 @@ const _buildPageUrl = (pageNum, pp) => {
             </div>
 
             <!-- Product Grid -->
-            <div class="lg:col-span-3">
+            <div class="<%= _hasCatNav ? '' : 'lg:col-span-3' %>">
                 <% if (categoryBanner) { %>
                     <div class="mb-6">
                         <a href="<%= categoryBanner.link_url || '#' %>">
@@ -173,7 +186,11 @@ const _buildPageUrl = (pageNum, pp) => {
                     <% } %>
                         <div class="flex flex-col mb-6 gap-3 lg:sticky lg:top-0 lg:bg-gray-50 lg:z-10 lg:pt-2 lg:pb-2" id="products-filter-bar">
                             <div class="flex justify-between items-center">
-                                <h4 class="text-xl font-bold text-gray-800">Products<% if (currentCategory || currentBrand) { %> <span class="text-gray-500 text-base font-normal">(<%= _pg.total %>)</span><% } %></h4>
+                                <% if (_hasCatNav) { %>
+                                    <span class="text-sm text-gray-500">총 <strong class="text-gray-900"><%= _pg.total %></strong>개</span>
+                                <% } else { %>
+                                    <h4 class="text-xl font-bold text-gray-800">Products<% if (currentCategory || currentBrand) { %> <span class="text-gray-500 text-base font-normal">(<%= _pg.total %>)</span><% } %></h4>
+                                <% } %>
 
                                 <!-- 모바일: 필터/정렬/개수 3개 아이콘 버튼 -->
                                 <div class="flex lg:hidden items-center gap-1.5">
@@ -191,7 +208,7 @@ const _buildPageUrl = (pageNum, pp) => {
                                     </select>
                                 </div>
 
-                                <!-- PC: 기존 레이아웃 -->
+                                <!-- PC: 개수 선택 -->
                                 <div class="hidden lg:flex items-center gap-3">
                                     <select onchange="location.href=this.value"
                                         class="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--gh-primary)]">
@@ -199,33 +216,24 @@ const _buildPageUrl = (pageNum, pp) => {
                                             <option value="<%= _buildPageUrl(1, n) %>" <%= _pg.perPage === n ? 'selected' : '' %>><%= n %>개씩</option>
                                         <% }) %>
                                     </select>
-                                    <div class="relative group mt-0 self-auto">
-                                    <button
-                                        class="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none">
-                                        <span>정렬</span>
-                                        <i class="bi bi-chevron-down text-xs"></i>
-                                    </button>
-                                    <!-- Simple Dropdown via group-hover for pure CSS dropdown or add JS toggler if preferred. Using pure CSS for simplicity in migration unless complex. -->
-                                    <div
-                                        class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 w-max min-w-[120px]">
-                                        <div class="py-1">
-                                            <a href="?<%= sortPrefix %>sort=new"
-                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'new' ? 'font-bold' : '' %>">최신순</a>
-                                            <a href="?<%= sortPrefix %>sort=best"
-                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'best' ? 'font-bold' : '' %>">인기순</a>
-                                            <a href="?<%= sortPrefix %>sort=price_asc"
-                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'price_asc' ? 'font-bold' : '' %>">가격: 낮은 순</a>
-                                            <a href="?<%= sortPrefix %>sort=price_desc"
-                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 <%= currentSort === 'price_desc' ? 'font-bold' : '' %>">가격: 높은 순</a>
-                                        </div>
-                                    </div>
-                                </div>
                                 </div><!-- PC 레이아웃 end -->
                             </div>
 
-                            <!-- 모바일: 현재 선택된 카테고리/브랜드 활성 태그 -->
+                            <!-- PC: 정렬 탭 -->
+                            <div class="hidden lg:flex items-center border-b border-gray-200 pb-2 -mt-1">
+                                <% _sortTabs.forEach((t, i) => { %>
+                                    <% if (i > 0) { %><span class="text-gray-200 mx-3">|</span><% } %>
+                                    <a href="?<%= sortPrefix %>sort=<%= t.value %>"
+                                       class="text-sm no-underline transition-colors <%= currentSort === t.value
+                                           ? 'text-[color:var(--gh-primary)] font-bold'
+                                           : 'text-gray-500 hover:text-gray-900' %>"><%= t.label %></a>
+                                <% }) %>
+                            </div>
+
+                            <!-- 현재 선택된 카테고리/브랜드 활성 태그.
+                                 카테고리 패널 모드에서는 사이드바가 없으므로 브랜드 해제 UI 를 PC 에도 남긴다. -->
                             <% if (currentCategory || currentBrand) { %>
-                            <div class="lg:hidden flex flex-wrap items-center gap-1.5">
+                            <div class="<%= (_hasCatNav && currentBrand) ? '' : 'lg:hidden' %> flex flex-wrap items-center gap-1.5">
                                 <% if (currentCategory) {
                                     const _curCat = categories.find(c => String(c.id) === String(currentCategory));
                                     if (_curCat) { %>
@@ -288,7 +296,7 @@ const _buildPageUrl = (pageNum, pp) => {
                         </a>
                         <% } %>
 
-                        <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+                        <div class="grid grid-cols-2 <%= _hasCatNav ? 'lg:grid-cols-4' : 'lg:grid-cols-3' %> gap-3 sm:gap-4 lg:gap-6">
                             <% products.forEach(product=> { %>
                                 <% const status=product.status || 'ON' ; const stock=(product.stock !=null &&
                                     product.stock>= 0) ? product.stock : 0;
@@ -558,10 +566,10 @@ async function toggleListLike(btn, productId) {
         </div>
     </div>
     <div class="py-2">
-        <% [['new','최신순'],['best','인기순'],['price_asc','가격: 낮은 순'],['price_desc','가격: 높은 순']].forEach(([v, label]) => { %>
-            <a href="?<%= sortPrefix %>sort=<%= v %>" class="flex items-center justify-between px-5 py-3 text-sm <%= currentSort === v ? 'text-[var(--gh-primary)] font-semibold' : 'text-gray-700' %> hover:bg-gray-50 no-underline">
-                <%= label %>
-                <% if (currentSort === v) { %><i class="bi bi-check-lg"></i><% } %>
+        <% _sortTabs.forEach(t => { %>
+            <a href="?<%= sortPrefix %>sort=<%= t.value %>" class="flex items-center justify-between px-5 py-3 text-sm <%= currentSort === t.value ? 'text-[var(--gh-primary)] font-semibold' : 'text-gray-700' %> hover:bg-gray-50 no-underline">
+                <%= t.label %>
+                <% if (currentSort === t.value) { %><i class="bi bi-check-lg"></i><% } %>
             </a>
         <% }) %>
     </div>

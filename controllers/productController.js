@@ -1,4 +1,31 @@
 const pool = require('../config/db');
+const navigationService = require('../services/menu/navigationService');
+
+/**
+ * 카테고리 목록 정렬 6종.
+ *
+ * 판매량·상품평은 **ORDER BY 안의 상관 서브쿼리**로 넣는다. FROM 에 JOIN 하면
+ * getList 의 `query.replace('SELECT *','SELECT COUNT(*)')` 카운트가 조인만큼 뻥튀기된다.
+ */
+const SORT_ORDERS = {
+    best: 'view_count DESC, created_at DESC',
+    price_asc: 'price ASC, created_at DESC',
+    price_desc: 'price DESC, created_at DESC',
+    sales: '(SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi WHERE oi.product_id = products.id) DESC, created_at DESC',
+    review: '(SELECT COALESCE(AVG(r.rating),0) FROM reviews r WHERE r.product_id = products.id) DESC, '
+        + '(SELECT COUNT(*) FROM reviews r WHERE r.product_id = products.id) DESC, created_at DESC',
+    new: 'created_at DESC',
+};
+
+/** 정렬 탭(캡처 순서). value 는 SORT_ORDERS 키와 1:1. */
+const SORT_TABS = [
+    { value: 'best', label: '인기상품' },
+    { value: 'price_asc', label: '낮은가격' },
+    { value: 'price_desc', label: '높은가격' },
+    { value: 'sales', label: '판매량' },
+    { value: 'new', label: '최근등록' },
+    { value: 'review', label: '상품평' },
+];
 
 function buildKakaoChannelUrl(rawValue) {
     if (!rawValue) return '';
@@ -33,7 +60,7 @@ exports.getList = async (req, res) => {
     const brandId = req.params.brandId;
     const queryCategoryId = q.categoryId;
     const queryBrandId = q.brandId;
-    const sort = q.sort || 'new';
+    const sort = SORT_ORDERS[q.sort] ? q.sort : 'new';
     const distributionBadge = q.distributionBadge || '';
     const productBadge = q.badge || '';
 
@@ -50,6 +77,7 @@ exports.getList = async (req, res) => {
 
     let pageTitle = '전체상품';
     let categoryBanner = null;
+    let categoryNav = null;
 
     try {
         if (selectedCategoryId) {
@@ -70,8 +98,14 @@ exports.getList = async (req, res) => {
                         params.push(selectedCategoryId, selectedCategoryId);
                     }
                 } else {
-                    query += ' AND category_id = ?';
-                    params.push(selectedCategoryId);
+                    // NORMAL: 서브트리 집계. 부모를 눌렀을 때 자식 상품까지 나와야 한다
+                    // (mall 2 는 상품 205건 중 171건이 depth 2·3 에 붙어 있다).
+                    categoryNav = await navigationService.getCategoryContext(mallId, selectedCategoryId);
+                    const ids = (categoryNav && categoryNav.descendantIds.length)
+                        ? categoryNav.descendantIds
+                        : [Number(selectedCategoryId)];
+                    query += ` AND category_id IN (${ids.map(() => '?').join(',')})`;
+                    params.push(...ids);
                 }
 
                 const [bannerRows] = await pool.query(
@@ -152,20 +186,22 @@ exports.getList = async (req, res) => {
         const totalPages = Math.ceil(total / perPage);
 
         const statusOrder = "FIELD(status,'ON','COMING_SOON','RESTOCK','SOLD_OUT','OFF')";
-        switch (sort) {
-            case 'best': query += ` ORDER BY ${statusOrder}, view_count DESC, created_at DESC`; break;
-            case 'price_asc': query += ` ORDER BY ${statusOrder}, price ASC, created_at DESC`; break;
-            case 'price_desc': query += ` ORDER BY ${statusOrder}, price DESC, created_at DESC`; break;
-            case 'new':
-            default: query += ` ORDER BY ${statusOrder}, created_at DESC`; break;
-        }
+        query += ` ORDER BY ${statusOrder}, ${SORT_ORDERS[sort]}`;
 
         query += ' LIMIT ? OFFSET ?';
         params.push(perPage, offset);
 
         const [products] = await pool.query(query, params);
-        const [categories] = await pool.query("SELECT * FROM categories WHERE type = 'NORMAL' ORDER BY display_order ASC");
-        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' ORDER BY display_order ASC, id ASC");
+        // P5 몰 스코프 — 없으면 사이드바에 다른 몰 카테고리·브랜드가 섞인다.
+        // 사이드바는 평면 목록이므로 최상위(depth 1)만 올린다. 하위는 카테고리 패널이 담당.
+        const [categories] = await pool.query(
+            "SELECT * FROM categories WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1 AND depth = 1 ORDER BY display_order ASC",
+            [mallId]
+        );
+        const [brands] = await pool.query(
+            "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC",
+            [mallId]
+        );
 
         const siteSettings = res.locals.siteSettings || {};
         const companyName = siteSettings.company_name || '와이디몰';
@@ -206,6 +242,8 @@ exports.getList = async (req, res) => {
             currentUser: req.user,
             likedProductIds,
             categoryBanner,
+            categoryNav,
+            sortTabs: SORT_TABS,
             seo,
             pagination: { page, perPage, total, totalPages }
         });

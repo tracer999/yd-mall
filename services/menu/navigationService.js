@@ -149,15 +149,89 @@ function buildTree(rows) {
     return roots;
 }
 
-/** 카테고리 드롭다운용 트리 (NORMAL, 활성, 최대 뎁스 이내) */
-async function getCategoryTree(mallId, maxDepth) {
+/**
+ * 카테고리 트리의 단일 소스.
+ *
+ * maxDepth 를 주면 그 뎁스까지만(=GNB 표시 규칙), 안 주면 활성 전체를 돌려준다.
+ * 상품 집계(서브트리)는 표시 뎁스 상한과 무관해야 하므로 후자를 쓴다 —
+ * 상한을 낮췄다고 하위 카테고리 상품이 목록에서 사라지면 안 된다.
+ */
+async function getCategoryRows(mallId, maxDepth) {
+    const hasDepth = Number.isFinite(Number(maxDepth));
     const [rows] = await pool.query(`
         SELECT id, name, slug, parent_id, depth, display_order, pc_visible, mobile_visible
         FROM categories
-        WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1 AND depth <= ?
+        WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1
+          ${hasDepth ? 'AND depth <= ?' : ''}
         ORDER BY display_order ASC, id ASC
-    `, [mallId, maxDepth]);
-    return buildTree(rows);
+    `, hasDepth ? [mallId, Number(maxDepth)] : [mallId]);
+    return rows;
+}
+
+/** 카테고리 드롭다운용 트리 (NORMAL, 활성, 최대 뎁스 이내) */
+async function getCategoryTree(mallId, maxDepth) {
+    return buildTree(await getCategoryRows(mallId, maxDepth));
+}
+
+/**
+ * 카테고리 목록 페이지가 필요로 하는 문맥.
+ *
+ * 반환:
+ *   current       선택 노드 (트리에 없으면 전체 null 반환 → 호출부가 기존 레이아웃으로 폴백)
+ *   ancestors     루트→부모 순서 (브레드크럼)
+ *   children      자식 목록
+ *   siblings      형제 목록 (자기 포함)
+ *   panelItems    패널에 깔 목록. 자식이 있으면 children, **리프면 siblings**.
+ *                 리프에서 children 을 쓰면 패널이 통째로 빈다.
+ *   panelParent   panelItems 의 부모 (리프일 때 부모, 아니면 current)
+ *   descendantIds current + 모든 후손 id — 상품 서브트리 집계용
+ */
+async function getCategoryContext(mallId, categoryId) {
+    const id = Number(categoryId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+
+    const rows = await getCategoryRows(mallId);
+    const byId = new Map(rows.map(r => [r.id, r]));
+    const current = byId.get(id);
+    if (!current) return null; // 비활성·타몰·THEME/BRAND → 호출부가 폴백
+
+    const childrenOf = (pid) => rows.filter(r => r.parent_id === pid);
+
+    const ancestors = [];
+    for (let p = current.parent_id; p; ) {
+        const node = byId.get(p);
+        if (!node) break;
+        ancestors.unshift(node);
+        p = node.parent_id;
+    }
+
+    const children = childrenOf(current.id);
+    const siblings = current.parent_id ? childrenOf(current.parent_id) : rows.filter(r => !r.parent_id);
+
+    // BFS 로 후손 수집. rows 는 순환이 없다고 보장할 수 없으므로(depthGuard 는 쓰기 경로),
+    // 방문 집합으로 무한 루프를 막는다.
+    const descendantIds = [];
+    const seen = new Set();
+    const queue = [current.id];
+    while (queue.length) {
+        const cur = queue.shift();
+        if (seen.has(cur)) continue;
+        seen.add(cur);
+        descendantIds.push(cur);
+        childrenOf(cur).forEach(c => queue.push(c.id));
+    }
+
+    const isLeaf = children.length === 0;
+    return {
+        current,
+        ancestors,
+        children,
+        siblings,
+        panelItems: isLeaf ? siblings : children,
+        panelParent: isLeaf ? (ancestors[ancestors.length - 1] || null) : current,
+        isLeaf,
+        descendantIds,
+    };
 }
 
 /** 로그인 필요 메뉴는 비로그인 사용자에게 감춘다. */
@@ -219,6 +293,8 @@ module.exports = {
     getNavigation,
     getConfig,
     getCategoryTree,
+    getCategoryRows,
+    getCategoryContext,
     buildTree,
     DEFAULT_CONFIG,
     BADGE_TYPES,
