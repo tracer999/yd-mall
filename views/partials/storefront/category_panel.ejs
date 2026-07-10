@@ -1,102 +1,115 @@
 <%
   /*
-   * PC GNB 카테고리 드롭다운 패널 (§12 디자인 개선)
+   * PC GNB 카테고리 드롭다운 패널 — 3단 캐스케이드
    *
-   * 좌측 1뎁스 세로 리스트. 각 항목은 **썸네일 + 이름 + 간략 설명**으로 구성한다.
-   *   - logo_image_path 가 있으면 썸네일, 없으면 이름 이니셜 원형 placeholder.
-   *   - description 이 있으면 이름 아래 한 줄(말줄임), 없으면 그 줄만 생략.
-   *   - 이미지/설명이 비어도 카테고리 노출 자체는 유지한다(NULL-safe).
+   *   [1뎁스] │ [2뎁스] │ [3뎁스] │ [프로모션]
    *
-   * 자식이 있는 노드에만 우측 서브패널(2·3뎁스)을 hover 로 띄운다.
-   * 2뎁스 데이터가 없으면 우측 컬럼을 만들지 않아 깔끔한 리스트로 보인다.
+   *   - 1뎁스 롤오버 → 2뎁스 컬럼이 옆 칸에 열린다.
+   *   - 2뎁스 롤오버 → 그 2뎁스의 3뎁스 컬럼이 다음 칸에 열린다.
+   *   - 프로모션 칸에는 **1뎁스의 이미지 + 간략 설명**이 뜬다.
+   *     (logo_image_path/description 은 이 프로모션 영역 전용이다. 항목 아이콘이 아니다.)
+   *
+   * hover 는 CSS 만으로 동작한다. 그래서 3뎁스 컬럼은 반드시 2뎁스 <li> 의 자손,
+   * 2뎁스 컬럼은 1뎁스 <li> 의 자손이어야 한다. 형제로 빼면 마우스가 옮겨가는
+   * 순간 hover 가 끊긴다. 각 컬럼은 트리거 바로 옆에 **틈 없이** 붙인다.
+   *
+   * 자식이 없으면 그 컬럼을 아예 만들지 않는다(hover 시 빈 칸 방지).
    *
    * locals: categoryTree (navigationService.getCategoryTree 결과, 최대 3뎁스)
    */
   const _tree = (typeof categoryTree !== 'undefined' && categoryTree) ? categoryTree : [];
   const hasChildren = (n) => n.children && n.children.length > 0;
   const anyChildren = _tree.some(hasChildren);
-  const initial = (s) => (s || '·').trim().charAt(0);
+
+  // 컬럼 좌표(px). 1뎁스 288 + 2뎁스 240 + 3뎁스 240 + 프로모션 288 = 1056
+  //
+  // 2뎁스 컬럼은 바깥 .relative 기준(left = 1뎁스 폭)이지만,
+  // 3뎁스 컬럼의 기준은 **absolute 인 2뎁스 컬럼**이다. 그래서 3뎁스 left 는
+  // 컨테이너 절대좌표(528)가 아니라 2뎁스 컬럼 기준 상대값(=2뎁스 폭)이어야 한다.
+  const W1 = 288, W2 = 240, W3 = 240, WP = 288;
+  const L2 = W1;           // 288 — 컨테이너 기준
+  const L3 = W2;           // 240 — 2뎁스 컬럼 기준 (절대 528)
 %>
 
 <% if (_tree.length === 0) { %>
   <p class="p-5 text-sm text-gray-400">등록된 카테고리가 없습니다.</p>
 <% } else { %>
-  <%# 서브패널의 기준은 이 컨테이너다. <li> 를 기준으로 잡으면 목록 하단 항목에 hover 했을 때
-      서브패널이 패널 아래로 넘쳐 나간다. %>
-  <div class="relative flex <%= anyChildren ? 'min-h-[420px]' : '' %>">
+  <%# 모든 absolute 컬럼의 기준. <li> 를 기준으로 잡으면 목록 하단 항목에서 컬럼이 아래로 넘친다. %>
+  <div class="relative flex <%= anyChildren ? 'min-h-[460px] w-[1056px]' : '' %>">
 
-    <%# 1뎁스 — 항상 세로 리스트(썸네일 + 이름 + 설명) %>
-    <ul class="w-80 shrink-0 py-2 <%= anyChildren ? 'border-r border-gray-100 bg-gray-50/40' : '' %>">
+    <%# ── 1뎁스 ── 이름만. 썸네일은 붙이지 않는다. %>
+    <ul class="w-72 shrink-0 py-2 <%= anyChildren ? 'border-r border-gray-100 bg-gray-50/40' : '' %>">
       <% _tree.forEach(function (node) { %>
-        <li class="group/cat">
+        <li class="group/d1">
           <a href="/products/category/<%= node.id %>"
-             class="flex items-center gap-3 px-4 py-2.5 text-gray-700
-                    hover:bg-white hover:text-[var(--gh-primary)] transition-colors">
-            <%# 썸네일 (없으면 이니셜 원형) %>
-            <span class="shrink-0 w-11 h-11 rounded-lg overflow-hidden bg-white border border-gray-100 flex items-center justify-center">
-              <% if (node.logo_image_path) { %>
-                <img src="<%= node.logo_image_path %>" alt="<%= node.name %>" class="w-full h-full object-cover">
-              <% } else { %>
-                <span class="text-base font-bold text-[var(--gh-primary)]/70"><%= initial(node.name) %></span>
-              <% } %>
-            </span>
-            <%# 이름 + 설명 %>
-            <span class="min-w-0 flex-1">
-              <span class="flex items-center gap-1">
-                <span class="truncate text-sm font-semibold group-hover/cat:text-[var(--gh-primary)]"><%= node.name %></span>
-                <% if (hasChildren(node)) { %>
-                  <i class="bi bi-chevron-right text-xs text-gray-300 group-hover/cat:text-[var(--gh-primary)]"></i>
-                <% } %>
-              </span>
-              <% if (node.description) { %>
-                <span class="block truncate text-xs text-gray-400 mt-0.5"><%= node.description %></span>
-              <% } %>
-            </span>
+             class="flex items-center justify-between gap-2 px-5 py-2.5 text-sm text-gray-700
+                    group-hover/d1:bg-white group-hover/d1:text-[var(--gh-primary)] transition-colors">
+            <span class="truncate font-medium"><%= node.name %></span>
+            <% if (hasChildren(node)) { %>
+              <i class="bi bi-chevron-right text-xs text-gray-300 group-hover/d1:text-[var(--gh-primary)]"></i>
+            <% } %>
           </a>
 
-          <%# 2뎁스 — 자식이 있을 때만. hover 로 우측에 펼친다.
-              위치 기준은 바깥 컨테이너(.relative)라 언제나 패널 상단에 맞춰 열린다. %>
+          <%# ── 2뎁스 컬럼 ── 1뎁스 바로 오른쪽. 자식이 있을 때만. %>
           <% if (hasChildren(node)) { %>
-            <div class="hidden group-hover/cat:block absolute left-80 top-0 bottom-0 z-10 w-[560px]
-                        bg-white pl-6 pr-5 py-4">
-              <div class="flex items-center gap-2 mb-3">
-                <% if (node.logo_image_path) { %>
-                  <img src="<%= node.logo_image_path %>" alt="" class="w-6 h-6 rounded object-cover">
-                <% } %>
-                <p class="text-sm font-bold text-gray-800"><%= node.name %></p>
-              </div>
-              <% if (node.description) { %>
-                <p class="mb-3 text-xs text-gray-400"><%= node.description %></p>
-              <% } %>
-              <ul class="grid grid-cols-2 gap-x-6 gap-y-0.5">
+            <div class="hidden group-hover/d1:block absolute top-0 bottom-0 z-10 bg-white border-r border-gray-100 py-3"
+                 style="left: <%= L2 %>px; width: <%= W2 %>px;">
+              <p class="px-5 pb-2 text-base font-bold text-gray-900 truncate"><%= node.name %></p>
+              <ul>
                 <% node.children.forEach(function (child) { %>
-                  <li>
+                  <li class="group/d2">
                     <a href="/products/category/<%= child.id %>"
-                       class="block px-2 py-1.5 text-sm text-gray-600 rounded hover:bg-gray-50 hover:text-[var(--gh-primary)]">
-                      <%= child.name %>
+                       class="flex items-center justify-between gap-2 px-5 py-1.5 text-sm text-gray-600
+                              group-hover/d2:text-[var(--gh-primary)]">
+                      <span class="truncate"><%= child.name %></span>
+                      <% if (hasChildren(child)) { %>
+                        <i class="bi bi-chevron-right text-[10px] text-gray-300 group-hover/d2:text-[var(--gh-primary)]"></i>
+                      <% } %>
                     </a>
-                    <%# 3뎁스 %>
-                    <% if (child.children && child.children.length) { %>
-                      <ul class="ml-2 pl-2 border-l border-gray-100">
-                        <% child.children.forEach(function (leaf) { %>
-                          <li>
-                            <a href="/products/category/<%= leaf.id %>"
-                               class="block px-2 py-1 text-xs text-gray-500 rounded hover:text-[var(--gh-primary)]">
-                              <%= leaf.name %>
-                            </a>
-                          </li>
-                        <% }); %>
-                      </ul>
+
+                    <%# ── 3뎁스 컬럼 ── 2뎁스 바로 오른쪽. 이 <li> 의 자손이라야 hover 가 이어진다. %>
+                    <% if (hasChildren(child)) { %>
+                      <div class="hidden group-hover/d2:block absolute top-0 bottom-0 z-20 bg-white border-r border-gray-100 py-3"
+                           style="left: <%= L3 %>px; width: <%= W3 %>px;">
+                        <p class="px-5 pb-2 text-base font-bold text-gray-900 truncate"><%= child.name %></p>
+                        <ul>
+                          <% child.children.forEach(function (leaf) { %>
+                            <li>
+                              <a href="/products/category/<%= leaf.id %>"
+                                 class="block px-5 py-1.5 text-sm text-gray-600 hover:text-[var(--gh-primary)]">
+                                <span class="truncate"><%= leaf.name %></span>
+                              </a>
+                            </li>
+                          <% }); %>
+                        </ul>
+                      </div>
                     <% } %>
                   </li>
                 <% }); %>
               </ul>
             </div>
+
+            <%# ── 프로모션 ── 1뎁스의 이미지 + 간략 설명. 오른쪽 끝 고정. %>
+            <% if (node.logo_image_path || node.description) { %>
+              <div class="hidden group-hover/d1:block absolute top-0 bottom-0 right-0 z-10 bg-white p-5"
+                   style="width: <%= WP %>px;">
+                <% if (node.logo_image_path) { %>
+                  <div class="w-full aspect-[4/5] overflow-hidden rounded-lg bg-gray-50">
+                    <img src="<%= node.logo_image_path %>" alt="<%= node.name %>"
+                         class="w-full h-full object-cover" loading="lazy">
+                  </div>
+                <% } %>
+                <p class="mt-3 text-sm font-bold text-gray-900 truncate"><%= node.name %></p>
+                <% if (node.description) { %>
+                  <p class="mt-1 text-xs text-gray-500 line-clamp-2"><%= node.description %></p>
+                <% } %>
+              </div>
+            <% } %>
           <% } %>
         </li>
       <% }); %>
     </ul>
 
-    <%# 자식이 하나도 없으면 우측 영역을 아예 만들지 않는다(빈 컬럼 방지). %>
+    <%# 자식이 하나도 없으면 우측 영역을 만들지 않는다(빈 컬럼 방지). %>
   </div>
 <% } %>

@@ -75,6 +75,10 @@ const toJs = (v) => JSON.stringify(v)
                             <%
                                 const formId = `cat-form-${category.id}`;
                                 const indent = (category._depth - 1) * 22;
+                                // NORMAL 의 이미지·간략 설명은 메가메뉴 프로모션 영역 전용 → 1뎁스만.
+                                // BRAND 로고는 브랜드관/캐러셀용이라 뎁스 제한 없음(어차피 전부 1뎁스).
+                                const rowHasLogo = tab.hasLogo && (tab.type !== 'NORMAL' || category._depth === 1);
+                                const rowHasDesc = tab.hasDesc && category._depth === 1;
                             %>
                             <tr class="align-middle <%= category.is_active ? '' : 'bg-gray-50/60' %>">
                                 <td class="px-4 py-4 whitespace-nowrap">
@@ -84,6 +88,7 @@ const toJs = (v) => JSON.stringify(v)
                                         <input type="hidden" name="type" value="<%= tab.type %>">
                                         <input type="hidden" name="active_tab" value="<%= tab.key %>">
                                         <% if (tab.hasLogo) { %>
+                                            <%# 업로드 필드를 숨긴 행에서도 보낸다. 빠지면 postEdit 가 기존 이미지를 NULL 로 덮는다. %>
                                             <input type="hidden" name="existing_logo" value="<%= category.logo_image_path || '' %>">
                                         <% } %>
                                     </form>
@@ -93,6 +98,9 @@ const toJs = (v) => JSON.stringify(v)
 
                                 <% if (tab.hasLogo) { %>
                                     <td class="px-4 py-4 whitespace-nowrap">
+                                        <% if (!rowHasLogo) { %>
+                                            <span class="text-xs text-gray-300">—</span>
+                                        <% } else { %>
                                         <div class="flex items-center gap-2">
                                             <div id="preview-container-<%= category.id %>"
                                                 class="h-10 w-20 flex-shrink-0 relative overflow-hidden rounded border bg-gray-50 flex items-center justify-center">
@@ -107,6 +115,7 @@ const toJs = (v) => JSON.stringify(v)
                                                 class="brand-logo-upload-btn block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
                                                 data-id="<%= category.id %>">
                                         </div>
+                                        <% } %>
                                     </td>
                                 <% } %>
 
@@ -122,9 +131,15 @@ const toJs = (v) => JSON.stringify(v)
 
                                 <% if (tab.hasDesc) { %>
                                     <td class="px-4 py-4">
-                                        <input form="<%= formId %>" type="text" name="description" maxlength="255"
-                                            value="<%= category.description || '' %>" placeholder="메가메뉴에 표시될 한 줄 설명"
-                                            class="w-full text-sm">
+                                        <% if (rowHasDesc) { %>
+                                            <input form="<%= formId %>" type="text" name="description" maxlength="255"
+                                                value="<%= category.description || '' %>" placeholder="메가메뉴 우측 영역에 표시될 한 줄 설명"
+                                                class="w-full text-sm">
+                                        <% } else { %>
+                                            <span class="text-xs text-gray-300">—</span>
+                                            <%# 값 보존 — 빠지면 postEdit 가 description 을 NULL 로 덮는다. %>
+                                            <input form="<%= formId %>" type="hidden" name="description" value="<%= category.description || '' %>">
+                                        <% } %>
                                     </td>
                                 <% } %>
 
@@ -412,18 +427,35 @@ const toJs = (v) => JSON.stringify(v)
         document.getElementById('modal-type-input').value = typeMap[currentTab] || 'NORMAL';
         document.getElementById('modal-active-tab-input').value = currentTab;
 
-        // 이미지 업로드: 브랜드(로고) + 상품(카테고리 이미지) 탭에서 표시. 설명: 상품 탭에서만.
-        const showImage = (currentTab === 'brand' || currentTab === 'product');
-        document.getElementById('logoUploadField').classList.toggle('hidden', !showImage);
         document.getElementById('logoUploadLabel').textContent =
             currentTab === 'brand' ? '브랜드 로고 파일 업로드' : '카테고리 이미지 업로드';
-        document.getElementById('descField').classList.toggle('hidden', currentTab !== 'product');
 
         updateModalDisplayOrder();
         updateModalParentOptions();
+        updateModalMediaFields();
         document.getElementById('addModal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
     }
+
+    /*
+     * 상품 카테고리의 이미지·간략 설명은 GNB 메가메뉴 우측 프로모션 영역 전용이라 1뎁스만 쓴다.
+     * → 상위 카테고리를 고르는 순간(=2뎁스 이상) 두 입력을 숨긴다.
+     * 브랜드 로고는 브랜드관/캐러셀용이라 뎁스와 무관하게 항상 표시한다.
+     */
+    function updateModalMediaFields() {
+        const parentSelect = document.getElementById('modal-parent-select');
+        const isTopLevel = !parentSelect || !parentSelect.value;
+
+        const showImage = currentTab === 'brand' || (currentTab === 'product' && isTopLevel);
+        const showDesc = currentTab === 'product' && isTopLevel;
+
+        document.getElementById('logoUploadField').classList.toggle('hidden', !showImage);
+        document.getElementById('descField').classList.toggle('hidden', !showDesc);
+    }
+
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'modal-parent-select') updateModalMediaFields();
+    });
 
     function closeModal() {
         document.getElementById('addModal').classList.add('hidden');
