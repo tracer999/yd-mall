@@ -80,7 +80,10 @@ const toJs = (v) => JSON.stringify(v)
                                 const rowHasLogo = tab.hasLogo && (tab.type !== 'NORMAL' || category._depth === 1);
                                 const rowHasDesc = tab.hasDesc && category._depth === 1;
                             %>
-                            <tr class="align-middle <%= category.is_active ? '' : 'bg-gray-50/60' %>">
+                            <tr class="cat-row align-middle <%= category.is_active ? '' : 'bg-gray-50/60' %> <%= category._depth > 1 ? 'hidden' : '' %>"
+                                data-cat-id="<%= category.id %>"
+                                data-parent-id="<%= category.parent_id || '' %>"
+                                data-depth="<%= category._depth %>">
                                 <td class="px-4 py-4 whitespace-nowrap">
                                     <form id="<%= formId %>" action="/admin/categories/edit" method="POST"
                                         enctype="multipart/form-data">
@@ -121,11 +124,23 @@ const toJs = (v) => JSON.stringify(v)
 
                                 <td class="px-4 py-4 whitespace-nowrap">
                                     <div class="flex items-center" style="padding-left: <%= indent %>px">
-                                        <% if (category._depth > 1) { %>
-                                            <span class="text-gray-300 mr-1 select-none" aria-hidden="true">└</span>
+                                        <% if (category.childCount > 0) { %>
+                                            <button type="button" class="cat-toggle flex-shrink-0 mr-1 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700"
+                                                data-cat-id="<%= category.id %>" aria-expanded="false" title="하위 카테고리 펼치기/접기">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="cat-chevron h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                                </svg>
+                                            </button>
+                                        <% } else if (category._depth > 1) { %>
+                                            <span class="flex-shrink-0 text-gray-300 mr-1 w-5 h-5 flex items-center justify-center select-none" aria-hidden="true">└</span>
+                                        <% } else { %>
+                                            <span class="flex-shrink-0 mr-1 w-5 h-5" aria-hidden="true"></span>
                                         <% } %>
                                         <input form="<%= formId %>" type="text" name="name" value="<%= category.name %>" class="flex-1 min-w-[120px]">
                                         <span class="ml-2 text-[11px] text-gray-400 whitespace-nowrap">D<%= category._depth %></span>
+                                        <% if (category.childCount > 0) { %>
+                                            <span class="ml-1 text-[11px] text-gray-400 whitespace-nowrap">하위 <%= category.childCount %></span>
+                                        <% } %>
                                     </div>
                                 </td>
 
@@ -333,6 +348,11 @@ const toJs = (v) => JSON.stringify(v)
     <input type="hidden" name="active_tab" id="deleteActiveTab">
 </form>
 
+<style>
+    .cat-chevron { transition: transform .15s ease; }
+    .cat-toggle[aria-expanded="true"] .cat-chevron { transform: rotate(90deg); }
+</style>
+
 <script>
     let currentTab = '<%- activeTab || "product" %>';
     // 카테고리명이 그대로 들어가므로 스크립트 조기 종료 태그나 U+2028/2029 로 깨지지 않게 이스케이프한다.
@@ -473,6 +493,39 @@ const toJs = (v) => JSON.stringify(v)
             document.getElementById('deleteForm').submit();
         }
     }
+
+    /*
+     * 뎁스별 아코디언.
+     * 초기 렌더에서 depth>1 행은 .hidden 으로 접혀 있다(서버에서 부여).
+     * 자식 있는 행의 셰브론을 누르면 직계 자식만 펼치고, 접으면 후손 전체를 함께 접는다.
+     * 행은 부모→자식 순으로 이미 평탄화돼 있고, data-parent-id 로 부모-자식을 잇는다.
+     */
+    function catChildRows(catId) {
+        return Array.from(document.querySelectorAll('tr.cat-row[data-parent-id="' + catId + '"]'));
+    }
+    function collapseCatDescendants(catId) {
+        catChildRows(catId).forEach(row => {
+            row.classList.add('hidden');
+            const toggle = row.querySelector('.cat-toggle');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+            collapseCatDescendants(row.dataset.catId);
+        });
+    }
+    function toggleCategory(toggle) {
+        const catId = toggle.dataset.catId;
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        if (expanded) {
+            toggle.setAttribute('aria-expanded', 'false');
+            collapseCatDescendants(catId);          // 접을 땐 후손 전체를 함께 접는다
+        } else {
+            toggle.setAttribute('aria-expanded', 'true');
+            catChildRows(catId).forEach(row => row.classList.remove('hidden')); // 직계 자식만 편다
+        }
+    }
+    document.addEventListener('click', (e) => {
+        const toggle = e.target.closest('.cat-toggle');
+        if (toggle) { e.preventDefault(); toggleCategory(toggle); }
+    });
 
     switchTab(currentTab);
 

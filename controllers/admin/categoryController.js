@@ -18,8 +18,12 @@ const depthGuard = require('../../services/tree/depthGuard');
 const TYPES = ['NORMAL', 'THEME', 'BRAND'];
 const TAB_TO_TYPE = { product: 'NORMAL', theme: 'THEME', brand: 'BRAND' };
 
-/** 한 화면에 그릴 최대 행 수. 행마다 폼·file input 이 붙어 DOM 이 무겁다. */
-const ROWS_PER_PAGE = 100;
+/*
+ * 한 페이지에 담는 최상위(1뎁스) 카테고리 수.
+ * 뎁스별 아코디언이라 부모-자식이 한 페이지에 온전히 있어야 한다 → 행이 아니라
+ * "최상위 + 그 서브트리 전체"를 한 단위로 잘라 서브트리가 페이지 경계에서 쪼개지지 않게 한다.
+ */
+const TOP_PER_PAGE = 100;
 
 function normalizeTab(tab) {
     return ['product', 'theme', 'brand'].includes(tab) ? tab : 'product';
@@ -107,7 +111,7 @@ exports.getList = async (req, res) => {
         }
 
         // 한 화면에 1354개(mall 2 브랜드) 행을 그리면 DOM 이 6.8만 노드가 되어 브라우저가 37초를 쓴다.
-        // 행 수를 잘라야 한다. 세 탭이 모두 서버 렌더되므로 활성 탭만 요청 page 를 쓰고 나머지는 1페이지.
+        // 최상위 서브트리 단위로 잘라야 한다(아코디언 정합성). 세 탭이 모두 서버 렌더되므로 활성 탭만 요청 page 를 쓰고 나머지는 1페이지.
         const activeTab = normalizeTab(req.query.tab);
         const activeType = TAB_TO_TYPE[activeTab];
         const reqPage = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -115,11 +119,23 @@ exports.getList = async (req, res) => {
         const pageInfo = {};
         const pagedByType = {};
         for (const type of TYPES) {
-            const all = byType[type];
-            const totalPages = Math.max(1, Math.ceil(all.length / ROWS_PER_PAGE));
+            const all = byType[type]; // 부모→자식 순 평탄화
+
+            // 최상위(_depth===1)를 만날 때마다 새 블록을 시작한다. 자식은 직전 블록에 이어붙는다
+            // (평탄화가 부모→자식 순이므로 한 서브트리는 연속 구간이다).
+            const blocks = [];
+            for (const node of all) {
+                if (node._depth === 1 || blocks.length === 0) blocks.push([node]);
+                else blocks[blocks.length - 1].push(node);
+            }
+
+            const totalTop = blocks.length;
+            const totalPages = Math.max(1, Math.ceil(totalTop / TOP_PER_PAGE));
             const page = Math.min(type === activeType ? reqPage : 1, totalPages);
-            pagedByType[type] = all.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
-            pageInfo[type] = { page, totalPages, total: all.length, perPage: ROWS_PER_PAGE };
+            const pageBlocks = blocks.slice((page - 1) * TOP_PER_PAGE, page * TOP_PER_PAGE);
+            pagedByType[type] = pageBlocks.flat();
+            // total 은 최상위(대분류) 기준. perPage 도 최상위 기준이라 '전체 N개 중 x–y' 가 대분류 수로 표시된다.
+            pageInfo[type] = { page, totalPages, total: totalTop, perPage: TOP_PER_PAGE };
         }
 
         res.render('admin/categories/list', {
