@@ -16,6 +16,10 @@ const depthGuard = require('../../services/tree/depthGuard');
  */
 
 const TYPES = ['NORMAL', 'THEME', 'BRAND'];
+const TAB_TO_TYPE = { product: 'NORMAL', theme: 'THEME', brand: 'BRAND' };
+
+/** 한 화면에 그릴 최대 행 수. 행마다 폼·file input 이 붙어 DOM 이 무겁다. */
+const ROWS_PER_PAGE = 100;
 
 function normalizeTab(tab) {
     return ['product', 'theme', 'brand'].includes(tab) ? tab : 'product';
@@ -46,15 +50,6 @@ function flattenTree(rows, parentId = null, depth = 1, out = []) {
     return out;
 }
 
-/** node 의 후손 id 집합 (부모 선택지에서 제외해야 순환이 생기지 않는다) */
-function descendantIds(rows, nodeId, acc = new Set()) {
-    rows.filter(r => r.parent_id === nodeId).forEach((child) => {
-        acc.add(child.id);
-        descendantIds(rows, child.id, acc);
-    });
-    return acc;
-}
-
 exports.getList = async (req, res) => {
     const MALL_ID = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
     try {
@@ -67,22 +62,32 @@ exports.getList = async (req, res) => {
         const maxDepth = await depthGuard.getCategoryMaxDepth(MALL_ID);
         const maxParent = maxDepth - 1; // 부모가 될 수 있는 최대 depth
 
+        const nameById = new Map(categories.map(c => [c.id, c.name]));
+
+        // 부모 후보(parentOptions)를 노드마다 만들면 O(n^3) 이다(노드별 flattenTree + descendantIds).
+        // 브랜드가 1354개인 mall 2 에서 응답이 18MB/70초로 터져 잘린 HTML 이 나갔다.
+        // → 트리는 type 당 1회만 만들고, 부모 후보는 type 당 1벌(addParentOptions)을 뷰가
+        //   select focus 시점에 클라이언트에서 걸러 쓴다. 자기/후손 제외는 UX 편의이고,
+        //   실제 순환·뎁스 방어는 postEdit 의 wouldCreateCycle/assertDepthAllowed 가 한다.
         const byType = {};
+        const treeByType = {};
         for (const type of TYPES) {
             const rows = categories.filter(c => c.type === type);
-            const tree = flattenTree(rows).map(node => Object.assign({}, node, {
+            const tree = flattenTree(rows);
+            treeByType[type] = tree;
+
+            const childCountBy = new Map();
+            for (const r of rows) {
+                if (!r.parent_id) continue;
+                childCountBy.set(r.parent_id, (childCountBy.get(r.parent_id) || 0) + 1);
+            }
+
+            byType[type] = tree.map(node => Object.assign({}, node, {
                 productCount: productCountBy.get(node.id) || 0,
-                childCount: rows.filter(r => r.parent_id === node.id).length,
-                // 이 노드의 부모 후보: 같은 type, depth <= maxParent, 자기 자신/후손 제외
-                parentOptions: (() => {
-                    const banned = descendantIds(rows, node.id);
-                    banned.add(node.id);
-                    return flattenTree(rows)
-                        .filter(o => !banned.has(o.id) && o._depth <= maxParent)
-                        .map(o => ({ id: o.id, name: o.name, depth: o._depth }));
-                })(),
+                childCount: childCountBy.get(node.id) || 0,
+                // select 초기 렌더용 — 현재 부모 1개만 option 으로 찍는다.
+                parentName: node.parent_id ? (nameById.get(node.parent_id) || '') : '',
             }));
-            byType[type] = tree;
         }
 
         const nextDisplayOrder = {};
@@ -91,23 +96,42 @@ exports.getList = async (req, res) => {
             nextDisplayOrder[type] = (rows.length ? Math.max(...rows.map(c => Number(c.display_order) || 0)) : -1) + 1;
         }
 
-        // 신규 추가 모달의 부모 선택지 (type 별, depth <= maxParent)
+        // 부모 선택지 (type 별, depth <= maxParent) — 신규 추가 모달 + 행별 select 가 공유한다.
+        // parentId 는 클라이언트가 "이 후보가 편집 중인 노드의 후손인가" 를 판정하는 데 쓴다.
+        // 페이지네이션과 무관하게 **type 전체** 후보를 담으므로, 다른 페이지의 노드도 부모로 고를 수 있다.
         const addParentOptions = {};
         for (const type of TYPES) {
-            addParentOptions[type] = flattenTree(categories.filter(c => c.type === type))
+            addParentOptions[type] = treeByType[type]
                 .filter(o => o._depth <= maxParent)
-                .map(o => ({ id: o.id, name: o.name, depth: o._depth }));
+                .map(o => ({ id: o.id, name: o.name, depth: o._depth, parentId: o.parent_id || null }));
+        }
+
+        // 한 화면에 1354개(mall 2 브랜드) 행을 그리면 DOM 이 6.8만 노드가 되어 브라우저가 37초를 쓴다.
+        // 행 수를 잘라야 한다. 세 탭이 모두 서버 렌더되므로 활성 탭만 요청 page 를 쓰고 나머지는 1페이지.
+        const activeTab = normalizeTab(req.query.tab);
+        const activeType = TAB_TO_TYPE[activeTab];
+        const reqPage = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+
+        const pageInfo = {};
+        const pagedByType = {};
+        for (const type of TYPES) {
+            const all = byType[type];
+            const totalPages = Math.max(1, Math.ceil(all.length / ROWS_PER_PAGE));
+            const page = Math.min(type === activeType ? reqPage : 1, totalPages);
+            pagedByType[type] = all.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+            pageInfo[type] = { page, totalPages, total: all.length, perPage: ROWS_PER_PAGE };
         }
 
         res.render('admin/categories/list', {
             layout: 'layouts/admin_layout',
             title: '카테고리 관리',
             categories,
-            productCategories: byType.NORMAL,
-            themeCategories: byType.THEME,
-            brandCategories: byType.BRAND,
+            productCategories: pagedByType.NORMAL,
+            themeCategories: pagedByType.THEME,
+            brandCategories: pagedByType.BRAND,
             addParentOptions,
-            activeTab: normalizeTab(req.query.tab),
+            activeTab,
+            pageInfo,
             nextDisplayOrder,
             maxDepth,
             error: req.query.error || '',
