@@ -116,6 +116,10 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
             </button>
         </div>
 
+        <% if (typeof isOutlet !== 'undefined' && isOutlet) { %>
+            <%- include('../../partials/list_scaffold/hero_outlet', { maxDiscount, currentMinDiscount }) %>
+        <% } %>
+
         <% if (_hasCatNav) { %>
             <%- include('./_category_nav', { categoryNav, currentBrand }) %>
         <% } else { %>

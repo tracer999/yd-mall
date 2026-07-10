@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const pool = require('../config/db');
 const productController = require('../controllers/productController');
 
 /*
@@ -23,13 +24,42 @@ function preset(featurePreset) {
 
 // 베스트 — 조회수 기준 인기 상품
 // menuKey: 메뉴별 배너(group_key='menu:{key}') 매칭용. 관리자 bannerController.MENU_BANNER_TARGETS 와 1:1.
-router.get('/best', preset({ sort: 'best', menuKey: 'BEST' }), productController.getList);
+// 상위 100 으로 캡한다(capLimit). 순위 번호는 붙이지 않는다(그건 랭킹의 몫).
+router.get('/best', preset({ sort: 'best', capLimit: 100, menuKey: 'BEST' }), productController.getList);
 
-// 신상품 — 최근 등록 순
-router.get('/new', preset({ sort: 'new', menuKey: 'NEW' }), productController.getList);
+// 신상품 — NEW 뱃지 상품만(최신순). 전체 카탈로그를 최신순 정렬하면 "신상품 = 전체"가 되므로
+// 뱃지로 자른다. productController 에 badge==='NEW' 분기(FIND_IN_SET)가 이미 있다.
+router.get('/new', preset({ badge: 'NEW', sort: 'new', menuKey: 'NEW' }), productController.getList);
 
-// 오늘특가 — 마감 임박 세일 뱃지 상품
-router.get('/deal/today', preset({ badge: 'DEADLINE_SALE', menuKey: 'DEAL' }), productController.getList);
+/*
+ * 오늘특가 — 관리자가 상품그룹(manual)에서 직접 고른 상품을 보여준다.
+ *   - 소스 그룹: mall 별 오늘특가 그룹(seed_key='ct_deal' 또는 이름에 '오늘특가').
+ *     홈의 '오늘의 특가' 캐러셀과 같은 그룹을 공유한다 → 관리자가 한 곳만 관리.
+ *   - 그룹이 없거나 담긴 상품이 0건이면 준비중 랜딩으로 폴백(빈 목록 방지, dev=prod).
+ *   - 뱃지(DEADLINE_SALE) 자동 노출 방식은 폐기했다(관리자 수동 큐레이션으로 전환).
+ */
+router.get('/deal/today', async (req, res, next) => {
+    try {
+        const mallId = req.mallId || 1;
+        const [[grp]] = await pool.query(
+            `SELECT id FROM product_group
+              WHERE mall_id = ? AND is_active = 1
+                AND (JSON_UNQUOTE(JSON_EXTRACT(filter_condition_json,'$.seed_key')) = 'ct_deal'
+                     OR name LIKE '%오늘특가%')
+              ORDER BY id LIMIT 1`,
+            [mallId]
+        );
+        if (!grp) return comingSoon('deal-today')(req, res);
+        const [[{ c }]] = await pool.query(
+            'SELECT COUNT(*) c FROM product_group_item WHERE product_group_id = ?', [grp.id]
+        );
+        if (!c) return comingSoon('deal-today')(req, res);
+        req.featurePreset = { groupId: grp.id, menuKey: 'DEAL' };
+        return productController.getList(req, res);
+    } catch (e) {
+        return next(e);
+    }
+});
 
 // '/event' 는 routes/event.js 가 실제 목록을 렌더한다.
 // 예전에는 '/boards/notice'(공지사항) 로 302 했으나, 공지사항은 고객센터(/cs)의 하위 항목이지
@@ -112,6 +142,15 @@ const COMING_SOON = {
         primary: { label: '내 적립금', href: '/mypage/points' },
         secondary: { label: '전체 상품', href: '/products' },
     },
+    // 오늘특가 상품그룹(manual)에 관리자가 상품을 1건도 담지 않았을 때만 쓰이는 폴백 랜딩이다.
+    'deal-today': {
+        name: '오늘특가',
+        icon: 'bi-alarm',
+        description: '오늘의 특가 상품을 준비하고 있습니다.<br>곧 엄선한 구성으로 찾아뵙겠습니다.',
+        bullets: ['MD 엄선 특가 구성', '기간 한정 판매', '매일 새로운 구성'],
+        primary: { label: '베스트 상품 보기', href: '/best' },
+        secondary: { label: '전체 상품', href: '/products' },
+    },
     // 이벤트는 모듈이 있다. 이 항목은 **발행된 이벤트가 0건일 때만** 쓰이는 폴백 랜딩이다.
     event: {
         name: '이벤트 & 혜택',
@@ -150,8 +189,57 @@ function comingSoon(key) {
 // featureRoutes 가 '/' 에 먼저 마운트되므로 뒤의 app.use('/coupon', ...) 가 영영 닿지 못한다.
 router.get('/live', comingSoon('live'));
 router.get('/ranking', comingSoon('ranking'));
-router.get('/outlet', comingSoon('outlet'));
-router.get('/membership', comingSoon('membership'));
+
+/*
+ * 아울렛 — 할인 상품(discount_rate>0)을 할인율순으로. 몰에 할인 상품이 0건이면
+ * 빈 그리드 대신 준비중 랜딩으로 폴백한다(mall=1 은 항상 0건 — gnb §2-2).
+ * 목록/필터는 productController.getList 를 재사용하고, isOutlet 프리셋으로 전용 슬롯만 켠다.
+ */
+router.get('/outlet', async (req, res, next) => {
+    try {
+        const mallId = req.mallId || 1;
+        const visFilter = req.user ? "visibility IN ('PUBLIC','MEMBER_ONLY')" : "visibility = 'PUBLIC'";
+        const [[{ c }]] = await pool.query(
+            `SELECT COUNT(*) c FROM products
+              WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${visFilter}
+                AND discount_rate > 0`,
+            [mallId]
+        );
+        if (!c) return comingSoon('outlet')(req, res);
+        req.featurePreset = { isOutlet: true, sort: 'discount' };
+        return productController.getList(req, res);
+    } catch (e) {
+        return next(e);
+    }
+});
+
+/*
+ * 멤버십 — 정적 제도 소개(안 A). 등급 산정을 하지 않는다(데이터 부족, gnb §2-9).
+ * 등급 정의는 테이블 없이 상수로 둔다. 실제 등급 시스템(user_grade + 배치)은 2차.
+ */
+const MEMBERSHIP_TIERS = [
+    { code: 'WELCOME', name: '웰컴',   threshold: '가입 시',          rate: '1%', perks: ['기본 적립'] },
+    { code: 'SILVER',  name: '실버',   threshold: '누적 10만원 이상',  rate: '2%', perks: ['기본 적립 상향'] },
+    { code: 'GOLD',    name: '골드',   threshold: '누적 50만원 이상',  rate: '3%', perks: ['적립 상향', '무료배송'], accent: true },
+    { code: 'VIP',     name: 'VIP',    threshold: '누적 200만원 이상', rate: '5%', perks: ['최고 적립', '무료배송', '전용 쿠폰'] },
+];
+const MEMBERSHIP_BENEFITS = [
+    { icon: 'bi-coin',            title: '구매 적립', desc: '등급별 적립률로 구매 금액을 적립금으로 돌려드립니다.' },
+    { icon: 'bi-truck',          title: '배송 혜택', desc: '골드 등급부터 무료배송 혜택이 적용됩니다.' },
+    { icon: 'bi-gift',           title: '생일 쿠폰', desc: '생일·기념일에 전용 쿠폰을 드립니다.' },
+];
+router.get('/membership', (req, res) => {
+    res.render('user/membership/index', {
+        title: '멤버십',
+        tiers: MEMBERSHIP_TIERS,
+        benefits: MEMBERSHIP_BENEFITS,
+        seo: Object.assign({}, res.locals.seo, {
+            title: '멤버십 안내',
+            description: '구매 실적에 따른 등급별 적립·배송·전용 혜택을 안내합니다.',
+            robots: 'index,follow',
+        }),
+    });
+});
 
 module.exports = router;
 // 기획전·이벤트·공동구매 컨트롤러가 '발행 0건' 폴백에서 같은 랜딩을 렌더한다.
