@@ -19,7 +19,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 레포 경로 | `/home/ikcho/dev/nodeWs/ydmall` (WSL Ubuntu) |
+| 레포 경로 | `/home/ikcho/dev/yd-mall` (WSL Ubuntu) |
 | 브랜치 / HEAD | `main` @ `7f1e128` (작업 트리 clean) |
 | 원격 | `git@github.com:tracer999/yd-mall.git` |
 | 앱 포트 | 3006 (pm2 프로세스명 `dev-mall`, `NODE_ENV=production`) |
@@ -67,11 +67,11 @@ a25d45b docs: B1 완료 반영, B3 후순위 명시
 
 ```bash
 # 1) 상태 확인
-cd /home/ikcho/dev/nodeWs/ydmall && git status --short && git log --oneline -3
+cd /home/ikcho/dev/yd-mall && git status --short && git log --oneline -3
 pm2 list
 
 # 2) 일회성 검증 스크립트 실행 형태 (Bash 도구는 Windows Git Bash)
-MSYS_NO_PATHCONV=1 wsl bash -lc 'set -a; . /etc/environment; set +a; cd /home/ikcho/dev/nodeWs/ydmall && node _tmp.js'
+MSYS_NO_PATHCONV=1 wsl bash -lc 'set -a; . /etc/environment; set +a; cd /home/ikcho/dev/yd-mall && node _tmp.js'
 #   - /etc/environment 를 source 하지 않으면 ENCRYPTION_KEY 없어 기동 실패
 #   - 스크립트는 반드시 `await require("./scripts/_bootstrap")()` 먼저 호출
 #     (안 하면 isShopifySyncEnabled() 가 fail-open 으로 true → 진짜 Shopify API 호출)
