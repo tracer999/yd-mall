@@ -331,7 +331,16 @@ c.type, c.min_purchase, c.expires_at
 | B3 | `badge_expire_date` 미적용 | `controllers/productController.js` DEADLINE_SALE 분기 | **오늘특가** | 만료 3주 지난 상품(id 106)이 특가에 노출 | 미수정 |
 | B4 | `HEADER_CS` 가 `/cs` 가 아닌 `/boards/notice` | `feature_menu` 데이터 | **이벤트&혜택** | 고객센터·이벤트가 같은 화면을 가리킴 | 미수정 |
 
-B2·B3 는 코드 수정, B4 는 데이터(`feature_menu.default_path`) 수정이다.
+B2·B3 는 코드 수정, B4 는 데이터 수정이다.
+
+> **B4 는 두 곳을 고쳐야 완결된다** (둘 다 DB. 코드 수정 없음).
+> ```sql
+> UPDATE feature_menu SET default_path='/cs' WHERE feature_code='HEADER_CS';   -- 헤더 고객센터
+> UPDATE page_section SET config_json = JSON_SET(config_json,'$.items[3].url','/cs')
+>   WHERE section_type='quick_menu';                                            -- 모바일 퀵메뉴
+> ```
+> `views/partials/storefront/header.ejs:226` 의 `/boards/notice` 는 라벨이 **"게시판"**이므로
+> 그대로 둔다. `views/user/cs/index.ejs` 의 공지 링크들도 정상이다.
 
 > **B1 후속.** 별도 작업으로 mall=2 에 브랜드 카테고리 **1,354건**이 생성되고 상품 **6,739건**이
 > 연결됐다(`a7e7861`). 따라서 아래 "브랜드 mall=2 = 0건" 기술은 더 이상 유효하지 않다.
