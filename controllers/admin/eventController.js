@@ -10,15 +10,27 @@ const pool = require('../../config/db');
  *   - 폼 POST + redirect (이 저장소 관리자 표준). page-builder 만 예외적으로 JSON.
  */
 
-const EVENT_TYPES = ['NOTICE', 'APPLY', 'COUPON_PACK', 'ATTENDANCE', 'PURCHASE'];
+/*
+ * 선택 가능한 참여 방식은 **실제로 동작하는 것만** 노출한다.
+ * 운영자가 고를 수 있는데 아무 일도 일어나지 않으면 그게 더 나쁘다.
+ *
+ * 아직 못 여는 것들(스키마 컬럼 값으로는 존재):
+ *   ATTENDANCE  — UNIQUE(event_id,user_id) 때문에 1인 1회만 참여된다. 일별 출석은
+ *                 event_attendance(event_id,user_id,attend_date) 같은 별도 테이블이 필요하다.
+ *   COUPON_PACK — event_coupon 테이블은 만들었지만 participate() 가 쿠폰을 지급하지 않는다.
+ *                 couponController 의 issued_by='ADMIN' 지급 경로를 연결해야 한다.
+ *   PURCHASE    — 주문 검증(order_items 대조)이 없다. 지금 열면 아무나 참여된다.
+ */
+const EVENT_TYPES = ['NOTICE', 'APPLY'];
 const STATUSES = ['DRAFT', 'PUBLISHED', 'HIDDEN'];
 
 const EVENT_TYPE_LABELS = {
     NOTICE: '공지형',
     APPLY: '응모',
-    COUPON_PACK: '쿠폰팩',
-    ATTENDANCE: '출석체크',
-    PURCHASE: '구매인증',
+    // 아래 3종은 폼에 노출하지 않는다. 목록에서 기존 행을 표시할 때만 쓰인다.
+    COUPON_PACK: '쿠폰팩(준비중)',
+    ATTENDANCE: '출석체크(준비중)',
+    PURCHASE: '구매인증(준비중)',
 };
 
 /** 기간에서 노출 상태를 파생한다. 저장하지 않는다. */

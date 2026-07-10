@@ -33,14 +33,22 @@ function phaseClause(phase) {
     return '';
 }
 
+/*
+ * 참여 버튼을 띄울 수 있는 유형. 지금은 APPLY(응모) 뿐이다.
+ *   ATTENDANCE  — UNIQUE(event_id,user_id) 라 일별 출석이 불가능(별도 테이블 필요)
+ *   COUPON_PACK — participate() 가 쿠폰을 지급하지 않는다
+ *   PURCHASE    — 주문 검증이 없다
+ * 이 목록에 없는 유형은 참여 슬롯(issued_count)을 축내지 못하게 막는다.
+ */
+const PARTICIPABLE_TYPES = ['APPLY'];
+
 function decorate(ev) {
     ev.phase = derivePhase(ev);
     ev.phaseLabel = PHASE_LABELS[ev.phase];
     ev.isOngoing = ev.phase === PHASES.ONGOING;
     ev.isFull = ev.issue_limit !== null && ev.issued_count >= ev.issue_limit;
     ev.remaining = ev.issue_limit !== null ? Math.max(0, ev.issue_limit - ev.issued_count) : null;
-    // 공지형은 참여 버튼 자체가 없다.
-    ev.participable = ev.event_type !== 'NOTICE';
+    ev.participable = PARTICIPABLE_TYPES.includes(ev.event_type);
     return ev;
 }
 
@@ -114,16 +122,17 @@ async function participate(mallId, eventId, userId) {
     try {
         await conn.beginTransaction();
 
-        // 슬롯 확보 — 기간·수량을 SQL 한 문장으로 검사한다.
+        // 슬롯 확보 — 기간·수량·참여가능유형을 SQL 한 문장으로 검사한다.
+        const placeholders = PARTICIPABLE_TYPES.map(() => '?').join(',');
         const [r] = await conn.query(
             `UPDATE event
                 SET issued_count = issued_count + 1
               WHERE id = ? AND mall_id = ? AND status = 'PUBLISHED'
-                AND event_type <> 'NOTICE'
+                AND event_type IN (${placeholders})
                 AND start_at <= NOW()
                 AND (end_at IS NULL OR end_at >= NOW())
                 AND (issue_limit IS NULL OR issued_count < issue_limit)`,
-            [eventId, mallId]
+            [eventId, mallId, ...PARTICIPABLE_TYPES]
         );
         if (!r.affectedRows) {
             await conn.rollback();
