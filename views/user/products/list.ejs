@@ -176,6 +176,20 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
 
             <!-- Product Grid -->
             <div class="<%= _hasCatNav ? '' : 'lg:col-span-3' %>">
+                <% if (typeof menuBanner !== 'undefined' && menuBanner) { %>
+                    <!-- 메뉴별 배너 (group_key='menu:{key}') -->
+                    <div class="mb-6">
+                        <a href="<%= menuBanner.link_url || '#' %>">
+                            <picture>
+                                <% if (menuBanner.mobile_image_url) { %>
+                                    <source media="(max-width: 639px)" srcset="<%= menuBanner.mobile_image_url %>">
+                                <% } %>
+                                <img src="<%= menuBanner.image_url %>" alt="<%= menuBanner.title || '' %>"
+                                    class="w-full h-auto rounded-xl shadow-sm object-cover">
+                            </picture>
+                        </a>
+                    </div>
+                <% } %>
                 <% if (categoryBanner) { %>
                     <div class="mb-6">
                         <a href="<%= categoryBanner.link_url || '#' %>">

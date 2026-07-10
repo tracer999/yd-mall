@@ -22,13 +22,14 @@ function preset(featurePreset) {
 }
 
 // 베스트 — 조회수 기준 인기 상품
-router.get('/best', preset({ sort: 'best' }), productController.getList);
+// menuKey: 메뉴별 배너(group_key='menu:{key}') 매칭용. 관리자 bannerController.MENU_BANNER_TARGETS 와 1:1.
+router.get('/best', preset({ sort: 'best', menuKey: 'BEST' }), productController.getList);
 
 // 신상품 — 최근 등록 순
-router.get('/new', preset({ sort: 'new' }), productController.getList);
+router.get('/new', preset({ sort: 'new', menuKey: 'NEW' }), productController.getList);
 
 // 오늘특가 — 마감 임박 세일 뱃지 상품
-router.get('/deal/today', preset({ badge: 'DEADLINE_SALE' }), productController.getList);
+router.get('/deal/today', preset({ badge: 'DEADLINE_SALE', menuKey: 'DEAL' }), productController.getList);
 
 // '/event' 는 routes/event.js 가 실제 목록을 렌더한다.
 // 예전에는 '/boards/notice'(공지사항) 로 302 했으나, 공지사항은 고객센터(/cs)의 하위 항목이지
