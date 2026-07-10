@@ -579,3 +579,114 @@ HTTP + 즉시 삭제       실제 주문을 만들고 값을 확인한 뒤 order
 ---
 
 **세션 C 상태**: 커밋 3개 미푸시. 배송비·쿠폰 0~2차 완료. 3차(부분취소 → 상품쿠폰 → 다중쿠폰) 미착수.
+
+---
+---
+
+# 세션 D — 주문·배송·클레임 트랙 (2026-07-11, 세션 C 이어서)
+
+> `주문배송관리.md`(일반론 레퍼런스)를 실제 코드에 접지시켜 **취소·반품·환불 모듈**을 만들었다.
+> 신규 설계 문서 `order_claim_design_and_development.md`. 커밋 `e31fed1`, 미푸시.
+
+## 1. 발견한 결함 두 개 (둘 다 수정)
+
+```text
+🔴 고객 주문 취소가 항상 500  — mypageController 가 없는 컬럼 orders.cancel_reason 에 UPDATE
+   → 트랜잭션 롤백돼 데이터는 안전했으나 고객은 취소를 아예 못 했다.
+🔴 restoreOrderResources 가 재고에 멱등하지 않았다 — stock = stock + qty 를 조건 없이 실행
+   → 취소 경로가 하나뿐이라 도달 불가였는데, 클레임 승인이 두 번째 경로가 됐다.
+   → orders.resources_restored_at 조건부 UPDATE 의 affectedRows 로 멱등화.
+```
+
+## 2. 상태를 네 축으로 분리
+
+```text
+orders.status          주문 전체 — 정본(옛 코드가 읽는다). 나머지가 세분화
+orders.payment_status  결제 (대기·완료·취소·환불·부분환불)
+orders.claim_status    취소·반품 진행 (NONE·REQUESTED·APPROVED·REJECTED·COMPLETED)
+orders.refund_status   환불 (NONE·REQUESTED·COMPLETED·FAILED)
+order_status_logs      모든 변경 이력 (누가·언제·무엇)
+```
+
+레퍼런스의 6축 중 fulfillment·settlement 는 안 만들었다(배송은 shipments.status, 정산은 단일 판매자).
+
+## 3. 클레임 모듈
+
+```text
+services/order/orderStatusService.js  transition()·log()·history() — 상태 변경 한 곳
+services/order/refundService.js       토스 결제 취소. payment_key 없으면 method='NONE'
+services/order/claimService.js         신청·승인·거절·철회. 승인 시 복원+환불 한 트랜잭션
+order_claims / order_refunds           취소·반품 / 환불 (주문 단위. 부분은 3차)
+```
+
+- **출고 전 취소는 즉시 승인**, 준비 시작(PREPARING) 후·반품은 관리자 승인.
+- **귀책 자동 판정** — 불량·오배송=판매자(전액 환불), 단순 변심=고객(왕복 배송비 차감).
+- **PG 실패해도 클레임을 되돌리지 않는다** — "취소됐는데 환불 안 됨"이 "재고 새는" 것보다 낫다.
+  실패분은 관리자가 `/admin/claims` 상세에서 수동 환불로 마감.
+- 화면: 관리자 `/admin/claims`(메뉴 1개), 고객 주문상세 취소·반품 + `/mypage/claims`.
+  배송완료 처리(`delivered_at` = 반품 가능 기간 기준).
+
+## 4. 🔴 다음 세션이 반드시 알아야 할 것
+
+### 4-1. 배포 후 켜야 하는 메뉴가 이제 둘이다
+
+```sql
+UPDATE admin_menus SET is_active = 1 WHERE path IN ('/admin/shipping-policy', '/admin/claims');
+```
+라우트 배포 전에 켜면 운영 관리자에게 404 링크가 노출된다(검증 중 임시로 켰다가 껐다).
+
+### 4-2. 🔴 PG 환불이 실주문으로 검증되지 않았다
+
+검증 주문이 전부 `payment_key=NULL`(TEST 결제)이라 환불이 죄다 `method='NONE'` 분기만 탔다.
+**실제 토스 취소(`method='PG'`)는 한 번도 안 돌았다.** 요청 형태(URL·Basic 인증·부분 cancelAmount)는
+fetch 스텁으로 확인했으나, 라이브 취소는 미검증이다. 프로덕션 전에 토스 테스트 시크릿으로 1회 확인할 것.
+
+### 4-3. 환불 fetch 가 트랜잭션 안에서 돈다 (후속 과제)
+
+`approveInTransaction` 이 주문 행을 `FOR UPDATE` 로 잠근 채 토스 `fetch` 를 호출한다. 저트래픽(22건)엔
+무해하나 올바른 형태가 아니다 — 환불 REQUESTED 커밋 → 트랜잭션 밖 PG 호출 → 짧은 2차 트랜잭션으로
+COMPLETED/FAILED. 문서 §6-3 에 명시. **트래픽 늘기 전에 고친다.**
+
+### 4-4. 취소 경로는 이제 두 개다 — 둘 다 멱등 복원을 탄다
+
+```text
+고객    POST /mypage/orders/:id/cancel   → claimService.requestClaim
+관리자  POST /admin/sales/status (CANCELLED) → restoreOrderResources + refundOrder + transition
+관리자  POST /admin/claims/:id/approve   → claimService.approveClaim
+```
+셋 다 `restoreOrderResources`(멱등) 하나를 부른다. `/admin/orders` 는 여전히 죽은 라우트다.
+
+### 4-5. 교환·부분클레임·정산은 3차 (의도적 연기)
+
+교환(EXCHANGE)은 신청 자체를 막았다("반품 후 재주문"). 부분 클레임은 쿠폰 할인액 배분(쿠폰 §13-3)이
+선행. 정산·미수금·판매자별은 단일 판매자라 개념이 없다. 전부 문서 §6-3 에 해제 조건과 함께 기록.
+
+## 5. 세션 D 에서 배운 것
+
+### 5-1. 레퍼런스 문서는 "모두 작업"의 대상이 아니다
+
+`주문배송관리.md` 는 7개 상태축·5개 클레임 도메인을 나열한 **업계 표준 문서**다. 그대로 다 만들면
+과설계다. 문서 자신의 §6 MVP(주문·배송·클레임 3영역)를 목표로 잡고, 쓰지 않을 컬럼(정산·이행)은
+안 만들었다. **"없으면 만든다"의 반대편 — "레퍼런스에 있어도 근거 없으면 안 만든다".**
+
+### 5-2. 새 경로가 옛 코드의 잠복 결함을 깨운다
+
+`restoreOrderResources` 의 비멱등 재고 복원은 세션 C 에서 멀쩡히 돌던 코드다. 취소 경로가 하나였기
+때문이다. 클레임 승인을 붙이는 순간 도달 가능해졌다. **함수를 재사용할 때는 "지금 안전한 이유"가
+새 호출자에게도 성립하는지 본다.** advisor 가 이걸 코드 작성 전에 짚었다.
+
+### 5-3. 합성 가능한 해피 패스만 덮으면 진짜 위험은 안 덮인다
+
+클레임 흐름 전체를 검증했지만 전부 `payment_key=NULL` 이라 PG 환불은 한 번도 안 돌았다 — 세션 C 의
+"getComplete 를 전부 test=1 로만 검증했다"와 똑같은 함정. 외부 의존(토스)이 걸린 경로는 스텁으로라도
+따로 친다. fetch 스텁으로 요청 형태(URL·인증·cancelAmount)를 검증해 malformed 요청은 막았다.
+
+### 5-4. EJS 는 `<% %>` 짝만 본다 — 잔여 마크업은 조용히 쌓인다
+
+`order_detail.ejs` 끝에 `}` `}` `</script>` 잔여물이 원래 있었는데(리터럴 텍스트라 무해), 내가 `if` 를
+`if/else if` 로 바꾸자 짝 안 맞는 `<% } %>` 가 하나 생겨 컴파일이 깨졌다. 증상은 "Missing catch or
+finally after try"(엉뚱한 메시지). **`ejs.compile()` 로 직접 컴파일해 파일을 특정**하는 게 빨랐다.
+
+---
+
+**세션 D 상태**: 커밋 `e31fed1` 미푸시. 클레임 0~2차 완료. PG 실주문·트랜잭션 밖 fetch·교환·부분클레임은 후속.
