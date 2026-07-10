@@ -728,6 +728,20 @@ exports.postEdit = async (req, res) => {
     }
 };
 
+/** 카테고리 서브트리 id 목록. 부모를 고르면 하위 뎁스 상품까지 잡아야 한다
+ *  (mall 2 는 상품 대부분이 2·3뎁스에 달려 있다). 관리자용이라 비활성 카테고리도 포함한다. */
+async function categorySubtreeIds(mallId, categoryId) {
+    const [rows] = await pool.query(`
+        WITH RECURSIVE sub AS (
+            SELECT id FROM categories WHERE id = ? AND mall_id = ?
+            UNION ALL
+            SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+        )
+        SELECT id FROM sub
+    `, [categoryId, mallId]);
+    return rows.map(r => r.id);
+}
+
 exports.getList = async (req, res) => {
     const MALL_ID = req.adminMallId || 1; // P5: 편집 중인 몰의 상품만
     try {
@@ -737,6 +751,17 @@ exports.getList = async (req, res) => {
         const offset = (page - 1) * perPage;
         const keyword = (req.query.keyword || '').trim();
 
+        // 필터 — 허용값만 통과시킨다(쿼리에 직접 넣지 않고 파라미터로 바인딩).
+        const STATUSES = ['ON', 'OFF', 'SOLD_OUT', 'COMING_SOON', 'RESTOCK'];
+        const VISIBILITIES = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
+        const STOCKS = ['in', 'out'];
+
+        const status = STATUSES.includes(req.query.status) ? req.query.status : '';
+        const visibility = VISIBILITIES.includes(req.query.visibility) ? req.query.visibility : '';
+        const stock = STOCKS.includes(req.query.stock) ? req.query.stock : '';
+        const categoryId = Number(req.query.categoryId) > 0 ? Number(req.query.categoryId) : null;
+        const brandId = Number(req.query.brandId) > 0 ? Number(req.query.brandId) : null;
+
         // 몰 필터는 항상 건다. keyword 유무와 무관하게 다른 몰 상품이 섞이면 안 된다.
         let whereClause = 'WHERE p.mall_id = ?';
         const queryParams = [MALL_ID];
@@ -744,6 +769,29 @@ exports.getList = async (req, res) => {
             whereClause += ` AND (p.name LIKE ? OR p.provider LIKE ? OR c.name LIKE ?)`;
             const like = `%${keyword}%`;
             queryParams.push(like, like, like);
+        }
+        if (status) {
+            whereClause += ' AND p.status = ?';
+            queryParams.push(status);
+        }
+        if (visibility) {
+            whereClause += ' AND p.visibility = ?';
+            queryParams.push(visibility);
+        }
+        if (stock === 'in') whereClause += ' AND p.stock > 0';
+        else if (stock === 'out') whereClause += ' AND (p.stock IS NULL OR p.stock = 0)';
+
+        // 선택한 카테고리가 다른 몰이면 서브트리가 비고, 결과는 0건이 된다(크로스몰 차단).
+        let categoryIds = [];
+        if (categoryId) {
+            categoryIds = await categorySubtreeIds(MALL_ID, categoryId);
+            if (categoryIds.length === 0) categoryIds = [0];
+            whereClause += ` AND p.category_id IN (${categoryIds.map(() => '?').join(',')})`;
+            queryParams.push(...categoryIds);
+        }
+        if (brandId) {
+            whereClause += ' AND p.brand_category_id = ?';
+            queryParams.push(brandId);
         }
 
         const [[{ total }]] = await pool.query(
@@ -765,6 +813,18 @@ exports.getList = async (req, res) => {
             LIMIT ? OFFSET ?
         `, [...queryParams, perPage, offset]);
 
+        // 선택 레이어용 목록 — 카테고리는 트리(들여쓰기), 브랜드는 검색으로 좁혀 고른다.
+        const [filterCategories] = await pool.query(
+            `SELECT id, name, parent_id, depth FROM categories
+             WHERE mall_id = ? AND type = 'NORMAL' ORDER BY display_order ASC, id ASC`, [MALL_ID]
+        );
+        const [filterBrands] = await pool.query(
+            `SELECT id, name FROM categories
+             WHERE mall_id = ? AND type = 'BRAND' ORDER BY display_order ASC, id ASC`, [MALL_ID]
+        );
+        const selectedCategory = categoryId ? filterCategories.find(c => c.id === categoryId) || null : null;
+        const selectedBrand = brandId ? filterBrands.find(b => b.id === brandId) || null : null;
+
         const totalPages = Math.ceil(total / perPage);
 
         res.render('admin/products/list', {
@@ -772,6 +832,11 @@ exports.getList = async (req, res) => {
             title: '상품 관리',
             products,
             keyword,
+            filters: { status, visibility, stock, categoryId, brandId },
+            filterCategories,
+            filterBrands,
+            selectedCategory,
+            selectedBrand,
             pagination: { page, perPage, total, totalPages }
         });
     } catch (err) {

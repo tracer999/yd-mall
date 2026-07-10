@@ -1,30 +1,130 @@
 <%
   const _kw = typeof keyword !== 'undefined' ? keyword : '';
+  const _f  = typeof filters !== 'undefined' ? filters : { status:'', visibility:'', stock:'', categoryId:null, brandId:null };
+  const _cats   = typeof filterCategories !== 'undefined' ? filterCategories : [];
+  const _brands = typeof filterBrands !== 'undefined' ? filterBrands : [];
+  const _selCat   = typeof selectedCategory !== 'undefined' ? selectedCategory : null;
+  const _selBrand = typeof selectedBrand   !== 'undefined' ? selectedBrand   : null;
+  const _hasFilter = !!(_kw || _f.status || _f.visibility || _f.stock || _f.categoryId || _f.brandId);
+
+  /* 페이지네이션·개수변경 링크가 필터를 잃지 않도록 현재 필터를 전부 실어 나른다. */
   const _qs = (extra) => {
     const params = new URLSearchParams();
     if (_kw) params.set('keyword', _kw);
+    if (_f.status) params.set('status', _f.status);
+    if (_f.visibility) params.set('visibility', _f.visibility);
+    if (_f.stock) params.set('stock', _f.stock);
+    if (_f.categoryId) params.set('categoryId', _f.categoryId);
+    if (_f.brandId) params.set('brandId', _f.brandId);
     params.set('perPage', pagination.perPage);
     if (extra) Object.entries(extra).forEach(([k, v]) => params.set(k, v));
     return params.toString();
   };
+
+  /* 카테고리 365개·브랜드 1354개는 select 로 못 쓴다 → 선택 레이어에서 검색해 고른다. */
+  const toJs = (v) => JSON.stringify(v)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+
+  /* 같은 이름의 카테고리가 여러 부모 밑에 있다(예: 티셔츠 = 여성패션/남성패션).
+     이름만 보여주면 고를 수 없으므로 "여성패션 > 티셔츠" 전체 경로를 함께 넘긴다. */
+  const _catById = new Map(_cats.map(c => [c.id, c]));
+  const _catPath = (c) => {
+    const names = [c.name];
+    let cur = c.parent_id, guard = 0;
+    while (cur && guard++ < 10) {
+      const parent = _catById.get(cur);
+      if (!parent) break;
+      names.unshift(parent.name);
+      cur = parent.parent_id;
+    }
+    return names.join(' > ');
+  };
+
+  const STATUS_LABELS = { ON:'판매중', OFF:'판매중지', SOLD_OUT:'품절', COMING_SOON:'출시예정', RESTOCK:'재입고예정' };
+  const VIS_LABELS = { PUBLIC:'전체공개', HIDDEN:'숨김', MEMBER_ONLY:'회원전용' };
 %>
-<div class="mb-4">
-    <form action="/admin/products" method="GET" class="flex items-center gap-2">
-        <input type="text" name="keyword" value="<%= _kw %>" placeholder="상품명, 브랜드, 카테고리 검색"
-            class="flex-1 max-w-md h-[38px] px-4 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
-        <input type="hidden" name="perPage" value="<%= pagination.perPage %>">
-        <button type="submit" style="width:auto; background:#374151; color:#fff; cursor:pointer;" class="inline-flex items-center justify-center h-[38px] px-5 text-sm font-medium rounded-md hover:bg-gray-800 transition-colors">검색</button>
-        <% if (_kw) { %>
-            <a href="/admin/products?perPage=<%= pagination.perPage %>" class="inline-flex items-center justify-center h-[38px] px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 no-underline">초기화</a>
-        <% } %>
-    </form>
-</div>
+<form action="/admin/products" method="GET" class="mb-4 rounded-lg border border-gray-200 bg-white p-4">
+    <input type="hidden" name="perPage" value="<%= pagination.perPage %>">
+    <input type="hidden" name="categoryId" id="filter-category-id" value="<%= _f.categoryId || '' %>">
+    <input type="hidden" name="brandId" id="filter-brand-id" value="<%= _f.brandId || '' %>">
+
+    <div class="flex flex-wrap items-end gap-3">
+        <div class="flex-1 min-w-[220px]">
+            <label class="block mb-1 text-xs font-medium text-gray-500">검색어</label>
+            <input type="text" name="keyword" value="<%= _kw %>" placeholder="상품명, 브랜드, 카테고리"
+                class="w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+
+        <div class="w-36">
+            <label class="block mb-1 text-xs font-medium text-gray-500">재고 여부</label>
+            <select name="stock" class="w-full h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="">전체</option>
+                <option value="in"  <%= _f.stock === 'in'  ? 'selected' : '' %>>재고 있음</option>
+                <option value="out" <%= _f.stock === 'out' ? 'selected' : '' %>>재고 없음</option>
+            </select>
+        </div>
+
+        <div class="w-36">
+            <label class="block mb-1 text-xs font-medium text-gray-500">상태</label>
+            <select name="status" class="w-full h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="">전체</option>
+                <% Object.entries(STATUS_LABELS).forEach(([v, label]) => { %>
+                    <option value="<%= v %>" <%= _f.status === v ? 'selected' : '' %>><%= label %></option>
+                <% }) %>
+            </select>
+        </div>
+
+        <div class="w-36">
+            <label class="block mb-1 text-xs font-medium text-gray-500">노출 여부</label>
+            <select name="visibility" class="w-full h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="">전체</option>
+                <% Object.entries(VIS_LABELS).forEach(([v, label]) => { %>
+                    <option value="<%= v %>" <%= _f.visibility === v ? 'selected' : '' %>><%= label %></option>
+                <% }) %>
+            </select>
+        </div>
+
+        <div class="w-52">
+            <label class="block mb-1 text-xs font-medium text-gray-500">카테고리</label>
+            <div class="flex items-center gap-1">
+                <button type="button" onclick="openPickerModal('category')" id="filter-category-btn"
+                    class="flex-1 h-[38px] px-3 text-sm text-left truncate border border-gray-300 rounded-md bg-white hover:bg-gray-50">
+                    <%= _selCat ? _catPath(_selCat) : '전체' %>
+                </button>
+                <button type="button" onclick="clearPicker('category')" title="선택 해제"
+                    class="h-[38px] px-2 text-sm text-gray-400 hover:text-gray-700 <%= _f.categoryId ? '' : 'hidden' %>" id="filter-category-clear">✕</button>
+            </div>
+        </div>
+
+        <div class="w-52">
+            <label class="block mb-1 text-xs font-medium text-gray-500">브랜드</label>
+            <div class="flex items-center gap-1">
+                <button type="button" onclick="openPickerModal('brand')" id="filter-brand-btn"
+                    class="flex-1 h-[38px] px-3 text-sm text-left truncate border border-gray-300 rounded-md bg-white hover:bg-gray-50">
+                    <%= _selBrand ? _selBrand.name : '전체' %>
+                </button>
+                <button type="button" onclick="clearPicker('brand')" title="선택 해제"
+                    class="h-[38px] px-2 text-sm text-gray-400 hover:text-gray-700 <%= _f.brandId ? '' : 'hidden' %>" id="filter-brand-clear">✕</button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button type="submit" class="inline-flex items-center justify-center h-[38px] px-5 text-sm font-medium rounded-md bg-gray-700 text-white hover:bg-gray-800 transition-colors">검색</button>
+            <% if (_hasFilter) { %>
+                <a href="/admin/products?perPage=<%= pagination.perPage %>"
+                   class="inline-flex items-center justify-center h-[38px] px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 no-underline">초기화</a>
+            <% } %>
+        </div>
+    </div>
+</form>
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
     <div class="flex items-center gap-4">
         <p class="text-sm text-gray-500">총 <span class="font-semibold text-gray-800"><%= pagination.total %></span>개 상품
             <% if (_kw) { %><span class="text-blue-600">(「<%= _kw %>」 검색 결과)</span><% } %>
         </p>
-        <select onchange="location.href='/admin/products?<%= _kw ? 'keyword='+encodeURIComponent(_kw)+'&' : '' %>perPage='+this.value"
+        <select onchange="location.href='/admin/products?<%= _qs({ page: 1 }) %>&perPage='+this.value"
             class="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
             <% [10, 20, 30, 50].forEach(n => { %>
                 <option value="<%= n %>" <%= pagination.perPage === n ? 'selected' : '' %>><%= n %>개씩 보기</option>
@@ -189,8 +289,7 @@
             <%= (pagination.page - 1) * pagination.perPage + 1 %>-<%= Math.min(pagination.page * pagination.perPage, pagination.total) %> / 총 <%= pagination.total %>개
         </p>
         <%
-            const _kwParam = _kw ? '&keyword=' + encodeURIComponent(_kw) : '';
-            const _pgUrl = (p) => `/admin/products?page=${p}&perPage=${pagination.perPage}${_kwParam}`;
+            const _pgUrl = (p) => `/admin/products?${_qs({ page: p })}`;
         %>
         <nav class="flex items-center gap-1">
             <% if (pagination.page > 1) { %>
@@ -314,3 +413,113 @@
         });
     </script>
 </div>
+
+<%# ── 카테고리/브랜드 선택 레이어 ──────────────────────────────
+    항목이 각각 수백~1천 개라 select 박스로는 못 쓴다. 레이어에서 검색해 고른다.
+    한 번에 그리는 항목 수를 제한한다(브랜드 1354개를 전부 그리면 DOM 이 무겁다). %>
+<div id="pickerModal" class="fixed inset-0 z-50 hidden" aria-modal="true" role="dialog">
+    <div class="absolute inset-0 bg-black/40" onclick="closePickerModal()"></div>
+    <div class="relative mx-auto mt-24 w-full max-w-lg rounded-lg bg-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+            <h3 class="text-base font-semibold text-gray-900" id="picker-title">선택</h3>
+            <button type="button" onclick="closePickerModal()" class="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <div class="p-5">
+            <input type="text" id="picker-search" placeholder="이름으로 검색"
+                class="mb-3 w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <p id="picker-count" class="mb-2 text-xs text-gray-400"></p>
+            <ul id="picker-list" class="max-h-80 overflow-y-auto divide-y divide-gray-100 border border-gray-100 rounded-md"></ul>
+        </div>
+        <div class="flex justify-end gap-2 border-t border-gray-200 px-5 py-3">
+            <button type="button" onclick="pickItem(null)" class="h-[36px] px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50">전체(선택 해제)</button>
+            <button type="button" onclick="closePickerModal()" class="h-[36px] px-4 text-sm rounded-md bg-gray-700 text-white hover:bg-gray-800">닫기</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const PICKER_DATA = {
+        category: <%- toJs(_cats.map(c => ({ id: c.id, name: c.name, depth: c.depth, path: _catPath(c) }))) %>,
+        brand: <%- toJs(_brands.map(b => ({ id: b.id, name: b.name, depth: 1 }))) %>,
+    };
+    const PICKER_TITLE = { category: '카테고리 선택', brand: '브랜드 선택' };
+    const PICKER_MAX = 200;  // 한 번에 그릴 최대 항목 수
+    let pickerKind = 'category';
+
+    function openPickerModal(kind) {
+        pickerKind = kind;
+        document.getElementById('picker-title').textContent = PICKER_TITLE[kind];
+        const search = document.getElementById('picker-search');
+        search.value = '';
+        renderPickerList('');
+        document.getElementById('pickerModal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        search.focus();
+    }
+
+    function closePickerModal() {
+        document.getElementById('pickerModal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    function renderPickerList(query) {
+        const q = (query || '').trim().toLowerCase();
+        const all = PICKER_DATA[pickerKind] || [];
+        const matched = q ? all.filter(x => (x.path || x.name).toLowerCase().includes(q)) : all;
+        const shown = matched.slice(0, PICKER_MAX);
+        const searching = q.length > 0;
+
+        const countEl = document.getElementById('picker-count');
+        countEl.textContent = matched.length > shown.length
+            ? `${matched.length}개 중 ${shown.length}개 표시 — 검색으로 좁혀주세요`
+            : `${matched.length}개`;
+
+        const list = document.getElementById('picker-list');
+        list.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        shown.forEach(item => {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50';
+            if (searching && item.path) {
+                // 검색 중에는 동명 항목을 구분해야 하므로 경로를 그대로 보여준다.
+                btn.textContent = item.path;
+            } else {
+                btn.style.paddingLeft = (12 + (item.depth - 1) * 16) + 'px';
+                btn.textContent = (item.depth > 1 ? '└ ' : '') + item.name;
+            }
+            btn.onclick = () => pickItem(item);
+            li.appendChild(btn);
+            frag.appendChild(li);
+        });
+        if (shown.length === 0) {
+            const li = document.createElement('li');
+            li.className = 'px-3 py-6 text-center text-sm text-gray-400';
+            li.textContent = '검색 결과가 없습니다.';
+            frag.appendChild(li);
+        }
+        list.appendChild(frag);
+    }
+
+    /* 선택하면 hidden 값과 버튼 라벨만 바꾼다. 실제 필터링은 폼 제출(GET) 로 서버가 한다. */
+    function pickItem(item) {
+        const idInput = document.getElementById(`filter-${pickerKind}-id`);
+        const btn = document.getElementById(`filter-${pickerKind}-btn`);
+        const clear = document.getElementById(`filter-${pickerKind}-clear`);
+        idInput.value = item ? item.id : '';
+        btn.textContent = item ? (item.path || item.name) : '전체';
+        clear.classList.toggle('hidden', !item);
+        closePickerModal();
+    }
+
+    function clearPicker(kind) {
+        pickerKind = kind;
+        pickItem(null);
+    }
+
+    document.getElementById('picker-search').addEventListener('input', (e) => renderPickerList(e.target.value));
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !document.getElementById('pickerModal').classList.contains('hidden')) closePickerModal();
+    });
+</script>
