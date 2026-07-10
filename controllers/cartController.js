@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { calcShippingFee } = require('../services/shipping/shippingCalculator');
 
 // 장바구니 조회
 exports.getCart = async (req, res) => {
@@ -27,11 +28,16 @@ exports.getCart = async (req, res) => {
             totalAmount += q * price;
         });
 
+        // 무료배송 임박 안내가 가장 효과적인 자리다(배송비 문서 §5-2).
+        // 배송지가 아직 없으므로 지역 할증은 계산하지 않는다 — 기본 배송비만 보여준다.
+        const shipping = await calcShippingFee({ mallId: req.mallId || 1, subtotalAmount: totalAmount });
+
         res.render('user/cart', {
             title: '장바구니',
             items: rows,
             totalQuantity,
             totalAmount,
+            shipping,
             currentUser: req.user,
             stockError: req.query.error === 'stock' ? req.query.max : null
         });

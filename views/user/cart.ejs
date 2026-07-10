@@ -69,11 +69,43 @@
                         <dt>상품 수</dt>
                         <dd><%= totalQuantity %>개</dd>
                     </div>
-                    <div class="flex justify-between font-semibold text-gray-900">
-                        <dt>총 결제 예상 금액</dt>
+                    <div class="flex justify-between">
+                        <dt>상품 금액</dt>
                         <dd><%= Number(totalAmount || 0).toLocaleString() %>원</dd>
                     </div>
+                    <div class="flex justify-between">
+                        <dt>배송비</dt>
+                        <dd>
+                            <% if (shipping.baseFee === 0) { %>
+                                <span class="text-[var(--gh-primary)] font-medium">무료</span>
+                            <% } else { %>
+                                <%= Number(shipping.baseFee).toLocaleString() %>원
+                            <% } %>
+                        </dd>
+                    </div>
+                    <div class="flex justify-between font-semibold text-gray-900 pt-2 border-t border-gray-100">
+                        <dt>총 결제 예상 금액</dt>
+                        <dd><%= Number((totalAmount || 0) + shipping.baseFee).toLocaleString() %>원</dd>
+                    </div>
                 </dl>
+
+                <%# 무료배송 임박 게이지 — 지역 할증은 배송지가 정해지는 주문서에서 더해진다.
+                    여기서는 기본 배송비만 다룬다(배송비 문서 §5-2). %>
+                <% if (shipping.freeThreshold) { %>
+                    <div class="mb-4 rounded-xl bg-gray-50 border border-gray-100 p-3">
+                        <% const pct = Math.min(100, Math.round(((totalAmount || 0) / shipping.freeThreshold) * 100)); %>
+                        <div class="h-2 rounded-full bg-gray-200 overflow-hidden">
+                            <div class="h-full bg-[var(--gh-primary)] rounded-full" style="width: <%= pct %>%"></div>
+                        </div>
+                        <p class="mt-2 text-xs <%= shipping.remainingForFree > 0 ? 'text-gray-600' : 'text-[var(--gh-primary)] font-medium' %>">
+                            <% if (shipping.remainingForFree > 0) { %>
+                                <strong><%= Number(shipping.remainingForFree).toLocaleString() %>원</strong> 더 담으면 무료배송
+                            <% } else { %>
+                                무료배송 대상입니다
+                            <% } %>
+                        </p>
+                    </div>
+                <% } %>
                 <form action="/checkout" method="GET" class="space-y-2">
                     <input type="hidden" name="cart" value="1">
                     <button type="submit" class="w-full py-3 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">

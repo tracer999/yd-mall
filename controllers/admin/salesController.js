@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { restoreOrderResources } = require('../../services/order/orderCancelService');
 
 exports.getList = async (req, res) => {
     try {
@@ -85,13 +86,46 @@ exports.getDetail = async (req, res) => {
     }
 };
 
+const ORDER_STATUSES = ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
+const CANCEL_STATUSES = ['CANCELLED', 'REFUNDED'];
+
+/*
+ * 상태 변경. 취소·환불로 넘어갈 때는 재고·쿠폰·적립금을 함께 되돌린다(C1).
+ * 이 화면(/admin/sales)이 운영자가 실제로 쓰는 유일한 주문 취소 경로다
+ * — routes/admin/orders.js 는 마운트돼 있지 않다.
+ */
 exports.postStatus = async (req, res) => {
     const { id, status } = req.body;
+    if (!ORDER_STATUSES.includes(status)) {
+        return res.redirect(`/admin/sales/${id}`);
+    }
+
+    const connection = await pool.getConnection();
     try {
-        await pool.query('UPDATE orders SET status = ? WHERE id = ?', [status, id]);
+        await connection.beginTransaction();
+
+        const [[order]] = await connection.query(
+            'SELECT id, user_id, status, point_used FROM orders WHERE id = ? FOR UPDATE',
+            [id]
+        );
+        if (!order) {
+            await connection.rollback();
+            return res.redirect('/admin/sales');
+        }
+
+        const becomingCancelled = CANCEL_STATUSES.includes(status) && !CANCEL_STATUSES.includes(order.status);
+        if (becomingCancelled) {
+            await restoreOrderResources(connection, order);
+        }
+
+        await connection.query('UPDATE orders SET status = ? WHERE id = ?', [status, id]);
+        await connection.commit();
         res.redirect(`/admin/sales/${id}`);
     } catch (err) {
+        await connection.rollback();
         console.error(err);
         res.status(500).send('Server Error');
+    } finally {
+        connection.release();
     }
 };

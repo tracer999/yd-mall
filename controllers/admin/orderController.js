@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { restoreOrderResources } = require('../../services/order/orderCancelService');
 
 exports.getList = async (req, res, next) => {
     try {
@@ -150,8 +151,11 @@ exports.cancelOrder = async (req, res, next) => {
         const { cancel_reason } = req.body;
 
         // 주문 상태 확인 (Lock)
-        const [[order]] = await connection.query('SELECT status FROM orders WHERE id = ? FOR UPDATE', [id]);
-        
+        const [[order]] = await connection.query(
+            'SELECT id, user_id, status, point_used FROM orders WHERE id = ? FOR UPDATE',
+            [id]
+        );
+
         if (!order) {
             await connection.rollback();
             return res.status(404).send('주문을 찾을 수 없습니다.');
@@ -162,11 +166,8 @@ exports.cancelOrder = async (req, res, next) => {
             return res.redirect(`/admin/orders/${id}`);
         }
 
-        // 재고 복구
-        const [items] = await connection.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id]);
-        for (const item of items) {
-            await connection.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
-        }
+        // 재고·쿠폰·적립금 복구 (C1)
+        await restoreOrderResources(connection, order);
 
         // 주문 상태 업데이트
         await connection.query('UPDATE orders SET status = ?, cancel_reason = ? WHERE id = ?', ['CANCELLED', cancel_reason || '관리자 취소', id]);

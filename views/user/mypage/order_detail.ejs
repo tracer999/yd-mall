@@ -43,6 +43,22 @@
                                     <span>-<%= Number(order.point_used).toLocaleString() %>원</span>
                                 </div>
                                 <% } %>
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-gray-600">배송비</span>
+                                        <span>
+                                            <% if (Number(order.shipping_fee) > 0) { %>
+                                                +<%= Number(order.shipping_fee).toLocaleString() %>원
+                                            <% } else { %>
+                                                무료
+                                            <% } %>
+                                        </span>
+                                    </div>
+                                    <% if (Number(order.shipping_discount) > 0) { %>
+                                        <div class="flex justify-between mb-1 text-red-600">
+                                            <span>배송비 할인</span>
+                                            <span>-<%= Number(order.shipping_discount).toLocaleString() %>원</span>
+                                        </div>
+                                    <% } %>
                                     <div class="flex justify-between mt-2 pt-2 border-t font-bold text-lg">
                                         <span>총 결제금액</span>
                                         <span class="text-[var(--gh-primary)]">

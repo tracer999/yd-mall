@@ -24,12 +24,11 @@
                                     <%= statusText %>
                                 </div>
                                 <div class="p-5 flex-1">
+                                    <%# coupon.type 은 coupon_type(NEW_SIGNUP/EVENT/SEASON/SPECIAL) 이다.
+                                        'percent' 값이 존재한 적이 없어 죽은 분기였다(C6).
+                                        정률 할인은 2차의 benefit_type='PERCENT' 로 되살아난다. %>
                                     <h4 class="text-xl font-bold text-gray-800">
-                                        <% if (coupon.type==='percent' ) { %>
-                                            <%= coupon.discount_amount %>% 할인
-                                                <% } else { %>
-                                                    <%= Number(coupon.discount_amount).toLocaleString() %>원 할인
-                                                        <% } %>
+                                        <%= Number(coupon.discount_amount).toLocaleString() %>원 할인
                                     </h4>
                                     <p class="text-gray-600 mt-1">
                                         <%= coupon.name %>

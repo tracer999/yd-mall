@@ -18,6 +18,7 @@
                 <% if (error === 'coupon') { %>유효하지 않은 쿠폰입니다.<% } %>
                 <% if (error === 'stock') { %>재고가 부족합니다.<% } %>
                 <% if (error === 'coupon_min') { %>쿠폰 최소 주문금액을 만족하지 않습니다.<% } %>
+                <% if (error === 'coupon_limit') { %>이 쿠폰의 전체 사용 한도가 모두 소진되었습니다.<% } %>
             </span>
         </div>
     <% } %>
@@ -130,9 +131,19 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-gray-600">배송비</span>
-                        <span>0원</span>
+                        <span id="shippingFeeText">+ <%= Number(shipping.baseFee).toLocaleString() %>원</span>
+                    </div>
+                    <div id="shippingExtraRow" class="flex justify-between <%= shipping.extraFee > 0 ? '' : 'hidden' %>">
+                        <span class="text-gray-600 pl-3" id="shippingExtraLabel">
+                            <%= shipping.zone === 'JEJU' ? '제주 추가' : '도서산간 추가' %>
+                        </span>
+                        <span id="shippingExtraText">+ <%= Number(shipping.extraFee).toLocaleString() %>원</span>
                     </div>
                 </div>
+
+                <p id="freeShipHint" class="text-xs text-[var(--gh-primary)] bg-green-50 rounded px-3 py-2 <%= shipping.remainingForFree > 0 ? '' : 'hidden' %>">
+                    <span id="freeShipHintText"><%= Number(shipping.remainingForFree).toLocaleString() %>원 더 담으면 무료배송</span>
+                </p>
 
                 <hr>
 
@@ -189,6 +200,8 @@
     var pointMinUse = Number('<%= pointMinUse || 0 %>');
     let couponDiscount = 0;
     let pointDiscount = 0;
+    // 표시용 배송비. 결제 총액의 근거는 서버가 주문 생성 시 다시 계산한 값이다.
+    let shippingFee = Number('<%= shipping.fee || 0 %>');
 
     // Address
     function execDaumPostcode() {
@@ -198,8 +211,55 @@
                 document.getElementById('postcode').value = data.zonecode;
                 document.getElementById("address").value = addr;
                 document.getElementById("detailAddress").focus();
+                refreshShippingFee(data.zonecode);
             }
         }).open();
+    }
+
+    // 배송지가 바뀌면 서버에 배송비를 다시 묻는다. 금액은 보내지 않는다 — 서버가 장바구니에서 구한다.
+    function refreshShippingFee(zipcode) {
+        const body = new URLSearchParams({
+            receiver_zipcode: zipcode || '',
+            product_id: '<%= query.product_id || "" %>',
+            quantity: '<%= query.quantity || "" %>',
+            cart: '<%= query.cart || "" %>',
+            group_buy_id: '<%= query.group_buy_id || "" %>'
+        });
+        fetch('/checkout/shipping-fee', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) return;
+                applyShipping(data.shipping);
+            })
+            .catch(() => { /* 표시용이므로 실패해도 주문 흐름을 막지 않는다 */ });
+    }
+
+    function applyShipping(s) {
+        shippingFee = Number(s.fee) || 0;
+        document.getElementById('shippingFeeText').textContent = '+ ' + Number(s.baseFee).toLocaleString() + '원';
+
+        const extraRow = document.getElementById('shippingExtraRow');
+        if (Number(s.extraFee) > 0) {
+            document.getElementById('shippingExtraLabel').textContent = s.zone === 'JEJU' ? '제주 추가' : '도서산간 추가';
+            document.getElementById('shippingExtraText').textContent = '+ ' + Number(s.extraFee).toLocaleString() + '원';
+            extraRow.classList.remove('hidden');
+        } else {
+            extraRow.classList.add('hidden');
+        }
+
+        const hint = document.getElementById('freeShipHint');
+        if (Number(s.remainingForFree) > 0) {
+            document.getElementById('freeShipHintText').textContent =
+                Number(s.remainingForFree).toLocaleString() + '원 더 담으면 무료배송';
+            hint.classList.remove('hidden');
+        } else {
+            hint.classList.add('hidden');
+        }
+        updateSummary();
     }
 
     // Same as buyer
@@ -281,9 +341,12 @@
     function updateSummary() {
         document.getElementById('couponDiscountText').textContent = '-' + couponDiscount.toLocaleString() + '원';
         document.getElementById('pointDiscountText').textContent = '-' + pointDiscount.toLocaleString() + '원';
-        const final = Math.max(0, totalAmount - couponDiscount - pointDiscount);
+        // 무료배송 판정은 쿠폰·적립금 차감 전 상품금액 기준이다. 여기서 shippingFee 를 다시 깎지 않는다.
+        const final = Math.max(0, totalAmount - couponDiscount - pointDiscount + shippingFee);
         document.getElementById('finalAmountText').textContent = final.toLocaleString() + '원';
     }
+
+    updateSummary();
 </script>
 
 <%# 공용 파티셜은 views/partials/ 에 있다. 여기서 '../partials' 는 views/user/partials 를 가리켜 include 가 실패했다. %>

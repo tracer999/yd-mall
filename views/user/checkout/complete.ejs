@@ -6,6 +6,14 @@
         <h1 class="text-2xl font-bold text-gray-900 mb-2">주문이 완료되었습니다.</h1>
         <% if (order) { %>
             <p class="text-sm text-gray-600 mb-4">주문번호: <span class="font-mono font-semibold"><%= order.order_number %></span></p>
+            <p class="text-sm text-gray-500 mb-1">
+                상품금액 <%= Number(order.subtotal_amount || 0).toLocaleString() %>원
+                <% if (Number(order.shipping_fee) > 0) { %>
+                    · 배송비 <%= Number(order.shipping_fee).toLocaleString() %>원
+                <% } else { %>
+                    · 배송비 무료
+                <% } %>
+            </p>
             <p class="text-sm text-gray-500 mb-2">총 결제금액: <strong><%= Number(order.total_amount).toLocaleString() %>원</strong></p>
         <% } %>
         <p class="text-sm text-gray-500 mb-8">주문 내역은 마이페이지에서 확인하실 수 있습니다. (추후 연동 예정)</p>

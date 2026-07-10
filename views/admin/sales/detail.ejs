@@ -77,6 +77,18 @@
                                     <td class="py-2 text-right text-sm text-green-600">-<%= order.point_used.toLocaleString() %>원</td>
                                 </tr>
                                 <% } %>
+                                <tr class="bg-gray-50">
+                                    <td colspan="3" class="py-2 text-right text-sm text-gray-600 pr-6">배송비</td>
+                                    <td class="py-2 text-right text-sm text-gray-800">
+                                        <% if (Number(order.shipping_fee) > 0) { %>+<%= Number(order.shipping_fee).toLocaleString() %>원<% } else { %>무료<% } %>
+                                    </td>
+                                </tr>
+                                <% if (Number(order.shipping_discount) > 0) { %>
+                                <tr class="bg-gray-50">
+                                    <td colspan="3" class="py-2 text-right text-sm text-gray-600 pr-6">배송비 할인</td>
+                                    <td class="py-2 text-right text-sm text-green-600">-<%= Number(order.shipping_discount).toLocaleString() %>원</td>
+                                </tr>
+                                <% } %>
                                 <tr class="bg-gray-100 border-t border-gray-200">
                                     <td colspan="3" class="py-3 text-right text-sm font-bold text-gray-700 pr-6">최종 결제 금액</td>
                                     <td class="py-3 text-right text-lg font-bold text-indigo-600">

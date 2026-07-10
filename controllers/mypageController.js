@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 const emailService = require('../services/emailService');
+const { restoreOrderResources } = require('../services/order/orderCancelService');
 
 exports.getDashboard = async (req, res, next) => {
     try {
@@ -432,7 +433,7 @@ exports.cancelOrder = async (req, res, next) => {
 
         // 주문 조회 및 상태 확인 (Lock)
         const [orders] = await connection.query(
-            'SELECT status, buyer_email FROM orders WHERE id = ? AND user_id = ? FOR UPDATE',
+            'SELECT id, user_id, status, point_used, buyer_email FROM orders WHERE id = ? AND user_id = ? FOR UPDATE',
             [orderId, userId]
         );
 
@@ -446,6 +447,9 @@ exports.cancelOrder = async (req, res, next) => {
             await connection.rollback();
             return res.status(400).send('취소할 수 없는 주문 상태입니다.');
         }
+
+        // 재고·쿠폰·적립금을 같은 트랜잭션에서 되돌린다 (C1). status 는 취소 전 값이어야 한다.
+        await restoreOrderResources(connection, order);
 
         await connection.query(
             'UPDATE orders SET status = ?, cancel_reason = ? WHERE id = ?',

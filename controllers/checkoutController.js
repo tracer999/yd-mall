@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const groupBuySvc = require('../services/groupBuy/groupBuyService');
+const { calcShippingFee } = require('../services/shipping/shippingCalculator');
 
 /*
  * ── 공동구매 연동 (docs/사이트개선/group_buy_design_and_development.md §9) ──
@@ -64,8 +65,11 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
     try {
         await conn.beginTransaction();
 
+        // 쿠폰·적립금·배송비는 **주문 행이 유일한 근거**다. 요청에서 읽지 않는다(배송비 문서 §1-1).
         const [[orderRow]] = await conn.query(
-            'SELECT user_id, coupon_discount, point_used, user_coupon_id, subtotal_amount, total_amount FROM orders WHERE id = ?',
+            `SELECT user_id, coupon_discount, point_used, user_coupon_id,
+                    subtotal_amount, shipping_fee, shipping_discount, total_amount
+               FROM orders WHERE id = ?`,
             [orderId]
         );
 
@@ -117,8 +121,10 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
                 );
             }
 
+            // 적립은 상품 결제액에만 붙인다. 배송비에 적립을 주면 배송비를 내고 포인트를 버는 셈이 된다.
             const rate = Number(global.systemSettings?.point_accumulate_rate || 5) || 5;
-            const payAmount = Number(orderRow.total_amount) || 0;
+            const netShipping = (Number(orderRow.shipping_fee) || 0) - (Number(orderRow.shipping_discount) || 0);
+            const payAmount = Math.max(0, (Number(orderRow.total_amount) || 0) - netShipping);
             const accumulate = Math.floor((payAmount * rate) / 100);
             if (accumulate > 0) {
                 await conn.query(
@@ -275,6 +281,13 @@ exports.getForm = async (req, res) => {
         receiver_detailed_address: user.detailed_address || ''
     } : {};
 
+    // 화면 표시용 배송비. 주문 생성 시 서버가 다시 계산한다(§1-1) — 이 값은 총액의 근거가 아니다.
+    const shipping = await calcShippingFee({
+        mallId: req.mallId || 1,
+        subtotalAmount: totalAmount,
+        receiverZipcode: prefilled.receiver_zipcode,
+    });
+
     res.render('user/checkout/form', {
         title: '주문/결제',
         items,
@@ -285,9 +298,50 @@ exports.getForm = async (req, res) => {
         userCoupons: userCoupons || [],
         pointsBalance: typeof pointsBalance === 'number' ? pointsBalance : 0,
         pointMinUse: typeof pointMinUse === 'number' ? pointMinUse : 1000,
+        shipping,
         error,
         success
     });
+};
+
+/**
+ * 배송비 재조회 (AJAX) — 배송지 우편번호가 바뀌면 화면 배송비를 갱신한다.
+ *
+ * 클라이언트는 우편번호만 보낸다. **금액은 보내지 않는다.** 상품 금액은 서버가 장바구니·상품에서
+ * 다시 구한다. 이 응답 역시 표시용이며, 주문 생성 시 서버가 한 번 더 계산한다.
+ */
+exports.postShippingFee = async (req, res) => {
+    try {
+        const { product_id, quantity, cart, group_buy_id, receiver_zipcode } = req.body;
+        let subtotalAmount = 0;
+
+        if (cart === '1' && req.user) {
+            const [[row]] = await pool.query(
+                `SELECT COALESCE(SUM(p.price * c.quantity), 0) AS subtotal
+                   FROM carts c JOIN products p ON c.product_id = p.id
+                  WHERE c.user_id = ? AND p.status = 'ON'`,
+                [req.user.id]
+            );
+            subtotalAmount = Number(row.subtotal) || 0;
+        } else if (group_buy_id && product_id && quantity) {
+            const line = await groupBuySvc.resolveLine(req.mallId || 1, group_buy_id, product_id, quantity);
+            if (line.ok) subtotalAmount = line.unitPrice * line.quantity;
+        } else if (product_id && quantity) {
+            const qty = Math.max(1, parseInt(quantity, 10) || 1);
+            const [[p]] = await pool.query('SELECT price FROM products WHERE id = ? AND status = "ON"', [parseInt(product_id, 10)]);
+            if (p) subtotalAmount = p.price * qty;
+        }
+
+        const shipping = await calcShippingFee({
+            mallId: req.mallId || 1,
+            subtotalAmount,
+            receiverZipcode: receiver_zipcode,
+        });
+        return res.json({ ok: true, subtotalAmount, shipping });
+    } catch (err) {
+        console.error('[Checkout] postShippingFee error:', err);
+        return res.status(500).json({ ok: false });
+    }
 };
 
 /**
@@ -422,7 +476,7 @@ exports.postForm = async (req, res) => {
         // 1. 쿠폰 우선 적용
         if (user_coupon_id) {
             const [ucRows] = await pool.query(
-                `SELECT uc.id, c.discount_amount, c.min_order_amount
+                `SELECT uc.id, uc.coupon_id, c.discount_amount, c.min_order_amount, c.max_total_uses
                  FROM user_coupons uc
                  JOIN coupons c ON uc.coupon_id = c.id
                  WHERE uc.id = ? AND uc.user_id = ? AND uc.used_at IS NULL AND c.is_active = 1
@@ -433,12 +487,24 @@ exports.postForm = async (req, res) => {
             if (ucRows.length === 0) {
                 return res.redirect('/checkout?error=coupon&' + new URLSearchParams(req.query).toString());
             }
-            const discount = Math.min(ucRows[0].discount_amount, subtotalAmount);
-            const minOrder = ucRows[0].min_order_amount || 0;
+            const uc = ucRows[0];
+
+            // 전체 사용 한도 재검증 (C4). getForm 의 쿠폰 목록 조회는 이걸 보지 않는다.
+            if (uc.max_total_uses != null) {
+                const [[usedRow]] = await pool.query(
+                    'SELECT COUNT(*) AS c FROM user_coupons WHERE coupon_id = ? AND used_at IS NOT NULL',
+                    [uc.coupon_id]
+                );
+                if (Number(usedRow.c) >= Number(uc.max_total_uses)) {
+                    return res.redirect('/checkout?error=coupon_limit&' + new URLSearchParams(req.query).toString());
+                }
+            }
+
+            const minOrder = uc.min_order_amount || 0;
             if (subtotalAmount < minOrder) {
                 return res.redirect('/checkout?error=coupon_min&' + new URLSearchParams(req.query).toString());
             }
-            couponDiscount = discount;
+            couponDiscount = Math.min(uc.discount_amount, subtotalAmount);
             userCouponId = user_coupon_id;
         }
 
@@ -461,7 +527,20 @@ exports.postForm = async (req, res) => {
         }
     }
 
-    const totalAmount = Math.max(0, subtotalAmount - couponDiscount - pointUsed);
+    /*
+     * 배송비는 서버가 계산한다 (배송비 문서 §1-1).
+     * 폼에 shipping_fee 필드를 두지 않는다 — 화면 표시값은 참고일 뿐 총액의 근거가 아니다.
+     * 무료배송 판정은 쿠폰·적립금 차감 전 `subtotalAmount` 로 한다 (§1-2).
+     */
+    const shipping = await calcShippingFee({
+        mallId: req.mallId || 1,
+        subtotalAmount,
+        receiverZipcode: receiver_zipcode,
+    });
+    const shippingFee = shipping.fee;
+    const shippingDiscount = 0; // 배송비 쿠폰은 2차 (쿠폰 문서 P7~P9)
+
+    const totalAmount = Math.max(0, subtotalAmount - couponDiscount - pointUsed + shippingFee - shippingDiscount);
     const orderNumber = generateOrderNumber();
 
     const connection = await pool.getConnection();
@@ -473,16 +552,19 @@ exports.postForm = async (req, res) => {
 
         await connection.query(
             `INSERT INTO orders (
-                user_id, order_number, status, subtotal_amount, total_amount, coupon_discount, point_used, user_coupon_id,
+                user_id, order_number, status, subtotal_amount, shipping_fee, shipping_discount,
+                total_amount, coupon_discount, point_used, user_coupon_id,
                 receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
                 shipping_address, shipping_message,
                 buyer_name, buyer_email, buyer_phone
-            ) VALUES (?, ?, 'PENDING', ?, ?, ?, ?, ?,
+            ) VALUES (?, ?, 'PENDING', ?, ?, ?,
+                ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?,
                 ?, ?, ?)`,
             [
-                userId, orderNumber, subtotalAmount, totalAmount, couponDiscount, pointUsed, userCouponId,
+                userId, orderNumber, subtotalAmount, shippingFee, shippingDiscount,
+                totalAmount, couponDiscount, pointUsed, userCouponId,
                 receiver_name, receiver_phone, receiver_zipcode || null, receiver_address || null, receiver_detailed_address || null,
                 shippingAddr || null, shipping_message || null,
                 isGuest ? buyer_name : null, isGuest ? buyer_email : null, isGuest ? buyer_phone : null
@@ -507,6 +589,12 @@ exports.postForm = async (req, res) => {
 
         await connection.commit();
         connection.release();
+
+        // 비회원 주문에는 소유자를 판정할 user_id 가 없다. 주문 완료 화면이 남의 주문번호로
+        // 배송지를 노출하지 않도록, 이 세션이 만든 주문번호만 기억해 둔다(getComplete 참고).
+        if (!userId && req.session) {
+            req.session.guestOrders = [...((req.session.guestOrders || []).slice(-9)), orderNumber];
+        }
 
         return res.redirect(`/checkout/pay/${orderNumber}`);
     } catch (err) {
@@ -619,65 +707,56 @@ exports.getFail = (req, res) => {
 
 /**
  * 주문 완료
+ *
+ * ⚠️ 이 함수는 과거 `?test=1&coupon_discount=...&user_coupon_id=...` 쿼리스트링을 그대로 믿고
+ *    주문을 PAID 로 확정했다. 결제 없이 주문 완료가 가능했고, 남의 user_coupon_id 를 주입해
+ *    타인의 쿠폰을 소모시킬 수 있었다(쿠폰 문서 C3).
+ *
+ *    지금은 세 가지를 지킨다.
+ *      1) 쿠폰·포인트·배송비는 요청에서 읽지 않는다. 주문 행이 유일한 근거다.
+ *      2) 테스트 확정 경로는 NODE_ENV 로 잠근다. 클라이언트가 켤 수 없다.
+ *      3) 주문 소유자만 조회할 수 있다(비회원은 주문 생성 시 세션에 남긴 주문번호로 판정).
  */
+function isTestCheckoutAllowed(req) {
+    return process.env.NODE_ENV !== 'production' && req.query.test === '1';
+}
+
+function isOrderOwner(req, order) {
+    if (order.user_id) {
+        return !!(req.user && Number(req.user.id) === Number(order.user_id));
+    }
+    const guestOrders = (req.session && req.session.guestOrders) || [];
+    return guestOrders.includes(order.order_number);
+}
+
 exports.getComplete = async (req, res) => {
-    const orderId = req.query.orderId;
-    const isTest = req.query.test === '1';
-    const couponDiscount = req.query.coupon_discount != null ? parseInt(req.query.coupon_discount, 10) : null;
-    const userCouponId = req.query.user_coupon_id != null && req.query.user_coupon_id !== '' ? parseInt(req.query.user_coupon_id, 10) : null;
-    const pointUseAmount = req.query.point_use_amount != null ? parseInt(req.query.point_use_amount, 10) : null;
+    const orderNumber = req.query.orderId;
     let order = null;
 
-    if (orderId) {
-        if (isTest) {
-            const [pendingRows] = await pool.query(
-                'SELECT id, coupon_discount, point_used, user_coupon_id, subtotal_amount, total_amount FROM orders WHERE order_number = ? AND status = ?',
-                [orderId, 'PENDING']
-            );
-            if (pendingRows.length > 0) {
-                const row = pendingRows[0];
-                const orderDbId = row.id;
-                const hasCouponInOrder = Number(row.coupon_discount) > 0 || row.user_coupon_id;
-                const hasPointInOrder = Number(row.point_used) > 0;
-                if ((couponDiscount != null && couponDiscount > 0) || (pointUseAmount != null && pointUseAmount > 0)) {
-                    const updates = [];
-                    const params = [];
-                    if ((couponDiscount != null && couponDiscount > 0) && !hasCouponInOrder && userCouponId != null && !Number.isNaN(userCouponId)) {
-                        updates.push('coupon_discount = ?, user_coupon_id = ?');
-                        params.push(couponDiscount, userCouponId);
-                    }
-                    if ((pointUseAmount != null && pointUseAmount > 0) && !hasPointInOrder) {
-                        updates.push('point_used = ?');
-                        params.push(pointUseAmount);
-                    }
-                    if (updates.length > 0) {
-                        const subtotal = row.subtotal_amount != null ? Number(row.subtotal_amount) : 0;
-                        const newTotal = Math.max(0, subtotal
-                            - (couponDiscount != null && couponDiscount > 0 && !hasCouponInOrder ? couponDiscount : Number(row.coupon_discount) || 0)
-                            - (pointUseAmount != null && pointUseAmount > 0 && !hasPointInOrder ? pointUseAmount : Number(row.point_used) || 0));
-                        updates.push('total_amount = ?');
-                        params.push(newTotal);
-                        params.push(orderDbId);
-                        await pool.query(
-                            `UPDATE orders SET ${updates.join(', ')} WHERE id = ?`,
-                            params
-                        );
-                    }
-                }
-                const completeResult = await completeOrderWithStockAndPaid(orderDbId, {
-                    paymentMethod: 'TEST'
-                });
+    if (orderNumber) {
+        const [rows] = await pool.query(
+            'SELECT id, user_id, order_number, status FROM orders WHERE order_number = ?',
+            [orderNumber]
+        );
+        const found = rows[0];
+
+        if (found && isOrderOwner(req, found)) {
+            if (found.status === 'PENDING' && isTestCheckoutAllowed(req)) {
+                const completeResult = await completeOrderWithStockAndPaid(found.id, { paymentMethod: 'TEST' });
                 if (!completeResult.ok) {
                     return res.redirect('/checkout/fail?reason=stock');
                 }
             }
+
+            const [paidRows] = await pool.query(
+                `SELECT o.id, o.order_number, o.subtotal_amount, o.coupon_discount, o.point_used,
+                        o.shipping_fee, o.shipping_discount, o.total_amount,
+                        o.receiver_name, o.receiver_phone, o.shipping_address, o.created_at
+                 FROM orders o WHERE o.id = ? AND o.status = 'PAID'`,
+                [found.id]
+            );
+            if (paidRows.length > 0) order = paidRows[0];
         }
-        const [rows] = await pool.query(
-            `SELECT o.id, o.order_number, o.total_amount, o.receiver_name, o.receiver_phone, o.shipping_address, o.created_at
-             FROM orders o WHERE o.order_number = ? AND o.status = 'PAID'`,
-            [orderId]
-        );
-        if (rows.length > 0) order = rows[0];
     }
     res.render('user/checkout/complete', {
         title: '주문 완료',

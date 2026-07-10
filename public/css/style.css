@@ -60,7 +60,9 @@
     --color-cyan-400: oklch(78.9% 0.154 211.53);
     --color-cyan-500: oklch(71.5% 0.143 215.221);
     --color-cyan-800: oklch(45% 0.085 224.283);
+    --color-sky-50: oklch(97.7% 0.013 236.62);
     --color-sky-100: oklch(95.1% 0.026 236.824);
+    --color-sky-700: oklch(50% 0.134 242.749);
     --color-blue-50: oklch(97% 0.014 254.604);
     --color-blue-100: oklch(93.2% 0.032 255.585);
     --color-blue-200: oklch(88.2% 0.059 254.128);
@@ -2153,6 +2155,9 @@
   .bg-rose-100 {
     background-color: var(--color-rose-100);
   }
+  .bg-sky-50 {
+    background-color: var(--color-sky-50);
+  }
   .bg-sky-100 {
     background-color: var(--color-sky-100);
   }
@@ -2894,6 +2899,9 @@
   }
   .text-rose-700 {
     color: var(--color-rose-700);
+  }
+  .text-sky-700 {
+    color: var(--color-sky-700);
   }
   .text-slate-600 {
     color: var(--color-slate-600);

@@ -1,0 +1,156 @@
+<%
+  /* 배송비 정책 (배송비 문서 §5-4) — 몰별 1행 + 우편번호 할증 대역 */
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const zoneLabel = { JEJU: '제주', ISLAND: '도서산간' };
+%>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">배송비 정책</h1>
+    <p class="mt-1 text-sm text-gray-500">
+      몰별 기본 배송비와 무료배송 기준을 설정합니다. 무료배송 판정은 <strong>쿠폰·적립금 차감 전 상품금액</strong> 기준이며,
+      지역 할증은 무료배송이어도 청구됩니다.
+      송장 관리는 <a href="/admin/shipping" class="text-indigo-600 underline">배송 관리</a>에 있습니다.
+    </p>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <!-- 몰별 정책 -->
+  <div class="space-y-5 mb-10">
+    <% malls.forEach(function (mall) {
+         const p = policyByMall.get(Number(mall.id)) || { base_fee: 3000, free_threshold: 50000, jeju_extra: 3000, island_extra: 5000, is_active: 1 };
+    %>
+      <form method="POST" action="/admin/shipping-policy" class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <input type="hidden" name="mall_id" value="<%= mall.id %>">
+
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-semibold text-gray-900">
+            <%= mall.name %>
+            <span class="ml-2 text-xs font-normal text-gray-400">mall_id <%= mall.id %></span>
+          </h2>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="is_active" value="1" <%= Number(p.is_active) === 1 ? 'checked' : '' %>
+                   class="rounded border-gray-300 text-indigo-600">
+            배송비 적용
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">기본 배송비 (원)</label>
+            <input type="number" name="base_fee" min="0" value="<%= p.base_fee %>"
+                   class="block w-full text-sm border-gray-300 rounded-md">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">무료배송 기준금액 (원)</label>
+            <input type="number" name="free_threshold" min="0" value="<%= p.free_threshold == null ? '' : p.free_threshold %>"
+                   placeholder="비우면 무료배송 없음" class="block w-full text-sm border-gray-300 rounded-md">
+            <p class="mt-1 text-[11px] text-gray-400">비워두면 무료배송을 적용하지 않습니다. 0 을 넣으면 전 주문 무료.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">제주 추가 (원)</label>
+            <input type="number" name="jeju_extra" min="0" value="<%= p.jeju_extra %>"
+                   class="block w-full text-sm border-gray-300 rounded-md">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">도서산간 추가 (원)</label>
+            <input type="number" name="island_extra" min="0" value="<%= p.island_extra %>"
+                   class="block w-full text-sm border-gray-300 rounded-md">
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <button type="submit" class="h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+            저장
+          </button>
+        </div>
+      </form>
+    <% }); %>
+  </div>
+
+  <!-- 우편번호 할증 대역 -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100">
+      <h2 class="text-base font-semibold text-gray-900">우편번호 할증 대역</h2>
+      <p class="mt-1 text-xs text-gray-500">
+        배송지 우편번호가 아래 대역에 들면 해당 할증이 붙습니다. 몰 구분 없이 공통 적용됩니다.
+        대역이 겹치면 먼저 등록된 행이 이깁니다.
+      </p>
+    </div>
+
+    <form method="POST" action="/admin/shipping-policy/zones" class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-end gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">구분</label>
+        <select name="zone_type" class="text-sm border-gray-300 rounded-md">
+          <option value="JEJU">제주</option>
+          <option value="ISLAND">도서산간</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">시작 우편번호</label>
+        <input type="text" name="zipcode_from" maxlength="5" placeholder="63000" required
+               class="w-28 text-sm border-gray-300 rounded-md font-mono">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">끝 우편번호</label>
+        <input type="text" name="zipcode_to" maxlength="5" placeholder="63644" required
+               class="w-28 text-sm border-gray-300 rounded-md font-mono">
+      </div>
+      <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-gray-600 mb-1">지역명 (선택)</label>
+        <input type="text" name="label" placeholder="제주시" class="block w-full text-sm border-gray-300 rounded-md">
+      </div>
+      <button type="submit" class="h-[38px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900">
+        대역 추가
+      </button>
+    </form>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs font-semibold text-gray-500 bg-gray-50/60">
+            <th class="px-4 py-2.5 w-24">구분</th>
+            <th class="px-4 py-2.5 w-40">우편번호 대역</th>
+            <th class="px-4 py-2.5">지역명</th>
+            <th class="px-4 py-2.5 w-24 text-right">삭제</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% if (!zones.length) { %>
+            <tr><td colspan="4" class="px-4 py-10 text-center text-sm text-gray-400">
+              등록된 대역이 없습니다. 대역이 없으면 지역 할증이 붙지 않습니다.
+            </td></tr>
+          <% } %>
+          <% zones.forEach(function (z) { %>
+            <tr>
+              <td class="px-4 py-2.5">
+                <span class="inline-block px-2 py-0.5 rounded text-xs <%= z.zone_type === 'JEJU' ? 'bg-amber-50 text-amber-700' : 'bg-sky-50 text-sky-700' %>">
+                  <%= zoneLabel[z.zone_type] %>
+                </span>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-gray-700"><%= z.zipcode_from %> ~ <%= z.zipcode_to %></td>
+              <td class="px-4 py-2.5 text-gray-600"><%= z.label || '-' %></td>
+              <td class="px-4 py-2.5 text-right">
+                <form method="POST" action="/admin/shipping-policy/zones/<%= z.id %>/delete"
+                      onsubmit="return confirm('이 대역을 삭제할까요?');">
+                  <button type="submit" class="text-xs text-red-600 hover:underline">삭제</button>
+                </form>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

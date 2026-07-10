@@ -52,6 +52,8 @@ router.use('/group-buys', requireMenuAccess('/admin/group-buys'), require('./adm
 router.use('/users', requireMenuAccess('/admin/users'), require('./admin/users'));
 router.use('/sales', requireMenuAccess('/admin/sales'), require('./admin/sales'));
 router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/shipping'));
+// 배송비 정책(몰별 기본료·무료배송 기준·지역 할증). /admin/shipping 은 송장 관리다 — 별개 화면.
+router.use('/shipping-policy', requireMenuAccess('/admin/shipping-policy'), require('./admin/shipping-policy'));
 router.use('/visitors', requireMenuAccess('/admin/visitors'), require('./admin/visitors'));
 router.use('/settings', requireMenuAccess('/admin/settings'), require('./admin/settings'));
 router.use('/site-settings', requireMenuAccess('/admin/site-settings'), require('./admin/siteSettings'));
