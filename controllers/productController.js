@@ -124,7 +124,11 @@ exports.getList = async (req, res) => {
         }
 
         if (selectedBrandId) {
-            const [brandRows] = await pool.query("SELECT id, name FROM categories WHERE id = ? AND type = 'BRAND'", [selectedBrandId]);
+            // P5 몰 스코프 — 다른 몰 브랜드 id 로 접근하면 제목만 그 브랜드로 바뀌고 목록은 0건이 된다.
+            const [brandRows] = await pool.query(
+                "SELECT id, name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id = ?",
+                [selectedBrandId, mallId]
+            );
             if (brandRows.length > 0) {
                 const brandName = brandRows[0].name;
                 pageTitle = selectedCategoryId ? `${pageTitle} · ${brandName}` : `${brandName} 브랜드`;

@@ -2,12 +2,14 @@ const pool = require('../config/db');
 
 exports.getList = async (req, res) => {
     try {
+        // P5 몰 스코프 — 없으면 브랜드관에 다른 몰 브랜드가 전부 섞인다.
+        const mallId = req.mallId || 1;
         const [brands] = await pool.query(`
             SELECT c.id, c.name, c.display_order, c.logo_image_path
             FROM categories c
-            WHERE c.type = 'BRAND'
+            WHERE c.type = 'BRAND' AND c.mall_id = ?
             ORDER BY c.display_order ASC, c.id ASC
-        `);
+        `, [mallId]);
 
         // 로그인 사용자의 찜한 브랜드 id 목록(하트 초기 상태용)
         let likedBrandIds = [];

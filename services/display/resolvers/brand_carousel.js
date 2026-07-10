@@ -14,6 +14,8 @@ async function resolve({ shared, config, locals }) {
     const limit = Math.min(Number(config.maxCount) || 20, 60);
     const onlyWithProducts = config.onlyWithProducts !== false;
     const vis = visibilityClause(shared.hasUser);
+    // P5 몰 스코프 — 없으면 캐러셀에 다른 몰 브랜드가 섞인다.
+    const mallId = shared.mallId || 1;
 
     const having = onlyWithProducts ? 'HAVING product_count > 0' : '';
     const [rows] = await pool.query(`
@@ -21,12 +23,12 @@ async function resolve({ shared, config, locals }) {
         FROM categories c
         LEFT JOIN products p
                ON p.brand_category_id = c.id AND ${P_STATUS} AND ${vis}
-        WHERE c.type = 'BRAND' AND c.is_active = 1
+        WHERE c.type = 'BRAND' AND c.is_active = 1 AND c.mall_id = ?
         GROUP BY c.id, c.name, c.logo_image_path
         ${having}
         ORDER BY c.display_order ASC, c.id ASC
         LIMIT ?
-    `, [limit]);
+    `, [mallId, limit]);
 
     if (!rows || rows.length === 0) return null;
 
