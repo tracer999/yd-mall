@@ -13,6 +13,7 @@
   1. `CLAUDE.md`·`README.md` 를 **dev-mall 단독 저장소 기준으로 전면 재작성** (모노레포 서술 제거).
   2. 관리자 트랙 완주 — **A2 · B4 · B5 · B6 · B7 + 테마 설정 + 고객센터 FAQ** (7개 화면).
   3. **디자인 트랙 §12 1차 완료** — 히어로 전환 · GNB 드롭다운 restyle · 우측 레일 개선.
+  4. **미구현 모듈 4종 랜딩**(랭킹·아울렛·쿠폰·멤버십) + **테스트 카테고리 트리·상품 시드**(3뎁스, 존치).
 - **현재 상태**: `main` 푸시·배포 완료, 운영 검증 완료. 작업 트리 clean.
 - **다음 할 일**: 아래 "이번 트랙 밖" 목록 참고. 큰 트랙은 모두 닫혔다.
 
@@ -28,8 +29,9 @@
 | 앱 포트 | **3006** (개발·상용 동일). pm2 프로세스명 `dev-mall` |
 | Node | v22.23.1 |
 | DB | `ydata.co.kr` / `dev_mall` — **dev·prod 공용**, 51개 테이블 |
-| 카테고리 | NORMAL 10 / THEME 2 / BRAND 25 = 37행, 전부 depth 1 |
-| `navigation_config` | `max_gnb_items=11`, `max_custom_items=3`, `category_max_depth=3` |
+| 카테고리 | NORMAL 15 / THEME 2 / BRAND 25 = 42행, **최대 depth 3** (`[테스트]` 5행 포함) |
+| `navigation_config` | `max_gnb_items=12`, `max_custom_items=3`, `category_max_depth=3` |
+| GNB | 12종 전부 `module_ready=1` (랭킹·아울렛·쿠폰·멤버십은 '준비 중' 랜딩) |
 | `shopify_sync_enabled` | `0` (미사용, 코드는 유지·UI만 숨김) |
 
 ### 🔴 배포 규칙 (반드시 지킬 것)
@@ -78,7 +80,27 @@ Node 22 · 브랜치 `main` 단독 · 테이블 51개 · Shopify API 버전 3층
 > **백드롭은 `<header>` 바깥에 둔다.** 헤더가 `z-50` 으로 stacking context 를 만들어,
 > 안에 두면 `fixed` 백드롭이 헤더까지 덮는다(실제로 한 번 그렇게 됐다).
 
-### 3. 관리자 화면 7종
+### 3. 미구현 모듈 랜딩 + 테스트 카탈로그
+
+**랜딩 4종** — `/ranking` `/outlet` `/coupon` `/membership`.
+기존 `exhibition`·`group-buy`·`live` 의 comingSoon 패턴을 확장했다(`routes/feature.js`).
+`#` 죽은 링크 대신 실제 200 랜딩(전역 `X-Robots-Tag: noindex`)이므로 `module_ready=1` 이 정당하다.
+
+> 왜 실기능이 아닌가(데이터 확인): **OUTLET** 은 `discount_rate>0` 상품이 0개, **MEMBERSHIP** 은
+> `users` 에 등급 컬럼이 없다(`points_balance` 뿐), **COUPON** 은 다운로드 쿠폰 개념·화면이 없다.
+> **RANKING** 만 `getList`의 `sort=best` 로 반쪽 구현이 가능하나 카테고리별·기간별 집계가 빠져 랜딩으로 뒀다.
+
+`scripts/migrate_enable_coming_soon_menus.js` (멱등, `--revert`) 가 `module_ready=1` +
+`is_enabled=1` + **`max_gnb_items` 자동 상향**(11→12, GNB 는 상한 초과분을 뒤에서 자른다)을 한다.
+
+**테스트 카탈로그** — `scripts/seed_test_catalog.js` (멱등, `--remove` 로 회수).
+`[테스트] 데모 카테고리` → 비타민(→ 어린이 비타민) · 오메가3 · 유산균, 상품 10개. **데모용으로 존치한다.**
+
+> 코드 계약에 맞춘 설계: `getCategoryTree` 가 `type='NORMAL'` 만 올리므로 NORMAL 로 만들고,
+> `getList` 가 `category_id` 를 **직접 매칭**(자식 상품을 끌어오지 않음)하므로 **부모 노드에도 상품**을 붙였다.
+> 안 그러면 부모를 눌렀을 때 빈 목록이 된다.
+
+### 4. 관리자 화면 7종
 
 | 항목 | 경로 | 핵심 |
 |---|---|---|
@@ -205,7 +227,8 @@ SELECT COUNT(*) FROM categories c LEFT JOIN categories p ON c.parent_id = p.id
 
 | 항목 | 왜 지금 못 하나 |
 |---|---|
-| **2단 메가메뉴 완성** | 코드는 준비됨. **하위 카테고리 데이터 입력**(콘텐츠 작업)이 선행. 입력 후 `category_display_type='mega'` 를 쓰려면 Header 설정(B5)의 `mega` 잠금과 관리자 문서 §3.2.1 을 함께 풀어야 한다 |
+| **실제 카탈로그의 2뎁스** | 코드·데모 데이터 모두 준비됨(`[테스트]` 트리로 메가메뉴 동작 확인). 실제 카테고리 37개에 하위 분류를 넣는 **콘텐츠 작업**만 남았다. `category_display_type='mega'` 를 쓰려면 Header 설정(B5)의 `mega` 잠금과 관리자 문서 §3.2.1 을 함께 풀어야 한다 |
+| **랜딩 → 실기능 승격** | 랭킹은 `getList`+`sort=best` 로 가장 가깝다. 아울렛은 `discount_rate` 데이터, 멤버십은 등급 컬럼, 쿠폰은 다운로드 쿠폰 모델이 선행 |
 | **모바일 하단 탭** | `feature_menu` 에 `mobile_quick` 행이 0개고 `menuData`·뷰가 렌더하지 않는다. **기능 신설**이라 계획서 §0-0(프론트 먼저) 순서를 따라야 한다 |
 | **레일 브레이크포인트(≥1600px)** | 본문 `max-w-1400px` 와의 충돌. 참조몰처럼 좁은 화면에도 띄우려면 **본문 컨테이너 폭 정책**을 먼저 정해야 한다(§4.3, CT-7 잔여) |
 | **B3 커스텀 메뉴** | 후순위 지정. 풀렸는지 먼저 확인. `custom_menu` 스키마 완료, `navigationService` 가 렌더 규칙을 이미 강제. 관리자에 필요한 건 슬롯 초과 거부 / 메뉴명 10자 / `CATEGORY`·`BRAND` 의 `link_target` 필수 검증 |
