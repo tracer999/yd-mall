@@ -134,7 +134,7 @@ async function initDB() {
                 (14, '포인트 관리', '/admin/points', 'bi bi-coin', 9, NULL, 1, NULL),
                 (13, '쿠폰 관리', '/admin/coupons', 'bi bi-ticket-perforated-fill', 10, NULL, 1, NULL),
                 (10, '약관/정책 관리', '/admin/policies', 'bi bi-file-text-fill', 11, NULL, 1, 'super_admin,admin'),
-                (12, '메뉴관리', '/admin/menus', 'bi-ui-checks', 12, NULL, 1, 'super_admin,admin'),
+                (12, '관리자 메뉴 관리', '/admin/menus', 'bi-ui-checks', 12, NULL, 1, 'super_admin,admin'),
                 (11, '운영자 관리', '/admin/operators', 'bi bi-shield-lock-fill', 13, NULL, 1, 'super_admin'),
                 (15, '사이트 설정', '/admin/site-settings', 'bi bi-building', 14, NULL, 1, 'super_admin,admin'),
                 (16, '시스템 설정', '/admin/sys-settings', 'bi bi-gear-fill', 15, NULL, 1, 'super_admin,admin')

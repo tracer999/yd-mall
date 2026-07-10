@@ -51,15 +51,21 @@
 
 ---
 
-## 1. ⚠️ 명칭 충돌 (반드시 정리)
+## 1. ⚠️ 명칭 충돌 — ✅ **A2 완료 (2026-07-10)**
 
-현재 `/admin/menus` 는 **관리자 사이드바 메뉴(`admin_menus` 테이블)** 를 관리하는 화면이다.
-본 설계의 "메뉴 관리"(스토어프론트 GNB)와 **이름이 겹친다.**
+`/admin/menus` 는 **관리자 사이드바 메뉴(`admin_menus` 테이블)** 를 관리하는 화면인데,
+본 설계의 "메뉴 관리"(스토어프론트 GNB)와 이름이 겹쳤다.
 
-| 대상 | 현재 경로 | 신규 명칭/위치 |
+| 대상 | 경로 | 명칭/위치 |
 |---|---|---|
-| 관리자 사이드바 메뉴 | `/admin/menus` ("메뉴관리") | **운영/시스템 관리 > 관리자 메뉴 관리** |
-| 스토어프론트 GNB/카테고리 | (없음) | **메뉴/카테고리 관리** (신설) |
+| 관리자 사이드바 메뉴 | `/admin/menus` | ✅ 운영/시스템 관리 > **관리자 메뉴 관리** |
+| 스토어프론트 GNB 기능 메뉴 | `/admin/feature-menus` | ✅ 메뉴/카테고리 관리 > 일반 메뉴 관리 (B2) |
+| 스토어프론트 고정 유틸 메뉴 | `/admin/system-menus` | ✅ 메뉴/카테고리 관리 > 시스템 메뉴 설정 (B4) |
+
+`node scripts/migrate_admin_menu_a2_b4_b5.js` (멱등) 로 `admin_menus.name` 을 개명했다.
+**경로는 바꾸지 않았다** — `requireMenuAccess` 가 `path` 로 권한을 판정하므로 경로를 건드리면
+`admin_menus.visible_roles` 매칭이 깨진다. 그룹 배치는 A1 에서 이미 끝났다.
+화면 본문에도 H1("관리자 메뉴 관리")과 스토어프론트 메뉴 관리로의 안내 링크를 넣어 혼동을 없앴다.
 
 ---
 
@@ -133,7 +139,7 @@
 | 회원 관리 | 7 | 7. 주문/회원 관리 |
 | 문의 관리 | 8 | 7. 주문/회원 관리 (리뷰·문의) |
 | 운영자 관리 | 11 | 8. 운영/시스템 |
-| 메뉴관리(admin_menus) | 12 | 8. 운영/시스템 → **"관리자 메뉴 관리"로 개명** |
+| 메뉴관리(admin_menus) | 12 | 8. 운영/시스템 → ✅ **"관리자 메뉴 관리"로 개명 완료 (A2)** |
 | 공지사항 관리 | 17 | 8. 운영/시스템 |
 | 접속 통계(visitors) | – | 8. 운영/시스템 (로그·통계) |
 
@@ -157,17 +163,38 @@
 | 로고/브랜드 컬러/파비콘/OG | ✅ | `site_settings.logo_url`, `brand_*_color`, `favicon_url`, `kakao_share_image_url` |
 | 정책 설정(약관/개인정보) | ✅ | `/admin/policies` |
 | **테마 설정** | ⬜ | **`theme` 테이블·`themeService`·CSS 변수 주입은 P4에서 완료.** 관리 UI만 없음. 저장 시 `themeService` 검증 규칙(길이값 정규식/열거형)을 서버에서 재적용할 것 → CSS 인젝션 방어 |
-| **Header 설정** | ⬜ | `navigation_config` 테이블은 **생성됨**, 관리 UI 없음 |
+| **Header 설정** | ✅ | **B5 완료.** `/admin/header-settings` — `navigation_config` 편집(§3.2.1) |
 | **Footer 설정** | 🟡 | SNS·회사정보만 `site_settings` 에 있음. Footer 커스텀 메뉴 없음 |
-| **검색 설정** | ⬜ | 검색창 ON/OFF·위치 설정 없음 (`navigation_config.use_search_bar` 필드만 존재) |
+| **검색 설정** | 🟡 | 검색창 노출은 시스템 메뉴 `HEADER_SEARCH`(필수)로 제어. `navigation_config.use_search_bar` 는 Header 설정에서 저장되나 **렌더가 아직 소비하지 않는다** |
+
+#### 3.2.1 Header 설정 — ✅ B5 구현 완료 (2026-07-10)
+
+`/admin/header-settings` (쇼핑몰 설정 그룹). `navigation_config` 단일 행(mall_id=1)을 편집한다.
+
+| 필드 | 렌더 반영 | 서버 검증 |
+|---|---|---|
+| `max_gnb_items` | ✅ `navigationService` 가 GNB 총량으로 자름 | 1~20 클램프 |
+| `max_custom_items` | ✅ 커스텀 슬롯 상한 | 0~10 클램프, **`max_gnb_items` 초과 시 총량으로 맞춤** |
+| `category_max_depth` | ✅ `depthGuard` 상한 + 카테고리 트리 필터 | 1~3 클램프, **현재 데이터의 최대 depth 미만으로 하향 거부** |
+| `header_layout_type` | ⬜ 미소비 | 화이트리스트(현재 1종), 이외 값은 기존값 유지 |
+| `category_display_type` | ⬜ `mega` 미지원 | `dropdown` 만 허용(`mega` 는 UI 잠금 + 서버 거부) |
+| `use_mega_menu` | ⬜ 미소비 | **항상 0 으로 고정 저장** |
+| `use_search_bar` | ⬜ 미소비 | 저장만 |
+
+> **뎁스 하향 거부가 핵심이다.** `navigationService.getCategoryTree` 가 `depth <= maxDepth` 로 거르므로,
+> 3뎁스 카테고리가 있는 상태에서 상한을 1로 낮추면 하위 카테고리가 **조용히 GNB 에서 사라진다.**
+> 저장 시 `MAX(categories.depth)` 를 조회해 그보다 낮은 값이면 거부하고 사유를 화면에 표시한다.
+>
+> 렌더가 소비하지 않는 필드는 UI 에서 잠그고 "미지원/모듈 미구현"으로 표기했다.
+> `feature_menu.module_ready` 와 같은 원칙 — **켜도 안 바뀌는 스위치를 운영자에게 내주지 않는다.**
 
 ### 3.3 메뉴/카테고리 관리 ★ 최우선
 | 기능 | 상태 | 근거 / 비고 |
 |---|---|---|
 | 카테고리 관리 | 🟡 | `/admin/categories` 존재하나 **평면**. `parent_id` 미사용, 트리 UI 없음. **M1에서 `depth·is_active·pc_visible·mobile_visible·slug·mall_id` 컬럼은 추가 완료** |
-| 일반 메뉴 관리 (ON/OFF) | ⬜ | `feature_menu`/`mall_feature_menu` **테이블·시드 완료(M1·M2)**, 관리 UI 없음 → **M6** |
-| 커스텀 메뉴 관리 | ⬜ | `custom_menu` 테이블 완료, UI 없음 → **M6** |
-| 시스템 메뉴 설정 | ⬜ | `feature_menu.is_system/is_required` 로 모델링 완료, UI 없음 → **M6** |
+| 일반 메뉴 관리 (ON/OFF) | ✅ | **B2 완료.** `/admin/feature-menus` — GNB 13종 |
+| 커스텀 메뉴 관리 | ⬜ | `custom_menu` 테이블 완료, UI 없음 → **B3 (후순위)** |
+| 시스템 메뉴 설정 | ✅ | **B4 완료.** `/admin/system-menus` — 헤더 유틸 5 + 우측 레일 5 |
 | 모바일 메뉴 설정 | ⬜ | `pc_visible`/`mobile_visible` 컬럼만 존재 |
 | 메뉴 미리보기 | ⬜ | — |
 | SEO 제목/설명(카테고리) | ⬜ | `categories.seo_config` 미도입 |
@@ -309,7 +336,8 @@
 
 ### 4.2.1 일반 메뉴 관리 화면 — ✅ B2 구현 완료 (2026-07-09)
 
-`/admin/feature-menus` (메뉴/카테고리 관리 그룹)
+`/admin/feature-menus` (메뉴/카테고리 관리 그룹) — **B4 에서 `position='gnb'` 전용으로 좁혔다.**
+헤더 유틸·우측 레일은 [시스템 메뉴 설정](#44-시스템-메뉴-설정--b4-구현-완료-2026-07-10)이 담당한다.
 
 | 편집 가능 | 편집 불가 (코드 고정) |
 |---|---|
@@ -377,24 +405,36 @@ GNB 렌더도 배지를 표시하며, `navigationService` 가 `NEW/HOT/SALE` 화
 
 **도입하지 않음(YAGNI)**: `tracking_code`(캠페인 분석 소비처 없음)
 
-### 4.4 시스템 메뉴 설정
-경로: `관리자 > 메뉴/카테고리 관리 > 시스템 메뉴 설정`
+### 4.4 시스템 메뉴 설정 — ✅ B4 구현 완료 (2026-07-10)
 
-`feature_menu.is_system = 1` 인 행. **삭제 불가**, 노출 여부/표시명/순서만.
-`is_required = 1` 은 **끌 수도 없다**(로그인·마이쇼핑·장바구니·검색·TOP).
+`/admin/system-menus` (메뉴/카테고리 관리 그룹). **삭제·추가 불가**, 노출 여부/표시명/순서만.
+`is_required = 1` 은 **끌 수도 없다**(검색·로그인·마이쇼핑·장바구니·TOP).
 
-| 코드 | position | URL | `is_required` |
-|---|---|---|---|
-| `HEADER_SEARCH` | header_util | `/search` | 1 |
-| `HEADER_LOGIN` | header_util | `/auth/login` | 1 |
-| `HEADER_MYPAGE` | header_util | `/mypage` | 1 |
-| `HEADER_CART` | header_util | `/cart` | 1 |
-| `HEADER_CS` | header_util | `/boards/notice` → **`/cs` 로 승격 예정(M8)** | 0 |
-| `RAIL_CART` | right_rail | `/cart` | 1 |
-| `RAIL_WISHLIST` | right_rail | `/mypage/likes` | 0 |
-| `RAIL_BRAND_WISHLIST` | right_rail | `/mypage/brand-likes` | 0 |
-| `RAIL_RECENT` | right_rail | (client) | 0 |
-| `RAIL_TOP` | right_rail | (client) | 1 |
+> ⚠️ **필터는 `position` 이지 `is_system` 이 아니다.** 실측 결과 두 플래그가 어긋난다 —
+> `CATEGORY`(gnb)가 `is_system=1` 이고 `RAIL_BRAND_WISHLIST`·`RAIL_RECENT` 는 `is_system=0` 이다.
+> `is_system` 으로 가르면 GNB 카테고리 버튼이 이 화면에 끌려오고 우측 레일 2종이 빠진다.
+
+아래는 **2026-07-10 DB 실측값**이다(문서 원안의 `RAIL_CART.is_required=1` 은 오류였다).
+
+| 코드 | position | URL | `is_system` | `is_required` |
+|---|---|---|---|---|
+| `HEADER_SEARCH` | header_util | `/search` | 1 | 1 |
+| `HEADER_LOGIN` | header_util | `/auth/login` | 1 | 1 |
+| `HEADER_MYPAGE` | header_util | `/mypage` | 1 | 1 |
+| `HEADER_CART` | header_util | `/cart` | 1 | 1 |
+| `HEADER_CS` | header_util | `/boards/notice` → **`/cs` 로 승격 예정(M8)** | 1 | 0 |
+| `RAIL_CART` | right_rail | `/cart` | 1 | **0** |
+| `RAIL_WISHLIST` | right_rail | `/mypage/likes` | 1 | 0 |
+| `RAIL_BRAND_WISHLIST` | right_rail | `/mypage/brand-likes` | **0** | 0 |
+| `RAIL_RECENT` | right_rail | (client) | **0** | 0 |
+| `RAIL_TOP` | right_rail | (client) | 1 | 1 |
+
+**구현 메모**: 일반 메뉴 관리(B2)와 `featureMenuController` · 편집기 뷰(`views/partials/admin/menu_editor.ejs`)를
+공유하고 담당 `position` 만 다르다. 저장 시 서버가 `feature_menu.position` 을 다시 조회해
+**그 화면 소관이 아닌 코드는 건너뛴다** — 일반 메뉴 화면에서 시스템 메뉴를 조작하는 요청 위조를 막는다.
+
+**검증(2026-07-10)**: 시스템 화면에서 `BEST`(gnb) 끄기 시도 → 무시 / `HEADER_LOGIN` 끄기 시도 → 1 유지 /
+`RANKING`(모듈 없음) 켜기 시도 → 0 유지 / 배지에 `<script>` 주입 → `NULL` / 화면별 노출 13건·10건.
 
 ### 4.5 모바일 메뉴 설정
 모바일 하단 탭은 **고정 추천**: `홈 / 카테고리 / 검색 / 장바구니 / 마이`

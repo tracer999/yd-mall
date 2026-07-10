@@ -1,0 +1,162 @@
+<%
+  /*
+   * 스토어프론트 메뉴 편집기 (B2 일반 메뉴 관리 / B4 시스템 메뉴 설정 공용)
+   *
+   * 편집 가능 : 사용 여부(ON/OFF) · 표시 명칭 · 순서 · PC/모바일 노출 · 로그인 필요 · 배지
+   * 편집 불가 : 기본 명칭 · 표준 URL · 위치(position)   ← 코드가 고정한다
+   *
+   * 잠금 규칙:
+   *   module_ready = 0 → 켜도 노출되지 않으므로 토글 잠금 ('모듈 미구현')
+   *   is_required = 1  → 끌 수 없음 ('필수')
+   *
+   * 호출부가 넘겨야 하는 지역 변수: screen, groups, badgeTypes, config, saved
+   */
+  const _groups = groups || [];
+  const _badges = badgeTypes || [];
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900"><%= screen.title %></h1>
+    <p class="mt-1 text-sm text-gray-500"><%- screen.description %></p>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다. 스토어프론트에 즉시 반영됩니다.
+    </div>
+  <% } %>
+
+  <div class="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+    <div class="flex items-start gap-2">
+      <i class="bi bi-info-circle-fill mt-0.5"></i>
+      <div>
+        <p><strong>모듈 미구현</strong> 메뉴는 켜도 스토어프론트에 나오지 않습니다(죽은 링크 방지). 토글이 잠겨 있습니다.</p>
+        <p class="mt-1"><strong>필수</strong> 메뉴는 쇼핑몰 핵심 기능이라 끌 수 없습니다. 표시 명칭과 순서만 바꿀 수 있습니다.</p>
+        <% if (screen.showGnbLimit) { %>
+          <p class="mt-1">GNB 최대 노출 <strong><%= config.max_gnb_items %></strong>개 (커스텀 메뉴 슬롯 <%= config.max_custom_items %>개 포함)</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <form method="POST" action="<%= screen.path %>">
+    <% _groups.forEach(function (group) { %>
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+          <h2 class="text-base font-bold text-gray-800"><%= group.label %></h2>
+          <p class="mt-0.5 text-xs text-gray-500"><%= group.hint %></p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs font-semibold text-gray-500 bg-gray-50/60">
+                <th class="px-4 py-2.5 w-16">사용</th>
+                <th class="px-4 py-2.5 w-20">순서</th>
+                <th class="px-4 py-2.5">기본 명칭 <span class="font-normal text-gray-400">(고정)</span></th>
+                <th class="px-4 py-2.5">표시 명칭 <span class="font-normal text-gray-400">(변경 가능)</span></th>
+                <th class="px-4 py-2.5">표준 URL <span class="font-normal text-gray-400">(고정)</span></th>
+                <th class="px-4 py-2.5 w-24">배지</th>
+                <th class="px-4 py-2.5 w-28 text-center">PC / 모바일</th>
+                <th class="px-4 py-2.5 w-24 text-center">로그인 필요</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <% group.items.forEach(function (m) {
+                   const locked = !m.module_ready;
+                   const required = Number(m.is_required) === 1; %>
+                <tr class="<%= locked ? 'bg-gray-50/60' : '' %>">
+                  <td class="px-4 py-3">
+                    <%# hidden input 은 반드시 <td> 안에 둔다. <tr> 직하위에 두면 브라우저가
+                        테이블 밖으로 밀어내 sort_order[]/display_name[] 과 인덱스가 어긋난다. %>
+                    <input type="hidden" name="feature_code[]" value="<%= m.feature_code %>">
+                    <% if (locked) { %>
+                      <input type="checkbox" disabled class="opacity-40 cursor-not-allowed">
+                    <% } else if (required) { %>
+                      <input type="checkbox" checked disabled class="opacity-60 cursor-not-allowed">
+                      <%# disabled 는 전송되지 않으므로 서버가 강제로 1 로 저장한다 %>
+                    <% } else { %>
+                      <input type="checkbox" name="enabled[]" value="<%= m.feature_code %>"
+                             <%= m.is_enabled ? 'checked' : '' %>
+                             class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <% } %>
+                  </td>
+
+                  <td class="px-4 py-3">
+                    <input type="number" name="sort_order[]" value="<%= m.sort_order %>" min="0" max="99"
+                           class="w-16 px-2 py-1 rounded border border-gray-200 text-sm">
+                  </td>
+
+                  <td class="px-4 py-3">
+                    <div class="font-medium text-gray-900"><%= m.default_name %></div>
+                    <div class="mt-0.5 flex flex-wrap items-center gap-1">
+                      <code class="text-[10px] text-gray-400"><%= m.feature_code %></code>
+                      <% if (required) { %>
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">필수</span>
+                      <% } %>
+                      <% if (locked) { %>
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600"
+                              title="모듈 미구현: <%= m.required_module || '-' %>">모듈 미구현</span>
+                      <% } %>
+                      <% if (Number(m.is_system) === 1 && !required) { %>
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">시스템</span>
+                      <% } %>
+                    </div>
+                  </td>
+
+                  <td class="px-4 py-3">
+                    <input type="text" name="display_name[]" value="<%= m.display_name || '' %>"
+                           placeholder="<%= m.default_name %> (기본값 사용)" maxlength="20"
+                           class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+                  </td>
+
+                  <td class="px-4 py-3">
+                    <code class="text-xs text-gray-500"><%= m.default_path || '(드롭다운/클라이언트)' %></code>
+                  </td>
+
+                  <td class="px-4 py-3">
+                    <select name="badge_type[]" class="w-full px-2 py-1.5 rounded border border-gray-200 text-sm">
+                      <option value="">없음</option>
+                      <% _badges.forEach(function (b) { %>
+                        <option value="<%= b %>" <%= m.badge_type === b ? 'selected' : '' %>><%= b %></option>
+                      <% }); %>
+                    </select>
+                  </td>
+
+                  <td class="px-4 py-3">
+                    <div class="flex items-center justify-center gap-3">
+                      <label class="inline-flex items-center gap-1 text-xs text-gray-600">
+                        <input type="checkbox" name="pc_visible[]" value="<%= m.feature_code %>" <%= m.pc_visible ? 'checked' : '' %>
+                               class="w-4 h-4 rounded border-gray-300"> PC
+                      </label>
+                      <label class="inline-flex items-center gap-1 text-xs text-gray-600">
+                        <input type="checkbox" name="mobile_visible[]" value="<%= m.feature_code %>" <%= m.mobile_visible ? 'checked' : '' %>
+                               class="w-4 h-4 rounded border-gray-300"> M
+                      </label>
+                    </div>
+                  </td>
+
+                  <td class="px-4 py-3 text-center">
+                    <input type="checkbox" name="login_required[]" value="<%= m.feature_code %>" <%= m.login_required ? 'checked' : '' %>
+                           class="w-4 h-4 rounded border-gray-300">
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% }); %>
+
+    <div class="flex justify-end gap-2">
+      <a href="<%= screen.path %>" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">
+        되돌리기
+      </a>
+      <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <i class="bi bi-save mr-1.5"></i> 저장
+      </button>
+    </div>
+  </form>
+</div>

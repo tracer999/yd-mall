@@ -27,8 +27,12 @@ router.get('/traffic-sources/drill', dashboardController.getTrafficSourceDrill);
 router.get('/popular-products', dashboardController.getPopularProducts);
 
 router.use('/categories', requireMenuAccess('/admin/categories'), require('./admin/categories'));
-// 스토어프론트 메뉴(GNB/헤더유틸/우측레일) ON·OFF·순서 관리 (B2)
+// 스토어프론트 GNB 기능 메뉴 ON·OFF·순서 관리 (B2)
 router.use('/feature-menus', requireMenuAccess('/admin/feature-menus'), require('./admin/feature-menus'));
+// 헤더 유틸·우측 레일 등 고정 시스템 메뉴의 노출·표시명·순서 (B4)
+router.use('/system-menus', requireMenuAccess('/admin/system-menus'), require('./admin/system-menus'));
+// 헤더 레이아웃·GNB 슬롯 정책(navigation_config) (B5)
+router.use('/header-settings', requireMenuAccess('/admin/header-settings'), require('./admin/header-settings'));
 router.use('/products', requireMenuAccess('/admin/products'), require('./admin/products'));
 router.use('/banners', requireMenuAccess('/admin/banners'), require('./admin/banners'));
 router.use('/display', requireMenuAccess('/admin/display'), require('./admin/display'));

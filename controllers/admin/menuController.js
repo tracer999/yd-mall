@@ -41,7 +41,7 @@ exports.getMenus = async (req, res) => {
 
     res.render('admin/menus/list', {
       layout: 'layouts/admin_layout',
-      title: '메뉴 관리',
+      title: '관리자 메뉴 관리',
       menus: flattenTree(rows)
     });
   } catch (err) {
