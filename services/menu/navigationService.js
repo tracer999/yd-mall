@@ -159,7 +159,8 @@ function buildTree(rows) {
 async function getCategoryRows(mallId, maxDepth) {
     const hasDepth = Number.isFinite(Number(maxDepth));
     const [rows] = await pool.query(`
-        SELECT id, name, slug, parent_id, depth, display_order, pc_visible, mobile_visible
+        SELECT id, name, slug, parent_id, depth, display_order, pc_visible, mobile_visible,
+               logo_image_path, description
         FROM categories
         WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1
           ${hasDepth ? 'AND depth <= ?' : ''}

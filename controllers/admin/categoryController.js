@@ -139,7 +139,8 @@ exports.postAdd = async (req, res) => {
     const parentId = Number(parent_id) > 0 ? Number(parent_id) : null;
 
     const logoFile = req.file;
-    const logoPath = logoFile && allowedType === 'BRAND' ? '/uploads/brands/' + logoFile.filename : null;
+    const logoPath = logoFile ? '/uploads/brands/' + logoFile.filename : null;
+    const description = (req.body.description || '').trim() || null;
 
     const conn = await pool.getConnection();
     try {
@@ -158,9 +159,9 @@ exports.postAdd = async (req, res) => {
         }
 
         const [result] = await conn.query(
-            `INSERT INTO categories (mall_id, name, display_order, type, logo_image_path, parent_id, depth, is_active, pc_visible, mobile_visible)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [MALL_ID, name, nextOrder, allowedType, logoPath, parentId, depth,
+            `INSERT INTO categories (mall_id, name, display_order, type, logo_image_path, description, parent_id, depth, is_active, pc_visible, mobile_visible)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [MALL_ID, name, nextOrder, allowedType, logoPath, description, parentId, depth,
              toBool(req.body.is_active ?? '1'), toBool(req.body.pc_visible ?? '1'), toBool(req.body.mobile_visible ?? '1')]
         );
 
@@ -189,8 +190,9 @@ exports.postEdit = async (req, res) => {
     const nodeId = Number(id);
     const newParentId = Number(parent_id) > 0 ? Number(parent_id) : null;
 
-    let logoPath = req.body.existing_logo;
-    if (req.file && allowedType === 'BRAND') logoPath = '/uploads/brands/' + req.file.filename;
+    let logoPath = req.body.existing_logo || null;
+    if (req.file) logoPath = '/uploads/brands/' + req.file.filename;
+    const description = (req.body.description || '').trim() || null;
 
     const conn = await pool.getConnection();
     try {
@@ -213,10 +215,10 @@ exports.postEdit = async (req, res) => {
         await conn.beginTransaction();
         await conn.query(
             `UPDATE categories
-             SET name = ?, display_order = ?, type = ?, logo_image_path = ?, parent_id = ?,
+             SET name = ?, display_order = ?, type = ?, logo_image_path = ?, description = ?, parent_id = ?,
                  is_active = ?, pc_visible = ?, mobile_visible = ?
              WHERE id = ?`,
-            [name, display_order, allowedType, allowedType === 'BRAND' ? logoPath : null, newParentId,
+            [name, display_order, allowedType, logoPath, description, newParentId,
              toBool(req.body.is_active), toBool(req.body.pc_visible), toBool(req.body.mobile_visible), nodeId]
         );
 

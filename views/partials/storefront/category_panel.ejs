@@ -2,20 +2,20 @@
   /*
    * PC GNB 카테고리 드롭다운 패널 (§12 디자인 개선)
    *
-   * 벤치마킹(신세계TV쇼핑)은 좌측 1뎁스 세로 리스트 + hover 시 우측 2뎁스 컬럼이다.
-   * 우리 카테고리는 현재 전부 depth 1 이라 우측 컬럼이 항상 비게 된다.
+   * 좌측 1뎁스 세로 리스트. 각 항목은 **썸네일 + 이름 + 간략 설명**으로 구성한다.
+   *   - logo_image_path 가 있으면 썸네일, 없으면 이름 이니셜 원형 placeholder.
+   *   - description 이 있으면 이름 아래 한 줄(말줄임), 없으면 그 줄만 생략.
+   *   - 이미지/설명이 비어도 카테고리 노출 자체는 유지한다(NULL-safe).
    *
-   * 그래서 **자식이 있는 노드에만** 우측 서브패널을 띄운다.
-   *   - 2뎁스 데이터가 없는 지금: 깔끔한 세로 리스트 하나로 보인다.
-   *   - 2뎁스를 입력하면: 그 노드부터 자동으로 메가메뉴가 된다. 마크업 변경 불필요.
-   *
-   * `feature_menu.module_ready` 와 같은 원칙 — 내용 없는 껍데기를 노출하지 않는다.
+   * 자식이 있는 노드에만 우측 서브패널(2·3뎁스)을 hover 로 띄운다.
+   * 2뎁스 데이터가 없으면 우측 컬럼을 만들지 않아 깔끔한 리스트로 보인다.
    *
    * locals: categoryTree (navigationService.getCategoryTree 결과, 최대 3뎁스)
    */
   const _tree = (typeof categoryTree !== 'undefined' && categoryTree) ? categoryTree : [];
   const hasChildren = (n) => n.children && n.children.length > 0;
   const anyChildren = _tree.some(hasChildren);
+  const initial = (s) => (s || '·').trim().charAt(0);
 %>
 
 <% if (_tree.length === 0) { %>
@@ -23,27 +23,51 @@
 <% } else { %>
   <%# 서브패널의 기준은 이 컨테이너다. <li> 를 기준으로 잡으면 목록 하단 항목에 hover 했을 때
       서브패널이 패널 아래로 넘쳐 나간다. %>
-  <div class="relative flex <%= anyChildren ? 'min-h-[380px]' : '' %>">
+  <div class="relative flex <%= anyChildren ? 'min-h-[420px]' : '' %>">
 
-    <%# 1뎁스 — 항상 세로 리스트 %>
-    <ul class="w-60 shrink-0 py-2 <%= anyChildren ? 'border-r border-gray-100 bg-gray-50/40' : '' %>">
+    <%# 1뎁스 — 항상 세로 리스트(썸네일 + 이름 + 설명) %>
+    <ul class="w-80 shrink-0 py-2 <%= anyChildren ? 'border-r border-gray-100 bg-gray-50/40' : '' %>">
       <% _tree.forEach(function (node) { %>
         <li class="group/cat">
           <a href="/products/category/<%= node.id %>"
-             class="flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700
-                    hover:bg-white hover:text-[var(--gh-primary)] hover:font-semibold transition-colors">
-            <span class="truncate"><%= node.name %></span>
-            <% if (hasChildren(node)) { %>
-              <i class="bi bi-chevron-right text-xs text-gray-300 group-hover/cat:text-[var(--gh-primary)]"></i>
-            <% } %>
+             class="flex items-center gap-3 px-4 py-2.5 text-gray-700
+                    hover:bg-white hover:text-[var(--gh-primary)] transition-colors">
+            <%# 썸네일 (없으면 이니셜 원형) %>
+            <span class="shrink-0 w-11 h-11 rounded-lg overflow-hidden bg-white border border-gray-100 flex items-center justify-center">
+              <% if (node.logo_image_path) { %>
+                <img src="<%= node.logo_image_path %>" alt="<%= node.name %>" class="w-full h-full object-cover">
+              <% } else { %>
+                <span class="text-base font-bold text-[var(--gh-primary)]/70"><%= initial(node.name) %></span>
+              <% } %>
+            </span>
+            <%# 이름 + 설명 %>
+            <span class="min-w-0 flex-1">
+              <span class="flex items-center gap-1">
+                <span class="truncate text-sm font-semibold group-hover/cat:text-[var(--gh-primary)]"><%= node.name %></span>
+                <% if (hasChildren(node)) { %>
+                  <i class="bi bi-chevron-right text-xs text-gray-300 group-hover/cat:text-[var(--gh-primary)]"></i>
+                <% } %>
+              </span>
+              <% if (node.description) { %>
+                <span class="block truncate text-xs text-gray-400 mt-0.5"><%= node.description %></span>
+              <% } %>
+            </span>
           </a>
 
-          <%# 2뎁스 — 자식이 있을 때만 그린다. hover 로 우측에 펼친다.
+          <%# 2뎁스 — 자식이 있을 때만. hover 로 우측에 펼친다.
               위치 기준은 바깥 컨테이너(.relative)라 언제나 패널 상단에 맞춰 열린다. %>
           <% if (hasChildren(node)) { %>
-            <div class="hidden group-hover/cat:block absolute left-60 top-0 bottom-0 z-10 w-[560px]
-                        bg-white pl-6 pr-5 py-3">
-              <p class="mb-2 text-xs font-bold text-gray-400"><%= node.name %></p>
+            <div class="hidden group-hover/cat:block absolute left-80 top-0 bottom-0 z-10 w-[560px]
+                        bg-white pl-6 pr-5 py-4">
+              <div class="flex items-center gap-2 mb-3">
+                <% if (node.logo_image_path) { %>
+                  <img src="<%= node.logo_image_path %>" alt="" class="w-6 h-6 rounded object-cover">
+                <% } %>
+                <p class="text-sm font-bold text-gray-800"><%= node.name %></p>
+              </div>
+              <% if (node.description) { %>
+                <p class="mb-3 text-xs text-gray-400"><%= node.description %></p>
+              <% } %>
               <ul class="grid grid-cols-2 gap-x-6 gap-y-0.5">
                 <% node.children.forEach(function (child) { %>
                   <li>
