@@ -85,3 +85,5 @@ module.exports = async (req, res, next) => {
 };
 
 module.exports.invalidate = invalidate;
+// 관리자 몰 해석기(adminMallContext)가 같은 캐시를 재사용한다.
+module.exports.getMalls = getMalls;

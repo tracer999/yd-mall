@@ -266,6 +266,19 @@
       </div>
 
       <div class="flex items-center gap-4">
+        <%# 편집 대상 몰 선택기 (P5). 몰이 2개 이상일 때만 노출. adminMallContext 가 adminMalls·adminMallId 주입. %>
+        <% if (typeof adminMalls !== 'undefined' && adminMalls && adminMalls.length > 1) { %>
+          <form method="GET" action="" class="flex items-center gap-1.5" title="관리자가 편집 중인 몰">
+            <i class="bi bi-shop text-gray-400"></i>
+            <select name="adminMall" onchange="this.form.submit()"
+              class="text-sm font-semibold text-gray-700 bg-amber-50 border border-amber-200 rounded-lg pl-2 pr-7 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+              <% adminMalls.forEach(function (m) { %>
+                <option value="<%= m.id %>" <%= Number(adminMallId) === Number(m.id) ? 'selected' : '' %>><%= m.name %></option>
+              <% }); %>
+            </select>
+          </form>
+        <% } %>
+
         <button
           class="w-10 h-10 rounded-full bg-gray-50 hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-blue-600 transition-all duration-200 relative">
           <i class="bi bi-bell"></i>

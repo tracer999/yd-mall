@@ -13,17 +13,17 @@ const { sanitize } = require('../../services/display/htmlSanitizer');
  * `faq_category.code` 는 고정 식별자다. 운영자는 분류명(name)만 바꾼다.
  */
 
-const MALL_ID = 1;
-
-async function loadCategories() {
+// P5: 관리자가 편집 중인 몰. adminMallContext 미들웨어가 req.adminMallId 를 주입한다.
+async function loadCategories(mallId) {
     const [rows] = await pool.query(
-        'SELECT id, code, name FROM faq_category WHERE mall_id = ? AND is_active = 1 ORDER BY sort_order, id', [MALL_ID]
+        'SELECT id, code, name FROM faq_category WHERE mall_id = ? AND is_active = 1 ORDER BY sort_order, id', [mallId]
     );
     return rows;
 }
 
 /** GET /admin/faqs */
 exports.getList = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const categoryId = Number.parseInt(req.query.category_id, 10);
         const where = ['f.mall_id = ?'];
@@ -43,7 +43,7 @@ exports.getList = async (req, res) => {
             layout: 'layouts/admin_layout',
             title: '고객센터 관리',
             faqs,
-            categories: await loadCategories(),
+            categories: await loadCategories(MALL_ID),
             selectedCategory: Number.isFinite(categoryId) ? categoryId : null,
             saved: req.query.saved === '1',
         });
@@ -53,12 +53,12 @@ exports.getList = async (req, res) => {
     }
 };
 
-async function renderForm(res, faq) {
+async function renderForm(res, faq, mallId) {
     res.render('admin/faqs/form', {
         layout: 'layouts/admin_layout',
         title: faq.id ? 'FAQ 수정' : 'FAQ 등록',
         faq,
-        categories: await loadCategories(),
+        categories: await loadCategories(mallId),
         tinymceKey: process.env.TINYMCE_KEY || '',
     });
 }
@@ -66,7 +66,7 @@ async function renderForm(res, faq) {
 /** GET /admin/faqs/new */
 exports.getNew = async (req, res) => {
     try {
-        await renderForm(res, { id: null, category_id: null, question: '', answer: '', is_active: 1, is_best: 0, sort_order: 0 });
+        await renderForm(res, { id: null, category_id: null, question: '', answer: '', is_active: 1, is_best: 0, sort_order: 0 }, req.adminMallId || 1);
     } catch (err) {
         console.error('[faq] getNew:', err.message);
         res.status(500).send('Server Error');
@@ -75,10 +75,11 @@ exports.getNew = async (req, res) => {
 
 /** GET /admin/faqs/:id */
 exports.getEdit = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const [[faq]] = await pool.query('SELECT * FROM faq WHERE id = ? AND mall_id = ?', [req.params.id, MALL_ID]);
         if (!faq) return res.redirect('/admin/faqs');
-        await renderForm(res, faq);
+        await renderForm(res, faq, MALL_ID);
     } catch (err) {
         console.error('[faq] getEdit:', err.message);
         res.status(500).send('Server Error');
@@ -102,6 +103,7 @@ function normalize(body) {
 
 /** POST /admin/faqs */
 exports.postCreate = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const v = normalize(req.body);
         if (!v.question || !v.answer) return res.redirect('/admin/faqs/new');
@@ -120,6 +122,7 @@ exports.postCreate = async (req, res) => {
 
 /** POST /admin/faqs/:id */
 exports.postUpdate = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const v = normalize(req.body);
         if (!v.question || !v.answer) return res.redirect(`/admin/faqs/${req.params.id}`);
@@ -138,6 +141,7 @@ exports.postUpdate = async (req, res) => {
 
 /** POST /admin/faqs/:id/delete */
 exports.postDelete = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         // FAQ 는 다른 테이블이 참조하지 않는다(조회수는 faq 행 자체에 있다).
         await pool.query('DELETE FROM faq WHERE id = ? AND mall_id = ?', [req.params.id, MALL_ID]);

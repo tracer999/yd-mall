@@ -18,7 +18,6 @@ const themeData = require('../../middleware/themeData');
  *  다른 워커의 캐시는 최대 60초 뒤에 만료된다.)
  */
 
-const MALL_ID = 1;
 
 /** 폼에 노출할 토큰 (themeService.TOKENS 와 1:1) */
 const FIELDS = [
@@ -37,17 +36,25 @@ function parseConfig(v) {
     try { return JSON.parse(v); } catch (e) { return {}; }
 }
 
-async function loadTheme() {
+async function loadTheme(mallId) {
     const [[row]] = await pool.query(
-        'SELECT id, name, config_json FROM theme WHERE mall_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1', [MALL_ID]
+        'SELECT id, name, config_json FROM theme WHERE mall_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1', [mallId]
     );
-    return row || null;
+    if (row) return row;
+    // P5: 이 몰에 테마가 없으면 기본 테마를 만들어 편집 가능하게 한다(새 몰 대응).
+    // 값이 없는 토큰은 themeService 가 DEFAULTS 로 폴백하므로 config_json 은 비워도 안전하다.
+    const [r] = await pool.query(
+        "INSERT INTO theme (mall_id, name, config_json, is_active) VALUES (?, '기본 테마', JSON_OBJECT(), 1)", [mallId]
+    );
+    const [[created]] = await pool.query('SELECT id, name, config_json FROM theme WHERE id = ?', [r.insertId]);
+    return created || null;
 }
 
 /** GET /admin/theme-settings */
 exports.getEdit = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
-        const row = await loadTheme();
+        const row = await loadTheme(MALL_ID);
         if (!row) return res.status(500).send('활성 테마가 없습니다. scripts/migrate_theme.js 를 실행하세요.');
 
         // 화면에는 **저장된 원본 값**을 보여준다(정규화된 값이 아니라).
@@ -75,8 +82,9 @@ exports.getEdit = async (req, res) => {
 
 /** POST /admin/theme-settings */
 exports.postUpdate = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
-        const row = await loadTheme();
+        const row = await loadTheme(MALL_ID);
         if (!row) return res.status(500).send('활성 테마가 없습니다.');
 
         const errors = [];

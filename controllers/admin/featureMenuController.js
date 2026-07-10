@@ -20,7 +20,6 @@ const pool = require('../../config/db');
  * is_system 으로 가르면 GNB 버튼이 시스템 화면에 끌려오고 레일 2종이 빠진다.
  */
 
-const MALL_ID = 1;
 
 /** 위치별 표기 (코드 고정) */
 const POSITION_META = {
@@ -63,6 +62,7 @@ function toArray(v) {
 
 /** 화면 하나를 렌더한다. */
 async function renderScreen(screen, req, res) {
+    const MALL_ID = req.adminMallId || 1;
     const placeholders = screen.positions.map(() => '?').join(',');
 
     const [rows] = await pool.query(`
@@ -111,6 +111,7 @@ async function renderScreen(screen, req, res) {
  * (일반 메뉴 화면에서 시스템 메뉴를 조작하는 요청 위조 차단)
  */
 async function saveScreen(screen, req, res) {
+    const MALL_ID = req.adminMallId || 1;
     const codes = toArray(req.body.feature_code);
     const displayNames = toArray(req.body.display_name);
     const sortOrders = toArray(req.body.sort_order);

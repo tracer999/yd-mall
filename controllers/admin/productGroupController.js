@@ -23,7 +23,6 @@ const productGroupService = require('../../services/display/productGroupService'
  *   조용히 빈 목록이 된다. 그래서 삭제와 비활성화 양쪽에 가드를 건다.
  */
 
-const MALL_ID = 1;
 
 /** resolve() 의 ORDER_MAP 과 1:1 로 맞춘다. 여기에 없는 값은 저장되지 않는다. */
 const SORT_TYPES = [
@@ -100,6 +99,7 @@ function normalizeSortType(v) {
 
 /** GET /admin/product-groups */
 exports.getList = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const [groups] = await pool.query(`
             SELECT g.*,
@@ -128,9 +128,9 @@ exports.getList = async (req, res) => {
 };
 
 /** 편집 화면(신규/수정 공용) */
-async function renderForm(res, group, extra = {}) {
+async function renderForm(res, group, mallId, extra = {}) {
     const [categories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order, id", [MALL_ID]
+        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order, id", [mallId]
     );
 
     let items = [];
@@ -173,7 +173,7 @@ exports.getNew = async (req, res) => {
         await renderForm(res, {
             id: null, name: '', group_type: 'manual', sort_type: 'newest',
             filter_condition_json: null, is_active: 1,
-        });
+        }, req.adminMallId || 1);
     } catch (err) {
         console.error('[productGroup] getNew:', err.message);
         res.status(500).send('Server Error');
@@ -182,11 +182,12 @@ exports.getNew = async (req, res) => {
 
 /** GET /admin/product-groups/:id */
 exports.getEdit = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const [[group]] = await pool.query('SELECT * FROM product_group WHERE id = ? AND mall_id = ?', [req.params.id, MALL_ID]);
         if (!group) return res.redirect('/admin/product-groups?error=' + encodeURIComponent('그룹을 찾을 수 없습니다.'));
 
-        await renderForm(res, group, {
+        await renderForm(res, group, MALL_ID, {
             saved: req.query.saved === '1',
             error: req.query.error || null,
         });
@@ -198,6 +199,7 @@ exports.getEdit = async (req, res) => {
 
 /** POST /admin/product-groups — 생성 */
 exports.postCreate = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const name = String(req.body.name || '').trim();
         if (!name) return res.redirect('/admin/product-groups/new');
@@ -222,6 +224,7 @@ exports.postCreate = async (req, res) => {
 
 /** POST /admin/product-groups/:id — 수정 */
 exports.postUpdate = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     const id = req.params.id;
     try {
         const [[group]] = await pool.query('SELECT * FROM product_group WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
@@ -276,6 +279,7 @@ exports.postUpdate = async (req, res) => {
 
 /** POST /admin/product-groups/:id/delete */
 exports.postDelete = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     const id = req.params.id;
     try {
         // data_source_id 에 FK 가 없어 DB 가 막아주지 않는다. 지우면 섹션이 고아 참조를 든 채 빈다.
@@ -299,9 +303,14 @@ exports.postDelete = async (req, res) => {
 /** POST /admin/product-groups/:id/items — 상품 추가 */
 exports.postAddItem = async (req, res) => {
     const id = req.params.id;
+    const MALL_ID = req.adminMallId || 1;
     try {
         const productId = Number.parseInt(req.body.product_id, 10);
         if (!Number.isFinite(productId)) return res.redirect(`/admin/product-groups/${id}`);
+
+        // P5: 다른 몰 상품을 이 몰의 그룹에 담지 못하게 한다(요청 위조 차단).
+        const [[prod]] = await pool.query('SELECT id FROM products WHERE id = ? AND mall_id = ?', [productId, MALL_ID]);
+        if (!prod) return res.redirect(`/admin/product-groups/${id}?error=` + encodeURIComponent('이 몰의 상품이 아닙니다.'));
 
         const [[dup]] = await pool.query(
             'SELECT id FROM product_group_item WHERE product_group_id = ? AND product_id = ?', [id, productId]
@@ -362,18 +371,20 @@ exports.postReorderItems = async (req, res) => {
 
 /** GET /admin/product-groups/:id/product-search — AJAX */
 exports.getProductSearch = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const q = String(req.query.q || '').trim();
         if (!q) return res.json({ products: [] });
 
+        // P5: 이 몰의 상품만 후보로 제시한다.
         const [products] = await pool.query(`
             SELECT p.id, p.name, p.main_image, p.price, p.status, p.product_badge
             FROM products p
-            WHERE p.name LIKE ?
+            WHERE p.mall_id = ? AND p.name LIKE ?
               AND p.id NOT IN (SELECT product_id FROM product_group_item WHERE product_group_id = ?)
             ORDER BY p.created_at DESC
             LIMIT 20
-        `, [`%${q}%`, req.params.id]);
+        `, [MALL_ID, `%${q}%`, req.params.id]);
 
         res.json({ products });
     } catch (err) {

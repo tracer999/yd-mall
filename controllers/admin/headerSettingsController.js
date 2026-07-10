@@ -12,7 +12,6 @@ const pool = require('../../config/db');
  * 현재 데이터의 최대 depth 미만으로는 내릴 수 없다.
  */
 
-const MALL_ID = 1;
 
 /**
  * 화이트리스트.
@@ -49,21 +48,22 @@ function pickWhitelisted(raw, list, fallback) {
     return hit ? hit.value : fallback;
 }
 
-async function loadConfig() {
-    const [[row]] = await pool.query('SELECT * FROM navigation_config WHERE mall_id = ? LIMIT 1', [MALL_ID]);
+async function loadConfig(mallId) {
+    const [[row]] = await pool.query('SELECT * FROM navigation_config WHERE mall_id = ? LIMIT 1', [mallId]);
     return row || null;
 }
 
 /** 현재 카테고리 데이터의 최대 depth (없으면 1) */
-async function currentMaxCategoryDepth() {
-    const [[r]] = await pool.query('SELECT COALESCE(MAX(depth), 1) AS d FROM categories WHERE mall_id = ?', [MALL_ID]);
+async function currentMaxCategoryDepth(mallId) {
+    const [[r]] = await pool.query('SELECT COALESCE(MAX(depth), 1) AS d FROM categories WHERE mall_id = ?', [mallId]);
     return Number(r.d) || 1;
 }
 
 /** GET /admin/header-settings */
 exports.getEdit = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
-        const config = await loadConfig();
+        const config = await loadConfig(MALL_ID);
         if (!config) {
             return res.status(500).send('navigation_config 행이 없습니다. scripts/migrate_menu_architecture.js 를 실행하세요.');
         }
@@ -75,7 +75,7 @@ exports.getEdit = async (req, res) => {
             headerLayoutTypes: HEADER_LAYOUT_TYPES,
             categoryDisplayTypes: CATEGORY_DISPLAY_TYPES,
             limits: LIMITS,
-            maxCategoryDepth: await currentMaxCategoryDepth(),
+            maxCategoryDepth: await currentMaxCategoryDepth(MALL_ID),
             saved: req.query.saved === '1',
             error: req.query.error || null,
         });
@@ -87,8 +87,9 @@ exports.getEdit = async (req, res) => {
 
 /** POST /admin/header-settings */
 exports.postUpdate = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
-        const config = await loadConfig();
+        const config = await loadConfig(MALL_ID);
         if (!config) return res.status(500).send('navigation_config 행이 없습니다.');
 
         const headerLayout = pickWhitelisted(req.body.header_layout_type, HEADER_LAYOUT_TYPES, config.header_layout_type);
@@ -102,7 +103,7 @@ exports.postUpdate = async (req, res) => {
         if (maxCustom > maxGnb) maxCustom = maxGnb;
 
         // 뎁스를 낮추면 기존 하위 카테고리가 스토어프론트에서 사라진다.
-        const existingDepth = await currentMaxCategoryDepth();
+        const existingDepth = await currentMaxCategoryDepth(MALL_ID);
         if (maxDepth < existingDepth) {
             const msg = `카테고리 최대 뎁스를 ${maxDepth} 로 낮출 수 없습니다. 현재 ${existingDepth}뎁스 카테고리가 있어 스토어프론트에서 사라집니다.`;
             return res.redirect(`/admin/header-settings?error=${encodeURIComponent(msg)}`);

@@ -56,14 +56,15 @@ function descendantIds(rows, nodeId, acc = new Set()) {
 }
 
 exports.getList = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
     try {
-        const [categories] = await pool.query('SELECT * FROM categories ORDER BY display_order ASC, id ASC');
+        const [categories] = await pool.query('SELECT * FROM categories WHERE mall_id = ? ORDER BY display_order ASC, id ASC', [MALL_ID]);
         const [counts] = await pool.query(
-            'SELECT category_id, COUNT(*) AS n FROM products WHERE category_id IS NOT NULL GROUP BY category_id'
+            'SELECT p.category_id, COUNT(*) AS n FROM products p WHERE p.category_id IS NOT NULL AND p.mall_id = ? GROUP BY p.category_id', [MALL_ID]
         );
         const productCountBy = new Map(counts.map(c => [c.category_id, c.n]));
 
-        const maxDepth = await depthGuard.getCategoryMaxDepth(1);
+        const maxDepth = await depthGuard.getCategoryMaxDepth(MALL_ID);
         const maxParent = maxDepth - 1; // 부모가 될 수 있는 최대 depth
 
         const byType = {};
@@ -147,18 +148,19 @@ exports.postAdd = async (req, res) => {
         // 부모.depth + 1 > 최대뎁스 → DepthLimitError
         const depth = await depthGuard.assertDepthAllowed({ parentId, conn });
 
+        const MALL_ID = req.adminMallId || 1; // P5: 새 카테고리는 편집 중인 몰에 속한다
         let nextOrder = Number.parseInt(display_order, 10);
         if (Number.isNaN(nextOrder)) {
             const [rows] = await conn.query(
-                'SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM categories WHERE type = ?', [allowedType]
+                'SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM categories WHERE type = ? AND mall_id = ?', [allowedType, MALL_ID]
             );
             nextOrder = rows[0].next_order;
         }
 
         const [result] = await conn.query(
-            `INSERT INTO categories (name, display_order, type, logo_image_path, parent_id, depth, is_active, pc_visible, mobile_visible)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [name, nextOrder, allowedType, logoPath, parentId, depth,
+            `INSERT INTO categories (mall_id, name, display_order, type, logo_image_path, parent_id, depth, is_active, pc_visible, mobile_visible)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [MALL_ID, name, nextOrder, allowedType, logoPath, parentId, depth,
              toBool(req.body.is_active ?? '1'), toBool(req.body.pc_visible ?? '1'), toBool(req.body.mobile_visible ?? '1')]
         );
 

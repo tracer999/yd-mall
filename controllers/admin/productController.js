@@ -471,9 +471,10 @@ exports.postReorderRecommendations = async (req, res) => {
 
 exports.getAdd = async (req, res) => {
     try {
-        const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' ORDER BY display_order ASC, id ASC");
-        const [themeCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'THEME' ORDER BY display_order ASC, id ASC");
-        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' ORDER BY display_order ASC, id ASC");
+        const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
+        const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [themeCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'THEME' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
         const domain = domainFromSettings.replace(/\/$/, '');
         const productUrlBase = domain + '/products/';
@@ -521,6 +522,7 @@ exports.postAdd = async (req, res) => {
 
         const finalPrice = price || 0;
         const insertEntries = [
+            ['mall_id', req.adminMallId || 1], // P5: 새 상품은 편집 중인 몰에 속한다
             ['category_id', category_id || null],
             ['brand_category_id', normalizedBrandCategoryId],
             ['name', name],
@@ -727,6 +729,7 @@ exports.postEdit = async (req, res) => {
 };
 
 exports.getList = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1; // P5: 편집 중인 몰의 상품만
     try {
         const allowedSizes = [10, 20, 30, 50];
         const perPage = allowedSizes.includes(Number(req.query.perPage)) ? Number(req.query.perPage) : 20;
@@ -734,10 +737,11 @@ exports.getList = async (req, res) => {
         const offset = (page - 1) * perPage;
         const keyword = (req.query.keyword || '').trim();
 
-        let whereClause = '';
-        const queryParams = [];
+        // 몰 필터는 항상 건다. keyword 유무와 무관하게 다른 몰 상품이 섞이면 안 된다.
+        let whereClause = 'WHERE p.mall_id = ?';
+        const queryParams = [MALL_ID];
         if (keyword) {
-            whereClause = `WHERE (p.name LIKE ? OR p.provider LIKE ? OR c.name LIKE ?)`;
+            whereClause += ` AND (p.name LIKE ? OR p.provider LIKE ? OR c.name LIKE ?)`;
             const like = `%${keyword}%`;
             queryParams.push(like, like, like);
         }
@@ -842,9 +846,10 @@ exports.getEdit = async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM products WHERE id = ?', [id]);
         if (rows.length === 0) return res.redirect('/admin/products');
 
-        const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' ORDER BY display_order ASC, id ASC");
-        const [themeCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'THEME' ORDER BY display_order ASC, id ASC");
-        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' ORDER BY display_order ASC, id ASC");
+        const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
+        const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [themeCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'THEME' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
         const [themes] = await pool.query('SELECT category_id FROM product_themes WHERE product_id = ?', [id]);
 

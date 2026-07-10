@@ -19,9 +19,10 @@ function isValidType(type) {
   return Object.prototype.hasOwnProperty.call(registry, type);
 }
 
-async function getHomePage() {
+async function getHomePage(mallId = 1) {
   const [rows] = await pool.query(
-    "SELECT * FROM page WHERE page_type = 'home' AND mall_id = 1 ORDER BY id DESC LIMIT 1"
+    "SELECT * FROM page WHERE page_type = 'home' AND mall_id = ? ORDER BY id DESC LIMIT 1",
+    [mallId]
   );
   return rows[0] || null;
 }

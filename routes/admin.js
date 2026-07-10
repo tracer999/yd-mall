@@ -12,6 +12,8 @@ router.get('/logout', authController.logout);
 
 // Protected Routes
 router.use(adminAuth); // Apply middleware to all routes below
+// 관리자 편집 몰 컨텍스트 (P5) — 인증된 관리자 요청에만. req.adminMallId 주입.
+router.use(require('../middleware/adminMallContext'));
 
 router.get('/', dashboardController.getDashboard);
 router.get('/design-guide', (req, res) => {

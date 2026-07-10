@@ -21,7 +21,6 @@ const navigationService = require('../../services/menu/navigationService');
  * 그래서 여기서도 각 항목의 pcVisible/mobileVisible 로 화면에서 거른다.
  */
 
-const MALL_ID = 1;
 
 const POSITION_LABELS = {
     gnb: 'GNB (상단 메뉴)',
@@ -30,7 +29,7 @@ const POSITION_LABELS = {
 };
 
 /** 렌더에서 빠진 기능 메뉴와 그 사유 */
-async function findExcluded(isLoggedIn) {
+async function findExcluded(isLoggedIn, MALL_ID) {
     const [rows] = await pool.query(`
         SELECT f.feature_code, f.position, f.default_name, f.module_ready,
                COALESCE(m.is_enabled, 0) AS is_enabled,
@@ -61,6 +60,7 @@ async function findExcluded(isLoggedIn) {
 
 /** GET /admin/menu-preview */
 exports.getPreview = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     try {
         const opts = {
             isLoggedIn: req.query.login === '1',
@@ -78,7 +78,7 @@ exports.getPreview = async (req, res) => {
             title: '메뉴 미리보기',
             nav,
             opts,
-            excluded: await findExcluded(opts.isLoggedIn),
+            excluded: await findExcluded(opts.isLoggedIn, MALL_ID),
             maxGnb,
             gnbTruncated,
         });

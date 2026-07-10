@@ -36,7 +36,7 @@ function decorateSection(s, groupNameById) {
 
 exports.getEditor = async (req, res) => {
   try {
-    const page = await builder.getHomePage();
+    const page = await builder.getHomePage(req.adminMallId || 1);
     if (!page) {
       return res.status(404).render('admin/page-builder/editor', {
         layout: 'layouts/admin_layout',
@@ -70,7 +70,7 @@ exports.getEditor = async (req, res) => {
 
 exports.postSectionAdd = async (req, res) => {
   try {
-    const page = await builder.getHomePage();
+    const page = await builder.getHomePage(req.adminMallId || 1);
     if (!page) return res.status(404).json({ success: false, message: '홈 페이지 없음' });
     const id = await builder.addSection(page.id, { section_type: req.body.section_type });
     res.json({ success: true, id });
@@ -124,7 +124,7 @@ exports.postSectionDuplicate = async (req, res) => {
 
 exports.postSectionReorder = async (req, res) => {
   try {
-    const page = await builder.getHomePage();
+    const page = await builder.getHomePage(req.adminMallId || 1);
     const order = req.body.order;
     if (!page || !Array.isArray(order)) {
       return res.status(400).json({ success: false, message: '잘못된 요청' });
@@ -139,7 +139,7 @@ exports.postSectionReorder = async (req, res) => {
 
 exports.postPublish = async (req, res) => {
   try {
-    const page = await builder.getHomePage();
+    const page = await builder.getHomePage(req.adminMallId || 1);
     if (!page) return res.status(404).json({ success: false, message: '홈 페이지 없음' });
     const by = (req.session.admin && req.session.admin.username) || null;
     const revisionNo = await builder.publish(page.id, by);
@@ -152,7 +152,7 @@ exports.postPublish = async (req, res) => {
 
 exports.postRollback = async (req, res) => {
   try {
-    const page = await builder.getHomePage();
+    const page = await builder.getHomePage(req.adminMallId || 1);
     if (!page) return res.status(404).json({ success: false, message: '홈 페이지 없음' });
     await builder.rollback(page.id, Number(req.params.revisionId));
     res.json({ success: true });
