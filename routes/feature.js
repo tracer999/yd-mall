@@ -35,13 +35,23 @@ router.get('/deal/today', preset({ badge: 'DEADLINE_SALE' }), productController.
 router.get('/event', (req, res) => res.redirect(302, '/boards/notice'));
 
 /*
- * 준비 중 메뉴 (기획전 / 공동구매 / 쇼핑라이브)
+ * 준비 중 메뉴 (기획전 / 공동구매 / 쇼핑라이브 / 랭킹 / 아울렛 / 쿠폰 / 멤버십)
  *
  * GNB 에 노출하되 모듈이 아직 없다. '#' 죽은 링크 대신 실제 랜딩 페이지를 둔다.
  * 검색엔진에는 색인시키지 않는다(noindex).
  *
  * 모듈이 구현되면 이 핸들러를 실제 목록 렌더로 교체하면 되고,
  * 표준 URL 과 feature_menu 설정은 그대로 유지된다.
+ *
+ * ⚠️ 라우트를 배포한 **뒤에** `feature_menu.module_ready` 를 1 로 올린다.
+ *    (dev·prod 가 같은 DB 라, 먼저 올리면 운영 GNB 에 404 링크가 뜬다)
+ *
+ * 왜 RANKING·OUTLET·COUPON·MEMBERSHIP 도 실기능이 아니라 랜딩인가:
+ *   - OUTLET     : `discount_rate > 0` 인 상품이 **0개**다. 목록을 만들어도 항상 빈다.
+ *   - MEMBERSHIP : `users` 에 등급 컬럼이 없다(`points_balance` 뿐).
+ *   - COUPON     : `coupons` 는 있으나 고객이 받아가는 '다운로드 쿠폰' 개념·화면이 없다.
+ *   - RANKING    : `getList` 의 `sort=best`(조회수) 로 만들 수는 있다. 다만 카테고리별 순위·기간별
+ *                  집계가 빠진 반쪽이라, 지금은 랜딩으로 두고 모듈로 제대로 만든다.
  */
 const COMING_SOON = {
     exhibition: {
@@ -68,6 +78,38 @@ const COMING_SOON = {
         primary: { label: '신상품 보기', href: '/new' },
         secondary: { label: '고객센터', href: '/cs' },
     },
+    ranking: {
+        name: '랭킹',
+        icon: 'bi-trophy',
+        description: '카테고리별·기간별 인기 상품 순위를 준비하고 있습니다.<br>지금은 조회수 기준 베스트 상품을 먼저 만나보세요.',
+        bullets: ['카테고리별 실시간 순위', '주간·월간 랭킹', '급상승 상품'],
+        primary: { label: '베스트 상품 보기', href: '/best' },
+        secondary: { label: '전체 상품', href: '/products' },
+    },
+    outlet: {
+        name: '아울렛',
+        icon: 'bi-tags',
+        description: '재고 소진 특가와 시즌오프 상품을 모은 아울렛을 준비하고 있습니다.',
+        bullets: ['재고 소진 특가', '시즌오프 할인', '한정 수량 판매'],
+        primary: { label: '오늘특가 보러가기', href: '/deal/today' },
+        secondary: { label: '전체 상품', href: '/products' },
+    },
+    coupon: {
+        name: '쿠폰',
+        icon: 'bi-ticket-perforated',
+        description: '받아서 바로 쓰는 다운로드 쿠폰을 준비하고 있습니다.<br>지금은 주문서에서 쿠폰 코드를 입력해 사용할 수 있습니다.',
+        bullets: ['다운로드 즉시 적용', 'brand·카테고리 전용 쿠폰', '신규 가입·재구매 혜택'],
+        primary: { label: '내 쿠폰함', href: '/mypage/coupons' },
+        secondary: { label: '고객센터', href: '/cs' },
+    },
+    membership: {
+        name: '멤버십',
+        icon: 'bi-award',
+        description: '구매 실적에 따른 등급과 전용 혜택을 준비하고 있습니다.<br>지금은 적립금을 모아 사용할 수 있습니다.',
+        bullets: ['등급별 적립률·할인', '생일·기념일 쿠폰', '무료배송 혜택'],
+        primary: { label: '내 적립금', href: '/mypage/points' },
+        secondary: { label: '전체 상품', href: '/products' },
+    },
 };
 
 function comingSoon(key) {
@@ -88,5 +130,9 @@ function comingSoon(key) {
 router.get('/exhibition', comingSoon('exhibition'));
 router.get('/group-buy', comingSoon('group-buy'));
 router.get('/live', comingSoon('live'));
+router.get('/ranking', comingSoon('ranking'));
+router.get('/outlet', comingSoon('outlet'));
+router.get('/coupon', comingSoon('coupon'));
+router.get('/membership', comingSoon('membership'));
 
 module.exports = router;

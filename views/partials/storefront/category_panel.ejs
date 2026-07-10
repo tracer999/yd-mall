@@ -21,12 +21,14 @@
 <% if (_tree.length === 0) { %>
   <p class="p-5 text-sm text-gray-400">등록된 카테고리가 없습니다.</p>
 <% } else { %>
-  <div class="flex <%= anyChildren ? 'min-h-[380px]' : '' %>">
+  <%# 서브패널의 기준은 이 컨테이너다. <li> 를 기준으로 잡으면 목록 하단 항목에 hover 했을 때
+      서브패널이 패널 아래로 넘쳐 나간다. %>
+  <div class="relative flex <%= anyChildren ? 'min-h-[380px]' : '' %>">
 
     <%# 1뎁스 — 항상 세로 리스트 %>
     <ul class="w-60 shrink-0 py-2 <%= anyChildren ? 'border-r border-gray-100 bg-gray-50/40' : '' %>">
       <% _tree.forEach(function (node) { %>
-        <li class="group/cat relative">
+        <li class="group/cat">
           <a href="/products/category/<%= node.id %>"
              class="flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700
                     hover:bg-white hover:text-[var(--gh-primary)] hover:font-semibold transition-colors">
@@ -36,9 +38,10 @@
             <% } %>
           </a>
 
-          <%# 2뎁스 — 자식이 있을 때만 그린다. hover 로 우측에 펼친다. %>
+          <%# 2뎁스 — 자식이 있을 때만 그린다. hover 로 우측에 펼친다.
+              위치 기준은 바깥 컨테이너(.relative)라 언제나 패널 상단에 맞춰 열린다. %>
           <% if (hasChildren(node)) { %>
-            <div class="hidden group-hover/cat:block absolute left-full top-0 z-10 w-[560px] min-h-full
+            <div class="hidden group-hover/cat:block absolute left-60 top-0 bottom-0 z-10 w-[560px]
                         bg-white pl-6 pr-5 py-3">
               <p class="mb-2 text-xs font-bold text-gray-400"><%= node.name %></p>
               <ul class="grid grid-cols-2 gap-x-6 gap-y-0.5">
