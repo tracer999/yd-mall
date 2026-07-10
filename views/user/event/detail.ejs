@@ -81,17 +81,12 @@
                 </p>
             <% } %>
 
-            <% if (!currentUser && e.login_required) { %>
-                <a href="/auth/login?redirect=<%= encodeURIComponent('/event/' + e.slug) %>"
-                   class="inline-block px-8 py-3 rounded-full bg-gray-800 text-white font-semibold hover:bg-gray-900 transition">
-                    로그인하고 참여하기
-                </a>
-            <% } else if (participated) { %>
-                <button type="button" disabled
-                        class="px-8 py-3 rounded-full bg-gray-300 text-white font-semibold cursor-not-allowed">
-                    이미 참여하셨습니다
-                </button>
-            <% } else if (e.phase === 'upcoming') { %>
+            <%
+              /* 판정 순서가 중요하다. 로그인 체크를 앞에 두면 이미 마감·종료된 이벤트에도
+                 '로그인하고 참여하기' 가 떠서, 로그인한 뒤에야 마감을 알게 된다.
+                 이벤트 자체의 상태(예정/종료/마감)를 로그인 여부보다 먼저 본다. */
+            %>
+            <% if (e.phase === 'upcoming') { %>
                 <button type="button" disabled
                         class="px-8 py-3 rounded-full bg-gray-300 text-white font-semibold cursor-not-allowed">
                     곧 시작합니다
@@ -101,11 +96,21 @@
                         class="px-8 py-3 rounded-full bg-gray-300 text-white font-semibold cursor-not-allowed">
                     종료된 이벤트입니다
                 </button>
+            <% } else if (participated) { %>
+                <button type="button" disabled
+                        class="px-8 py-3 rounded-full bg-gray-300 text-white font-semibold cursor-not-allowed">
+                    이미 참여하셨습니다
+                </button>
             <% } else if (e.isFull) { %>
                 <button type="button" disabled
                         class="px-8 py-3 rounded-full bg-gray-300 text-white font-semibold cursor-not-allowed">
                     선착순 마감
                 </button>
+            <% } else if (!currentUser && e.login_required) { %>
+                <a href="/auth/login?redirect=<%= encodeURIComponent('/event/' + e.slug) %>"
+                   class="inline-block px-8 py-3 rounded-full bg-gray-800 text-white font-semibold hover:bg-gray-900 transition">
+                    로그인하고 참여하기
+                </a>
             <% } else { %>
                 <form action="/event/<%= e.slug %>/apply" method="POST">
                     <button type="submit"
