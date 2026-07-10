@@ -1,0 +1,302 @@
+<%
+  /*
+   * 상품 그룹 등록/수정 (B6)
+   *
+   * group_type 으로 폼이 완전히 갈린다. resolve() 가 읽지 않는 필드는 보여주지 않는다.
+   *   manual    → 상품 피커만 (sort_type / 필터는 무시됨)
+   *   condition → 필터 + 정렬만 (담긴 상품은 무시됨)
+   */
+  const isNew = !group.id;
+  const action = isNew ? '/admin/product-groups' : `/admin/product-groups/${group.id}`;
+  const _cond = cond || {};
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+%>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <a href="/admin/product-groups" class="text-sm text-gray-500 hover:text-gray-700 no-underline">
+      <i class="bi bi-chevron-left"></i> 상품 그룹 목록
+    </a>
+    <h1 class="mt-2 text-2xl font-bold text-gray-900"><%= title %></h1>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <% if (refs && refs.length) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+      <div class="flex items-start gap-2">
+        <i class="bi bi-info-circle-fill mt-0.5"></i>
+        <div>
+          <p><strong>섹션 <%= refs.length %>개가 이 그룹을 사용 중</strong>입니다.
+             비활성화하거나 삭제하면 해당 섹션이 빈 상태로 노출되므로 막혀 있습니다.</p>
+          <p class="mt-1 text-xs">
+            <% refs.forEach(function (r) { %>
+              <span class="inline-block mr-2">· <%= r.label %> (섹션 #<%= r.id %><%= r.is_active ? '' : ', 비활성' %>)</span>
+            <% }); %>
+          </p>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
+  <form method="POST" action="<%= action %>" class="space-y-6">
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">기본 정보</h2>
+      </div>
+      <div class="p-5 space-y-5">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">그룹명</label>
+          <input type="text" name="name" value="<%= group.name %>" maxlength="200" required
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">구성 방식</label>
+          <div class="flex gap-4">
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="radio" name="group_type" value="manual" data-group-type
+                     <%= group.group_type === 'manual' ? 'checked' : '' %> class="w-4 h-4">
+              수동 선택 <span class="text-xs text-gray-400">(상품을 직접 담고 순서 지정)</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="radio" name="group_type" value="condition" data-group-type
+                     <%= group.group_type === 'condition' ? 'checked' : '' %> class="w-4 h-4">
+              조건 검색 <span class="text-xs text-gray-400">(배지·카테고리 등으로 자동 수집)</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="is_active" value="1" <%= group.is_active ? 'checked' : '' %>
+                   class="w-4 h-4 rounded border-gray-300">
+            사용 (끄면 이 그룹을 쓰는 섹션이 빈 상태가 됩니다)
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <%# ── 조건 검색 전용 ─────────────────────────────── %>
+    <div data-panel="condition" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">수집 조건</h2>
+        <p class="mt-0.5 text-xs text-gray-500">모든 조건은 AND 로 결합됩니다. 판매중·노출중 상품만 대상입니다.</p>
+      </div>
+      <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">배지</label>
+          <select name="badge" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <option value="">전체</option>
+            <% badges.forEach(function (b) { %>
+              <option value="<%= b %>" <%= _cond.badge === b ? 'selected' : '' %>><%= b %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">카테고리</label>
+          <select name="category_id" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <option value="">전체</option>
+            <% categories.forEach(function (c) { %>
+              <option value="<%= c.id %>" <%= Number(_cond.category_id) === c.id ? 'selected' : '' %>><%= c.name %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">최소 할인율 (%)</label>
+          <input type="number" name="min_discount" value="<%= _cond.min_discount || '' %>" min="0" max="100" placeholder="제한 없음"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">정렬</label>
+          <select name="sort_type" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <% sortTypes.forEach(function (s) { %>
+              <option value="<%= s.value %>" <%= group.sort_type === s.value ? 'selected' : '' %>><%= s.label %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="in_stock" value="1" <%= _cond.in_stock ? 'checked' : '' %>
+                   class="w-4 h-4 rounded border-gray-300">
+            재고가 있는 상품만
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="/admin/product-groups" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+      <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <i class="bi bi-save mr-1.5"></i> 저장
+      </button>
+    </div>
+  </form>
+
+  <%# ── 수동 선택 전용: 상품 피커 (그룹 생성 후에만) ───────── %>
+  <% if (!isNew) { %>
+    <div data-panel="manual" class="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">담긴 상품 <span class="text-gray-400 font-normal">(<%= items.length %>개)</span></h2>
+        <p class="mt-0.5 text-xs text-gray-500">위에서 아래 순서로 노출됩니다. 추가·삭제·순서 변경은 즉시 저장됩니다.</p>
+      </div>
+
+      <div class="p-5 border-b border-gray-100">
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">상품 검색</label>
+        <input type="text" id="pgSearch" placeholder="상품명을 2글자 이상 입력하세요"
+               class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        <div id="pgSearchResults" class="mt-2 space-y-1"></div>
+      </div>
+
+      <ul id="pgItems" class="divide-y divide-gray-100">
+        <% if (items.length === 0) { %>
+          <li class="px-5 py-10 text-center text-sm text-gray-500">담긴 상품이 없습니다.</li>
+        <% } %>
+        <% items.forEach(function (it) { %>
+          <li class="px-5 py-3 flex items-center gap-3" data-item-id="<%= it.item_id %>">
+            <span class="w-6 text-center text-xs text-gray-400 pg-index"></span>
+            <img src="<%= it.main_image || '/images/no-image.png' %>" alt="" class="w-10 h-10 rounded object-cover bg-gray-100">
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-gray-900 truncate"><%= it.name %></div>
+              <div class="text-xs text-gray-400"><%= won(it.price) %>원 · <%= it.status %></div>
+            </div>
+            <button type="button" class="pg-up text-gray-400 hover:text-gray-700 px-1" title="위로"><i class="bi bi-arrow-up"></i></button>
+            <button type="button" class="pg-down text-gray-400 hover:text-gray-700 px-1" title="아래로"><i class="bi bi-arrow-down"></i></button>
+            <form method="POST" action="/admin/product-groups/<%= group.id %>/items/<%= it.item_id %>/delete">
+              <button type="submit" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">제거</button>
+            </form>
+          </li>
+        <% }); %>
+      </ul>
+    </div>
+  <% } else { %>
+    <div data-panel="manual" class="mt-6 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-600">
+      그룹을 먼저 저장하면 상품을 담을 수 있습니다.
+    </div>
+  <% } %>
+
+  <%# ── 미리보기: 스토어프론트와 동일한 resolve() 결과 ───────── %>
+  <% if (!isNew) { %>
+    <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">미리보기 <span class="text-gray-400 font-normal">(최대 12개)</span></h2>
+        <p class="mt-0.5 text-xs text-gray-500">스토어프론트와 같은 경로로 뽑은 실제 결과입니다(비로그인 기준).</p>
+      </div>
+      <div class="p-5">
+        <% if (!preview.length) { %>
+          <p class="py-8 text-center text-sm text-gray-500">조건에 맞는 상품이 없습니다. 이 그룹을 쓰는 섹션은 빈 상태로 노출됩니다.</p>
+        <% } else { %>
+          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            <% preview.forEach(function (p) { %>
+              <div class="text-center">
+                <img src="<%= p.main_image || '/images/no-image.png' %>" alt="" class="w-full aspect-square rounded object-cover bg-gray-100">
+                <div class="mt-1.5 text-xs text-gray-800 truncate" title="<%= p.name %>"><%= p.name %></div>
+                <div class="text-[11px] text-gray-400"><%= won(p.price) %>원</div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<script>
+(function () {
+  const groupId = <%- JSON.stringify(group.id) %>;
+
+  // group_type 에 따라 무의미한 패널을 숨긴다 — resolve() 가 읽지 않는 설정은 내주지 않는다.
+  function syncPanels() {
+    const type = document.querySelector('[data-group-type]:checked').value;
+    document.querySelectorAll('[data-panel]').forEach(el => {
+      el.style.display = (el.dataset.panel === type) ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('[data-group-type]').forEach(r => r.addEventListener('change', syncPanels));
+  syncPanels();
+
+  if (!groupId) return;
+
+  const list = document.getElementById('pgItems');
+  const search = document.getElementById('pgSearch');
+  const results = document.getElementById('pgSearchResults');
+
+  function renumber() {
+    list.querySelectorAll('[data-item-id]').forEach((li, i) => {
+      li.querySelector('.pg-index').textContent = i + 1;
+    });
+  }
+  function persistOrder() {
+    const order = [...list.querySelectorAll('[data-item-id]')].map(li => Number(li.dataset.itemId));
+    fetch(`/admin/product-groups/${groupId}/items/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    }).catch(() => {});
+  }
+
+  list && list.addEventListener('click', (e) => {
+    const li = e.target.closest('[data-item-id]');
+    if (!li) return;
+    if (e.target.closest('.pg-up') && li.previousElementSibling) {
+      li.parentNode.insertBefore(li, li.previousElementSibling);
+    } else if (e.target.closest('.pg-down') && li.nextElementSibling) {
+      li.parentNode.insertBefore(li.nextElementSibling, li);
+    } else { return; }
+    renumber();
+    persistOrder();
+  });
+  renumber();
+
+  let timer;
+  search && search.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = search.value.trim();
+    if (q.length < 2) { results.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const res = await fetch(`/admin/product-groups/${groupId}/product-search?q=${encodeURIComponent(q)}`);
+      const { products } = await res.json();
+      results.innerHTML = products.length ? '' : '<p class="text-xs text-gray-400 px-1 py-2">검색 결과가 없습니다.</p>';
+      products.forEach(p => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/product-groups/${groupId}/items`;
+        form.className = 'flex items-center gap-2 px-2 py-1.5 rounded border border-gray-100 hover:bg-gray-50';
+        const img = document.createElement('img');
+        img.src = p.main_image || '/images/no-image.png';
+        img.className = 'w-8 h-8 rounded object-cover bg-gray-100';
+        const span = document.createElement('span');
+        span.className = 'flex-1 text-sm text-gray-800 truncate';
+        span.textContent = p.name;           // textContent — 상품명이 마크업으로 해석되지 않도록
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden'; hidden.name = 'product_id'; hidden.value = p.id;
+        const btn = document.createElement('button');
+        btn.type = 'submit';
+        btn.className = 'text-xs px-2 py-1 rounded bg-indigo-600 text-white';
+        btn.textContent = '담기';
+        form.append(img, span, hidden, btn);
+        results.append(form);
+      });
+    }, 250);
+  });
+})();
+</script>

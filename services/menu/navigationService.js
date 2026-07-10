@@ -198,11 +198,16 @@ async function getNavigation(mallId = 1, opts = {}) {
     const gnbCustoms = customsAt('gnb', Number(config.max_custom_items) || 0);
     const maxGnb = Number(config.max_gnb_items) || 8;
 
+    const gnbCandidates = gnbFeatures.concat(gnbCustoms);
+
     return {
         config,
         categoryTree,
         categoryButton, // null 이면 카테고리 버튼 미노출
-        gnb: gnbFeatures.concat(gnbCustoms).slice(0, maxGnb),
+        gnb: gnbCandidates.slice(0, maxGnb),
+        // 자르기 전 후보 수. 관리자 메뉴 미리보기(B7)가 "몇 개가 잘렸는지" 보여주는 데 쓴다.
+        // 스토어프론트는 이 값을 읽지 않는다.
+        gnbCandidateCount: gnbCandidates.length,
         rightRail: byPosition('right_rail'),
         headerUtil: byPosition('header_util'),
         footer: byPosition('footer').concat(customsAt('footer', 20)),

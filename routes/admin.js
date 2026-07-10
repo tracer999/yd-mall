@@ -33,10 +33,14 @@ router.use('/feature-menus', requireMenuAccess('/admin/feature-menus'), require(
 router.use('/system-menus', requireMenuAccess('/admin/system-menus'), require('./admin/system-menus'));
 // 헤더 레이아웃·GNB 슬롯 정책(navigation_config) (B5)
 router.use('/header-settings', requireMenuAccess('/admin/header-settings'), require('./admin/header-settings'));
+// 스토어프론트 메뉴 조립 결과 미리보기 (B7)
+router.use('/menu-preview', requireMenuAccess('/admin/menu-preview'), require('./admin/menu-preview'));
 router.use('/products', requireMenuAccess('/admin/products'), require('./admin/products'));
 router.use('/banners', requireMenuAccess('/admin/banners'), require('./admin/banners'));
 router.use('/display', requireMenuAccess('/admin/display'), require('./admin/display'));
 router.use('/page-builder', requireMenuAccess('/admin/page-builder'), require('./admin/page-builder'));
+// 페이지 빌더 섹션의 데이터 소스가 되는 상품 그룹 (B6)
+router.use('/product-groups', requireMenuAccess('/admin/product-groups'), require('./admin/product-groups'));
 router.use('/users', requireMenuAccess('/admin/users'), require('./admin/users'));
 router.use('/sales', requireMenuAccess('/admin/sales'), require('./admin/sales'));
 router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/shipping'));
