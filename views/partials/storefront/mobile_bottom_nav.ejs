@@ -8,14 +8,22 @@
    *   [본문]
    *   [하단바] 홈 · 카테고리 · 장바구니 · 마이   ← 이 파일 (md:hidden, fixed)
    *
-   * 카테고리 레이어는 **탭(클릭)으로 여닫는다**. PC 의 category_panel.ejs 는 CSS hover
-   * 캐스케이드라 터치 기기에서 동작하지 않는다. 그래서 재사용하지 않고 아코디언으로 따로 만든다.
+   * 카테고리 레이어는 PC 패널과 같은 **단계별 드릴다운**이다.
+   *   1뎁스 탭 → 2뎁스만 보인다
+   *   2뎁스 탭 → 그 2뎁스의 3뎁스가 보인다(자식이 없으면 상품목록으로 이동)
+   *   하단에는 현재 선택한 1뎁스의 이미지 + 간략 설명이 뜬다(PC 패널의 프로모션 칸과 같은 자리).
    *
-   * 하단 바가 fixed 이므로 본문 마지막 줄을 가린다 → main_layout 이 <main> 에
-   * `pb-16 md:pb-0` 를 준다. 높이를 바꾸면 그 패딩도 함께 바꿔야 한다.
+   * PC 의 category_panel.ejs 를 재사용하지 않는 이유: 그쪽은 CSS hover 캐스케이드라
+   * 터치 기기에서 열리지 않는다. 여기서는 탭(클릭)으로 전환한다.
+   *
+   * 세 뎁스를 모두 서버에서 렌더하고 JS 로 보이기만 바꾼다(패널 스택).
+   * 뒤로가기는 헤더의 ← 버튼이다.
+   *
+   * 하단 바가 fixed 이므로 본문 마지막 줄을 가린다 → main_layout 이 body 에
+   * padding-bottom: var(--yd-mbnav-h) 를 준다. 바 높이를 바꾸면 그 값도 함께 바꾼다.
    *
    * 항목은 하드코딩이다. feature_menu(position='mobile_quick') 로 뺄 수 있으나
-   * 해당 행이 0건이고 관리 요구도 아직 없다. 필요해지면 그때 데이터로 옮긴다.
+   * 해당 행이 0건이고 관리 요구도 아직 없다.
    *
    * locals: categoryTree, malls, mallId, cartCount, user, currentPath
    */
@@ -25,6 +33,7 @@
   const _path = (typeof currentPath !== 'undefined') ? currentPath : '';
   const _user = (typeof user !== 'undefined') ? user : null;
   const isOn = (href) => _path === href;
+  const hasKids = (n) => Array.isArray(n.children) && n.children.length > 0;
 %>
 
 <!-- 카테고리 전체 레이어 (탭으로 열림) -->
@@ -32,16 +41,19 @@
     <div id="yd-cat-dim" class="absolute inset-0 bg-black/40"></div>
 
     <div class="absolute inset-x-0 bottom-0 top-14 bg-white rounded-t-2xl flex flex-col overflow-hidden">
-        <header class="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0">
-            <h2 class="text-lg font-bold text-gray-900">카테고리</h2>
-            <button type="button" id="yd-cat-close" aria-label="닫기" class="p-2 -mr-2 text-gray-500">
+        <header class="flex items-center gap-2 px-2 h-14 border-b border-gray-100 shrink-0">
+            <button type="button" id="yd-cat-back" aria-label="뒤로" class="hidden p-2 text-gray-600">
+                <i class="bi bi-chevron-left text-xl"></i>
+            </button>
+            <h2 id="yd-cat-title" class="flex-1 px-2 text-lg font-bold text-gray-900">카테고리</h2>
+            <button type="button" id="yd-cat-close" aria-label="닫기" class="p-2 text-gray-500">
                 <i class="bi bi-x-lg text-xl"></i>
             </button>
         </header>
 
-        <%# 몰 선택 — Top Bar 가 모바일에서 숨겨지므로 여기로 옮겨왔다 %>
+        <%# 몰 선택 — Top Bar 가 모바일에서 숨겨지므로 여기로 옮겨왔다. 1뎁스 화면에서만 보인다. %>
         <% if (_malls.length > 1) { %>
-            <form method="get" action="/" class="px-4 py-3 border-b border-gray-100 shrink-0">
+            <form method="get" action="/" id="yd-mall-form" class="px-4 py-3 border-b border-gray-100 shrink-0">
                 <label for="yd-mall-switch-m" class="block text-xs font-semibold text-gray-400 mb-1">몰 선택</label>
                 <select id="yd-mall-switch-m" name="mall" onchange="this.form.submit()"
                         class="w-full h-10 rounded-lg border border-gray-300 bg-white text-sm text-gray-800 px-3">
@@ -55,51 +67,91 @@
             </form>
         <% } %>
 
-        <div class="flex-1 overflow-y-auto overscroll-contain pb-6">
+        <div class="flex-1 overflow-y-auto overscroll-contain">
             <% if (!_tree.length) { %>
                 <p class="p-8 text-center text-gray-400 text-sm">등록된 카테고리가 없습니다.</p>
             <% } %>
 
-            <ul class="divide-y divide-gray-100">
+            <!-- 1뎁스 -->
+            <ul id="yd-cat-d1" class="yd-cat-panel divide-y divide-gray-100">
                 <% _tree.forEach(function (n1) { %>
                     <li>
-                        <% const has2 = n1.children && n1.children.length > 0; %>
-                        <% if (has2) { %>
-                            <button type="button"
-                                    class="yd-acc-btn w-full flex items-center justify-between px-4 py-3.5 text-left"
-                                    aria-expanded="false">
+                        <% if (hasKids(n1)) { %>
+                            <button type="button" class="yd-cat-drill w-full flex items-center justify-between px-4 py-3.5 text-left"
+                                    data-target="d2-<%= n1.id %>" data-title="<%= n1.name %>" data-root="<%= n1.id %>">
                                 <span class="font-semibold text-gray-900"><%= n1.name %></span>
-                                <i class="bi bi-chevron-down text-gray-400 transition-transform"></i>
+                                <i class="bi bi-chevron-right text-gray-400"></i>
                             </button>
-                            <div class="yd-acc-body hidden bg-gray-50">
-                                <a href="/products?categoryId=<%= n1.id %>"
-                                   class="block px-6 py-2.5 text-sm text-[var(--gh-primary)] font-medium">
-                                    <%= n1.name %> 전체보기
-                                </a>
-                                <% n1.children.forEach(function (n2) { %>
-                                    <a href="/products?categoryId=<%= n2.id %>"
-                                       class="block px-6 py-2.5 text-sm text-gray-700"><%= n2.name %></a>
-                                    <% if (n2.children && n2.children.length) { %>
-                                        <div class="pl-4">
-                                            <% n2.children.forEach(function (n3) { %>
-                                                <a href="/products?categoryId=<%= n3.id %>"
-                                                   class="block px-6 py-2 text-xs text-gray-500">· <%= n3.name %></a>
-                                            <% }); %>
-                                        </div>
-                                    <% } %>
-                                <% }); %>
-                            </div>
                         <% } else { %>
-                            <a href="/products?categoryId=<%= n1.id %>" class="block px-4 py-3.5 font-semibold text-gray-900">
-                                <%= n1.name %>
-                            </a>
+                            <a href="/products?categoryId=<%= n1.id %>" class="block px-4 py-3.5 font-semibold text-gray-900"><%= n1.name %></a>
                         <% } %>
                     </li>
                 <% }); %>
             </ul>
+
+            <!-- 2뎁스 패널들 -->
+            <% _tree.filter(hasKids).forEach(function (n1) { %>
+                <div id="d2-<%= n1.id %>" class="yd-cat-panel hidden" data-parent="d1" data-root="<%= n1.id %>">
+                    <a href="/products?categoryId=<%= n1.id %>"
+                       class="block px-4 py-3 text-sm font-semibold text-[var(--gh-primary)] border-b border-gray-100">
+                        <%= n1.name %> 전체보기
+                    </a>
+                    <ul class="divide-y divide-gray-100">
+                        <% n1.children.forEach(function (n2) { %>
+                            <li>
+                                <% if (hasKids(n2)) { %>
+                                    <button type="button" class="yd-cat-drill w-full flex items-center justify-between px-4 py-3.5 text-left"
+                                            data-target="d3-<%= n2.id %>" data-title="<%= n2.name %>" data-root="<%= n1.id %>">
+                                        <span class="text-gray-800"><%= n2.name %></span>
+                                        <i class="bi bi-chevron-right text-gray-400"></i>
+                                    </button>
+                                <% } else { %>
+                                    <a href="/products?categoryId=<%= n2.id %>" class="block px-4 py-3.5 text-gray-800"><%= n2.name %></a>
+                                <% } %>
+                            </li>
+                        <% }); %>
+                    </ul>
+                </div>
+            <% }); %>
+
+            <!-- 3뎁스 패널들 -->
+            <% _tree.filter(hasKids).forEach(function (n1) {
+                 n1.children.filter(hasKids).forEach(function (n2) { %>
+                    <div id="d3-<%= n2.id %>" class="yd-cat-panel hidden" data-parent="d2-<%= n1.id %>" data-root="<%= n1.id %>">
+                        <a href="/products?categoryId=<%= n2.id %>"
+                           class="block px-4 py-3 text-sm font-semibold text-[var(--gh-primary)] border-b border-gray-100">
+                            <%= n2.name %> 전체보기
+                        </a>
+                        <ul class="divide-y divide-gray-100">
+                            <% n2.children.forEach(function (n3) { %>
+                                <li><a href="/products?categoryId=<%= n3.id %>" class="block px-4 py-3.5 text-gray-700"><%= n3.name %></a></li>
+                            <% }); %>
+                        </ul>
+                    </div>
+            <% }); }); %>
+        </div>
+
+        <%# 하단 프로모션 — 현재 선택한 1뎁스의 이미지 + 설명 (PC 패널의 프로모션 칸과 같은 역할).
+            1뎁스 화면에서는 보여줄 대상이 없으므로 숨긴다. %>
+        <div id="yd-cat-promo" class="hidden shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-3">
+            <div class="flex items-center gap-3">
+                <img id="yd-cat-promo-img" src="" alt="" class="w-16 h-16 rounded-lg object-cover bg-white border border-gray-200 hidden">
+                <div class="min-w-0">
+                    <p id="yd-cat-promo-name" class="font-semibold text-gray-900 text-sm truncate"></p>
+                    <p id="yd-cat-promo-desc" class="text-xs text-gray-500 line-clamp-2"></p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<%# 1뎁스 이미지·설명을 JS 에 넘긴다(카테고리 수가 많아도 이 표는 1뎁스뿐이라 작다) %>
+<script type="application/json" id="yd-cat-promo-data">
+<%- JSON.stringify(_tree.reduce(function (acc, n) {
+      acc[n.id] = { name: n.name, img: n.logo_image_path || '', desc: n.description || '' };
+      return acc;
+    }, {})) %>
+</script>
 
 <!-- 하단 시스템 바 -->
 <nav class="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-200"
@@ -146,28 +198,82 @@
 (function () {
     var layer = document.getElementById('yd-cat-layer');
     if (!layer) return;
+
     var openBtn  = document.getElementById('yd-cat-open');
     var closeBtn = document.getElementById('yd-cat-close');
+    var backBtn  = document.getElementById('yd-cat-back');
     var dim      = document.getElementById('yd-cat-dim');
+    var title    = document.getElementById('yd-cat-title');
+    var mallForm = document.getElementById('yd-mall-form');
+
+    var promo     = document.getElementById('yd-cat-promo');
+    var promoImg  = document.getElementById('yd-cat-promo-img');
+    var promoName = document.getElementById('yd-cat-promo-name');
+    var promoDesc = document.getElementById('yd-cat-promo-desc');
+
+    var PROMO = {};
+    try { PROMO = JSON.parse(document.getElementById('yd-cat-promo-data').textContent); } catch (e) {}
+
+    var scroller = layer.querySelector('.overflow-y-auto');
+    var stack = ['d1'];   // 현재 패널 스택. 맨 뒤가 보이는 패널.
+
+    function show(id) {
+        layer.querySelectorAll('.yd-cat-panel').forEach(function (p) { p.classList.add('hidden'); });
+        var el = (id === 'd1') ? document.getElementById('yd-cat-d1') : document.getElementById(id);
+        if (el) el.classList.remove('hidden');
+        if (scroller) scroller.scrollTop = 0;
+
+        var atRoot = (id === 'd1');
+        backBtn.classList.toggle('hidden', atRoot);
+        if (mallForm) mallForm.classList.toggle('hidden', !atRoot);   // 몰 선택은 1뎁스에서만
+        if (atRoot) { title.textContent = '카테고리'; promo.classList.add('hidden'); }
+    }
+
+    function setPromo(rootId) {
+        var d = PROMO[rootId];
+        // 이미지도 설명도 없으면 이름만 남는데, 그 이름은 헤더 제목과 중복이다 → 영역 자체를 숨긴다.
+        if (!d || (!d.img && !d.desc)) { promo.classList.add('hidden'); return; }
+        promoName.textContent = d.name;
+        promoDesc.textContent = d.desc || '';
+        if (d.img) { promoImg.src = d.img; promoImg.alt = d.name; promoImg.classList.remove('hidden'); }
+        else { promoImg.classList.add('hidden'); }
+        promo.classList.remove('hidden');
+    }
 
     function open()  { layer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
-    function close() { layer.classList.add('hidden');    document.body.style.overflow = ''; }
+    function close() { layer.classList.add('hidden'); document.body.style.overflow = ''; stack = ['d1']; show('d1'); }
 
     if (openBtn)  openBtn.addEventListener('click', open);
     if (closeBtn) closeBtn.addEventListener('click', close);
     if (dim)      dim.addEventListener('click', close);
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !layer.classList.contains('hidden')) close(); });
 
-    // 아코디언 — hover 가 아니라 탭으로 연다(터치 기기)
-    layer.querySelectorAll('.yd-acc-btn').forEach(function (btn) {
+    // 1뎁스 → 2뎁스 → 3뎁스 드릴다운
+    layer.querySelectorAll('.yd-cat-drill').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var body = btn.nextElementSibling;
-            var icon = btn.querySelector('.bi-chevron-down');
-            var willOpen = body.classList.contains('hidden');
-            body.classList.toggle('hidden');
-            btn.setAttribute('aria-expanded', String(willOpen));
-            if (icon) icon.style.transform = willOpen ? 'rotate(180deg)' : '';
+            var target = btn.getAttribute('data-target');
+            var root   = btn.getAttribute('data-root');
+            if (!document.getElementById(target)) return;
+            stack.push(target);
+            show(target);
+            title.textContent = btn.getAttribute('data-title') || '카테고리';
+            setPromo(root);
         });
+    });
+
+    backBtn.addEventListener('click', function () {
+        if (stack.length <= 1) return;
+        stack.pop();
+        var cur = stack[stack.length - 1];
+        show(cur);
+        if (cur !== 'd1') {
+            var el = document.getElementById(cur);
+            var root = el && el.getAttribute('data-root');
+            // 되돌아간 패널의 제목은 그 패널을 연 버튼의 라벨이다
+            var opener = layer.querySelector('.yd-cat-drill[data-target="' + cur + '"]');
+            title.textContent = opener ? (opener.getAttribute('data-title') || '카테고리') : '카테고리';
+            if (root) setPromo(root);
+        }
     });
 })();
 </script>
