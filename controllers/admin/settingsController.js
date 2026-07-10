@@ -47,10 +47,15 @@ function buildBrandPalette({ main, dark, light }) {
     };
 }
 
-async function loadSettingsData() {
-    const [rows] = await pool.query('SELECT * FROM site_settings WHERE id = 1');
+async function loadSettingsData(mallId = 1) {
+    // P5: 편집 중인 몰의 브랜딩. 없으면 기본몰 행을 보여준다(새 몰 초기값).
+    let [rows] = await pool.query('SELECT * FROM site_settings WHERE mall_id = ? LIMIT 1', [mallId]);
+    if (!rows.length) {
+        [rows] = await pool.query('SELECT * FROM site_settings ORDER BY (mall_id = 1) DESC, id ASC LIMIT 1');
+    }
     const settings = rows[0] || {};
 
+    // system_settings 는 전역(OAuth·SMTP·결제 키). 몰별로 나누지 않는다.
     const [systemRows] = await pool.query('SELECT setting_key, setting_value FROM system_settings');
     const systemSettings = {};
     for (const row of systemRows) {
@@ -76,7 +81,7 @@ function renderSettingsPage(res, { pageTitle, activeTab, basePath, showTabs, set
 exports.getSettings = async (req, res) => {
     const activeTab = req.query.tab === 'system' ? 'system' : 'company';
     try {
-        const { settings, systemSettings } = await loadSettingsData();
+        const { settings, systemSettings } = await loadSettingsData(req.adminMallId || 1);
         return renderSettingsPage(res, {
             pageTitle: '환경 설정',
             activeTab,
@@ -93,7 +98,7 @@ exports.getSettings = async (req, res) => {
 
 exports.getSiteSettings = async (req, res) => {
     try {
-        const { settings, systemSettings } = await loadSettingsData();
+        const { settings, systemSettings } = await loadSettingsData(req.adminMallId || 1);
         return renderSettingsPage(res, {
             pageTitle: '사이트 설정',
             activeTab: 'company',
@@ -110,7 +115,7 @@ exports.getSiteSettings = async (req, res) => {
 
 exports.getSysSettings = async (req, res) => {
     try {
-        const { settings, systemSettings } = await loadSettingsData();
+        const { settings, systemSettings } = await loadSettingsData(req.adminMallId || 1);
         return renderSettingsPage(res, {
             pageTitle: '시스템 설정',
             activeTab: 'system',
@@ -194,20 +199,30 @@ exports.updateSettings = async (req, res) => {
         }
     }
 
+    const MALL_ID = req.adminMallId || 1; // P5: 편집 중인 몰의 브랜딩
     try {
+        // 이 몰의 행이 없으면(새 몰) 만들고, 있으면 갱신한다(mall_id 유니크).
         await pool.query(`
-            UPDATE site_settings 
-            SET company_name=?, logo_url=?, favicon_url=?, business_number=?, address=?, contact_email=?, contact_phone=?,
-                header_slogan=?, slogan=?, company_intro=?,
-                instagram_enabled=?, instagram_url=?,
-                facebook_enabled=?, facebook_url=?,
-                youtube_enabled=?, youtube_url=?,
-                kakao_channel_enabled=?, kakao_channel_url=?,
-                ga4_measurement_id=?,
-                brand_main_color=?, brand_dark_color=?, brand_light_color=?,
-                kakao_share_image_url=?
-            WHERE id=1
+            INSERT INTO site_settings
+                (mall_id, company_name, logo_url, favicon_url, business_number, address, contact_email, contact_phone,
+                 header_slogan, slogan, company_intro,
+                 instagram_enabled, instagram_url, facebook_enabled, facebook_url,
+                 youtube_enabled, youtube_url, kakao_channel_enabled, kakao_channel_url,
+                 ga4_measurement_id, brand_main_color, brand_dark_color, brand_light_color, kakao_share_image_url)
+            VALUES (?,?,?,?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE
+                company_name=VALUES(company_name), logo_url=VALUES(logo_url), favicon_url=VALUES(favicon_url),
+                business_number=VALUES(business_number), address=VALUES(address), contact_email=VALUES(contact_email),
+                contact_phone=VALUES(contact_phone), header_slogan=VALUES(header_slogan), slogan=VALUES(slogan),
+                company_intro=VALUES(company_intro), instagram_enabled=VALUES(instagram_enabled), instagram_url=VALUES(instagram_url),
+                facebook_enabled=VALUES(facebook_enabled), facebook_url=VALUES(facebook_url),
+                youtube_enabled=VALUES(youtube_enabled), youtube_url=VALUES(youtube_url),
+                kakao_channel_enabled=VALUES(kakao_channel_enabled), kakao_channel_url=VALUES(kakao_channel_url),
+                ga4_measurement_id=VALUES(ga4_measurement_id), brand_main_color=VALUES(brand_main_color),
+                brand_dark_color=VALUES(brand_dark_color), brand_light_color=VALUES(brand_light_color),
+                kakao_share_image_url=VALUES(kakao_share_image_url)
         `, [
+            MALL_ID,
             company_name,
             logo_url,
             favicon_url,
