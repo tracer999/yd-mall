@@ -43,7 +43,11 @@
 
 <!-- ── 섹션 조립 렌더 (page_section 순서대로) ── -->
 <% _sections.forEach(function (section) { %>
-  <%- include('../' + section.view, section.locals) %>
+  <% try { %>
+    <%- include('../' + section.view, section.locals) %>
+  <% } catch (e) { %>
+    <% console.error('[home] 섹션 렌더 실패 — 스킵:', section.type, e && e.message); %>
+  <% } %>
 <% }); %>
 
 <!-- ── 페이지 스크립트 (여러 섹션 공유) ── -->

@@ -63,6 +63,18 @@ const OPTIONS = Object.freeze({
             };
         },
     },
+    // src 가 비었거나 실제 경로로 보이지 않는 img 는 제거한다.
+    // (예: <img src=x onerror=…> 의 onerror 는 속성 화이트리스트로 이미 제거되지만,
+    //  깨진 src="x" 가 남아 브라우저에 깨진 이미지 아이콘으로 노출되는 것을 막는다.)
+    exclusiveFilter: (frame) => {
+        if (frame.tag !== 'img') return false;
+        const src = ((frame.attribs && frame.attribs.src) || '').trim();
+        if (!src) return true;
+        const looksReal = /^(https?:)?\/\//i.test(src)      // http(s):// 또는 //cdn
+            || src.startsWith('/')                          // 절대경로 /uploads/…
+            || /\.[a-z0-9]{2,5}([?#]|$)/i.test(src);        // 확장자 있는 상대경로
+        return !looksReal;
+    },
     disallowedTagsMode: 'discard',
 });
 

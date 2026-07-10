@@ -125,8 +125,12 @@ exports.getHome = async (req, res) => {
 // 관리자 미리보기: 라이브 page_section(작업본) 기준 draft 렌더 (발행 전 확인용)
 exports.getHomePreview = async (req, res) => {
     try {
-        const displayService = require('../services/display/displayService');
-        const page = await displayService.getHomePage();
+        const builder = require('../services/display/pageBuilderService');
+        // 미리보기는 "편집 중인 몰"(adminMallId)의 작업본을 렌더해야 한다.
+        // req.mallId 를 편집 몰로 맞춰야 히어로·상품 리졸버가 같은 몰로 스코프된다.
+        req.mallId = req.adminMallId || req.mallId || 1;
+        // builder.getHomePage 는 status 무필터 → 아직 발행 안 한 draft 홈도 잡는다.
+        const page = await builder.getHomePage(req.mallId);
         const { shared, renderData } = await buildHomeContext(req, res);
         const sections = page ? await displayService.getDraftSections(page.id, shared) : [];
         res.render('user/index', Object.assign({
