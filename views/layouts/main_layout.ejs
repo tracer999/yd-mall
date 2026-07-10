@@ -411,6 +411,18 @@
                                                                                                         }
                                                                                                     }
                                                                                                 </style>
+
+    <%#
+      모바일 하단 시스템 바(fixed)가 본문·푸터 마지막 줄을 가리지 않게 여백을 준다.
+      main 이 아니라 body 에 준다 — 푸터가 main 바깥이라 main 에만 주면 푸터가 가려진다.
+
+      실제 바 높이 = ul(h-16 = 4rem) + border-top(1px) + 노치 여백(env(safe-area-inset-bottom)).
+      pb-16(64px) 만으로는 테두리 1px 과 노치(iPhone 최대 34px)가 모자란다.
+    %>
+    <style>
+      :root { --yd-mbnav-h: calc(4rem + 1px + env(safe-area-inset-bottom, 0px)); }
+      @media (max-width: 767.98px) { body { padding-bottom: var(--yd-mbnav-h); } }
+    </style>
 </head>
 
 <body class="flex flex-col min-h-screen yd-card-<%= _cardStyle %>">
@@ -437,10 +449,13 @@
         <%- body %>
     </main>
 
-    <!-- Right Utility Rail (전역, CT-7) -->
+    <!-- Right Utility Rail (전역, CT-7) — @media(min-width:1600px) 에서만 노출되므로 하단 바와 겹치지 않는다 -->
     <% if (_hasRightUtility) { %>
         <%- include('../partials/storefront/right_utility') %>
     <% } %>
+
+    <!-- 모바일 하단 시스템 바 + 카테고리 전체 레이어 (md:hidden) -->
+    <%- include('../partials/storefront/mobile_bottom_nav') %>
 
     <!-- Footer -->
     <footer class="bg-white border-t border-gray-200 text-gray-600 mt-auto">
@@ -588,14 +603,9 @@
         </script>
 
             <script>
-                // Mobile Menu Toggle
-                const menuBtn = document.getElementById('mobile-menu-btn');
-                const mobileMenu = document.getElementById('mobile-menu');
-                if (menuBtn && mobileMenu) {
-                    menuBtn.addEventListener('click', () => {
-                        mobileMenu.classList.toggle('hidden');
-                    });
-                }
+                // 모바일 햄버거 드롭다운은 제거됐다. 모바일 내비게이션은
+                // GNB 슬라이더 + 하단 시스템 바 + 카테고리 전체 레이어가 담당한다
+                // (partials/storefront/mobile_bottom_nav.ejs 가 자체 스크립트를 갖는다).
 
                 // 카테고리 드롭다운 토글 (클릭 시 하위 카테고리 패널 표시)
                 // 패널이 좁아 뒤 콘텐츠(히어로 LNB 등)와 겹쳐 보이므로 백드롭을 함께 띄운다.

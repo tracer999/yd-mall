@@ -15,8 +15,9 @@
 %>
     <!-- Header -->
     <header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
-        <!-- Top Bar -->
-        <div class="bg-[var(--gh-secondary)] text-sm h-12 flex items-center px-4 border-b border-green-50">
+        <!-- Top Bar — 모바일에서는 숨긴다(모바일은 로고줄 + GNB 슬라이더 + 하단바 구조).
+             여기 있던 몰 선택은 모바일에서 카테고리 레이어 상단으로 옮겨간다. -->
+        <div class="hidden md:flex bg-[var(--gh-secondary)] text-sm h-12 items-center px-4 border-b border-green-50">
             <div class="max-w-7xl mx-auto flex justify-between items-center w-full">
                 <span class="hidden sm:inline text-gray-700 font-normal">
                     <%= siteSettings.header_slogan || '건강한 하루의 시작 | 와이디몰' %>
@@ -101,14 +102,14 @@
                     </a>
                 </div>
 
-                <!-- Search (center) -->
-                <form action="/search" method="get" class="hidden md:flex flex-1 max-w-2xl mx-auto" role="search">
+                <!-- Search (center) — 모바일에서도 노출한다(로고 + 검색 + 장바구니 구조) -->
+                <form action="/search" method="get" class="flex flex-1 max-w-2xl mx-auto" role="search">
                     <div class="relative w-full">
                         <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
-                            class="w-full h-12 rounded-full border-2 border-[var(--gh-primary)] pl-5 pr-14 text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20 bg-white">
+                            class="w-full h-10 md:h-12 rounded-full border-2 border-[var(--gh-primary)] pl-4 md:pl-5 pr-11 md:pr-14 text-sm md:text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20 bg-white">
                         <button type="submit" aria-label="검색"
-                            class="absolute right-1.5 top-1.5 h-9 w-9 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--gh-primary)]">
-                            <i class="bi bi-search text-xl"></i>
+                            class="absolute right-1 md:right-1.5 top-1 md:top-1.5 h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--gh-primary)]">
+                            <i class="bi bi-search text-lg md:text-xl"></i>
                         </button>
                     </div>
                 </form>
@@ -144,14 +145,42 @@
                         </a>
                     <% } %>
 
-                    <!-- Mobile menu button -->
-                    <button type="button" id="mobile-menu-btn"
-                        class="md:hidden text-gray-500 hover:text-[var(--gh-primary)] p-2">
-                        <i class="bi bi-list text-2xl"></i>
-                    </button>
+                    <%#
+                      모바일 햄버거 버튼은 제거했다. 모바일 내비게이션은
+                      GNB 슬라이더(아래) + 하단 시스템 바 + 카테고리 전체 레이어가 담당한다
+                      (partials/storefront/mobile_bottom_nav.ejs). 두 벌의 모바일 메뉴를 두지 않는다.
+                    %>
                 </div>
             </div>
         </div>
+
+        <!-- Mobile GNB 슬라이더 — 가로 스크롤. 카테고리는 여기 없다(하단 바가 담당). -->
+        <nav class="md:hidden border-t border-gray-100" aria-label="주 메뉴">
+            <div class="yd-mgnb flex items-center gap-1 overflow-x-auto px-2">
+                <%# 관리자가 모바일 노출을 끈 메뉴는 제외한다(mall_feature_menu.mobile_visible) %>
+                <% (typeof gnbMenus !== 'undefined' ? gnbMenus : [])
+                     .filter(function (m) { return m.mobileVisible !== 0; })
+                     .forEach(function (m) { %>
+                    <% const _active = (typeof currentPath !== 'undefined') && m.href && currentPath === m.href; %>
+                    <a href="<%= m.href %>" <%= m.newWindow ? 'target="_blank" rel="noopener"' : '' %>
+                       class="relative shrink-0 px-3 py-2.5 text-sm whitespace-nowrap transition-colors
+                              <%= _active ? 'font-bold text-[var(--gh-primary)]' : 'text-gray-700' %>">
+                        <%= m.name %>
+                        <% if (m.badgeType) { %>
+                            <span class="absolute top-1 -right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--gh-accent)]"></span>
+                        <% } %>
+                        <% if (_active) { %>
+                            <span class="absolute left-2 right-2 bottom-0 h-0.5 bg-[var(--gh-primary)] rounded-full"></span>
+                        <% } %>
+                    </a>
+                <% }); %>
+            </div>
+        </nav>
+        <style>
+          /* 가로 스크롤바 숨김 — 슬라이딩 느낌을 살린다 */
+          .yd-mgnb { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+          .yd-mgnb::-webkit-scrollbar { display: none; }
+        </style>
 
         <!-- Header Row 2: GNB (카테고리 드롭다운 + 몰별 가변 메뉴) -->
         <div class="hidden md:block border-t border-gray-100">
@@ -198,59 +227,6 @@
             </div>
         </div>
 
-        <!-- Mobile Menu Panel -->
-        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-100 absolute w-full shadow-lg">
-            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <!-- 모바일 검색 -->
-                <form action="/search" method="get" class="px-2 py-2" role="search">
-                    <div class="relative">
-                        <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
-                            class="w-full h-11 rounded-full border-2 border-[var(--gh-primary)] pl-4 pr-11 text-base focus:outline-none">
-                        <button type="submit" aria-label="검색" class="absolute right-1.5 top-1.5 h-8 w-8 flex items-center justify-center text-gray-500">
-                            <i class="bi bi-search text-lg"></i>
-                        </button>
-                    </div>
-                </form>
-
-                <!-- 몰별 가변 메뉴 (모바일 노출 항목만) -->
-                <% var _mobileMenus = (typeof gnbMenus !== 'undefined' ? gnbMenus : []).filter(function(m){ return m.mobileVisible !== 0; }); %>
-                <% if (_mobileMenus.length > 0) { %>
-                    <p class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider py-1">메뉴</p>
-                    <% _mobileMenus.forEach(function (m) { %>
-                        <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
-                            class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">
-                            <%= m.name %>
-                            <% if (m.badgeType) { %>
-                                <span class="ml-1 align-middle text-[9px] font-extrabold px-1 py-0.5 rounded
-                                    <%= m.badgeType === 'HOT' ? 'bg-red-500 text-white'
-                                      : (m.badgeType === 'SALE' ? 'bg-amber-500 text-white'
-                                      : 'bg-[var(--gh-primary)] text-white') %>"><%= m.badgeType %></span>
-                            <% } %>
-                        </a>
-                    <% }); %>
-                <% } %>
-
-                <!-- 카테고리(전체 뎁스) -->
-                <% if (typeof categoryTree !== 'undefined' && categoryTree.length > 0) { %>
-                    <div class="border-t border-gray-100 my-2"></div>
-                    <p class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider py-1"><i class="bi bi-list mr-1"></i>카테고리</p>
-                    <ul>
-                        <% categoryTree.forEach(function (node) { %>
-                            <%- include('./category_node', { node: node }) %>
-                        <% }); %>
-                    </ul>
-                <% } %>
-
-                                <div class="border-t border-gray-100 my-2"></div>
-                                <!-- <a href="/guide"
-                                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">이용가이드</a> -->
-                                <a href="/boards/notice"
-                                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">게시판</a>
-                                <a href="/inquiries"
-                                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[var(--gh-primary)] hover:bg-[var(--gh-secondary)]">1:1
-                                    문의</a>
-            </div>
-        </div>
     </header>
 
     <%# 카테고리 드롭다운 백드롭 — 패널 뒤 콘텐츠(히어로 LNB 등)와의 겹침을 없앤다.

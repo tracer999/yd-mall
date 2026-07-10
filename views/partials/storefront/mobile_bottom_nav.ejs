@@ -1,0 +1,173 @@
+<%
+  /*
+   * 모바일 하단 시스템 내비게이션 + 카테고리 전체 레이어
+   *
+   * 구조(CJ온스타일형):
+   *   [헤더] 로고 + 검색 + 장바구니        ← header.ejs
+   *   [GNB]  일반 메뉴 가로 슬라이딩        ← header.ejs (.yd-mgnb)
+   *   [본문]
+   *   [하단바] 홈 · 카테고리 · 장바구니 · 마이   ← 이 파일 (md:hidden, fixed)
+   *
+   * 카테고리 레이어는 **탭(클릭)으로 여닫는다**. PC 의 category_panel.ejs 는 CSS hover
+   * 캐스케이드라 터치 기기에서 동작하지 않는다. 그래서 재사용하지 않고 아코디언으로 따로 만든다.
+   *
+   * 하단 바가 fixed 이므로 본문 마지막 줄을 가린다 → main_layout 이 <main> 에
+   * `pb-16 md:pb-0` 를 준다. 높이를 바꾸면 그 패딩도 함께 바꿔야 한다.
+   *
+   * 항목은 하드코딩이다. feature_menu(position='mobile_quick') 로 뺄 수 있으나
+   * 해당 행이 0건이고 관리 요구도 아직 없다. 필요해지면 그때 데이터로 옮긴다.
+   *
+   * locals: categoryTree, malls, mallId, cartCount, user, currentPath
+   */
+  const _tree = (typeof categoryTree !== 'undefined' && categoryTree) ? categoryTree : [];
+  const _malls = (typeof malls !== 'undefined' && malls) ? malls : [];
+  const _cart = (typeof cartCount !== 'undefined' && cartCount) ? Number(cartCount) : 0;
+  const _path = (typeof currentPath !== 'undefined') ? currentPath : '';
+  const _user = (typeof user !== 'undefined') ? user : null;
+  const isOn = (href) => _path === href;
+%>
+
+<!-- 카테고리 전체 레이어 (탭으로 열림) -->
+<div id="yd-cat-layer" class="md:hidden fixed inset-0 z-[60] hidden" role="dialog" aria-modal="true" aria-label="카테고리">
+    <div id="yd-cat-dim" class="absolute inset-0 bg-black/40"></div>
+
+    <div class="absolute inset-x-0 bottom-0 top-14 bg-white rounded-t-2xl flex flex-col overflow-hidden">
+        <header class="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0">
+            <h2 class="text-lg font-bold text-gray-900">카테고리</h2>
+            <button type="button" id="yd-cat-close" aria-label="닫기" class="p-2 -mr-2 text-gray-500">
+                <i class="bi bi-x-lg text-xl"></i>
+            </button>
+        </header>
+
+        <%# 몰 선택 — Top Bar 가 모바일에서 숨겨지므로 여기로 옮겨왔다 %>
+        <% if (_malls.length > 1) { %>
+            <form method="get" action="/" class="px-4 py-3 border-b border-gray-100 shrink-0">
+                <label for="yd-mall-switch-m" class="block text-xs font-semibold text-gray-400 mb-1">몰 선택</label>
+                <select id="yd-mall-switch-m" name="mall" onchange="this.form.submit()"
+                        class="w-full h-10 rounded-lg border border-gray-300 bg-white text-sm text-gray-800 px-3">
+                    <% _malls.forEach(function (m) { %>
+                        <option value="<%= m.code %>" <%= Number(m.id) === Number(mallId) ? 'selected' : '' %>>
+                            <%= m.name %>
+                        </option>
+                    <% }); %>
+                </select>
+                <noscript><button type="submit" class="mt-2 w-full h-9 rounded-lg border border-gray-300 text-sm">이동</button></noscript>
+            </form>
+        <% } %>
+
+        <div class="flex-1 overflow-y-auto overscroll-contain pb-6">
+            <% if (!_tree.length) { %>
+                <p class="p-8 text-center text-gray-400 text-sm">등록된 카테고리가 없습니다.</p>
+            <% } %>
+
+            <ul class="divide-y divide-gray-100">
+                <% _tree.forEach(function (n1) { %>
+                    <li>
+                        <% const has2 = n1.children && n1.children.length > 0; %>
+                        <% if (has2) { %>
+                            <button type="button"
+                                    class="yd-acc-btn w-full flex items-center justify-between px-4 py-3.5 text-left"
+                                    aria-expanded="false">
+                                <span class="font-semibold text-gray-900"><%= n1.name %></span>
+                                <i class="bi bi-chevron-down text-gray-400 transition-transform"></i>
+                            </button>
+                            <div class="yd-acc-body hidden bg-gray-50">
+                                <a href="/products?categoryId=<%= n1.id %>"
+                                   class="block px-6 py-2.5 text-sm text-[var(--gh-primary)] font-medium">
+                                    <%= n1.name %> 전체보기
+                                </a>
+                                <% n1.children.forEach(function (n2) { %>
+                                    <a href="/products?categoryId=<%= n2.id %>"
+                                       class="block px-6 py-2.5 text-sm text-gray-700"><%= n2.name %></a>
+                                    <% if (n2.children && n2.children.length) { %>
+                                        <div class="pl-4">
+                                            <% n2.children.forEach(function (n3) { %>
+                                                <a href="/products?categoryId=<%= n3.id %>"
+                                                   class="block px-6 py-2 text-xs text-gray-500">· <%= n3.name %></a>
+                                            <% }); %>
+                                        </div>
+                                    <% } %>
+                                <% }); %>
+                            </div>
+                        <% } else { %>
+                            <a href="/products?categoryId=<%= n1.id %>" class="block px-4 py-3.5 font-semibold text-gray-900">
+                                <%= n1.name %>
+                            </a>
+                        <% } %>
+                    </li>
+                <% }); %>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- 하단 시스템 바 -->
+<nav class="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-200"
+     style="padding-bottom: env(safe-area-inset-bottom);" aria-label="시스템 메뉴">
+    <ul class="grid grid-cols-4 h-16">
+        <li>
+            <a href="/" class="h-full flex flex-col items-center justify-center gap-0.5 <%= isOn('/') ? 'text-[var(--gh-primary)]' : 'text-gray-500' %>">
+                <i class="bi <%= isOn('/') ? 'bi-house-fill' : 'bi-house' %> text-xl"></i>
+                <span class="text-[11px]">홈</span>
+            </a>
+        </li>
+        <li>
+            <button type="button" id="yd-cat-open" class="w-full h-full flex flex-col items-center justify-center gap-0.5 text-gray-500">
+                <i class="bi bi-grid text-xl"></i>
+                <span class="text-[11px]">카테고리</span>
+            </button>
+        </li>
+        <li>
+            <a href="/cart" class="relative h-full flex flex-col items-center justify-center gap-0.5 <%= isOn('/cart') ? 'text-[var(--gh-primary)]' : 'text-gray-500' %>">
+                <i class="bi <%= isOn('/cart') ? 'bi-bag-fill' : 'bi-bag' %> text-xl"></i>
+                <span class="text-[11px]">장바구니</span>
+                <% if (_cart > 0) { %>
+                    <span class="absolute top-2 right-[26%] bg-[var(--gh-accent)] text-white text-[10px] font-bold min-w-4 h-4 px-1 flex items-center justify-center rounded-full">
+                        <%= _cart %>
+                    </span>
+                <% } %>
+            </a>
+        </li>
+        <li>
+            <a href="<%= _user ? '/mypage' : '/auth/login' %>"
+               class="h-full flex flex-col items-center justify-center gap-0.5 <%= isOn('/mypage') ? 'text-[var(--gh-primary)]' : 'text-gray-500' %>">
+                <% if (_user && _user.picture) { %>
+                    <img src="<%= _user.picture %>" alt="" class="w-6 h-6 rounded-full object-cover border border-gray-200">
+                <% } else { %>
+                    <i class="bi <%= isOn('/mypage') ? 'bi-person-fill' : 'bi-person' %> text-xl"></i>
+                <% } %>
+                <span class="text-[11px]"><%= _user ? '마이' : '로그인' %></span>
+            </a>
+        </li>
+    </ul>
+</nav>
+
+<script>
+(function () {
+    var layer = document.getElementById('yd-cat-layer');
+    if (!layer) return;
+    var openBtn  = document.getElementById('yd-cat-open');
+    var closeBtn = document.getElementById('yd-cat-close');
+    var dim      = document.getElementById('yd-cat-dim');
+
+    function open()  { layer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+    function close() { layer.classList.add('hidden');    document.body.style.overflow = ''; }
+
+    if (openBtn)  openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (dim)      dim.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+    // 아코디언 — hover 가 아니라 탭으로 연다(터치 기기)
+    layer.querySelectorAll('.yd-acc-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var body = btn.nextElementSibling;
+            var icon = btn.querySelector('.bi-chevron-down');
+            var willOpen = body.classList.contains('hidden');
+            body.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', String(willOpen));
+            if (icon) icon.style.transform = willOpen ? 'rotate(180deg)' : '';
+        });
+    });
+})();
+</script>
