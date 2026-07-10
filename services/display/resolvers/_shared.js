@@ -36,4 +36,75 @@ async function loadHomeCategories(hasUser, mallId = 1) {
     return rows;
 }
 
-module.exports = { P_STATUS, visibilityClause, loadHomeCategories };
+/**
+ * 홈 "카테고리별 베스트" 섹션용 (CT category_showcase 신규):
+ * 최상위(depth-1, parent_id NULL) NORMAL 카테고리마다 서브트리 전체에서 베스트 상품 N개.
+ *
+ * - 최상위 카테고리는 직접 상품이 0이어도 자식에 상품이 있을 수 있으므로(예: 여성패션),
+ *   반드시 서브트리(자신+모든 후손) 기준으로 상품을 집계한다.
+ * - best = view_count DESC (ranking_tabs 관례와 동일). 시드 데이터의 view_count 가 평평하면
+ *   created_at DESC 로 자연 degrade.
+ * - 상품이 1건도 없는 최상위 카테고리는 스킵.
+ *
+ * opts: { productLimit=5, categoryLimit=20 }
+ * 반환: [{ id, name, products: [...] }]
+ */
+async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
+    const productLimit = Math.min(Number(opts.productLimit) || 5, 12);
+    const categoryLimit = Math.min(Number(opts.categoryLimit) || 20, 40);
+    const vis = visibilityClause(hasUser);
+
+    // 몰의 활성 NORMAL 카테고리 전체 (트리 구성용) — 쿼리 1회
+    const [cats] = await pool.query(`
+        SELECT id, name, parent_id
+        FROM categories
+        WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1
+        ORDER BY display_order ASC, id ASC
+    `, [mallId]);
+    if (!cats.length) return [];
+
+    // parent_id → children 맵 (parent_id NULL 은 키 0)
+    const childrenOf = new Map();
+    for (const c of cats) {
+        const p = c.parent_id || 0;
+        if (!childrenOf.has(p)) childrenOf.set(p, []);
+        childrenOf.get(p).push(c);
+    }
+    const roots = (childrenOf.get(0) || []).slice(0, categoryLimit);
+
+    // 최상위 root 별 서브트리 id (BFS, 순환 가드)
+    const subtreeIds = (rootId) => {
+        const ids = [];
+        const seen = new Set();
+        const queue = [rootId];
+        while (queue.length) {
+            const cur = queue.shift();
+            if (seen.has(cur)) continue;
+            seen.add(cur);
+            ids.push(cur);
+            (childrenOf.get(cur) || []).forEach(ch => queue.push(ch.id));
+        }
+        return ids;
+    };
+
+    const result = [];
+    for (const root of roots) {
+        const ids = subtreeIds(root.id);
+        const placeholders = ids.map(() => '?').join(',');
+        const [products] = await pool.query(`
+            SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
+                   p.discount_rate, p.status, p.stock, p.provider,
+                   p.product_badge, p.distribution_badge
+            FROM products p
+            WHERE p.category_id IN (${placeholders}) AND ${P_STATUS} AND ${vis}
+            ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT','OFF'),
+                     p.view_count DESC, p.created_at DESC
+            LIMIT ?
+        `, [...ids, productLimit]);
+        if (products.length === 0) continue; // 빈 최상위 카테고리는 스킵
+        result.push({ id: root.id, name: root.name, products });
+    }
+    return result;
+}
+
+module.exports = { P_STATUS, visibilityClause, loadHomeCategories, loadHomeCategoryBests };

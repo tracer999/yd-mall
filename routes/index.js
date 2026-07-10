@@ -53,7 +53,6 @@ router.post('/api/pv-duration', express.json(), async (req, res) => {
 });
 
 router.get('/', mainController.getHome);
-router.get('/api/main/category-products', mainController.getCategoryProducts);
 router.get('/search', productController.searchPage);
 router.get('/design-guide/user', (req, res) => {
 	res.render('user/design_guide', {

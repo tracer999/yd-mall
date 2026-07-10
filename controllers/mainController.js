@@ -139,35 +139,3 @@ exports.getHomePreview = async (req, res) => {
         res.status(500).send('미리보기 렌더 오류');
     }
 };
-
-// AJAX: 카테고리별 상품 목록 (탭 전환용)
-exports.getCategoryProducts = async (req, res) => {
-    try {
-        const categoryId = parseInt(req.query.category_id, 10);
-        if (!categoryId) return res.json({ products: [] });
-
-        const vFilter = req.user
-            ? "p.visibility IN ('PUBLIC','MEMBER_ONLY')"
-            : "p.visibility = 'PUBLIC'";
-
-        const [[catCfg]] = await pool.query(
-            "SELECT max_count FROM main_display_sections WHERE section_key = 'category'"
-        );
-        const limit = (catCfg && catCfg.max_count) || 8;
-
-        const [products] = await pool.query(`
-            SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
-                   p.discount_rate,
-                   p.status, p.stock, p.provider,
-                   p.product_badge, p.distribution_badge
-            FROM products p
-            WHERE p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${vFilter} AND p.category_id = ?
-            ORDER BY FIELD(p.status,'ON','COMING_SOON','RESTOCK','SOLD_OUT','OFF'), p.created_at DESC LIMIT ?
-        `, [categoryId, limit]);
-
-        res.json({ products });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server Error' });
-    }
-};

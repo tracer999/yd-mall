@@ -6,7 +6,6 @@
    * <style>/<script>는 여러 섹션이 공유하는 페이지 크롬으로 여기 유지한다.
    */
   const _sections = sections || [];
-  const _hasCategory = _sections.some(function (s) { return s.type === 'category_showcase'; });
 %>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
@@ -37,22 +36,6 @@
   .badge-best     { background: #ef4444; color: #fff; }
   .badge-new      { background: #10b981; color: #fff; }
   .badge-recommend{ background: #f59e0b; color: #fff; }
-
-  /* 카테고리 탭 */
-  .cat-tab {
-    padding: 0.5rem 1.25rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    border-radius: 9999px;
-    border: 1.5px solid #e5e7eb;
-    color: #6b7280;
-    background: #fff;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-  .cat-tab:hover { border-color: var(--gh-primary); color: var(--gh-primary); }
-  .cat-tab.active { background: var(--gh-primary); color: #fff; border-color: var(--gh-primary); }
 </style>
 
 <!-- ── 팝업 배너(오버레이) ── -->
@@ -117,109 +100,3 @@
 </script>
 <% } %>
 
-<!-- ── 카테고리 탭 AJAX (category_showcase 섹션이 있을 때만) ── -->
-<% if (_hasCategory) { %>
-<script>
-(function () {
-  function renderCard(p) {
-    var status = p.status || 'ON';
-    var stock = (p.stock != null && p.stock >= 0) ? p.stock : 0;
-    var isSoldOut = status === 'SOLD_OUT' || stock <= 0;
-    var isStopped = status === 'OFF';
-    var isComingSoon = status === 'COMING_SOON';
-    var price = p.price;
-    var listPrice = (p.original_price && p.original_price > price) ? p.original_price : null;
-    var detailPath = (p.slug && p.slug.trim())
-      ? '/products/' + encodeURIComponent(p.slug)
-      : '/products/view/' + p.id;
-
-    var distBadge = p.distribution_badge === 'ONLINE_ONLY' ? '온라인판매가능'
-                  : (p.distribution_badge === 'OFFLINE_ONLY' ? '오프라인전용' : null);
-    var pBadgeText = p.product_badge === 'BEST' ? 'BEST'
-                   : (p.product_badge === 'NEW' ? 'NEW'
-                   : (p.product_badge === 'RECOMMEND' ? '추천' : null));
-    var pBadgeClass = p.product_badge === 'BEST' ? 'badge-best'
-                    : (p.product_badge === 'NEW' ? 'badge-new'
-                    : (p.product_badge === 'RECOMMEND' ? 'badge-recommend' : ''));
-
-    var badgesHtml = '';
-    if (distBadge || pBadgeText) {
-      badgesHtml = '<div class="absolute top-2 left-2 z-20 flex flex-wrap gap-1.5">';
-      if (distBadge) badgesHtml += '<span class="product-pill-badge badge-channel">' + distBadge + '</span>';
-      if (pBadgeText) badgesHtml += '<span class="product-pill-badge ' + pBadgeClass + '">' + pBadgeText + '</span>';
-      badgesHtml += '</div>';
-    }
-
-    var saleHtml = (p.discount_rate > 0)
-      ? '<span class="absolute bottom-2 right-2 brand-badge text-xs font-bold px-2 py-1 rounded z-20 shadow-sm">' + p.discount_rate + '% SALE</span>'
-      : '';
-
-    var statusHtml = '';
-    if (isStopped || isComingSoon || isSoldOut) {
-      var cls = isStopped ? 'bg-red-600/90'
-              : (isComingSoon ? 'bg-gradient-to-r from-yellow-400/90 to-orange-400/90 status-banner-blink'
-              : 'bg-gray-800/85');
-      var label = isStopped ? '판매중지' : (isComingSoon ? 'COMING SOON' : 'SOLD OUT');
-      var ovCls = (isSoldOut && !isStopped && !isComingSoon) ? 'bg-black/20' : '';
-      statusHtml = '<div class="absolute inset-0 flex items-center justify-center pointer-events-none ' + ovCls + '">'
-                 + '<div class="px-4 py-1.5 rounded-lg text-white text-sm font-bold shadow-md backdrop-blur-sm ' + cls + '">' + label + '</div>'
-                 + '</div>';
-    }
-
-    var imgDim = (isSoldOut && !isStopped && !isComingSoon) ? 'opacity-60 grayscale-[0.5]' : '';
-
-    var priceHtml = '';
-    if (listPrice) {
-      priceHtml += '<span class="text-gray-400 text-xs line-through">' + Number(listPrice).toLocaleString() + '원</span>';
-    }
-    priceHtml += '<span class="text-gray-900 font-bold text-lg">' + Number(price).toLocaleString() + '원</span>';
-
-    return '<div class="group relative bg-white border border-gray-100 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">'
-      + '<a href="' + detailPath + '" class="block">'
-      + '<div class="w-full overflow-hidden bg-white h-52 relative">'
-      + '<img src="' + (p.main_image || '/images/placeholder.png') + '" alt="' + p.name + '" class="w-full h-full object-contain object-center p-3 ' + imgDim + '">'
-      + badgesHtml + saleHtml + statusHtml
-      + '</div>'
-      + '<div class="p-4">'
-      + '<h3 class="text-sm font-medium text-gray-900 truncate">' + p.name + '</h3>'
-      + '<p class="mt-0.5 text-xs text-gray-400 truncate">' + (p.provider || '') + '</p>'
-      + '<div class="mt-2 flex flex-col">' + priceHtml + '</div>'
-      + '</div>'
-      + '</a>'
-      + '</div>';
-  }
-
-  function loadCategoryTab(btn) {
-    document.querySelectorAll('.cat-tab').forEach(function(t) { t.classList.remove('active'); });
-    btn.classList.add('active');
-
-    var catId = btn.getAttribute('data-cat-id');
-
-    var moreLink = document.getElementById('cat-more-link');
-    if (moreLink) moreLink.href = '/products/category/' + catId;
-
-    var grid = document.getElementById('cat-product-grid');
-    grid.innerHTML = '<div class="col-span-full flex justify-center py-12"><svg class="animate-spin h-8 w-8 text-[var(--gh-primary)]" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></div>';
-
-    fetch('/api/main/category-products?category_id=' + catId)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var products = data.products || [];
-        if (products.length === 0) {
-          grid.innerHTML = '<div class="col-span-full py-12 text-center text-gray-400">상품이 없습니다.</div>';
-          return;
-        }
-        grid.innerHTML = products.map(renderCard).join('');
-      })
-      .catch(function() {
-        grid.innerHTML = '<div class="col-span-full py-12 text-center text-red-400">상품을 불러오지 못했습니다.</div>';
-      });
-  }
-
-  window.loadCategoryTab = loadCategoryTab;
-
-  var firstTab = document.querySelector('.cat-tab');
-  if (firstTab) loadCategoryTab(firstTab);
-})();
-</script>
-<% } %>
