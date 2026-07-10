@@ -198,6 +198,9 @@ async function startServer() {
         next();
     });
 
+    // Mall Context (P5) — ?mall= / 세션 → req.mallId. 스토어프론트 미들웨어보다 먼저 와야 한다.
+    app.use(require('./middleware/mallContext'));
+
     // Site Settings Middleware (Global)
     app.use(require('./middleware/siteSettings'));
 

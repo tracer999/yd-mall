@@ -43,8 +43,10 @@ exports.getList = async (req, res) => {
     const _visibilityFilter = req.user
         ? "visibility IN ('PUBLIC','MEMBER_ONLY')"
         : "visibility = 'PUBLIC'";
-    let query = `SELECT * FROM products WHERE status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}`;
-    const params = [];
+    // P5 몰 스코프 — 이 필터가 없으면 카테고리 없는 목록(/products)·검색에 다른 몰 상품이 샌다.
+    const mallId = req.mallId || 1;
+    let query = `SELECT * FROM products WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}`;
+    const params = [mallId];
 
     let pageTitle = '전체상품';
     let categoryBanner = null;
@@ -471,6 +473,7 @@ exports.searchPage = async (req, res) => {
     if (q.length >= 2) {
         try {
             const like = `%${q}%`;
+            const mallId = req.mallId || 1; // P5 몰 스코프 — 검색은 카테고리 필터가 없어 몰 필터가 필수
             const [rows] = await pool.query(`
                 SELECT p.id, p.name, COALESCE(bc.name, p.provider) AS provider, p.price, p.original_price,
                        p.discount_rate,
@@ -480,7 +483,8 @@ exports.searchPage = async (req, res) => {
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 LEFT JOIN categories bc ON p.brand_category_id = bc.id
-                WHERE (
+                WHERE p.mall_id = ?
+                  AND (
                       p.name LIKE ?
                       OR p.slug LIKE ?
                       OR p.provider LIKE ?
@@ -492,7 +496,7 @@ exports.searchPage = async (req, res) => {
                   AND (p.visibility = 'PUBLIC' ${req.user ? "OR p.visibility = 'MEMBER_ONLY'" : ''})
                 ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT','OFF'), p.created_at DESC
                 LIMIT 50
-            `, [like, like, like, like, like, like]);
+            `, [mallId, like, like, like, like, like, like]);
 
             products = rows;
             total = rows.length;

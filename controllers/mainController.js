@@ -22,6 +22,7 @@ function computeKakaoUrl(siteSettings) {
  */
 async function buildHomeContext(req, res) {
     const hasUser = !!req.user;
+    const mallId = req.mallId || 1; // P5 몰 스코프
 
     // 1. 메인 상단 배너 (MAIN 타입만)
     const [banners] = await pool.query(
@@ -43,13 +44,14 @@ async function buildHomeContext(req, res) {
                    p.price, p.original_price, p.discount_rate, p.status, p.stock, p.provider
             FROM hero_slide hs
             LEFT JOIN products p ON p.id = hs.product_id
-            WHERE hs.is_active = 1 AND hs.mall_id = 1
+            WHERE hs.is_active = 1 AND hs.mall_id = ?
             ORDER BY hs.slot ASC, hs.sort_order ASC, hs.id ASC
-        `);
+        `, [mallId]);
         heroMainSlides = slides.filter(s => s.slot === 'MAIN');
         heroFeature = slides.find(s => s.slot === 'FEATURE') || null;
         [lnbCategories] = await pool.query(
-            "SELECT id, name FROM categories WHERE type = 'NORMAL' AND parent_id IS NULL ORDER BY display_order ASC, id ASC"
+            "SELECT id, name FROM categories WHERE type = 'NORMAL' AND parent_id IS NULL AND mall_id = ? ORDER BY display_order ASC, id ASC",
+            [mallId]
         );
     }
 
@@ -94,6 +96,7 @@ async function buildHomeContext(req, res) {
 
     const shared = {
         hasUser,
+        mallId, // P5 — 리졸버·홈 섹션이 몰 스코프로 조회하도록
         // 리졸버가 사용자별 데이터(최근 본 상품 등)를 조회할 때 필요 (CT-8)
         userId: (req.user && req.user.id) || null,
         kakaoUrl: computeKakaoUrl(siteSettings),
@@ -113,7 +116,7 @@ async function buildHomeContext(req, res) {
 exports.getHome = async (req, res) => {
     try {
         const { shared, renderData } = await buildHomeContext(req, res);
-        const page = await displayService.getHomePage();
+        const page = await displayService.getHomePage(req.mallId || 1);
         const sections = await displayService.getHomeSections(shared);
         res.render('user/index', Object.assign({
             sections: sections || [],

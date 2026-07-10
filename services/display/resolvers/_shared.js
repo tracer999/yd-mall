@@ -22,17 +22,17 @@ function visibilityClause(hasUser) {
 }
 
 /** 홈 카테고리 탭용: 상품이 1건 이상 있는 NORMAL 카테고리 */
-async function loadHomeCategories(hasUser) {
+async function loadHomeCategories(hasUser, mallId = 1) {
     const vis = visibilityClause(hasUser);
     const [rows] = await pool.query(`
     SELECT c.id, c.name, COUNT(p.id) AS product_count
     FROM categories c
     JOIN products p ON p.category_id = c.id AND ${P_STATUS} AND ${vis}
-    WHERE c.type = 'NORMAL'
+    WHERE c.type = 'NORMAL' AND c.mall_id = ?
     GROUP BY c.id, c.name
     HAVING product_count > 0
     ORDER BY c.display_order ASC
-  `);
+  `, [mallId]);
     return rows;
 }
 

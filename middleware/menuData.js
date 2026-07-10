@@ -40,8 +40,11 @@ function toViewItem(item) {
 module.exports = async (req, res, next) => {
     res.locals.currentPath = req.path;
 
+    // 해석된 몰(P5). mallContext 미들웨어가 없거나 실패한 경우 1 로 폴백.
+    const mallId = req.mallId || MALL_ID;
+
     try {
-        const nav = await navigationService.getNavigation(MALL_ID, {
+        const nav = await navigationService.getNavigation(mallId, {
             isLoggedIn: Boolean(req.user),
         });
 
@@ -52,9 +55,9 @@ module.exports = async (req, res, next) => {
         res.locals.headerUtilMenus = nav.headerUtil.map(toViewItem);
         res.locals.categoryTree = nav.categoryTree;
 
-        // THEME 카테고리 (레거시 하위호환)
+        // THEME 카테고리 (레거시 하위호환) — 몰 스코프
         const [themeCategories] = await pool.query(
-            "SELECT * FROM categories WHERE type = 'THEME' ORDER BY display_order ASC"
+            "SELECT * FROM categories WHERE type = 'THEME' AND mall_id = ? ORDER BY display_order ASC", [mallId]
         );
         res.locals.menuCategories = themeCategories;
 

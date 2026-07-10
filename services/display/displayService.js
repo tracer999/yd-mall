@@ -18,9 +18,10 @@ function parseConfig(v) {
   try { return JSON.parse(v); } catch (e) { return {}; }
 }
 
-async function getHomePage() {
+async function getHomePage(mallId = 1) {
   const [rows] = await pool.query(
-    "SELECT * FROM page WHERE page_type = 'home' AND mall_id = 1 AND status = 'published' ORDER BY id DESC LIMIT 1"
+    "SELECT * FROM page WHERE page_type = 'home' AND mall_id = ? AND status = 'published' ORDER BY id DESC LIMIT 1",
+    [mallId]
   );
   return rows[0] || null;
 }
@@ -101,7 +102,7 @@ async function resolveSections(rows, shared = {}) {
  * @returns [{ type, view, locals }] 또는 null(홈 페이지 미시드 → 컨트롤러 레거시 폴백)
  */
 async function getHomeSections(shared = {}) {
-  const page = await getHomePage();
+  const page = await getHomePage(shared.mallId || 1);
   if (!page) return null;
 
   const revision = await getLatestRevision(page.id);

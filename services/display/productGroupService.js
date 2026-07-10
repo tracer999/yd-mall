@@ -38,23 +38,25 @@ async function resolve(group, { hasUser = false, limit = 8 } = {}) {
   if (!group) return [];
   const vis = visibilityClause(hasUser);
   const lim = Number(limit) > 0 ? Math.min(Number(limit), 60) : 8;
+  // P5 몰 스코프 — 그룹이 속한 몰의 상품만. 없으면(레거시) 1.
+  const mallId = Number(group.mall_id) || 1;
 
   if (group.group_type === 'manual') {
     const [rows] = await pool.query(
       `SELECT p.* FROM product_group_item pgi
        JOIN products p ON p.id = pgi.product_id
-       WHERE pgi.product_group_id = ? AND ${STATUS} AND ${vis}
+       WHERE pgi.product_group_id = ? AND p.mall_id = ? AND ${STATUS} AND ${vis}
        ORDER BY pgi.sort_order ASC, pgi.id ASC
        LIMIT ?`,
-      [group.id, lim]
+      [group.id, mallId, lim]
     );
     return rows;
   }
 
   // condition (화이트리스트 필터만 허용)
   const cond = parseCond(group.filter_condition_json);
-  const where = [STATUS, vis];
-  const params = [];
+  const where = [`p.mall_id = ?`, STATUS, vis];
+  const params = [mallId];
   if (cond.badge) { where.push('FIND_IN_SET(?, p.product_badge)'); params.push(String(cond.badge)); }
   if (cond.category_id) { where.push('p.category_id = ?'); params.push(Number(cond.category_id)); }
   if (cond.min_discount) { where.push('p.discount_rate >= ?'); params.push(Number(cond.min_discount)); }
