@@ -1,0 +1,101 @@
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-800"><%= title %></h1>
+        <a href="/admin/events/add" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+            <i class="bi bi-plus-lg"></i> 이벤트 등록
+        </a>
+    </div>
+
+    <% if (saved) { %>
+        <div class="mb-4 px-4 py-3 rounded bg-green-50 text-green-700 text-sm">저장되었습니다.</div>
+    <% } %>
+
+    <form method="GET" action="/admin/events" class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">운영 상태</label>
+            <select name="status" class="border-gray-300 rounded-md text-sm">
+                <option value="">전체</option>
+                <option value="DRAFT" <%= currentStatus === 'DRAFT' ? 'selected' : '' %>>임시저장</option>
+                <option value="PUBLISHED" <%= currentStatus === 'PUBLISHED' ? 'selected' : '' %>>발행</option>
+                <option value="HIDDEN" <%= currentStatus === 'HIDDEN' ? 'selected' : '' %>>숨김</option>
+            </select>
+        </div>
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs font-medium text-gray-600 mb-1">검색 (제목/슬러그)</label>
+            <input type="text" name="keyword" value="<%= keyword %>" class="w-full border-gray-300 rounded-md text-sm">
+        </div>
+        <button type="submit" class="px-4 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800">검색</button>
+    </form>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600">
+                <tr>
+                    <th class="px-4 py-3 text-left">ID</th>
+                    <th class="px-4 py-3 text-left">썸네일</th>
+                    <th class="px-4 py-3 text-left">이벤트명</th>
+                    <th class="px-4 py-3 text-left">유형</th>
+                    <th class="px-4 py-3 text-left">운영상태</th>
+                    <th class="px-4 py-3 text-left">노출상태</th>
+                    <th class="px-4 py-3 text-left">기간</th>
+                    <th class="px-4 py-3 text-right">참여</th>
+                    <th class="px-4 py-3 text-center">관리</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <% if (!events.length) { %>
+                    <tr><td colspan="9" class="px-4 py-10 text-center text-gray-400">등록된 이벤트가 없습니다.</td></tr>
+                <% } %>
+                <% events.forEach(function(e) { %>
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-gray-500"><%= e.id %></td>
+                        <td class="px-4 py-3">
+                            <% if (e.thumbnail_url) { %>
+                                <img src="<%= e.thumbnail_url %>" alt="" class="w-16 h-10 object-cover rounded">
+                            <% } else { %>
+                                <div class="w-16 h-10 bg-gray-100 rounded"></div>
+                            <% } %>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-gray-800"><%= e.title %></div>
+                            <div class="text-xs text-gray-400">/event/<%= e.slug %></div>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600"><%= e.typeLabel %></td>
+                        <td class="px-4 py-3">
+                            <% var sc = e.status === 'PUBLISHED' ? 'bg-green-100 text-green-700'
+                                       : e.status === 'HIDDEN' ? 'bg-gray-200 text-gray-600'
+                                       : 'bg-yellow-100 text-yellow-700'; %>
+                            <span class="px-2 py-0.5 rounded text-xs <%= sc %>"><%= e.status %></span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <% var pc = e.phase === '진행중' ? 'bg-blue-100 text-blue-700'
+                                       : e.phase === '예정' ? 'bg-purple-100 text-purple-700'
+                                       : 'bg-gray-100 text-gray-500'; %>
+                            <span class="px-2 py-0.5 rounded text-xs <%= pc %>"><%= e.phase %></span>
+                        </td>
+                        <td class="px-4 py-3 text-xs text-gray-500">
+                            <%= e.start_at ? new Date(e.start_at).toLocaleDateString('ko-KR') : '-' %>
+                            ~
+                            <%= e.end_at ? new Date(e.end_at).toLocaleDateString('ko-KR') : '상시' %>
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-600">
+                            <%= e.issued_count %><% if (e.issue_limit) { %> / <%= e.issue_limit %><% } %>
+                        </td>
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <a href="/admin/events/edit/<%= e.id %>" class="px-3 py-1 bg-gray-100 rounded hover:bg-gray-200 text-xs">수정</a>
+                            <form action="/admin/events/delete" method="POST" class="inline"
+                                  onsubmit="return confirm('삭제하면 참여자 기록도 함께 지워집니다. 계속할까요?');">
+                                <input type="hidden" name="id" value="<%= e.id %>">
+                                <button type="submit" class="px-3 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs">삭제</button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+    </div>
+
+    <p class="mt-4 text-xs text-gray-400">
+        운영상태(DRAFT/PUBLISHED/HIDDEN)만 저장합니다. 예정·진행중·종료는 시작·종료일시에서 자동으로 계산됩니다.
+    </p>
+</div>

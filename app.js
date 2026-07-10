@@ -245,16 +245,19 @@ async function startServer() {
     const shopifyRoutes = require('./routes/shopify');
     const featureRoutes = require('./routes/feature');
     const exhibitionRoutes = require('./routes/exhibition');
+    const eventRoutes = require('./routes/event');
     const sectionRoutes = require('./routes/sections');
     const csRoutes = require('./routes/cs');
     const adminMenuMiddleware = require('./middleware/adminMenu');
 
     app.use('/shopify', shopifyRoutes);
     app.use('/', sitemapRoutes);
-    // 기능 메뉴 표준 URL(/best, /new, /deal/today, /event) — indexRoutes 의 '/' 핸들러보다 먼저 마운트
+    // 기능 메뉴 표준 URL(/best, /new, /deal/today) — indexRoutes 의 '/' 핸들러보다 먼저 마운트
     app.use('/', featureRoutes);
     // 기획전 표준 URL(/exhibition) — feature_menu.EXHIBITION.default_path 와 1:1
     app.use('/exhibition', exhibitionRoutes);
+    // 이벤트&혜택 표준 URL(/event) — feature_menu.EVENT.default_path 와 1:1
+    app.use('/event', eventRoutes);
     // 스토어프론트 섹션 AJAX (CT-3 ranking_tabs 등)
     app.use('/sections', sectionRoutes);
     // 고객센터 (M8)

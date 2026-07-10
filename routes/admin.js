@@ -45,6 +45,8 @@ router.use('/page-builder', requireMenuAccess('/admin/page-builder'), require('.
 router.use('/product-groups', requireMenuAccess('/admin/product-groups'), require('./admin/product-groups'));
 // 기획전 — 시즌·브랜드·테마별 상품 전시 랜딩
 router.use('/exhibitions', requireMenuAccess('/admin/exhibitions'), require('./admin/exhibitions'));
+// 이벤트&혜택 — 응모·쿠폰팩·출석 등 참여/혜택 중심(기획전과 분리)
+router.use('/events', requireMenuAccess('/admin/events'), require('./admin/events'));
 router.use('/users', requireMenuAccess('/admin/users'), require('./admin/users'));
 router.use('/sales', requireMenuAccess('/admin/sales'), require('./admin/sales'));
 router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/shipping'));

@@ -30,9 +30,9 @@ router.get('/new', preset({ sort: 'new' }), productController.getList);
 // 오늘특가 — 마감 임박 세일 뱃지 상품
 router.get('/deal/today', preset({ badge: 'DEADLINE_SALE' }), productController.getList);
 
-// 이벤트&혜택 — 전용 모듈 구현 전까지 공지 게시판으로 연결(표준 URL 은 선점).
-// TODO: 이벤트 모듈 구현 시 이 별칭을 실제 이벤트 목록 렌더로 교체한다.
-router.get('/event', (req, res) => res.redirect(302, '/boards/notice'));
+// '/event' 는 routes/event.js 가 실제 목록을 렌더한다.
+// 예전에는 '/boards/notice'(공지사항) 로 302 했으나, 공지사항은 고객센터(/cs)의 하위 항목이지
+// 이벤트가 아니다. 발행된 이벤트가 0건이면 eventController 가 COMING_SOON.event 랜딩으로 되돌린다.
 
 /*
  * 준비 중 메뉴 (기획전 / 공동구매 / 쇼핑라이브 / 랭킹 / 아울렛 / 쿠폰 / 멤버십)
@@ -109,6 +109,15 @@ const COMING_SOON = {
         bullets: ['등급별 적립률·할인', '생일·기념일 쿠폰', '무료배송 혜택'],
         primary: { label: '내 적립금', href: '/mypage/points' },
         secondary: { label: '전체 상품', href: '/products' },
+    },
+    // 이벤트는 모듈이 있다. 이 항목은 **발행된 이벤트가 0건일 때만** 쓰이는 폴백 랜딩이다.
+    event: {
+        name: '이벤트 & 혜택',
+        icon: 'bi-gift',
+        description: '진행 중인 이벤트가 없습니다.<br>새로운 이벤트를 준비하고 있습니다.',
+        bullets: ['응모·경품 이벤트', '쿠폰팩 지급', '출석체크 혜택'],
+        primary: { label: '오늘특가 보러가기', href: '/deal/today' },
+        secondary: { label: '내 쿠폰함', href: '/mypage/coupons' },
     },
 };
 
