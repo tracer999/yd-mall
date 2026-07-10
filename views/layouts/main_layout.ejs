@@ -598,17 +598,24 @@
                 }
 
                 // 카테고리 드롭다운 토글 (클릭 시 하위 카테고리 패널 표시)
+                // 패널이 좁아 뒤 콘텐츠(히어로 LNB 등)와 겹쳐 보이므로 백드롭을 함께 띄운다.
                 (function () {
                     var catBtn = document.getElementById('gnb-cat-btn');
                     var catPanel = document.getElementById('gnb-cat-panel');
                     var catWrap = document.getElementById('gnb-cat-wrap');
+                    var backdrop = document.getElementById('gnb-cat-backdrop');
                     if (!catBtn || !catPanel || !catWrap) return;
-                    function close() { catPanel.classList.add('hidden'); catBtn.setAttribute('aria-expanded', 'false'); }
+
+                    function setOpen(open) {
+                        catPanel.classList.toggle('hidden', !open);
+                        if (backdrop) backdrop.classList.toggle('hidden', !open);
+                        catBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    }
+                    function close() { setOpen(false); }
+
                     catBtn.addEventListener('click', function (e) {
                         e.stopPropagation();
-                        var willOpen = catPanel.classList.contains('hidden');
-                        catPanel.classList.toggle('hidden');
-                        catBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                        setOpen(catPanel.classList.contains('hidden'));
                     });
                     document.addEventListener('click', function (e) { if (!catWrap.contains(e.target)) close(); });
                     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });

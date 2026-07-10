@@ -144,17 +144,11 @@
                             class="flex items-center gap-2 px-3 py-3 text-base font-bold text-gray-900 hover:text-[var(--gh-primary)]">
                             <i class="bi bi-list text-xl"></i><span><%= _catBtn.name %></span>
                         </button>
+                        <%# 패널 폭은 내용에 맞춘다. 2뎁스가 없으면 세로 리스트 하나라 좁고,
+                            2뎁스가 생기면 hover 서브패널이 우측으로 펼쳐진다(§12). %>
                         <div id="gnb-cat-panel"
-                            class="hidden absolute left-0 top-full z-50 w-[860px] max-w-[92vw] bg-white border border-gray-200 shadow-xl rounded-b-lg p-5">
-                            <% if (typeof categoryTree !== 'undefined' && categoryTree.length > 0) { %>
-                                <ul class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5">
-                                    <% categoryTree.forEach(function (node) { %>
-                                        <%- include('./category_node', { node: node }) %>
-                                    <% }); %>
-                                </ul>
-                            <% } else { %>
-                                <p class="text-sm text-gray-400">등록된 카테고리가 없습니다.</p>
-                            <% } %>
+                            class="hidden absolute left-0 top-full z-50 max-w-[92vw] bg-white border border-gray-200 shadow-xl rounded-b-lg overflow-visible">
+                            <%- include('./category_panel') %>
                         </div>
                     </div>
 
@@ -237,3 +231,8 @@
             </div>
         </div>
     </header>
+
+    <%# 카테고리 드롭다운 백드롭 — 패널 뒤 콘텐츠(히어로 LNB 등)와의 겹침을 없앤다.
+        반드시 <header> **바깥**에 둔다. 헤더는 z-50 으로 stacking context 를 만들기 때문에
+        그 안에 두면 fixed 백드롭이 헤더까지 덮어버린다. %>
+    <div id="gnb-cat-backdrop" class="hidden fixed inset-0 z-40 bg-black/20" aria-hidden="true"></div>

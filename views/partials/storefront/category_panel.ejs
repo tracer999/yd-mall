@@ -1,0 +1,75 @@
+<%
+  /*
+   * PC GNB 카테고리 드롭다운 패널 (§12 디자인 개선)
+   *
+   * 벤치마킹(신세계TV쇼핑)은 좌측 1뎁스 세로 리스트 + hover 시 우측 2뎁스 컬럼이다.
+   * 우리 카테고리는 현재 전부 depth 1 이라 우측 컬럼이 항상 비게 된다.
+   *
+   * 그래서 **자식이 있는 노드에만** 우측 서브패널을 띄운다.
+   *   - 2뎁스 데이터가 없는 지금: 깔끔한 세로 리스트 하나로 보인다.
+   *   - 2뎁스를 입력하면: 그 노드부터 자동으로 메가메뉴가 된다. 마크업 변경 불필요.
+   *
+   * `feature_menu.module_ready` 와 같은 원칙 — 내용 없는 껍데기를 노출하지 않는다.
+   *
+   * locals: categoryTree (navigationService.getCategoryTree 결과, 최대 3뎁스)
+   */
+  const _tree = (typeof categoryTree !== 'undefined' && categoryTree) ? categoryTree : [];
+  const hasChildren = (n) => n.children && n.children.length > 0;
+  const anyChildren = _tree.some(hasChildren);
+%>
+
+<% if (_tree.length === 0) { %>
+  <p class="p-5 text-sm text-gray-400">등록된 카테고리가 없습니다.</p>
+<% } else { %>
+  <div class="flex <%= anyChildren ? 'min-h-[380px]' : '' %>">
+
+    <%# 1뎁스 — 항상 세로 리스트 %>
+    <ul class="w-60 shrink-0 py-2 <%= anyChildren ? 'border-r border-gray-100 bg-gray-50/40' : '' %>">
+      <% _tree.forEach(function (node) { %>
+        <li class="group/cat relative">
+          <a href="/products/category/<%= node.id %>"
+             class="flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700
+                    hover:bg-white hover:text-[var(--gh-primary)] hover:font-semibold transition-colors">
+            <span class="truncate"><%= node.name %></span>
+            <% if (hasChildren(node)) { %>
+              <i class="bi bi-chevron-right text-xs text-gray-300 group-hover/cat:text-[var(--gh-primary)]"></i>
+            <% } %>
+          </a>
+
+          <%# 2뎁스 — 자식이 있을 때만 그린다. hover 로 우측에 펼친다. %>
+          <% if (hasChildren(node)) { %>
+            <div class="hidden group-hover/cat:block absolute left-full top-0 z-10 w-[560px] min-h-full
+                        bg-white pl-6 pr-5 py-3">
+              <p class="mb-2 text-xs font-bold text-gray-400"><%= node.name %></p>
+              <ul class="grid grid-cols-2 gap-x-6 gap-y-0.5">
+                <% node.children.forEach(function (child) { %>
+                  <li>
+                    <a href="/products/category/<%= child.id %>"
+                       class="block px-2 py-1.5 text-sm text-gray-600 rounded hover:bg-gray-50 hover:text-[var(--gh-primary)]">
+                      <%= child.name %>
+                    </a>
+                    <%# 3뎁스 %>
+                    <% if (child.children && child.children.length) { %>
+                      <ul class="ml-2 pl-2 border-l border-gray-100">
+                        <% child.children.forEach(function (leaf) { %>
+                          <li>
+                            <a href="/products/category/<%= leaf.id %>"
+                               class="block px-2 py-1 text-xs text-gray-500 rounded hover:text-[var(--gh-primary)]">
+                              <%= leaf.name %>
+                            </a>
+                          </li>
+                        <% }); %>
+                      </ul>
+                    <% } %>
+                  </li>
+                <% }); %>
+              </ul>
+            </div>
+          <% } %>
+        </li>
+      <% }); %>
+    </ul>
+
+    <%# 자식이 하나도 없으면 우측 영역을 아예 만들지 않는다(빈 컬럼 방지). %>
+  </div>
+<% } %>

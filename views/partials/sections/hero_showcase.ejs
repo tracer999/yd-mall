@@ -13,6 +13,9 @@
     : (s.slug && String(s.slug).trim() ? `/products/${encodeURIComponent(s.slug)}` : (s.product_id ? `/products/view/${s.product_id}` : '#'));
   const slideImg = s => s.image_url || s.main_image || '/images/placeholder.png';
   const slideTitle = s => s.headline || s.product_name || '';
+  // 썸네일 라벨: 슬라이드 label('[베스트]' → '베스트')을 우선한다.
+  // provider 를 쓰면 단일 공급사 몰에서 모든 썸네일이 같은 글자가 된다.
+  const slideTag = s => String(s.label || '').replace(/^\[|\]$/g, '').trim() || s.provider || slideTitle(s);
 %>
 <% if ((mainSlides || []).length > 0) { %>
 <style>
@@ -108,7 +111,7 @@
                   <div class="hero-thumb-ring w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-transparent bg-white">
                     <img src="<%= slideImg(s) %>" alt="<%= slideTitle(s) %>" class="w-full h-full object-cover">
                   </div>
-                  <span class="text-[11px] text-gray-600 truncate max-w-[4.5rem] text-center"><%= s.provider || slideTitle(s) %></span>
+                  <span class="text-[11px] text-gray-600 truncate max-w-[4.5rem] text-center"><%= slideTag(s) %></span>
                 </div>
               </div>
             <% }); %>
