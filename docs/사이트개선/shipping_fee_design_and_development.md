@@ -87,7 +87,7 @@ const couponDiscount = req.query.coupon_discount != null ? parseInt(...) : null;
 
 ### 1-2. 무료배송 판정 기준은 `subtotal_amount` 다
 
-기준 금액을 무엇으로 볼지가 정책의 핵심이다. 레퍼런스([`쿠폰관리.md`](./쿠폰관리.md) §3-5)의 4가지 후보 중:
+기준 금액을 무엇으로 볼지가 정책의 핵심이다. 레퍼런스(`쿠폰관리.md` §3-5, 삭제됨 — `git show b97e257:"docs/사이트개선/쿠폰관리.md"`)의 4가지 후보 중:
 
 | 후보 | 이 저장소에서의 의미 | 채택 |
 |---|---|---|

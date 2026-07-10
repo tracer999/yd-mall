@@ -6,7 +6,28 @@
 > → 본 문서로 통합·대체되어 **삭제됨**. 원문이 필요하면 git 이력에서 조회한다:
 > `git show 4528e44:"docs/사이트개선/flexible_shopping_mall_builder_design.md"`
 >
-> 최종 갱신: 2026-07-09
+> 최종 갱신: 2026-07-11
+
+---
+
+## 모듈 설계 문서 색인
+
+> 아래 기능 모듈은 각자 **독립 설계 문서**를 갖는다. 이 표는 **링크와 큰 진행 상태만** 관리하고,
+> 세부 체크리스트는 각 문서가 소유한다 — 한 곳에서만 관리해야 교차참조 드리프트가 없다.
+> 각 문서는 관리자·사용자 화면을 모두 다루므로 [`admin_dev_plan.md`](./admin_dev_plan.md) 에도 같은 색인이 있다(관리자/사용자 관점만 다름).
+
+| 모듈 | 설계 문서 | 상태 | 사용자 화면 |
+|---|---|---|---|
+| 쿠폰 | [coupon_design_and_development.md](./coupon_design_and_development.md) | ✅ 0~2차 | `/coupon` 다운로드 쿠폰존·코드입력, 쿠폰함 4구분, 체크아웃 주문+배송비 2쿠폰 |
+| 배송비 | [shipping_fee_design_and_development.md](./shipping_fee_design_and_development.md) | ✅ 1·2차 | 체크아웃·장바구니 배송비 표시·무료배송 게이지, 배송지별 AJAX 재계산 |
+| 주문·클레임 | [order_claim_design_and_development.md](./order_claim_design_and_development.md) | ✅ 클레임 0~2차 | 주문 상세 취소·반품 신청, `/mypage/claims` 내역·철회 |
+| 기획전 | [exhibition_design_and_development.md](./exhibition_design_and_development.md) | 🟡 1차 | `/exhibition` 목록·상세 |
+| 공동구매 | [group_buy_design_and_development.md](./group_buy_design_and_development.md) | 🟡 1차 | `/group-buy` 목록·상세·바로구매 |
+| GNB 메뉴 | [gnb_menu_design.md](./gnb_menu_design.md) | 🟡 부분 | 이벤트 `/event` 완료. 목록형(L1~L5)·브랜드·멤버십·라이브 미착수(준비중 랜딩) |
+| 쇼핑라이브 | [live sales.md](<./live sales.md>) | ⬜ 설계만 | `/live` 준비중 랜딩 |
+
+> 입력 일반론 문서(`쿠폰관리.md`·`주문배송관리.md`)는 위 설계 문서에 흡수·접지되어 **삭제**했다.
+> 원문은 git 이력: `git show b97e257:"docs/사이트개선/쿠폰관리.md"` · `git show b97e257:"docs/사이트개선/주문배송관리.md"`
 
 ---
 
@@ -215,7 +236,11 @@ Footer
 `feature_menu.module_ready = 0` 이면 관리자가 메뉴를 켜도 **스토어프론트에 노출되지 않는다.**
 → 죽은 `#` 링크가 **구조적으로 발생 불가**.
 
-현재 `module_ready = 0`: `EXHIBITION` `RANKING` `OUTLET` `COUPON` `MEMBERSHIP` `GROUP_BUY` `LIVE`
+> ⚠️ **갱신(2026-07-11)**: 아래 목록은 낡았다. 현재 `feature_menu` 는 **전 항목 `module_ready = 1`** 이다 —
+> 미구현 메뉴도 `module_ready=1` + **준비중 랜딩**(200 noindex, `comingSoon`)으로 노출하는 패턴으로 전환됐다.
+> 실제 구현: `EXHIBITION`·`COUPON`·`GROUP_BUY`·`EVENT` 완료(모듈 색인 참조). 여전히 준비중 랜딩: `RANKING`·`OUTLET`·`MEMBERSHIP`·`LIVE`.
+>
+> ~~현재 `module_ready = 0`: `EXHIBITION` `RANKING` `OUTLET` `COUPON` `MEMBERSHIP` `GROUP_BUY` `LIVE`~~
 
 ### 5.3 M1~M3 구현 완료 (2026-07-09)
 - **M1 DB**: `feature_menu` / `mall_feature_menu` / `custom_menu` / `navigation_config` / `brand_likes` 신설.
@@ -497,7 +522,7 @@ CREATE TABLE IF NOT EXISTS `mall` (
 | 1 | **멀티테넌시 격리** | 전 테이블 `tenant_id` + Global Query Filter + **RLS**(Row Level Security) | 사람이 `WHERE tenant_id` 를 기억하는 방식은 반드시 새어 나간다. **DB가 강제**해야 한다 | ORM/미들웨어 도입 검토 |
 | 2 | **에지 라우팅** | 도메인 → 테넌트 해소를 에지 캐시(KV/Redis)로 | 테넌트가 늘면 매 요청 DB 조회가 병목. 라우팅은 0ms 여야 한다 | 게이트웨이/에지 |
 | 3 | **SDUI 전면화** | GraphQL Union/Interface 위젯 규약, 무배포 반영 | 현재 EJS 렌더러의 한계(클라이언트 상호작용·앱 대응). **데이터 모델(`page_section`)은 이미 프레임워크 무관**하게 만들어 뒀다 | **기존 `spf-mall`(Next.js)을 SDUI 렌더러로 승격** — 신규 프로젝트 생성이 아니라 재활용 |
-| 4 | **비디오 커머스** | HLS 트랜스코딩 · 숏폼 · 라이브 방송 | `live_cards` 섹션과 `LIVE`/`GROUP_BUY` 기능 메뉴가 여기서 열린다 (현재 `module_ready=0`) | AWS MediaLive/S3/CloudFront |
+| 4 | **비디오 커머스** | HLS 트랜스코딩 · 숏폼 · 라이브 방송 | `live_cards` 섹션과 `LIVE` 기능 메뉴가 여기서 열린다(현재 준비중 랜딩). `GROUP_BUY` 는 이미 1차 구현됨 → [group_buy 설계](./group_buy_design_and_development.md) | AWS MediaLive/S3/CloudFront |
 | 5 | **AI 에이전트** | 실시간 상담·추천 | — | Bedrock 서버리스 |
 
 *(O2O — QR·UTM·딥링크 기반 오프라인 연계 전시 — 도 원설계에 포함되어 있으나 위 5개 이후 순위)*
