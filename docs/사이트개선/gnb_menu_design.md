@@ -538,6 +538,9 @@ UPDATE event SET issued_count = issued_count + 1
 > **상세 설계는 [`coupon_design_and_development.md`](./coupon_design_and_development.md) 로 이관됐다 (2026-07-10).**
 > 아래 스케치는 유지하되, **스키마·제약·개발 순서는 그 문서가 소유**한다. 두 곳이 어긋나면 그쪽이 정본이다.
 > 특히 아래 §7-2 의 `UNIQUE(user_id, coupon_id)` 는 **폐기됐다**(관리자 재발급 경로와 충돌 — 이관 문서 §6-3).
+>
+> 무료배송 쿠폰은 [`shipping_fee_design_and_development.md`](./shipping_fee_design_and_development.md) 를
+> 선행 과제로 둔다. 쿠폰 문서 §13 이 **범위 전체(만든다 / 보류)** 를 판정한다.
 
 #### 화면 구성
 
