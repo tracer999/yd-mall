@@ -1,0 +1,118 @@
+<%
+  /*
+   * 테마 설정 — theme.config_json 스타일 토큰
+   *
+   * 값은 CSS 커스텀 프로퍼티로 직접 삽입되므로 서버가 화이트리스트로 검증한다.
+   * 화면에는 저장된 원본 값(raw)을 보여주고, 실제 적용 중인 값(active.tokens)을 함께 표기한다.
+   */
+  const _raw = raw || {};
+  const val = (k) => (_raw[k] != null ? _raw[k] : '');
+%>
+
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">테마 설정</h1>
+    <p class="mt-1 text-sm text-gray-500">
+      스토어프론트의 <strong>모서리·간격·폰트</strong> 같은 스타일 토큰입니다.
+      브랜드 색상과 로고는 <a href="/admin/site-settings" class="text-indigo-600 hover:underline">사이트 설정</a>에서 관리합니다.
+    </p>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다. 스토어프론트에 즉시 반영됩니다.
+    </div>
+  <% } %>
+
+  <% if (errors && errors.length) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+      <div class="flex items-start gap-2">
+        <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
+        <div>
+          <p class="font-semibold">저장하지 않았습니다. 허용되지 않는 값이 있습니다.</p>
+          <ul class="mt-1 list-disc list-inside space-y-0.5">
+            <% errors.forEach(function (e) { %><li><%= e %></li><% }); %>
+          </ul>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
+  <div class="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+    <i class="bi bi-shield-lock-fill mr-1"></i>
+    이 값들은 <strong>CSS 에 직접 삽입</strong>됩니다. 길이 값은 <code>0.5rem</code>·<code>12px</code>·<code>50%</code> 형식만,
+    폰트는 따옴표·쉼표·하이픈·점만 허용됩니다. 그 외 문자는 저장이 거부됩니다.
+  </div>
+
+  <form method="POST" action="/admin/theme-settings" class="space-y-6">
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">테마</h2>
+      </div>
+      <div class="p-5">
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">테마 이름</label>
+        <input type="text" name="name" value="<%= theme.name %>" maxlength="100"
+               class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">스타일 토큰</h2>
+        <p class="mt-0.5 text-xs text-gray-500">비워 두면 기본값으로 되돌아갑니다.</p>
+      </div>
+      <div class="p-5 space-y-5">
+
+        <% fields.forEach(function (f) { %>
+          <div>
+            <div class="flex items-baseline justify-between mb-1.5">
+              <label class="block text-sm font-medium text-gray-700"><%= f.label %></label>
+              <span class="text-[11px] text-gray-400">
+                적용 중: <code class="text-gray-500"><%= active.tokens[f.key] %></code>
+                <% if (String(val(f.key)) !== String(active.tokens[f.key])) { %>
+                  <span class="ml-1 text-amber-600" title="저장된 값이 검증을 통과하지 못해 기본값이 적용 중입니다">⚠ 기본값 대체</span>
+                <% } %>
+              </span>
+            </div>
+            <input type="text" name="<%= f.key %>" value="<%= val(f.key) %>"
+                   placeholder="<%= defaults[f.key] %>"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono">
+            <p class="mt-1 text-xs text-gray-400"><%= f.hint %></p>
+          </div>
+        <% }); %>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">상품 카드 스타일</label>
+          <select name="productCardStyle" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <% cardStyles.forEach(function (s) { %>
+              <option value="<%= s %>" <%= active.cardStyle === s ? 'selected' : '' %>><%= s %></option>
+            <% }); %>
+          </select>
+          <p class="mt-1 text-xs text-gray-400">shadow(그림자) · border(테두리) · flat(민무늬)</p>
+        </div>
+
+      </div>
+    </div>
+
+    <%# 실제 주입되는 CSS 를 그대로 보여준다 — 무엇이 반영되는지 감추지 않는다 %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">스토어프론트에 주입되는 CSS</h2>
+      </div>
+      <div class="p-5">
+        <pre class="text-xs bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto"><code>:root {
+<% active.cssVars.forEach(function (v) { %>  <%= v %>
+<% }); %>}</code></pre>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="/admin/theme-settings" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">되돌리기</a>
+      <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <i class="bi bi-save mr-1.5"></i> 저장
+      </button>
+    </div>
+  </form>
+</div>

@@ -47,6 +47,10 @@ router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/s
 router.use('/visitors', requireMenuAccess('/admin/visitors'), require('./admin/visitors'));
 router.use('/settings', requireMenuAccess('/admin/settings'), require('./admin/settings'));
 router.use('/site-settings', requireMenuAccess('/admin/site-settings'), require('./admin/siteSettings'));
+// 스타일 토큰(theme.config_json) — 값이 CSS 에 직접 삽입되므로 서버 검증 필수
+router.use('/theme-settings', requireMenuAccess('/admin/theme-settings'), require('./admin/theme-settings'));
+// 고객센터 FAQ CRUD (answer 는 저장 시 새니타이즈)
+router.use('/faqs', requireMenuAccess('/admin/faqs'), require('./admin/faqs'));
 router.use('/sys-settings', requireMenuAccess('/admin/sys-settings'), require('./admin/sysSettings'));
 router.use('/operators', requireMenuAccess('/admin/operators'), require('./admin/operators'));
 router.use('/policies', requireMenuAccess('/admin/policies'), require('./admin/policies'));

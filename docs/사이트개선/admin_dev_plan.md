@@ -6,7 +6,7 @@
 > → 본 문서로 통합·대체되어 **삭제됨**. 원문이 필요하면 git 이력에서 조회한다:
 > `git show 4528e44:"docs/사이트개선/관리자 개선.md"`
 >
-> 최종 갱신: 2026-07-09
+> 최종 갱신: 2026-07-10
 
 ---
 
@@ -162,7 +162,7 @@
 | 기본 정보(상호·연락처·주소·사업자) | ✅ | `/admin/site-settings`, `site_settings` |
 | 로고/브랜드 컬러/파비콘/OG | ✅ | `site_settings.logo_url`, `brand_*_color`, `favicon_url`, `kakao_share_image_url` |
 | 정책 설정(약관/개인정보) | ✅ | `/admin/policies` |
-| **테마 설정** | ⬜ | **`theme` 테이블·`themeService`·CSS 변수 주입은 P4에서 완료.** 관리 UI만 없음. 저장 시 `themeService` 검증 규칙(길이값 정규식/열거형)을 서버에서 재적용할 것 → CSS 인젝션 방어 |
+| **테마 설정** | ✅ | **완료 (2026-07-10).** `/admin/theme-settings` — `theme.config_json` 스타일 토큰. 저장 시 `themeService` 가 export 하는 검증 규칙(`TOKENS[].test` / `CARD_STYLES`)을 **그대로 재사용**해 CSS 인젝션을 막고, `themeData.invalidate()` 로 캐시를 비운다. `themeService` 는 렌더 시 이상값을 조용히 폴백하지만 관리자는 **거부하고 사유를 표시**한다. |
 | **Header 설정** | ✅ | **B5 완료.** `/admin/header-settings` — `navigation_config` 편집(§3.2.1) |
 | **Footer 설정** | 🟡 | SNS·회사정보만 `site_settings` 에 있음. Footer 커스텀 메뉴 없음 |
 | **검색 설정** | 🟡 | 검색창 노출은 시스템 메뉴 `HEADER_SEARCH`(필수)로 제어. `navigation_config.use_search_bar` 는 Header 설정에서 저장되나 **렌더가 아직 소비하지 않는다** |
@@ -196,9 +196,32 @@
 | 커스텀 메뉴 관리 | ⬜ | `custom_menu` 테이블 완료, UI 없음 → **B3 (후순위)** |
 | 시스템 메뉴 설정 | ✅ | **B4 완료.** `/admin/system-menus` — 헤더 유틸 5 + 우측 레일 5 |
 | 모바일 메뉴 설정 | ⬜ | `pc_visible`/`mobile_visible` 컬럼만 존재 |
-| 메뉴 미리보기 | ⬜ | — |
+| 메뉴 미리보기 | ✅ | **B7 완료.** `/admin/menu-preview` — `navigationService.getNavigation` 재사용(§3.3.1) |
 | SEO 제목/설명(카테고리) | ⬜ | `categories.seo_config` 미도입 |
 | 카테고리 대표 이미지(메가메뉴) | ⬜ | `logo_image_path` 는 BRAND 용도로만 사용 중 |
+
+#### 3.3.1 메뉴 미리보기 — ✅ B7 구현 완료 (2026-07-10)
+
+`/admin/menu-preview?device=pc|mobile&login=0|1`
+
+조립 로직을 다시 짜지 않고 **스토어프론트와 같은 함수** `navigationService.getNavigation(1, {isLoggedIn})`
+을 호출한다. 미리보기와 실제가 어긋나면 미리보기의 존재 이유가 사라진다.
+
+미리보기의 값은 "무엇이 보이는가"보다 **"무엇이 왜 안 보이는가"** 에 있다. 그래서 제외 항목을 사유와 함께 표시한다.
+
+| 사유 | 판정 |
+|---|---|
+| 모듈 미구현 | `feature_menu.module_ready = 0` (켜도 렌더 제외) |
+| 사용 안 함 | `mall_feature_menu.is_enabled = 0` |
+| 로그인 필요 | `login_required = 1` 이고 비로그인 미리보기 |
+| 노출 기간 전/종료 | `visible_start_at` / `visible_end_at` |
+| GNB 잘림 | `max_gnb_items` 초과분 (몇 개가 잘렸는지 표시) |
+
+잘린 개수는 `navigationService` 가 새로 돌려주는 **`gnbCandidateCount`**(자르기 전 후보 수)로 계산한다.
+커스텀 메뉴의 `link_type` 해석(모듈 없는 유형 제외)까지 반영된 값이다. 스토어프론트는 이 필드를 읽지 않는다.
+
+PC/모바일은 서버가 기기 필터를 하지 않는다(같은 HTML 에 함께 렌더되고 뷰가 고른다).
+미리보기도 같은 방식으로 `pcVisible`/`mobileVisible` 을 뷰에서 거른다.
 
 ### 3.4 페이지/전시 관리
 | 기능 | 상태 | 근거 / 비고 |
@@ -209,13 +232,51 @@
 | **예약 발행** | ⬜ | 스케줄러 없음 |
 | 드래그앤드롭 정렬 | 🟡 | 위/아래 버튼만. 완전 DnD 미구현 |
 | 배너 관리 | ✅ | `/admin/banners` |
-| 상품 그룹 관리 | 🟡 | `product_group(_item)` 테이블 O. **전용 관리 화면 없음** (page-builder 에서 선택만) |
+| 상품 그룹 관리 | ✅ | **B6 완료.** `/admin/product-groups` — 삭제·비활성 참조 가드 + seed_key 보존(§3.4.1) |
 | 카테고리 페이지 관리 | ⬜ | — |
 | 기획전 페이지 관리 | ⬜ | `EXHIBITION` 모듈 자체가 없음 |
 | 섹션 템플릿 관리 | ⬜ | `sectionRegistry.js` 코드 고정 (의도된 설계) |
 | **섹션 팔레트 (CT 컴포넌트)** | ✅ | CT-0~9 완료. `sectionRegistry` 에 14종 등록돼 **페이지 빌더 "섹션 추가" 팔레트에 자동 노출**됨: `product_carousel` `brand_carousel` `ranking_tabs` `benefit_bento` `promotion_banner` `quick_menu` `recent_product` `custom_html` |
 | **custom_html 저장 새니타이즈** | ✅ | `pageBuilderService.updateSection` 이 저장 시 새니타이즈(렌더 시와 이중 방어) |
 | **전시관리(레거시)** | 🟡 | `/admin/display` + `main_display_*`. **`page_section` 으로 대체됨 → 폐기 대상** |
+
+#### 3.4.1 상품 그룹 관리 — ✅ B6 구현 완료 (2026-07-10)
+
+`/admin/product-groups` (페이지/전시 관리 그룹). `product_grid` · `product_carousel` · `benefit_bento`
+섹션의 데이터 소스인 `product_group` 을 직접 만들고 편집한다.
+
+**UI 범위는 `productGroupService.resolve()` 가 실제로 읽는 것에 정확히 맞췄다.**
+
+| group_type | 유효한 것 | 무시되는 것(UI 에서 감춤) |
+|---|---|---|
+| `manual` | `product_group_item` (product_id, sort_order) | `sort_type`, `filter_condition_json` |
+| `condition` | 필터 4키(`badge`/`category_id`/`min_discount`/`in_stock`) + `sort_type` 6종 | `product_group_item` |
+
+`product_group_item.is_fixed` 는 `resolve` 가 읽지 않는 **죽은 컬럼**이라 노출하지 않는다.
+B5 와 같은 원칙 — 켜도 안 바뀌는 스위치를 운영자에게 내주지 않는다.
+
+##### 반드시 지켜야 할 2가지
+
+| 위험 | 막지 않으면 | 처리 |
+|---|---|---|
+| 참조 중인 그룹 **삭제** | `page_section.data_source_id` 에 **FK 가 없다** → 섹션이 고아 참조를 든 채 빈 상태로 노출 | 참조 섹션이 있으면 삭제 차단 |
+| 참조 중인 그룹 **비활성화** | `getById` 가 `WHERE is_active = 1` 이라 **끄기만 해도** 참조 섹션이 조용히 빔 | 활성 참조 섹션이 있으면 `is_active→0` 차단 |
+
+> 삭제만 막으면 절반이다. 비활성화가 같은 결과를 낳는다는 점이 핵심이다.
+> 참조 섹션 목록은 목록·편집 화면에 함께 띄운다.
+
+##### `seed_key` 보존
+
+`filter_condition_json` 안의 `seed_key` 는 `scripts/seed_ct_sections.js` 가 그룹을 식별하는 키다(3·4번 그룹).
+저장 시 JSON 을 통째로 덮으면 시드 재실행이 **그룹을 중복 생성**한다.
+그래서 UI 가 관리하는 4키만 갱신하는 read-modify-write 로 저장한다.
+
+##### 함께 고친 버그
+
+`condition` → `manual` 전환 시 500. mysql2 가 JSON 컬럼을 **객체로** 돌려주는데 그 값을 그대로
+UPDATE 파라미터로 재바인딩해 `[object Object]` → `Invalid JSON text` 가 났다.
+`manual` 일 때는 `filter_condition_json` 컬럼을 **아예 건드리지 않는다** —
+나중에 `condition` 으로 되돌릴 때 조건과 `seed_key` 가 살아 있어야 한다.
 
 ### 3.5 상품 관리
 | 기능 | 상태 | 근거 / 비고 |
@@ -261,9 +322,9 @@
 | 공지사항 관리 | ✅ | `/admin/notices` |
 | 외부 연동 설정 | ✅ | `/admin/sys-settings` (`system_settings`: Shopify/OpenAI/OAuth/SMTP/Toss/TinyMCE) |
 | 업로드 관리 | ✅ | `/admin/uploads` (문서 원안에 누락된 항목) |
-| 접속 통계 | ✅ | `/admin/visitors` |
+| 접속 통계 | ✅ | `/admin/visitors/stats` (라우트에 인덱스 없음 — `/admin/visitors` 는 404) |
 | 권한 그룹 관리 | 🟡 | `admin_menus.visible_roles` + `adminRoleGuard.js`. 별도 권한 그룹 화면 없음 |
-| **고객센터 관리** | ⬜ | **`faq`/`faq_category` 테이블과 `/cs` 프론트는 M8에서 완료.** FAQ CRUD 관리 UI만 없음(현재 시드 12건). `answer` 저장 시 `htmlSanitizer.sanitize()` 필수 |
+| **고객센터 관리** | ✅ | **완료 (2026-07-10).** `/admin/faqs` — FAQ CRUD. `answer` 는 저장 시 `htmlSanitizer.sanitize()` 를 걸어 렌더 시 방어와 **이중**으로 막는다. |
 | 알림 설정 | ⬜ | — |
 | 로그 관리 | 🟡 | `logs/access.log` 파일. 관리 화면 없음 |
 | 데이터 백업/복구 | ⬜ | — |
@@ -545,10 +606,11 @@ brand_likes         (사용자) user_id, category_id  ← 우측 레일 '찜한 
 - [x] **B1** 카테고리 관리 트리 UI ✅ 2026-07-09 — `depthGuard`(max 3, 순환 차단) + `is_active`/`pc·mobile_visible` (아래 §4.1)
 - [x] **B2** 일반 메뉴 관리 ✅ 2026-07-09 — `/admin/feature-menus` (아래 §4.2.1)
 - [ ] **B3** 커스텀 메뉴 관리 (GNB 슬롯 3 제한, 서버 측 강제) — ⏸ **후순위** (사용자 확정 2026-07-09): 커스텀 이외 정형화된 화면·관리가 모두 끝나고 기능 테스트를 마친 뒤 착수
-- [ ] **B4** 시스템 메뉴 설정 (`is_required` 잠금)
-- [ ] **B5** Header 설정 (`navigation_config` UI)
-- [ ] **B6** 상품 그룹 관리 전용 화면
-- [ ] **B7** 메뉴 미리보기
+- [x] **A2** 관리자 메뉴 개명 ✅ 2026-07-10 — `/admin/menus` → "관리자 메뉴 관리" (위 §1)
+- [x] **B4** 시스템 메뉴 설정 ✅ 2026-07-10 — `/admin/system-menus` (아래 §4.4). B2 가 한 화면에 합쳐 지었던 것을 계획서대로 분리
+- [x] **B5** Header 설정 ✅ 2026-07-10 — `/admin/header-settings` (위 §3.2.1)
+- [x] **B6** 상품 그룹 관리 전용 화면 ✅ 2026-07-10 — `/admin/product-groups` (위 §3.4.1)
+- [x] **B7** 메뉴 미리보기 ✅ 2026-07-10 — `/admin/menu-preview` (위 §3.3.1)
 
 > B1~B4 는 프론트 **M4(navigationService) · M5(렌더 전환)** 와 짝을 이룬다.
 > **M5 렌더 전환이 끝나야** 관리자 변경이 실제 GNB에 반영된다.
@@ -556,8 +618,8 @@ brand_likes         (사용자) user_id, category_id  ← 우측 레일 '찜한 
 ### C. 2차 구현
 - [ ] 모바일 메뉴 설정 / 카테고리 페이지 관리 / 기획전 관리
 - [ ] 쿠폰·할인 관리 활성화 / 오늘특가·베스트 관리
-- [ ] **고객센터 관리 + FAQ 모듈** (프론트 M8과 동시)
-- [ ] 테마 설정 (P4)
+- [x] **고객센터 관리 + FAQ 모듈** ✅ 2026-07-10 — `/admin/faqs` (CRUD, 저장 시 `htmlSanitizer.sanitize()`)
+- [x] 테마 설정 (P4) ✅ 2026-07-10 — `/admin/theme-settings` (저장 시 `themeService` 검증 규칙 재사용)
 
 ### D. 3차 구현
 - [ ] 예약 발행 스케줄러 / 버전 관리 고도화
