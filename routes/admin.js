@@ -55,6 +55,8 @@ router.use('/theme-settings', requireMenuAccess('/admin/theme-settings'), requir
 router.use('/faqs', requireMenuAccess('/admin/faqs'), require('./admin/faqs'));
 router.use('/sys-settings', requireMenuAccess('/admin/sys-settings'), require('./admin/sysSettings'));
 router.use('/operators', requireMenuAccess('/admin/operators'), require('./admin/operators'));
+// 몰 관리 (P5 Phase 2) — mall 정의 테이블 CRUD
+router.use('/malls', requireMenuAccess('/admin/malls'), require('./admin/malls'));
 router.use('/policies', requireMenuAccess('/admin/policies'), require('./admin/policies'));
 router.use('/notices', requireMenuAccess('/admin/notices'), require('./admin/notices'));
 router.use('/inquiries', requireMenuAccess('/admin/inquiries'), require('./admin/inquiries'));
