@@ -84,7 +84,11 @@
 </div>
 
 <script id="pb-data" type="application/json">
-  <%- JSON.stringify({ pageId: page.id, sections, palette, productGroups }) %>
+  <%- JSON.stringify({ pageId: page.id, sections, palette, productGroups })
+    .replace(/<\//g, '<\\/')
+    .replace(/<!--/g, '<\\!--')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029') %>
 </script>
 <script src="/js/admin/page-builder.js"></script>
 
