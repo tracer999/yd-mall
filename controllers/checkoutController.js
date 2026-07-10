@@ -1,4 +1,23 @@
 const pool = require('../config/db');
+const groupBuySvc = require('../services/groupBuy/groupBuyService');
+
+/*
+ * ── 공동구매 연동 (docs/사이트개선/group_buy_design_and_development.md §9) ──
+ *
+ * `group_buy_id` 가 없으면 이 파일의 동작은 예전과 완전히 같다. 있으면 단일 상품
+ * 바로구매 경로에서만 갈라지고, 결제 단가를 `groupBuySvc.resolveLine()` 이 서버에서
+ * 다시 계산한다. 프론트가 보낸 가격은 어디서도 쓰지 않는다(§9-2).
+ *
+ * 장바구니(cart=1) 경로는 건드리지 않았다 — carts 에 가격·출처 컬럼이 없어 라인마다
+ * 공동구매가를 실을 수 없다(2차).
+ */
+
+/** 공동구매 검증 실패 시 되돌아갈 곳. slug 를 모르면 목록으로. */
+function groupBuyErrorRedirect(line) {
+    return line.slug
+        ? `/group-buy/${encodeURIComponent(line.slug)}?error=${line.reason}`
+        : '/group-buy';
+}
 
 /**
  * 주문 번호 생성 (토스 orderId: 6자 이상 64자 이하, 영문/숫자/-_)
@@ -113,6 +132,15 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
             }
         }
 
+        /*
+         * 공동구매 참여 기록 (§9-1).
+         *
+         * 같은 트랜잭션 안에서 돌린다 — 결제는 확정됐는데 참여 수량은 안 올라간 상태를
+         * 만들지 않기 위해서다. 공동구매 주문이 아니면 order_items 스캔 1회로 끝난다.
+         * 재실행돼도 uk_gb_participation_order_item 때문에 중복 집계되지 않는다.
+         */
+        await groupBuySvc.recordParticipation(conn, orderId);
+
         await conn.commit();
         return { ok: true };
     } catch (err) {
@@ -159,7 +187,7 @@ exports.getChoose = async (req, res) => {
  * - 로그인: 회원 주문 폼 (주소 프리필)
  */
 exports.getForm = async (req, res) => {
-    const { product_id, quantity, guest, cart, error, success } = req.query;
+    const { product_id, quantity, guest, cart, error, success, group_buy_id } = req.query;
     const isGuest = guest === '1';
 
     if (!req.user && !isGuest) {
@@ -184,6 +212,22 @@ exports.getForm = async (req, res) => {
             items.push({ product_id: r.product_id, name: r.name, price, quantity: qty, image: r.main_image || r.thumbnail_image });
             totalAmount += price * qty;
         });
+    } else if (group_buy_id && product_id && quantity) {
+        // 공동구매 바로구매 — 단가는 group_buy_product.group_buy_price 로 서버가 확정한다.
+        const line = await groupBuySvc.resolveLine(req.mallId || 1, group_buy_id, product_id, quantity);
+        if (!line.ok) return res.redirect(groupBuyErrorRedirect(line));
+
+        const [[p]] = await pool.query(
+            'SELECT id, name, main_image, thumbnail_image FROM products WHERE id = ?', [line.product.product_id]
+        );
+        items = [{
+            product_id: line.product.product_id,
+            name: p ? p.name : line.product.name,
+            price: line.unitPrice,
+            quantity: line.quantity,
+            image: p ? (p.main_image || p.thumbnail_image) : null,
+        }];
+        totalAmount = line.unitPrice * line.quantity;
     } else if (product_id && quantity) {
         const pid = parseInt(product_id, 10);
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
@@ -309,7 +353,7 @@ exports.postApplyCouponCode = async (req, res) => {
  */
 exports.postForm = async (req, res) => {
     const {
-        product_id, quantity, cart,
+        product_id, quantity, cart, group_buy_id,
         buyer_name, buyer_email, buyer_phone,
         receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
         shipping_message,
@@ -338,6 +382,19 @@ exports.postForm = async (req, res) => {
             const price = r.price;
             items.push({ product_id: r.product_id, name: r.name, price, quantity: qty });
         }
+    } else if (group_buy_id && product_id && quantity) {
+        // 주문서를 거치지 않고 이 POST 를 직접 두드릴 수 있으므로 여기서도 다시 검증한다.
+        const line = await groupBuySvc.resolveLine(req.mallId || 1, group_buy_id, product_id, quantity);
+        if (!line.ok) return res.redirect(groupBuyErrorRedirect(line));
+
+        items = [{
+            product_id: line.product.product_id,
+            name: line.product.name,
+            price: line.unitPrice,
+            quantity: line.quantity,
+            source_type: 'GROUP_BUY',
+            source_id: line.groupBuy.id,
+        }];
     } else if (product_id && quantity) {
         const pid = parseInt(product_id, 10);
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
@@ -435,10 +492,12 @@ exports.postForm = async (req, res) => {
 
         for (const item of items) {
             const lineTotal = item.price * item.quantity;
+            // source_type/source_id 는 nullable — 일반 주문에는 NULL 이 들어간다(§9-1).
             await connection.query(
-                `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity, total_price)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [orderId, item.product_id, item.name, item.price, item.quantity, lineTotal]
+                `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity, total_price, source_type, source_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [orderId, item.product_id, item.name, item.price, item.quantity, lineTotal,
+                    item.source_type || null, item.source_id || null]
             );
         }
 

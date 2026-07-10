@@ -1,5 +1,11 @@
-<%- layout('layouts/main_layout') %>
-
+<%
+  /*
+   * 이 파일 맨 위에 있던 layout('layouts/main_layout') 호출을 지웠다.
+   * express-ejs-layouts 는 뷰 안에서 부르는 `layout()` 헬퍼를 제공하지 않는다(그건 ejs-locals 문법이다).
+   * 그래서 주문서는 렌더할 때마다 "layout is not defined" 로 500 을 냈다.
+   * 기본 레이아웃은 app.js 의 `app.set('layout', 'layouts/main_layout')` 이 이미 지정한다.
+   */
+%>
 <div class="max-w-4xl mx-auto px-4 py-8">
     <h1 class="text-2xl font-bold mb-6">주문/결제</h1>
 
@@ -22,6 +28,8 @@
         <input type="hidden" name="quantity" value="<%= query.quantity %>">
         <input type="hidden" name="cart" value="<%= query.cart %>">
         <input type="hidden" name="guest" value="<%= isGuest ? '1' : '0' %>">
+        <%# 공동구매 바로구매일 때만 값이 있다. postForm 이 이 값으로 공동구매가를 재계산한다. %>
+        <input type="hidden" name="group_buy_id" value="<%= query.group_buy_id || '' %>">
         <input type="hidden" name="user_coupon_id" id="userCouponIdInput">
 
         <!-- Left Column: Info -->
@@ -278,4 +286,7 @@
     }
 </script>
 
-<%- include('../partials/coupon_modal', { coupons: userCoupons }) %>
+<%# 공용 파티셜은 views/partials/ 에 있다. 여기서 '../partials' 는 views/user/partials 를 가리켜 include 가 실패했다. %>
+<% if (!isGuest) { %>
+  <%- include('../../partials/coupon_modal', { coupons: userCoupons }) %>
+<% } %>

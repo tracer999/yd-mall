@@ -47,6 +47,8 @@ router.use('/product-groups', requireMenuAccess('/admin/product-groups'), requir
 router.use('/exhibitions', requireMenuAccess('/admin/exhibitions'), require('./admin/exhibitions'));
 // 이벤트&혜택 — 응모·쿠폰팩·출석 등 참여/혜택 중심(기획전과 분리)
 router.use('/events', requireMenuAccess('/admin/events'), require('./admin/events'));
+// 공동구매 — 기간·목표수량·공동구매가가 있는 조건부 판매 캠페인(기획전·이벤트와 분리)
+router.use('/group-buys', requireMenuAccess('/admin/group-buys'), require('./admin/group-buys'));
 router.use('/users', requireMenuAccess('/admin/users'), require('./admin/users'));
 router.use('/sales', requireMenuAccess('/admin/sales'), require('./admin/sales'));
 router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/shipping'));

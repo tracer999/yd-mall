@@ -246,6 +246,7 @@ async function startServer() {
     const featureRoutes = require('./routes/feature');
     const exhibitionRoutes = require('./routes/exhibition');
     const eventRoutes = require('./routes/event');
+    const groupBuyRoutes = require('./routes/group-buy');
     const sectionRoutes = require('./routes/sections');
     const csRoutes = require('./routes/cs');
     const adminMenuMiddleware = require('./middleware/adminMenu');
@@ -258,6 +259,8 @@ async function startServer() {
     app.use('/exhibition', exhibitionRoutes);
     // 이벤트&혜택 표준 URL(/event) — feature_menu.EVENT.default_path 와 1:1
     app.use('/event', eventRoutes);
+    // 공동구매 표준 URL(/group-buy) — feature_menu.GROUP_BUY.default_path 와 1:1
+    app.use('/group-buy', groupBuyRoutes);
     // 스토어프론트 섹션 AJAX (CT-3 ranking_tabs 등)
     app.use('/sections', sectionRoutes);
     // 고객센터 (M8)

@@ -1,0 +1,320 @@
+<%
+  /*
+   * 공동구매 상세 (§2-3)
+   *
+   * 컴포넌트 대응(§8):
+   *   GroupBuyStatusTimer  → 상단 상태 바 + 카운트다운
+   *   GroupBuyMainProduct  → 대표 상품 영역 (가격 · 수량 · CTA)
+   *   GroupBuyProgress     → 참여 현황 (달성률 막대)
+   *   GroupBuyNotice       → 유의사항
+   *   RelatedGroupBuyList  → 관련 공동구매
+   *
+   * 옵션 선택(GroupBuyOptionSelector)은 이 몰에 상품 옵션/SKU 테이블이 없어 1차에서 제외한다.
+   *
+   * ⚠️ 여기 표시되는 가격은 표시용이다. 결제 금액은 checkoutController 가
+   *    group_buy_product.group_buy_price 로 다시 계산한다(§9-2).
+   */
+  const g = groupBuy;
+  const mp = mainProduct;
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const fmtDT = (d) => d ? new Date(d).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+  const PHASE_BADGE = {
+    ACTIVE:    'bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)]',
+    CLOSING:   'bg-red-600 text-white',
+    SCHEDULED: 'bg-purple-600 text-white',
+    ENDED:     'bg-gray-500 text-white',
+  };
+
+  const normal = mp ? mp.effectiveNormalPrice : 0;
+  const price = mp ? Number(mp.group_buy_price) : 0;
+  const rate = mp ? (Number(mp.discount_rate) || 0) : 0;
+
+  // 구매 버튼을 살릴 조건. 하나라도 어긋나면 비활성 사유를 보여준다.
+  const buyable = Boolean(mp) && g.purchasable && mp.purchase_enabled && !mp.soldOut && mp.product_status === 'ON';
+  const maxQty = mp ? Math.min(Number(mp.max_order_quantity) || Number(mp.stock) || 1, Number(mp.stock) || 1) : 1;
+  const minQty = mp ? (Number(mp.min_order_quantity) || 1) : 1;
+%>
+
+<div class="max-w-screen-lg mx-auto px-4 py-8">
+
+  <nav class="mb-6 text-sm text-gray-400">
+    <a href="/group-buy" class="hover:text-gray-700">공동구매</a>
+    <span class="mx-1">/</span>
+    <span class="text-gray-600"><%= g.title %></span>
+  </nav>
+
+  <% if (error) { %>
+    <div class="mb-6 px-4 py-3 rounded-lg bg-red-50 text-red-600 text-sm"><%= error %></div>
+  <% } %>
+
+  <%# ── 상태 영역 (GroupBuyStatusTimer) ───────────────── %>
+  <div class="mb-6 flex flex-wrap items-center gap-3">
+    <span class="px-3 py-1.5 rounded-full text-xs font-bold <%= PHASE_BADGE[g.phase] %>"><%= g.phaseLabel %></span>
+    <% if (g.phase === 'ENDED') { %>
+      <span class="text-sm text-gray-500">이 공동구매는 <%= fmtDT(g.end_at) %>에 종료되었습니다.</span>
+    <% } else if (g.phase === 'SCHEDULED') { %>
+      <span class="text-sm text-gray-500"><%= fmtDT(g.start_at) %> 시작 예정</span>
+    <% } else { %>
+      <span class="text-sm text-gray-500">마감까지</span>
+      <span id="gbCountdown" data-ends-at="<%= g.endsAtMs %>"
+            class="text-base font-extrabold tabular-nums <%= g.phase === 'CLOSING' ? 'text-red-600' : 'text-gray-900' %>">–</span>
+    <% } %>
+  </div>
+
+  <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-tight"><%= g.title %></h1>
+  <% if (g.summary) { %>
+    <p class="mt-2 text-gray-500"><%= g.summary %></p>
+  <% } %>
+  <p class="mt-3 text-sm text-gray-400">
+    <i class="bi bi-calendar3"></i> <%= fmtDT(g.start_at) %> ~ <%= fmtDT(g.end_at) %>
+  </p>
+
+  <%# ── 대표 이미지 ─────────────────────────────────── %>
+  <% if (g.pc_hero_image_url || g.mobile_hero_image_url) { %>
+    <figure class="mt-6 rounded-xl overflow-hidden bg-gray-100">
+      <% if (g.mobile_hero_image_url) { %>
+        <img src="<%= g.mobile_hero_image_url %>" alt="<%= g.title %>" class="w-full sm:hidden">
+      <% } %>
+      <% if (g.pc_hero_image_url) { %>
+        <img src="<%= g.pc_hero_image_url %>" alt="<%= g.title %>"
+             class="w-full <%= g.mobile_hero_image_url ? 'hidden sm:block' : '' %>">
+      <% } %>
+    </figure>
+  <% } %>
+
+  <%# ── 대표 상품 (GroupBuyMainProduct) ───────────────── %>
+  <% if (!mp) { %>
+    <section class="mt-8 p-8 rounded-xl border-2 border-dashed border-gray-200 text-center">
+      <i class="bi bi-box-seam text-3xl text-gray-200"></i>
+      <p class="mt-3 text-sm text-gray-500">아직 판매 상품이 등록되지 않았습니다.</p>
+    </section>
+  <% } else { %>
+    <section class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 p-6 rounded-2xl border border-gray-100 bg-white">
+
+      <div class="rounded-xl overflow-hidden bg-gray-100 aspect-square">
+        <% if (mp.main_image) { %>
+          <img src="<%= mp.main_image %>" alt="<%= mp.name %>" class="w-full h-full object-cover">
+        <% } %>
+      </div>
+
+      <div class="flex flex-col">
+        <% if (mp.provider) { %>
+          <p class="text-xs text-gray-400"><%= mp.provider %></p>
+        <% } %>
+        <h2 class="mt-1 text-lg font-bold text-gray-900"><%= mp.name %></h2>
+
+        <div class="mt-4">
+          <% if (normal > price) { %>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-300 line-through"><%= won(normal) %>원</span>
+              <% if (rate > 0) { %>
+                <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-xs font-bold"><%= rate %>% 할인</span>
+              <% } %>
+            </div>
+          <% } %>
+          <div class="mt-1 flex items-baseline gap-2">
+            <span class="text-3xl font-extrabold text-gray-900"><%= won(price) %></span>
+            <span class="text-lg text-gray-700">원</span>
+          </div>
+          <p class="mt-1 text-xs text-gray-400">공동구매 전용가 · 마감 후에는 적용되지 않습니다.</p>
+        </div>
+
+        <%# 구매 제한 안내 %>
+        <% if (minQty > 1 || mp.max_order_quantity) { %>
+          <p class="mt-3 text-xs text-gray-500">
+            <i class="bi bi-info-circle"></i>
+            1회 구매 <%= minQty %>개 이상<% if (mp.max_order_quantity) { %>, <%= mp.max_order_quantity %>개 이하<% } %>
+          </p>
+        <% } %>
+
+        <%# CTA (§8 GroupBuyStatusTimer — 종료 시 구매 버튼 비활성화) %>
+        <div class="mt-auto pt-6">
+          <% if (!buyable) { %>
+            <button type="button" disabled
+                    class="w-full py-4 rounded-xl bg-gray-200 text-gray-500 font-bold cursor-not-allowed">
+              <% if (g.phase === 'SCHEDULED') { %>곧 시작합니다
+              <% } else if (g.phase === 'ENDED') { %>종료된 공동구매입니다
+              <% } else if (mp.soldOut || mp.product_status !== 'ON') { %>품절되었습니다
+              <% } else { %>지금은 구매할 수 없습니다<% } %>
+            </button>
+          <% } else { %>
+            <form action="/group-buy/<%= encodeURIComponent(g.slug) %>/buy" method="POST" class="space-y-4">
+              <input type="hidden" name="product_id" value="<%= mp.product_id %>">
+
+              <div class="flex items-center justify-between">
+                <label for="gbQty" class="text-sm font-medium text-gray-700">수량</label>
+                <div class="flex items-center border border-gray-200 rounded-lg">
+                  <button type="button" id="gbQtyMinus" class="px-3 py-2 text-gray-500 hover:text-gray-900">−</button>
+                  <input type="number" id="gbQty" name="quantity" value="<%= minQty %>"
+                         min="<%= minQty %>" max="<%= maxQty %>"
+                         class="w-16 border-0 text-center text-sm focus:ring-0">
+                  <button type="button" id="gbQtyPlus" class="px-3 py-2 text-gray-500 hover:text-gray-900">+</button>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span class="text-sm text-gray-500">결제 예상 금액</span>
+                <span id="gbTotal" class="text-xl font-extrabold text-gray-900"><%= won(price * minQty) %>원</span>
+              </div>
+
+              <button type="submit"
+                      class="w-full py-4 rounded-xl bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] font-bold hover:opacity-90 transition">
+                공동구매 참여하기
+              </button>
+            </form>
+            <p class="mt-2 text-center text-xs text-gray-400">재고 <%= won(mp.stock) %>개 남음</p>
+          <% } %>
+        </div>
+      </div>
+    </section>
+  <% } %>
+
+  <%# ── 참여 현황 (GroupBuyProgress) ──────────────────── %>
+  <% if (g.progress_visible || g.quantity_count_visible || g.participant_count_visible) { %>
+    <section class="mt-8 p-6 rounded-2xl bg-gray-50 border border-gray-100">
+      <h2 class="font-bold text-gray-800 mb-4">참여 현황</h2>
+
+      <% if (g.progress_visible && g.progressRate !== null) { %>
+        <div class="mb-4">
+          <div class="flex items-baseline justify-between mb-2">
+            <span class="text-2xl font-extrabold <%= g.targetReached ? 'text-green-600' : 'text-gray-900' %>">
+              <%= g.progressRate %>%
+            </span>
+            <span class="text-sm text-gray-500">
+              목표 <strong class="text-gray-800"><%= won(g.target_quantity) %></strong>개
+            </span>
+          </div>
+          <div class="h-2.5 w-full rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-full rounded-full transition-all <%= g.targetReached ? 'bg-green-500' : '' %>"
+                 style="width: <%= g.progressRate %>%; <%= g.targetReached ? '' : 'background: var(--gh-primary);' %>"></div>
+          </div>
+          <% if (g.targetReached) { %>
+            <p class="mt-2 text-sm text-green-600 font-medium"><i class="bi bi-check-circle-fill"></i> 목표 수량을 달성했습니다!</p>
+          <% } %>
+        </div>
+      <% } %>
+
+      <dl class="grid grid-cols-2 gap-4 text-center">
+        <% if (g.quantity_count_visible) { %>
+          <div class="p-4 rounded-xl bg-white">
+            <dt class="text-xs text-gray-400">현재 참여 수량</dt>
+            <dd class="mt-1 text-xl font-bold text-gray-900"><%= won(g.current_quantity) %>개</dd>
+          </div>
+        <% } %>
+        <% if (g.participant_count_visible) { %>
+          <div class="p-4 rounded-xl bg-white">
+            <dt class="text-xs text-gray-400">참여자 수</dt>
+            <dd class="mt-1 text-xl font-bold text-gray-900"><%= won(g.participant_count) %>명</dd>
+          </div>
+        <% } %>
+      </dl>
+
+      <% if (g.delivery_note) { %>
+        <p class="mt-4 text-sm text-gray-600">
+          <i class="bi bi-truck"></i> <%= g.delivery_note %>
+        </p>
+      <% } %>
+    </section>
+  <% } %>
+
+  <%# ── 상품 상세 정보 ──────────────────────────────── %>
+  <% if (descriptionHtml) { %>
+    <article class="mt-10 prose max-w-none text-gray-800">
+      <%- descriptionHtml %>
+    </article>
+  <% } else if (mp && mp.product_description) { %>
+    <article class="mt-10 prose max-w-none text-gray-800">
+      <%- mp.product_description %>
+    </article>
+  <% } %>
+
+  <%# ── 유의사항 (GroupBuyNotice) ─────────────────────── %>
+  <% if (noticeHtml) { %>
+    <section class="mt-10 p-6 rounded-xl bg-gray-50 border border-gray-100">
+      <h2 class="font-semibold text-gray-800 mb-3">공동구매 유의사항</h2>
+      <div class="text-sm text-gray-600 leading-relaxed"><%- noticeHtml %></div>
+    </section>
+  <% } %>
+
+  <%# ── 관련 공동구매 (RelatedGroupBuyList) ───────────── %>
+  <% if (related && related.length) { %>
+    <section class="mt-12">
+      <h2 class="font-bold text-gray-800 mb-4">진행 중인 다른 공동구매</h2>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <% related.forEach(function (r) { %>
+          <a href="<%= r.detailPath %>" class="group block rounded-xl overflow-hidden border border-gray-100 bg-white no-underline hover:shadow-md transition-shadow">
+            <div class="aspect-[4/3] bg-gray-100 overflow-hidden">
+              <% const rimg = r.list_thumbnail_url || r.main_product_image; %>
+              <% if (rimg) { %>
+                <img src="<%= rimg %>" alt="<%= r.title %>" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]">
+              <% } %>
+            </div>
+            <div class="p-3">
+              <p class="text-sm font-semibold text-gray-900 line-clamp-2"><%= r.title %></p>
+              <% if (r.main_group_buy_price) { %>
+                <p class="mt-1 text-sm font-bold text-gray-900"><%= won(r.main_group_buy_price) %>원</p>
+              <% } %>
+            </div>
+          </a>
+        <% }); %>
+      </div>
+    </section>
+  <% } %>
+
+  <div class="mt-12 text-center">
+    <a href="/group-buy" class="inline-flex items-center gap-2 px-6 py-2.5 border border-gray-300 rounded-full text-sm text-gray-700 hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition">
+      <i class="bi bi-arrow-left"></i> 공동구매 목록
+    </a>
+  </div>
+</div>
+
+<script>
+(function () {
+    // ── 남은 시간 카운트다운. 사용자 시계 기준으로 매초 다시 계산한다.
+    const el = document.getElementById('gbCountdown');
+    if (el) {
+        const endsAt = Number(el.dataset.endsAt);
+        const pad = function (n) { return String(n).padStart(2, '0'); };
+        const tick = function () {
+            let left = Math.floor((endsAt - Date.now()) / 1000);
+            if (left <= 0) { el.textContent = '마감'; return; }
+            const d = Math.floor(left / 86400); left %= 86400;
+            const h = Math.floor(left / 3600);  left %= 3600;
+            const m = Math.floor(left / 60);
+            const s = left % 60;
+            el.textContent = (d > 0 ? d + '일 ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s);
+        };
+        tick();
+        setInterval(tick, 1000);
+    }
+
+    // ── 수량 · 예상 금액. 실제 결제 금액은 서버가 다시 계산한다.
+    const qty = document.getElementById('gbQty');
+    if (!qty) return;
+
+    const unitPrice = <%= price %>;
+    const total = document.getElementById('gbTotal');
+    const min = Number(qty.min) || 1;
+    const max = Number(qty.max) || 1;
+
+    const sync = function () {
+        let v = parseInt(qty.value, 10);
+        if (!Number.isFinite(v) || v < min) v = min;
+        if (v > max) v = max;
+        qty.value = v;
+        total.textContent = (unitPrice * v).toLocaleString('ko-KR') + '원';
+    };
+
+    document.getElementById('gbQtyMinus').addEventListener('click', function () {
+        qty.value = Math.max(min, (parseInt(qty.value, 10) || min) - 1);
+        sync();
+    });
+    document.getElementById('gbQtyPlus').addEventListener('click', function () {
+        qty.value = Math.min(max, (parseInt(qty.value, 10) || min) + 1);
+        sync();
+    });
+    qty.addEventListener('change', sync);
+    sync();
+})();
+</script>

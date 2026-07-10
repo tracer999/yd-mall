@@ -124,7 +124,7 @@
         <p class="text-sm text-gray-500">총 <span class="font-semibold text-gray-800"><%= pagination.total %></span>개 상품
             <% if (_kw) { %><span class="text-blue-600">(「<%= _kw %>」 검색 결과)</span><% } %>
         </p>
-        <select onchange="location.href='/admin/products?<%= _qs({ page: 1 }) %>&perPage='+this.value"
+        <select onchange="changePerPage(this.value)"
             class="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
             <% [10, 20, 30, 50].forEach(n => { %>
                 <option value="<%= n %>" <%= pagination.perPage === n ? 'selected' : '' %>><%= n %>개씩 보기</option>
@@ -438,6 +438,14 @@
 </div>
 
 <script>
+    /* perPage 는 URL 에 이미 있을 수 있다. 새로 append 하면 중복 키가 되어 서버가 기본값으로 되돌린다. */
+    function changePerPage(value) {
+        const url = new URL(location.href);
+        url.searchParams.set('perPage', value);
+        url.searchParams.set('page', 1);
+        location.href = url.pathname + '?' + url.searchParams.toString();
+    }
+
     const PICKER_DATA = {
         category: <%- toJs(_cats.map(c => ({ id: c.id, name: c.name, depth: c.depth, path: _catPath(c) }))) %>,
         brand: <%- toJs(_brands.map(b => ({ id: b.id, name: b.name, depth: 1 }))) %>,

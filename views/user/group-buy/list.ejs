@@ -1,0 +1,204 @@
+<%
+  /*
+   * 공동구매 목록 (§2-1, §2-2)
+   *
+   * 발행된 공동구매가 0건이면 컨트롤러가 준비중 랜딩으로 되돌리므로, 여기 도달하면 최소 1건은 있다.
+   * (단, 상태 필터를 걸거나 2페이지 이후로 넘어가면 빈 목록이 나올 수 있다.)
+   *
+   * 카테고리 필터는 2차 범위다. 카드의 남은 시간은 아래 스크립트가 매초 다시 그린다.
+   */
+  const _items = groupBuys || [];
+  const _p = pagination;
+  const qs = (over) => new URLSearchParams(Object.assign({ phase, sort }, over)).toString();
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+
+  const PHASE_BADGE = {
+    ACTIVE:    'bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)]',
+    CLOSING:   'bg-red-600 text-white',
+    SCHEDULED: 'bg-purple-600 text-white',
+    ENDED:     'bg-gray-500 text-white',
+  };
+%>
+
+<div class="bg-white border-b border-gray-100">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">공동구매</h1>
+    <p class="mt-2 text-sm sm:text-base text-gray-500">기간 한정 특가로 함께 구매하세요. 마감되면 그 가격은 사라집니다.</p>
+  </div>
+</div>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+
+  <%# ── 상태 필터 ───────────────────────────────────── %>
+  <div class="mb-5 flex flex-wrap items-center gap-1 border-b border-gray-100 pb-4">
+    <% phases.forEach(function (p) { %>
+      <a href="/group-buy?<%= qs({ phase: p.value }) %>"
+         class="px-4 py-2 text-sm rounded-full no-underline <%= phase === p.value
+           ? 'bg-gray-900 text-white font-semibold'
+           : 'text-gray-500 hover:bg-gray-100' %>"><%= p.label %></a>
+    <% }); %>
+  </div>
+
+  <%# ── 정렬 ────────────────────────────────────────── %>
+  <div class="mb-6 flex items-center justify-between gap-4">
+    <p class="text-sm text-gray-500">전체 <strong class="text-gray-900"><%= _p.total %></strong>개</p>
+    <div class="flex flex-wrap items-center gap-1">
+      <% sorts.forEach(function (s) { %>
+        <a href="/group-buy?<%= qs({ sort: s.value }) %>"
+           class="px-3 py-1.5 text-xs rounded-full no-underline <%= sort === s.value
+             ? 'bg-gray-900 text-white font-semibold'
+             : 'text-gray-500 hover:bg-gray-100' %>"><%= s.label %></a>
+      <% }); %>
+    </div>
+  </div>
+
+  <%# ── 카드 리스트 ─────────────────────────────────── %>
+  <% if (!_items.length) { %>
+    <div class="py-24 text-center">
+      <i class="bi bi-people-fill text-4xl text-gray-200"></i>
+      <p class="mt-4 text-sm text-gray-500">해당 조건의 공동구매가 없습니다.</p>
+      <a href="/group-buy" class="mt-4 inline-block text-sm text-gray-600 hover:text-gray-900">전체 보기</a>
+    </div>
+  <% } else { %>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <% _items.forEach(function (g) { %>
+        <%
+          const img = g.list_thumbnail_url || g.main_product_image;
+          const normal = Number(g.main_normal_price) || Number(g.main_product_price) || 0;
+          const price = Number(g.main_group_buy_price) || 0;
+          const rate = Number(g.main_discount_rate) || 0;
+        %>
+        <a href="<%= g.detailPath %>"
+           class="group block rounded-2xl overflow-hidden border border-gray-100 bg-white no-underline hover:shadow-lg transition-shadow">
+
+          <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+            <% if (img) { %>
+              <img src="<%= img %>" alt="<%= g.title %>"
+                   class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03] <%= g.phase === 'ENDED' ? 'grayscale opacity-70' : '' %>">
+            <% } %>
+            <span class="absolute top-3 left-3 px-2.5 py-1 rounded text-[11px] font-bold <%= PHASE_BADGE[g.phase] %>">
+              <%= g.phaseLabel %>
+            </span>
+            <% if (rate > 0 && g.phase !== 'ENDED') { %>
+              <span class="absolute top-3 right-3 px-2.5 py-1 rounded bg-black/70 text-white text-[11px] font-bold">
+                <%= rate %>% OFF
+              </span>
+            <% } %>
+          </div>
+
+          <div class="p-4">
+            <h2 class="text-base font-bold text-gray-900 leading-snug line-clamp-2"><%= g.title %></h2>
+            <% if (g.main_product_name) { %>
+              <p class="mt-1 text-xs text-gray-400 line-clamp-1"><%= g.main_product_name %></p>
+            <% } %>
+
+            <%# 가격 %>
+            <% if (price > 0) { %>
+              <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-lg font-extrabold text-gray-900"><%= won(price) %>원</span>
+                <% if (normal > price) { %>
+                  <span class="text-sm text-gray-300 line-through"><%= won(normal) %>원</span>
+                <% } %>
+              </div>
+            <% } %>
+
+            <%# 참여 현황 · 달성률 %>
+            <% if (g.progress_visible && g.progressRate !== null) { %>
+              <div class="mt-3">
+                <div class="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                  <div class="h-full rounded-full <%= g.targetReached ? 'bg-green-500' : '' %>"
+                       style="width: <%= g.progressRate %>%; <%= g.targetReached ? '' : 'background: var(--gh-primary);' %>"></div>
+                </div>
+                <div class="mt-1.5 flex items-center justify-between text-[11px]">
+                  <span class="<%= g.targetReached ? 'text-green-600 font-semibold' : 'text-gray-500' %>">
+                    <%= g.targetReached ? '목표 달성!' : '달성률 ' + g.progressRate + '%' %>
+                  </span>
+                  <span class="text-gray-400">목표 <%= won(g.target_quantity) %>개</span>
+                </div>
+              </div>
+            <% } %>
+
+            <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+              <span>
+                <% if (g.quantity_count_visible) { %>
+                  <i class="bi bi-cart-check"></i> <%= won(g.current_quantity) %>개 참여
+                <% } else if (g.participant_count_visible) { %>
+                  <i class="bi bi-people"></i> <%= won(g.participant_count) %>명 참여
+                <% } %>
+              </span>
+              <% if (g.phase === 'ENDED') { %>
+                <span class="text-gray-400">종료됨</span>
+              <% } else if (g.phase === 'SCHEDULED') { %>
+                <span class="text-purple-600 font-medium">곧 시작</span>
+              <% } else { %>
+                <span class="gb-countdown font-semibold <%= g.phase === 'CLOSING' ? 'text-red-600' : 'text-gray-700' %>"
+                      data-ends-at="<%= g.endsAtMs %>">–</span>
+              <% } %>
+            </div>
+          </div>
+        </a>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <%# ── 페이지네이션 ────────────────────────────────── %>
+  <% if (_p.totalPages > 1) { %>
+    <nav class="mt-10 flex items-center justify-center gap-1">
+      <% if (_p.page > 1) { %>
+        <a href="/group-buy?<%= qs({ page: _p.page - 1 }) %>"
+           class="px-3 py-2 text-sm rounded-md text-gray-500 hover:bg-gray-100 no-underline">
+          <i class="bi bi-chevron-left"></i>
+        </a>
+      <% } %>
+      <% for (let n = 1; n <= _p.totalPages; n++) { %>
+        <a href="/group-buy?<%= qs({ page: n }) %>"
+           class="min-w-[38px] text-center px-3 py-2 text-sm rounded-md no-underline <%= n === _p.page
+             ? 'bg-gray-900 text-white font-semibold'
+             : 'text-gray-600 hover:bg-gray-100' %>"><%= n %></a>
+      <% } %>
+      <% if (_p.page < _p.totalPages) { %>
+        <a href="/group-buy?<%= qs({ page: _p.page + 1 }) %>"
+           class="px-3 py-2 text-sm rounded-md text-gray-500 hover:bg-gray-100 no-underline">
+          <i class="bi bi-chevron-right"></i>
+        </a>
+      <% } %>
+    </nav>
+  <% } %>
+
+</div>
+
+<script>
+/*
+ * 남은 시간 카운트다운.
+ * 서버는 종료 시각(ms)만 내려준다 — 서버 시각을 그대로 쓰면 사용자 시계와 어긋나므로
+ * 클라이언트가 자기 시계 기준으로 매초 다시 계산한다.
+ */
+(function () {
+    const nodes = document.querySelectorAll('.gb-countdown');
+    if (!nodes.length) return;
+
+    const render = function () {
+        const now = Date.now();
+        nodes.forEach(function (el) {
+            const endsAt = Number(el.dataset.endsAt);
+            if (!endsAt) { el.textContent = ''; return; }
+
+            let left = Math.floor((endsAt - now) / 1000);
+            if (left <= 0) { el.textContent = '마감'; return; }
+
+            const d = Math.floor(left / 86400); left %= 86400;
+            const h = Math.floor(left / 3600);  left %= 3600;
+            const m = Math.floor(left / 60);
+            const s = left % 60;
+
+            const pad = function (n) { return String(n).padStart(2, '0'); };
+            el.textContent = d > 0
+                ? d + '일 ' + h + '시간 남음'
+                : pad(h) + ':' + pad(m) + ':' + pad(s) + ' 남음';
+        });
+    };
+
+    render();
+    setInterval(render, 1000);
+})();
+</script>

@@ -1,0 +1,76 @@
+<%
+  /*
+   * 주문서 쿠폰 선택 모달
+   *
+   * form.ejs 가 include 하면서도 파일이 저장소에 없어, 주문서(/checkout)가 항상 500 이었다.
+   * form.ejs 의 스크립트가 기대하는 계약을 그대로 구현한다:
+   *
+   *   #couponModal            style.display 를 'flex'/'none' 으로 토글한다
+   *   selectCoupon(element)   element.dataset 에서 값을 읽는다:
+   *       data-user-coupon-id · data-name · data-amount · data-min-purchase
+   *   closeCouponModal()      닫기 버튼·배경 클릭
+   *
+   * `coupons` 는 checkoutController.getForm 이 넘기는 userCoupons 다
+   * (user_coupons.id AS id, coupons.name, discount_amount, min_order_amount).
+   */
+  const _coupons = (typeof coupons !== 'undefined' && coupons) ? coupons : [];
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+%>
+<div id="couponModal" class="fixed inset-0 z-[100]" style="display: none;">
+  <div class="fixed inset-0 bg-gray-500/60 backdrop-blur-sm" onclick="closeCouponModal()"></div>
+
+  <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col pointer-events-auto"
+         role="dialog" aria-modal="true" aria-labelledby="couponModalTitle">
+
+      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h3 id="couponModalTitle" class="text-lg font-semibold text-gray-800">쿠폰 선택</h3>
+        <button type="button" onclick="closeCouponModal()"
+                class="text-gray-400 hover:text-gray-600 text-2xl leading-none" aria-label="닫기">&times;</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-6 py-4">
+        <% if (!_coupons.length) { %>
+          <p class="py-10 text-center text-sm text-gray-400">사용할 수 있는 쿠폰이 없습니다.</p>
+        <% } else { %>
+          <ul class="space-y-2">
+            <% _coupons.forEach(function (c) { %>
+              <li>
+                <button type="button"
+                        onclick="selectCoupon(this)"
+                        data-user-coupon-id="<%= c.id %>"
+                        data-name="<%= c.name %>"
+                        data-amount="<%= c.discount_amount %>"
+                        data-min-purchase="<%= c.min_order_amount || 0 %>"
+                        class="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-[var(--gh-primary)] hover:bg-gray-50 transition">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-gray-800 truncate"><%= c.name %></p>
+                      <p class="mt-0.5 text-xs text-gray-400">
+                        <% if (c.min_order_amount) { %>
+                          <%= won(c.min_order_amount) %>원 이상 구매 시
+                        <% } else { %>
+                          최소 주문금액 없음
+                        <% } %>
+                      </p>
+                    </div>
+                    <span class="shrink-0 text-base font-bold text-[var(--gh-primary)]">
+                      <%= won(c.discount_amount) %>원
+                    </span>
+                  </div>
+                </button>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+      </div>
+
+      <div class="px-6 py-4 border-t border-gray-100">
+        <button type="button" onclick="closeCouponModal()"
+                class="w-full py-2.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

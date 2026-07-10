@@ -21,6 +21,16 @@ const EXHIBITION_IMAGE_FIELDS = new Set([
     'og_image',
 ]);
 
+/**
+ * 공동구매 이미지 3종 — group_buy 테이블의 *_url 컬럼과 1:1
+ * 필드명이 기획전과 겹치면 저장 경로가 섞이므로 `gb_` 접두어를 붙였다.
+ */
+const GROUP_BUY_IMAGE_FIELDS = new Set([
+    'gb_list_thumbnail',
+    'gb_pc_hero_image',
+    'gb_mobile_hero_image',
+]);
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         let uploadPath = 'public/uploads/products';
@@ -36,6 +46,8 @@ const storage = multer.diskStorage({
             uploadPath = 'public/uploads/favicon';
         } else if (EXHIBITION_IMAGE_FIELDS.has(file.fieldname)) {
             uploadPath = 'public/uploads/exhibitions';
+        } else if (GROUP_BUY_IMAGE_FIELDS.has(file.fieldname)) {
+            uploadPath = 'public/uploads/group-buys';
         }
 
         if (!fs.existsSync(uploadPath)) {
@@ -61,6 +73,7 @@ const imageOnlyFields = new Set([
     'favicon',
     'file',
     ...EXHIBITION_IMAGE_FIELDS,
+    ...GROUP_BUY_IMAGE_FIELDS,
 ]);
 
 const fileFilter = (req, file, cb) => {

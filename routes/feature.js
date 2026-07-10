@@ -35,7 +35,7 @@ router.get('/deal/today', preset({ badge: 'DEADLINE_SALE' }), productController.
 // 이벤트가 아니다. 발행된 이벤트가 0건이면 eventController 가 COMING_SOON.event 랜딩으로 되돌린다.
 
 /*
- * 준비 중 메뉴 (기획전 / 공동구매 / 쇼핑라이브 / 랭킹 / 아울렛 / 쿠폰 / 멤버십)
+ * 준비 중 메뉴 (쇼핑라이브 / 랭킹 / 아울렛 / 쿠폰 / 멤버십)
  *
  * GNB 에 노출하되 모듈이 아직 없다. '#' 죽은 링크 대신 실제 랜딩 페이지를 둔다.
  * 검색엔진에는 색인시키지 않는다(noindex).
@@ -62,11 +62,12 @@ const COMING_SOON = {
         primary: { label: '오늘특가 보러가기', href: '/deal/today' },
         secondary: { label: '전체 상품', href: '/products' },
     },
+    // 공동구매는 모듈이 있다. 이 항목은 **발행된 공동구매가 0건일 때만** 쓰이는 폴백 랜딩이다.
     'group-buy': {
         name: '공동구매',
         icon: 'bi-people-fill',
-        description: '목표 수량을 함께 채워 더 저렴하게 구매하는 공동구매를 준비하고 있습니다.',
-        bullets: ['목표 수량 달성 시 할인 적용', '기간 한정 진행', '알림 신청으로 오픈 소식 받기'],
+        description: '진행 중인 공동구매가 없습니다.<br>기간 한정 특가 공동구매를 준비하고 있습니다.',
+        bullets: ['기간 한정 공동구매가', '목표 수량 달성률 공개', '참여 수량 실시간 표시'],
         primary: { label: '베스트 상품 보기', href: '/best' },
         secondary: { label: '1:1 문의', href: '/inquiries' },
     },
@@ -138,7 +139,10 @@ function comingSoon(key) {
 
 // '/exhibition' 은 routes/exhibition.js 가 실제 목록을 렌더한다.
 // 다만 발행된 기획전이 0건이면 exhibitionController 가 COMING_SOON.exhibition 랜딩으로 되돌린다.
-router.get('/group-buy', comingSoon('group-buy'));
+//
+// '/group-buy' 도 마찬가지로 routes/group-buy.js 가 렌더한다.
+// ⚠️ 여기에 `router.get('/group-buy', ...)` 를 남겨두면 안 된다 — featureRoutes 가 app.js 에서
+//    '/' 에 **먼저** 마운트되므로, 뒤에 오는 app.use('/group-buy', ...) 가 영영 닿지 못한다.
 router.get('/live', comingSoon('live'));
 router.get('/ranking', comingSoon('ranking'));
 router.get('/outlet', comingSoon('outlet'));
@@ -146,5 +150,5 @@ router.get('/coupon', comingSoon('coupon'));
 router.get('/membership', comingSoon('membership'));
 
 module.exports = router;
-// 기획전 컨트롤러가 '발행 0건' 폴백에서 같은 랜딩을 렌더한다(mallContext 의 invalidate 노출과 같은 패턴).
+// 기획전·이벤트·공동구매 컨트롤러가 '발행 0건' 폴백에서 같은 랜딩을 렌더한다.
 module.exports.COMING_SOON = COMING_SOON;
