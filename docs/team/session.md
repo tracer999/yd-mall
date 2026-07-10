@@ -16,6 +16,7 @@
   4. **미구현 모듈 4종 랜딩**(랭킹·아울렛·쿠폰·멤버십) + **테스트 카테고리 트리·상품 시드**(3뎁스, 존치).
   5. **멀티몰(P5) 기반 + 종합관(mall 2) 신설** — `mall` 정의 테이블, `products.mall_id`, 몰 해석기(`?mall=`), 스토어프론트 몰 스코프. mall 2 종합몰 데이터(카테고리 74·상품 205·3뎁스·GNB·홈) 시드.
   6. **관리자 멀티몰 관리(P5 관리자편 Phase 1+2)** — 편집 몰 선택기(`?adminMall=`), 관리자 컨트롤러 몰 스코프(혼재 버그 수정), **몰 관리 화면(`/admin/malls` CRUD)**.
+  7. **브랜딩 몰별 분리** — `site_settings` 를 몰별 행으로. mall 2 = 종합관 브랜딩(회사명·슬로건·인디고색 #5B5BD6·hero_variant). `res.locals.categories` 도 몰 스코프.
 - **현재 상태**: `main` 푸시·배포 완료, 운영 검증 완료. 작업 트리 clean.
 - **다음 할 일**: 종합몰 **브랜딩 몰별 분리**(상단 슬로건이 아직 건강식품 문구, `site_settings` 전역), 또는 "이번 트랙 밖" 목록. 멀티몰 큰 트랙은 닫혔다.
 
@@ -23,6 +24,8 @@
 - **스토어프론트**: `https://dev-mall.ydata.co.kr/?mall=2` → 종합관, `?mall=1`(또는 파라미터 없음) → 건강식품몰(기본). 세션 유지. 손님 세션 키 = `mallId`.
 - **관리자**: 우측 상단 **몰 선택기** 드롭다운(또는 `?adminMall=2`) → 편집 대상 몰 전환. 관리자 세션 키 = `adminMallId`(스토어와 **독립**).
 - **몰 관리 화면**: `운영/시스템 관리 > 몰 관리`(`/admin/malls`) — 몰 추가·수정·삭제·기본몰 지정. 가드: 기본몰 삭제·비활성 불가, 데이터 있는 몰 삭제 불가, 기본몰 정확히 1개.
+- **브랜딩**: `site_settings` 몰별 행. 관리자 `사이트 설정`이 편집몰(`adminMallId`) 행을 편집. `system_settings`(OAuth·SMTP·결제 키)는 전역. hero_variant 가 site_settings 에 있으니 새 몰 시드 시 반드시 포함(`scripts/seed_mall2_branding.js`).
+- **약관/개인정보**(auth.js·policyController)는 `id=1`(mall 1) 공유 — 데모 경계.
 - **관리자 멀티몰 스코프 대상**: 카테고리·상품(목록+생성 mall_id 상속)·일반/시스템 메뉴·Header 설정·테마·상품그룹·FAQ·메뉴 미리보기·페이지 빌더. `req.adminMallId` 사용.
 - **스코프 밖(전역)**: `admin_menus`(사이드바)·banners·orders/users/sales/dashboard·레거시 display.
 - **새 몰 대응**: theme-settings 는 그 몰에 테마가 없으면 기본 테마를 자동 생성한다.
