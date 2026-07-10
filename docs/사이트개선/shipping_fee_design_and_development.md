@@ -3,6 +3,25 @@
 > 작성 2026-07-10. **[`coupon_design_and_development.md`](./coupon_design_and_development.md) 의 선행 과제.**
 > 무료배송 쿠폰은 이 문서가 끝나야 성립한다. 다만 이 문서의 존재 이유는 쿠폰이 아니다 —
 > **이미 고객에게 고지한 배송 정책이 시스템에 구현돼 있지 않다.**
+>
+> ---
+> ## ✅ 구현 완료 (2026-07-11)
+>
+> **1차(S1~S11)·2차(S12~S16) 전부 구현·검증 완료.** 커밋 `e8fd931`.
+> 배송비 쿠폰(§8-3)은 쿠폰 문서 P7~P11 로 함께 완료됐다(커밋 `119dd1c`).
+>
+> | 미결 | 확정 |
+> |---|---|
+> | 1. 무료배송 시 지역 할증 | **(A) 기본료만 면제, 할증은 청구.** `guide.ejs` 문구도 그에 맞게 수정 |
+> | 5. 도서산간 대역 기준 | 널리 쓰이는 제주 전역 + 주요 유인도서로 시드(`scripts/seed_shipping_zones.sql`). **운영 기준 확정 시 `/admin/shipping-policy` 에서 편집** |
+>
+> **남은 운영 조치**: 코드 배포 후 관리자 메뉴를 켠다 —
+> `UPDATE admin_menus SET is_active = 1 WHERE path = '/admin/shipping-policy';`
+> (dev·prod 가 같은 DB 라 라우트 배포 전에 켜면 운영에 404 링크가 노출된다.)
+>
+> **다음 세션이 알아야 할 것**: 실제 계약 택배사의 도서산간 목록으로 대역을 교체해야 한다.
+> 대역에 빠진 섬은 할증이 붙지 않아 손해로 돌아온다.
+> ---
 
 ---
 
@@ -304,29 +323,29 @@ async function calcShippingFee({ mallId, subtotalAmount, receiverZipcode }) {
 
 ### 8-0. 선행
 
-- [ ] **쿠폰 문서 C3 (결제 우회) 수정** — 총액을 서버가 권위 있게 계산하도록 만든 뒤 배송비를 올린다 🔴
+- [x] **쿠폰 문서 C3 (결제 우회) 수정** — 총액을 서버가 권위 있게 계산하도록 만든 뒤 배송비를 올린다 🔴
 
 ### 8-1. 1차 — 기본 배송비 (무료배송 기준)
 
-- [ ] **S1** `shipping_policy` 테이블 + `orders.shipping_fee` · `shipping_discount` ALTER + 기존 22건 백필(0)
-- [ ] **S2** `services/shipping/shippingCalculator.js` — `calcShippingFee({mallId, subtotalAmount})`. **서버 전용**
-- [ ] **S3** `checkoutController.postForm` 에서 배송비 계산 → `orders.shipping_fee` 기록. `total_amount` 식 갱신
-- [ ] **S4** `completeOrderWithStockAndPaid` 가 **주문 행에서** `shipping_fee` 를 읽도록 (요청에서 읽지 않음)
-- [ ] **S5** 체크아웃 화면 — 정적 `0원` 제거, 실제 배송비 표시, "N원 더 담으면 무료배송" 안내
-- [ ] **S6** 장바구니 — 배송비 + 무료배송 임박 게이지
-- [ ] **S7** 주문 상세 · 마이페이지 · 관리자 주문에 배송비 표시
-- [ ] **S8** 관리자 `/admin/shipping-policy` 몰별 정책 편집
-- [ ] **S9** 취소 시 배송비 환불 (쿠폰 문서 C1 복원 작업과 같은 트랜잭션)
-- [ ] **S10** 검증 — 4.9만원 주문 3,000원 / 5만원 주문 0원 / 쿠폰 사용 후 4.5만원이 되어도 **배송비 0원 유지**(§1-2)
-- [ ] **S11** 검증 — 클라이언트가 `shipping_fee` 를 조작해도 서버 계산값이 이긴다
+- [x] **S1** `shipping_policy` 테이블 + `orders.shipping_fee` · `shipping_discount` ALTER + 기존 22건 백필(0)
+- [x] **S2** `services/shipping/shippingCalculator.js` — `calcShippingFee({mallId, subtotalAmount})`. **서버 전용**
+- [x] **S3** `checkoutController.postForm` 에서 배송비 계산 → `orders.shipping_fee` 기록. `total_amount` 식 갱신
+- [x] **S4** `completeOrderWithStockAndPaid` 가 **주문 행에서** `shipping_fee` 를 읽도록 (요청에서 읽지 않음)
+- [x] **S5** 체크아웃 화면 — 정적 `0원` 제거, 실제 배송비 표시, "N원 더 담으면 무료배송" 안내
+- [x] **S6** 장바구니 — 배송비 + 무료배송 임박 게이지
+- [x] **S7** 주문 상세 · 마이페이지 · 관리자 주문에 배송비 표시
+- [x] **S8** 관리자 `/admin/shipping-policy` 몰별 정책 편집
+- [x] **S9** 취소 시 배송비 환불 (쿠폰 문서 C1 복원 작업과 같은 트랜잭션)
+- [x] **S10** 검증 — 4.9만원 주문 3,000원 / 5만원 주문 0원 / 쿠폰 사용 후 4.5만원이 되어도 **배송비 0원 유지**(§1-2)
+- [x] **S11** 검증 — 클라이언트가 `shipping_fee` 를 조작해도 서버 계산값이 이긴다
 
 ### 8-2. 2차 — 지역 할증
 
-- [ ] **S12** `shipping_zipcode_zone` 테이블 + 제주·도서산간 대역 시드
-- [ ] **S13** `shipping_policy.jeju_extra` · `island_extra` + `resolveZone()` 판정
-- [ ] **S14** 배송지 변경 시 배송비 재계산 AJAX (`POST /checkout/shipping-fee`)
-- [ ] **S15** 관리자 — 우편번호 대역 편집 화면
-- [ ] **S16** 검증 — 제주·도서산간 우편번호에 할증이 붙는지, 무료배송 기준을 넘겨도 할증은 청구되는지(§7 미결 1)
+- [x] **S12** `shipping_zipcode_zone` 테이블 + 제주·도서산간 대역 시드
+- [x] **S13** `shipping_policy.jeju_extra` · `island_extra` + `resolveZone()` 판정
+- [x] **S14** 배송지 변경 시 배송비 재계산 AJAX (`POST /checkout/shipping-fee`)
+- [x] **S15** 관리자 — 우편번호 대역 편집 화면
+- [x] **S16** 검증 — 제주·도서산간 우편번호에 할증이 붙는지, 무료배송 기준을 넘겨도 할증은 청구되는지(§7 미결 1)
 
 ### 8-3. 2차 — 배송비 쿠폰 (**체크박스는 쿠폰 문서가 소유**)
 
