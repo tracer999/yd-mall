@@ -145,8 +145,8 @@ config/
   passport.js          # Google/Kakao OAuth (env 없으면 전략 미등록)
   systemSettings.js    # system_settings → global.systemSettings + process.env
 shared/crypto.js       # AES-256-GCM 암복호 (ENC: 접두어)
-controllers/           # 고객 13개 + admin/ 관리자 22개
-routes/                # 고객 라우트 + admin/ 관리자 서브라우트 23개
+controllers/           # 고객 13개 + admin/ 관리자 21개
+routes/                # 고객 라우트 + admin/ 관리자 서브라우트 22개
 middleware/            # 14개 (5.3 참고)
 services/
   emailService.js      # SMTP 발송
@@ -162,7 +162,7 @@ public/
   uploads/             # 상품 이미지
 scripts/               # init_db.js, migrate_*.js, seed_*.js, shopify-*.js, encrypt.js, _bootstrap.js
 docs/                  # 개발 문서 + 매뉴얼 소스 + 계획서
-tables.sql             # DB 스키마 (42개 — 실제 51개와 차이 있음, 6장 참고)
+tables.sql             # DB 스키마 (42개 — 실제 49개와 차이 있음, 6장 참고)
 ecosystem.config.cjs   # PM2 설정
 dev-mall.sh            # 배포/기동 스크립트
 .github/workflows/deploy.yml
@@ -270,7 +270,7 @@ SDK 없이 `fetch` 로 REST 를 직접 호출합니다(`controllers/checkoutCont
 
 ## 6. 데이터베이스
 
-MySQL `dev_mall` @ ydata.co.kr — **개발·상용 공용**, 51개 테이블.
+MySQL `dev_mall` @ ydata.co.kr — **개발·상용 공용**, 49개 테이블.
 
 ```bash
 mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' dev_mall
@@ -283,7 +283,7 @@ mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' dev_mall
 | 주문/장바구니/배송 | `orders` · `order_items` · `carts` · `shipments` |
 | 프로모션/포인트 | `coupons` · `user_coupons` · `point_transactions` |
 | 메뉴/네비게이션 | `admin_menus` · `feature_menu` · `mall_feature_menu` · `custom_menu` · `navigation_config` |
-| 디스플레이/섹션 | `banners` · `hero_slide` · `page` · `page_section` · `page_revision` · `main_display_sections` · `main_display_products` |
+| 디스플레이/섹션 | `banners` · `hero_slide` · `page` · `page_section` · `page_revision` |
 | 게시판/CS | `notices` · `faq` · `faq_category` · `inquiries` · `reviews` · `likes` · `brand_likes` |
 | 설정 | `site_settings`(싱글턴 행) · `system_settings`(key-value) · `policy_versions` |
 | 로그/분석 | `page_views` · `visitor_logs` · `recent_views` · `search_logs` · `kakao_click_logs` · `kakao_inquiry_logs` |
@@ -303,9 +303,9 @@ mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' dev_mall
 
 ### 6.2 스키마 드리프트 ⚠️
 
-`tables.sql` 은 **42개 테이블만** 정의하고 있어 실제 DB(51개)와 어긋납니다.
+`tables.sql` 은 **42개 테이블만** 정의하고 있어 실제 DB(49개)와 어긋납니다.
 
-- `tables.sql` 누락: `shopify_product_mappings`, `shopify_orders`, `shopify_image_mappings`, `main_display_sections`, `main_display_products`, `product_recommendations`, `product_seo`, `recent_views`, `kakao_inquiry_logs`
+- `tables.sql` 누락: `shopify_product_mappings`, `shopify_orders`, `shopify_image_mappings`, `product_recommendations`, `product_seo`, `recent_views`, `kakao_inquiry_logs`
 - **저장소의 어떤 SQL 에도 정의가 없는 컬럼** (운영 DB 에만 존재하며 코드가 사용):
   - `categories.shopify_collection_id` — `services/shopify/categorySync.js` 가 읽고 씀
   - `shopify_product_mappings.shopify_inventory_item_id` — `services/shopify/syncService.js` 가 INSERT/UPDATE
@@ -497,7 +497,7 @@ ssh tracer999@192.168.1.2
 
 - **`app.js` 의 `/docs` 정적 서빙이 저장소 밖을 가리킵니다.** `express.static(path.join(__dirname, '..', 'docs'))` 에서 `__dirname` 은 저장소 루트이므로 대상은 상위 디렉터리(운영 서버 기준 `/data/docs`)이고, 이 디렉터리는 존재하지 않습니다. 이 저장소가 모노레포의 서브폴더였을 때의 잔재입니다(주석의 예시 URL `/docs/develop/mall/…` 도 현재 `docs/` 구조와 맞지 않음). **운영에서 `https://dev-mall.ydata.co.kr/docs/` 는 404 로 확인됐습니다**(대조군 `/`, `/manual` 은 200). 저장소 내 `docs/` 를 서빙하려면 `path.join(__dirname, 'docs')` 여야 합니다.
   - `routes/manual.js` 의 `/manual` 은 `__dirname` 이 `routes/` 라서 `../docs` 가 저장소 내 `docs/` 를 정확히 가리키며, 정상 동작합니다.
-- **스키마 드리프트**: `tables.sql`(42) vs 실제 DB(51). 6.2 참고.
+- **스키마 드리프트**: `tables.sql`(42) vs 실제 DB(49). 6.2 참고.
 - **`seoDefaults` 가 전역 `noindex,nofollow` 를 강제**하고 `app.js` 도 `X-Robots-Tag: noindex, nofollow` 를 붙입니다. 테스트 서버 기준 설정이므로, 실제 공개 시 해제해야 합니다.
 - **`/checkout/complete?test=1`** 은 Toss 승인 없이 `paymentMethod: 'TEST'` 로 주문을 완료시키는 결제 우회 경로입니다.
 - **`isShopifySyncEnabled()` 는 fail-open** 입니다. 7.1 참고.

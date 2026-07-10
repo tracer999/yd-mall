@@ -132,6 +132,10 @@ async function renderForm(res, group, mallId, extra = {}) {
     const [categories] = await pool.query(
         "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order, id", [mallId]
     );
+    // 수동 선택 팝업의 브랜드 필터용 — 상품의 brand_category_id 는 type='BRAND' 카테고리를 가리킨다.
+    const [brands] = await pool.query(
+        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order, id", [mallId]
+    );
 
     let items = [];
     let preview = [];
@@ -159,6 +163,7 @@ async function renderForm(res, group, mallId, extra = {}) {
         items,
         preview,
         categories,
+        brands,
         sortTypes: SORT_TYPES,
         badges: BADGES,
         refs: group.id ? await findReferencingSections(null, group.id) : [],
@@ -369,26 +374,99 @@ exports.postReorderItems = async (req, res) => {
     }
 };
 
-/** GET /admin/product-groups/:id/product-search — AJAX */
+/**
+ * GET /admin/product-groups/:id/product-search — AJAX (필터형 상품 조회 팝업)
+ *
+ * 검색어는 선택이다. 카테고리/브랜드/재고/노출 필터만으로도 조회할 수 있어야 하므로
+ * "검색어 없으면 빈 결과" 가드를 두지 않는다. 필터는 모두 AND 로 결합한다.
+ */
+const VISIBILITIES = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
+
 exports.getProductSearch = async (req, res) => {
     const MALL_ID = req.adminMallId || 1;
     try {
         const q = String(req.query.q || '').trim();
-        if (!q) return res.json({ products: [] });
+        const categoryId = Number.parseInt(req.query.category_id, 10);
+        const brandId = Number.parseInt(req.query.brand_id, 10);
+        const inStock = String(req.query.in_stock || '');       // '' | 'y' | 'n'
+        const visibility = String(req.query.visibility || '');  // '' | PUBLIC | HIDDEN | MEMBER_ONLY
 
         // P5: 이 몰의 상품만 후보로 제시한다.
-        const [products] = await pool.query(`
-            SELECT p.id, p.name, p.main_image, p.price, p.status, p.product_badge
-            FROM products p
-            WHERE p.mall_id = ? AND p.name LIKE ?
-              AND p.id NOT IN (SELECT product_id FROM product_group_item WHERE product_group_id = ?)
-            ORDER BY p.created_at DESC
-            LIMIT 20
-        `, [MALL_ID, `%${q}%`, req.params.id]);
+        const where = ['p.mall_id = ?'];
+        const params = [MALL_ID];
 
-        res.json({ products });
+        if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
+        if (Number.isFinite(categoryId) && categoryId > 0) { where.push('p.category_id = ?'); params.push(categoryId); }
+        if (Number.isFinite(brandId) && brandId > 0) { where.push('p.brand_category_id = ?'); params.push(brandId); }
+        if (inStock === 'y') where.push('p.stock > 0');
+        else if (inStock === 'n') where.push('p.stock <= 0');
+        if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
+
+        // 이미 이 그룹에 담긴 상품은 후보에서 제외
+        where.push('p.id NOT IN (SELECT product_id FROM product_group_item WHERE product_group_id = ?)');
+        params.push(req.params.id);
+
+        const [products] = await pool.query(`
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status, p.visibility, p.product_badge
+            FROM products p
+            WHERE ${where.join(' AND ')}
+            ORDER BY p.created_at DESC
+            LIMIT 100
+        `, params);
+
+        res.json({ products, limited: products.length >= 100 });
     } catch (err) {
         console.error('[productGroup] getProductSearch:', err.message);
         res.status(500).json({ products: [] });
+    }
+};
+
+/**
+ * POST /admin/product-groups/:id/items/bulk — 여러 상품 한번에 담기 (AJAX)
+ * body: { product_ids: number[] }. 이미 담긴 것·타 몰 상품은 조용히 건너뛴다.
+ */
+exports.postAddItems = async (req, res) => {
+    const id = req.params.id;
+    const MALL_ID = req.adminMallId || 1;
+
+    const raw = Array.isArray(req.body.product_ids) ? req.body.product_ids : [];
+    const ids = [...new Set(raw.map(n => Number.parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0))];
+    if (!ids.length) return res.status(400).json({ success: false, added: 0 });
+
+    const conn = await pool.getConnection();
+    try {
+        // 이 몰 소유 상품만 (요청 위조 차단)
+        const ph = ids.map(() => '?').join(',');
+        const [owned] = await conn.query(`SELECT id FROM products WHERE mall_id = ? AND id IN (${ph})`, [MALL_ID, ...ids]);
+        const ownedIds = new Set(owned.map(r => r.id));
+
+        // 이미 담긴 상품 제외
+        const [existing] = await conn.query('SELECT product_id FROM product_group_item WHERE product_group_id = ?', [id]);
+        const have = new Set(existing.map(r => r.product_id));
+
+        const toAdd = ids.filter(pid => ownedIds.has(pid) && !have.has(pid));
+
+        if (toAdd.length) {
+            await conn.beginTransaction();
+            const [[maxRow]] = await conn.query(
+                'SELECT COALESCE(MAX(sort_order), 0) AS m FROM product_group_item WHERE product_group_id = ?', [id]
+            );
+            let order = maxRow.m;
+            for (const pid of toAdd) {
+                order += 1;
+                await conn.query(
+                    'INSERT INTO product_group_item (product_group_id, product_id, sort_order) VALUES (?, ?, ?)',
+                    [id, pid, order]
+                );
+            }
+            await conn.commit();
+        }
+        res.json({ success: true, added: toAdd.length, skipped: ids.length - toAdd.length });
+    } catch (err) {
+        try { await conn.rollback(); } catch (e) { /* 미시작 */ }
+        console.error('[productGroup] postAddItems:', err.message);
+        res.status(500).json({ success: false });
+    } finally {
+        conn.release();
     }
 };

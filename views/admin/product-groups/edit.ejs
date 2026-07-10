@@ -161,10 +161,11 @@
       </div>
 
       <div class="p-5 border-b border-gray-100">
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">상품 검색</label>
-        <input type="text" id="pgSearch" placeholder="상품명을 2글자 이상 입력하세요"
-               class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
-        <div id="pgSearchResults" class="mt-2 space-y-1"></div>
+        <button type="button" id="pgOpenPicker"
+                class="inline-flex items-center gap-1.5 h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+          <i class="bi bi-plus-lg"></i> 상품 추가
+        </button>
+        <span class="ml-2 text-xs text-gray-400">조회 팝업에서 카테고리·브랜드·재고·노출 필터로 찾아 여러 개를 한 번에 담을 수 있습니다.</span>
       </div>
 
       <ul id="pgItems" class="divide-y divide-gray-100">
@@ -218,6 +219,79 @@
       </div>
     </div>
   <% } %>
+
+  <%# ── 상품 조회 팝업 (수동 선택 · 필터 + 멀티선택) ───────── %>
+  <% if (!isNew) { %>
+  <div id="pgPicker" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-black/40" data-pg-close></div>
+    <div class="relative mx-auto my-8 w-[95%] max-w-4xl bg-white rounded-xl shadow-xl flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h3 class="text-base font-bold text-gray-800">상품 조회</h3>
+        <button type="button" data-pg-close class="text-gray-400 hover:text-gray-700"><i class="bi bi-x-lg"></i></button>
+      </div>
+
+      <%# 필터 %>
+      <div class="px-5 py-4 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
+        <div class="col-span-2">
+          <label class="block text-xs text-gray-500 mb-1">검색어</label>
+          <input type="text" id="pgfQ" placeholder="상품명·상품코드" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">카테고리</label>
+          <select id="pgfCategory" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+            <option value="">전체</option>
+            <% categories.forEach(function (c) { %><option value="<%= c.id %>"><%= c.name %></option><% }); %>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">브랜드</label>
+          <select id="pgfBrand" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+            <option value="">전체</option>
+            <% (brands || []).forEach(function (b) { %><option value="<%= b.id %>"><%= b.name %></option><% }); %>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">재고</label>
+          <select id="pgfStock" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+            <option value="">전체</option>
+            <option value="y">재고 있음</option>
+            <option value="n">재고 없음</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">노출</label>
+          <select id="pgfVisibility" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+            <option value="">전체</option>
+            <option value="PUBLIC">노출</option>
+            <option value="HIDDEN">숨김</option>
+            <option value="MEMBER_ONLY">회원전용</option>
+          </select>
+        </div>
+        <div class="col-span-2 sm:col-span-3 lg:col-span-6 flex items-center gap-2">
+          <button type="button" id="pgfSearch" class="h-[34px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900"><i class="bi bi-search mr-1"></i>검색</button>
+          <button type="button" id="pgfReset" class="h-[34px] px-3 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50">초기화</button>
+          <label class="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <input type="checkbox" id="pgfAll" class="w-4 h-4"> 결과 전체 선택
+          </label>
+        </div>
+      </div>
+
+      <%# 결과 %>
+      <div id="pgfResults" class="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+        <p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>
+      </div>
+
+      <%# 푸터 %>
+      <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+        <span class="text-xs text-gray-500"><span id="pgfCount">0</span>개 선택됨</span>
+        <div class="flex gap-2">
+          <button type="button" data-pg-close class="h-[36px] px-4 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50">닫기</button>
+          <button type="button" id="pgfAdd" class="h-[36px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50" disabled>선택 담기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% } %>
 </div>
 
 <script>
@@ -236,10 +310,8 @@
 
   if (!groupId) return;
 
+  /* ── 담긴 상품 순서 변경 ── */
   const list = document.getElementById('pgItems');
-  const search = document.getElementById('pgSearch');
-  const results = document.getElementById('pgSearchResults');
-
   function renumber() {
     list.querySelectorAll('[data-item-id]').forEach((li, i) => {
       li.querySelector('.pg-index').textContent = i + 1;
@@ -253,7 +325,6 @@
       body: JSON.stringify({ order }),
     }).catch(() => {});
   }
-
   list && list.addEventListener('click', (e) => {
     const li = e.target.closest('[data-item-id]');
     if (!li) return;
@@ -267,36 +338,125 @@
   });
   renumber();
 
-  let timer;
-  search && search.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = search.value.trim();
-    if (q.length < 2) { results.innerHTML = ''; return; }
-    timer = setTimeout(async () => {
-      const res = await fetch(`/admin/product-groups/${groupId}/product-search?q=${encodeURIComponent(q)}`);
-      const { products } = await res.json();
-      results.innerHTML = products.length ? '' : '<p class="text-xs text-gray-400 px-1 py-2">검색 결과가 없습니다.</p>';
-      products.forEach(p => {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `/admin/product-groups/${groupId}/items`;
-        form.className = 'flex items-center gap-2 px-2 py-1.5 rounded border border-gray-100 hover:bg-gray-50';
-        const img = document.createElement('img');
-        img.src = p.main_image || '/images/no-image.png';
-        img.className = 'w-8 h-8 rounded object-cover bg-gray-100';
-        const span = document.createElement('span');
-        span.className = 'flex-1 text-sm text-gray-800 truncate';
-        span.textContent = p.name;           // textContent — 상품명이 마크업으로 해석되지 않도록
-        const hidden = document.createElement('input');
-        hidden.type = 'hidden'; hidden.name = 'product_id'; hidden.value = p.id;
-        const btn = document.createElement('button');
-        btn.type = 'submit';
-        btn.className = 'text-xs px-2 py-1 rounded bg-indigo-600 text-white';
-        btn.textContent = '담기';
-        form.append(img, span, hidden, btn);
-        results.append(form);
+  /* ── 상품 조회 팝업 (필터 + 멀티선택) ── */
+  const picker = document.getElementById('pgPicker');
+  if (!picker) return;
+
+  const openBtn = document.getElementById('pgOpenPicker');
+  const resultsEl = document.getElementById('pgfResults');
+  const countEl = document.getElementById('pgfCount');
+  const addBtn = document.getElementById('pgfAdd');
+  const allChk = document.getElementById('pgfAll');
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const VIS = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+  const selected = new Set();
+
+  function openPicker() { picker.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  function closePicker() { picker.classList.add('hidden'); document.body.style.overflow = ''; }
+  openBtn && openBtn.addEventListener('click', openPicker);
+  picker.querySelectorAll('[data-pg-close]').forEach(el => el.addEventListener('click', closePicker));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !picker.classList.contains('hidden')) closePicker(); });
+
+  function updateCount() {
+    countEl.textContent = selected.size;
+    addBtn.disabled = selected.size === 0;
+  }
+
+  function render(products, limited) {
+    selected.clear(); updateCount();
+    if (allChk) allChk.checked = false;
+    if (!products.length) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조건에 맞는 상품이 없습니다.</p>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    if (limited) {
+      const note = document.createElement('p');
+      note.className = 'mb-2 text-xs text-amber-600';
+      note.textContent = '결과가 100개에 도달했습니다. 필터를 더 좁혀 주세요.';
+      frag.appendChild(note);
+    }
+    products.forEach(p => {
+      const row = document.createElement('label');
+      row.className = 'flex items-center gap-3 px-2 py-2 rounded border border-gray-100 hover:bg-gray-50 cursor-pointer';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.className = 'w-4 h-4 flex-shrink-0'; chk.value = String(p.id);
+      chk.addEventListener('change', () => {
+        if (chk.checked) selected.add(p.id); else selected.delete(p.id);
+        updateCount();
       });
-    }, 250);
+      const img = document.createElement('img');
+      img.src = p.main_image || '/images/no-image.png';
+      img.className = 'w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0';
+      const info = document.createElement('div');
+      info.className = 'flex-1 min-w-0';
+      const nm = document.createElement('div');
+      nm.className = 'text-sm text-gray-900 truncate';
+      nm.textContent = p.name;              // textContent — 상품명이 마크업으로 해석되지 않도록
+      const meta = document.createElement('div');
+      meta.className = 'text-xs text-gray-400';
+      meta.textContent = `${won(p.price)}원 · 재고 ${p.stock} · ${VIS[p.visibility] || p.visibility}`;
+      info.append(nm, meta);
+      row.append(chk, img, info);
+      frag.appendChild(row);
+    });
+    resultsEl.innerHTML = '';
+    resultsEl.appendChild(frag);
+  }
+
+  async function doSearch() {
+    const params = new URLSearchParams();
+    const q = document.getElementById('pgfQ').value.trim();
+    const cat = document.getElementById('pgfCategory').value;
+    const brand = document.getElementById('pgfBrand').value;
+    const stock = document.getElementById('pgfStock').value;
+    const vis = document.getElementById('pgfVisibility').value;
+    if (q) params.set('q', q);
+    if (cat) params.set('category_id', cat);
+    if (brand) params.set('brand_id', brand);
+    if (stock) params.set('in_stock', stock);
+    if (vis) params.set('visibility', vis);
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조회 중…</p>';
+    try {
+      const res = await fetch(`/admin/product-groups/${groupId}/product-search?` + params.toString());
+      const data = await res.json();
+      render(data.products || [], data.limited);
+    } catch (e) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-red-500">조회에 실패했습니다.</p>';
+    }
+  }
+  document.getElementById('pgfSearch').addEventListener('click', doSearch);
+  document.getElementById('pgfQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+  document.getElementById('pgfReset').addEventListener('click', () => {
+    ['pgfQ', 'pgfCategory', 'pgfBrand', 'pgfStock', 'pgfVisibility'].forEach(id => { document.getElementById(id).value = ''; });
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>';
+    selected.clear(); updateCount();
+    if (allChk) allChk.checked = false;
+  });
+
+  allChk && allChk.addEventListener('change', () => {
+    resultsEl.querySelectorAll('input[type=checkbox]').forEach(chk => {
+      chk.checked = allChk.checked;
+      const pid = Number(chk.value);
+      if (allChk.checked) selected.add(pid); else selected.delete(pid);
+    });
+    updateCount();
+  });
+
+  addBtn.addEventListener('click', async () => {
+    if (!selected.size) return;
+    addBtn.disabled = true;
+    try {
+      const res = await fetch(`/admin/product-groups/${groupId}/items/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: [...selected] }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        location.href = `/admin/product-groups/${groupId}?saved=1`;
+      } else { addBtn.disabled = false; alert('담기에 실패했습니다.'); }
+    } catch (e) { addBtn.disabled = false; alert('담기에 실패했습니다.'); }
   });
 })();
 </script>

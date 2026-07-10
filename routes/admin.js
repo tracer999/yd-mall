@@ -39,7 +39,6 @@ router.use('/header-settings', requireMenuAccess('/admin/header-settings'), requ
 router.use('/menu-preview', requireMenuAccess('/admin/menu-preview'), require('./admin/menu-preview'));
 router.use('/products', requireMenuAccess('/admin/products'), require('./admin/products'));
 router.use('/banners', requireMenuAccess('/admin/banners'), require('./admin/banners'));
-router.use('/display', requireMenuAccess('/admin/display'), require('./admin/display'));
 router.use('/page-builder', requireMenuAccess('/admin/page-builder'), require('./admin/page-builder'));
 // 페이지 빌더 섹션의 데이터 소스가 되는 상품 그룹 (B6)
 router.use('/product-groups', requireMenuAccess('/admin/product-groups'), require('./admin/product-groups'));

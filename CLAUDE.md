@@ -95,7 +95,7 @@ set -a; . /etc/environment; set +a; node _tmp.js
 ## DB 접근 규칙
 
 - **DB 조회/조작 시 반드시 `mysql` CLI 클라이언트(mysql-client)를 사용**할 것 (node mysql2 직접 실행 금지)
-- `dev_mall` (@ydata.co.kr) 이 이 프로젝트의 DB이자 소스 오브 트루스입니다. **개발·상용 공용**(51개 테이블).
+- `dev_mall` (@ydata.co.kr) 이 이 프로젝트의 DB이자 소스 오브 트루스입니다. **개발·상용 공용**(49개 테이블).
 
 ```bash
 mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' dev_mall
@@ -131,13 +131,13 @@ controllers/              # 고객 13개
   mainController · productController · cartController · checkoutController
   mypageController · likeController · boardController · brandController
   csController · inquiryController · noticeController · sectionController · termsController
-controllers/admin/        # 관리자 22개
+controllers/admin/        # 관리자 21개
   authController · dashboardController · productController · categoryController
   couponController · orderController · userController · noticeController · bannerController
   pointController · policyController · operatorController · settingsController
-  displayController · pageBuilderController · featureMenuController · menuController
+  pageBuilderController · featureMenuController · menuController
   salesController · shippingController · shopifyOrderController · visitorController · inquiryController
-routes/                   # 고객 라우트 + routes/admin/ 하위 23개 관리자 서브라우트
+routes/                   # 고객 라우트 + routes/admin/ 하위 22개 관리자 서브라우트
 middleware/               # 14개 — 아래 미들웨어 체인 참고
 services/
   emailService.js         # SMTP 발송
@@ -154,7 +154,7 @@ public/
   uploads/                # 상품 이미지 업로드
 scripts/                  # init_db.js, migrate_*.js, seed_*.js, shopify-*.js, encrypt.js, _bootstrap.js
 docs/                     # 개발 문서 + 온라인 매뉴얼 소스 + 사이트개선 계획서
-tables.sql                # DB 스키마 (42개 테이블 — 실제 DB 51개와 차이 있음)
+tables.sql                # DB 스키마 (42개 테이블 — 실제 DB 49개와 차이 있음)
 ecosystem.config.cjs      # PM2 설정 (fork, instances: 1)
 dev-mall.sh               # 운영 배포/기동 스크립트
 ```
@@ -181,9 +181,9 @@ dev-mall.sh               # 운영 배포/기동 스크립트
 
 ## DB 스키마
 
-전체 51개 테이블. **그룹별 목록은 [`README.md`](./README.md) 6장** 참고. 여기서는 스키마를 건드릴 때 반드시 알아야 할 것만 적습니다.
+전체 49개 테이블. **그룹별 목록은 [`README.md`](./README.md) 6장** 참고. 여기서는 스키마를 건드릴 때 반드시 알아야 할 것만 적습니다.
 
-> ⚠️ **스키마 드리프트.** `tables.sql` 은 42개만 정의해 실제 DB(51개)와 어긋납니다. 누락: `shopify_*` 3종, `main_display_*` 2종, `product_recommendations`, `product_seo`, `recent_views`, `kakao_inquiry_logs`. 또한 `categories.shopify_collection_id` 와 `shopify_product_mappings.shopify_inventory_item_id` 는 코드가 사용하지만 **저장소의 어떤 SQL 에도 정의가 없습니다**(운영 DB 에만 존재).
+> ⚠️ **스키마 드리프트.** `tables.sql` 은 42개만 정의해 실제 DB(49개)와 어긋납니다. 누락: `shopify_*` 3종, `product_recommendations`, `product_seo`, `recent_views`, `kakao_inquiry_logs`. 또한 `categories.shopify_collection_id` 와 `shopify_product_mappings.shopify_inventory_item_id` 는 코드가 사용하지만 **저장소의 어떤 SQL 에도 정의가 없습니다**(운영 DB 에만 존재).
 
 `categories` 는 `type` enum(`NORMAL` 10 / `THEME` 2 / `BRAND` 25 = 37행)과 `parent_id`·`depth` 로 최대 3뎁스 계층을 지원합니다(현재 데이터는 전부 depth 1). 계층 무결성은 애플리케이션이 지켜야 하며(`services/tree/depthGuard.js`), 아래 3가지는 반드시 유지하세요.
 

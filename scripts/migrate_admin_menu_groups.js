@@ -53,7 +53,6 @@ const ASSIGN = {
     // 4. 페이지/전시 관리
     '/admin/page-builder': { group: '페이지/전시 관리', order: 1 },
     '/admin/banners': { group: '페이지/전시 관리', order: 2 },
-    '/admin/display': { group: '페이지/전시 관리', order: 3 }, // 레거시 — §11 A-1 에서 제거 예정
 
     // 5. 상품 관리
     '/admin/products': { group: '상품 관리', order: 1 },

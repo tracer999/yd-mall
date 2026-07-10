@@ -26,6 +26,7 @@ router.post('/:id/delete', requireNumericId('id'), c.postDelete);
 
 router.get('/:id/product-search', requireNumericId('id'), c.getProductSearch);
 router.post('/:id/items', requireNumericId('id'), c.postAddItem);
+router.post('/:id/items/bulk', requireNumericId('id'), c.postAddItems);
 router.post('/:id/items/reorder', requireNumericId('id'), c.postReorderItems);
 router.post('/:id/items/:itemId/delete', requireNumericId('id'), requireNumericId('itemId'), c.postRemoveItem);
 

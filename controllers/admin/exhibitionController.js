@@ -514,7 +514,7 @@ exports.postRemoveProduct = async (req, res) => {
 
 /**
  * GET /admin/exhibitions/product-search?q=&exhibitionId= — AJAX (상품 선택 모달)
- * displayController.getProductSearch 의 응답 형태를 따른다.
+ * productGroupController.getProductSearch 의 응답 형태를 따른다.
  */
 exports.getProductSearch = async (req, res) => {
     const mallId = req.adminMallId || 1;
