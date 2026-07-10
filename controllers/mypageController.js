@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 const emailService = require('../services/emailService');
 const { restoreOrderResources } = require('../services/order/orderCancelService');
+const { benefitLabel } = require('../services/coupon/discountCalculator');
 
 exports.getDashboard = async (req, res, next) => {
     try {
@@ -271,7 +272,7 @@ exports.getCoupons = async (req, res, next) => {
         const [rows] = await pool.query(
             `SELECT
                 c.name,
-                c.discount_amount,
+                c.benefit_type, c.discount_amount, c.discount_rate, c.max_discount_amount,
                 c.min_order_amount AS min_purchase,
                 COALESCE(uc.expires_at, c.valid_to) AS expires_at,
                 uc.used_at,
@@ -299,6 +300,7 @@ exports.getCoupons = async (req, res, next) => {
             return {
                 ...c,
                 state,
+                benefit: benefitLabel(c),   // 정액·정률·무료배송을 한 곳에서 문구화한다 (C6 의 죽은 분기 대체)
                 expiringSoon: state === 'available' && c.expires_at
                     && new Date(c.expires_at).getTime() - now <= THREE_DAYS,
             };

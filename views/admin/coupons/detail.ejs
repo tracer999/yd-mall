@@ -65,14 +65,20 @@
                     <% } %>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <div class="text-sm font-medium text-gray-500 mb-1">할인 금액</div>
-                            <div class="text-base text-gray-900"><%= Number(coupon.discount_amount || 0).toLocaleString() %>원</div>
+                            <div class="text-sm font-medium text-gray-500 mb-1">혜택</div>
+                            <div class="text-base text-gray-900"><%= benefitLabel(coupon) %></div>
                         </div>
                         <div>
                             <div class="text-sm font-medium text-gray-500 mb-1">최소 주문 금액</div>
                             <div class="text-base text-gray-900"><%= Number(coupon.min_order_amount || 0).toLocaleString() %>원</div>
                         </div>
                     </div>
+                    <% if (coupon.scope_json) { %>
+                    <div>
+                        <div class="text-sm font-medium text-gray-500 mb-1">적용 범위</div>
+                        <pre class="text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto"><%= typeof coupon.scope_json === 'string' ? coupon.scope_json : JSON.stringify(coupon.scope_json, null, 2) %></pre>
+                    </div>
+                    <% } %>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <div class="text-sm font-medium text-gray-500 mb-1">유효 시작일</div>

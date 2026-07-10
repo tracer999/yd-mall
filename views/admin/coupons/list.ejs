@@ -95,9 +95,12 @@
                 </td>
                 <td class="px-4 py-4 text-sm text-gray-500"><%= c.mall_id ? c.mall_name : '전 몰 공용' %></td>
                 <td class="px-4 py-4 text-sm font-medium text-gray-900">
-                    <%= won(c.discount_amount) %>원
+                    <%= benefitLabel(c) %>
                     <% if (c.min_order_amount) { %>
                         <span class="block text-xs font-normal text-gray-400"><%= won(c.min_order_amount) %>원 이상</span>
+                    <% } %>
+                    <% if (c.scope_json) { %>
+                        <span class="block text-xs font-normal text-amber-600">적용범위 제한</span>
                     <% } %>
                 </td>
                 <td class="px-4 py-4 text-sm">

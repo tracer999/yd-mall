@@ -59,18 +59,19 @@ exports.getDetail = async (req, res) => {
         const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [id]);
         const [shipment] = await pool.query('SELECT * FROM shipments WHERE order_id = ?', [id]);
 
-        let usedCoupon = null;
-        if (order.user_coupon_id) {
-            const [couponRows] = await pool.query(`
+        // 주문 쿠폰 1장 + 배송비 쿠폰 1장 (쿠폰 문서 §6-1)
+        const loadCoupon = async (userCouponId) => {
+            if (!userCouponId) return null;
+            const [rows] = await pool.query(`
                 SELECT c.name AS coupon_name, c.code AS coupon_code, c.discount_amount
                 FROM user_coupons uc
                 JOIN coupons c ON uc.coupon_id = c.id
                 WHERE uc.id = ?
-            `, [order.user_coupon_id]);
-            if (couponRows.length > 0) {
-                usedCoupon = couponRows[0];
-            }
-        }
+            `, [userCouponId]);
+            return rows[0] || null;
+        };
+        const usedCoupon = await loadCoupon(order.user_coupon_id);
+        const shippingCoupon = await loadCoupon(order.shipping_coupon_id);
 
         res.render('admin/sales/detail', {
             layout: 'layouts/admin_layout',
@@ -78,7 +79,8 @@ exports.getDetail = async (req, res) => {
             order,
             items,
             shipment: shipment[0] || null,
-            usedCoupon
+            usedCoupon,
+            shippingCoupon
         });
     } catch (err) {
         console.error(err);

@@ -85,7 +85,9 @@
                                 </tr>
                                 <% if (Number(order.shipping_discount) > 0) { %>
                                 <tr class="bg-gray-50">
-                                    <td colspan="3" class="py-2 text-right text-sm text-gray-600 pr-6">배송비 할인</td>
+                                    <td colspan="3" class="py-2 text-right text-sm text-gray-600 pr-6">
+                                        배송비 할인<% if (shippingCoupon && shippingCoupon.coupon_name) { %> (<%= shippingCoupon.coupon_name %>)<% } %>
+                                    </td>
                                     <td class="py-2 text-right text-sm text-green-600">-<%= Number(order.shipping_discount).toLocaleString() %>원</td>
                                 </tr>
                                 <% } %>

@@ -61,7 +61,7 @@
     %>
       <div class="flex items-stretch border border-gray-200 rounded-xl overflow-hidden bg-white <%= btn.disabled ? 'opacity-60' : '' %>">
         <div class="flex-1 p-5 min-w-0">
-          <p class="text-xl font-bold text-gray-900"><%= won(c.discount_amount) %>원 할인</p>
+          <p class="text-xl font-bold text-gray-900"><%= c.benefit %></p>
           <p class="mt-1 text-sm text-gray-600 truncate"><%= c.name %></p>
 
           <p class="mt-2 text-xs text-gray-500">

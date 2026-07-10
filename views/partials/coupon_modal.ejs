@@ -1,33 +1,41 @@
 <%
   /*
-   * 주문서 쿠폰 선택 모달
+   * 주문서 쿠폰 선택 모달 (쿠폰 문서 §7-3)
    *
-   * form.ejs 가 include 하면서도 파일이 저장소에 없어, 주문서(/checkout)가 항상 500 이었다.
-   * form.ejs 의 스크립트가 기대하는 계약을 그대로 구현한다:
+   * 두 그룹을 각각 1장씩 고른다 (§6-1).
+   *   ORDER    → user_coupon_id
+   *   SHIPPING → shipping_coupon_id
    *
-   *   #couponModal            style.display 를 'flex'/'none' 으로 토글한다
-   *   selectCoupon(element)   element.dataset 에서 값을 읽는다:
-   *       data-user-coupon-id · data-name · data-amount · data-min-purchase
-   *   closeCouponModal()      닫기 버튼·배경 클릭
+   * 적용 가능 여부·할인액·불가 사유는 **서버(checkoutController.getForm)가 판정**해 넘긴다.
+   * 여기서 최소주문금액을 다시 계산하지 않는다 — 두 곳에서 계산하면 반드시 어긋난다.
    *
-   * `coupons` 는 checkoutController.getForm 이 넘기는 userCoupons 다
-   * (user_coupons.id AS id, coupons.name, discount_amount, min_order_amount).
+   * form.ejs 의 스크립트가 기대하는 계약:
+   *   #couponModal-ORDER · #couponModal-SHIPPING   style.display 를 'flex'/'none' 으로 토글
+   *   selectCoupon(el)   el.dataset: group · userCouponId · name · discount
    */
-  const _coupons = (typeof coupons !== 'undefined' && coupons) ? coupons : [];
+  const _group = group;                       // 'ORDER' | 'SHIPPING'
+  const _coupons = coupons || [];
   const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const title = _group === 'SHIPPING' ? '배송비 쿠폰 선택' : '쿠폰 선택';
 %>
-<div id="couponModal" class="fixed inset-0 z-[100]" style="display: none;">
-  <div class="fixed inset-0 bg-gray-500/60 backdrop-blur-sm" onclick="closeCouponModal()"></div>
+<div id="couponModal-<%= _group %>" class="fixed inset-0 z-[100]" style="display: none;">
+  <div class="fixed inset-0 bg-gray-500/60 backdrop-blur-sm" onclick="closeCouponModal('<%= _group %>')"></div>
 
   <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col pointer-events-auto"
-         role="dialog" aria-modal="true" aria-labelledby="couponModalTitle">
+         role="dialog" aria-modal="true" aria-labelledby="couponModalTitle-<%= _group %>">
 
       <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h3 id="couponModalTitle" class="text-lg font-semibold text-gray-800">쿠폰 선택</h3>
-        <button type="button" onclick="closeCouponModal()"
+        <h3 id="couponModalTitle-<%= _group %>" class="text-lg font-semibold text-gray-800"><%= title %></h3>
+        <button type="button" onclick="closeCouponModal('<%= _group %>')"
                 class="text-gray-400 hover:text-gray-600 text-2xl leading-none" aria-label="닫기">&times;</button>
       </div>
+
+      <p class="px-6 pt-3 text-xs text-gray-400">
+        <%= _group === 'SHIPPING'
+            ? '배송비 쿠폰은 주문 쿠폰과 함께 사용할 수 있습니다. 배송비보다 많이 할인되지 않습니다.'
+            : '주문 쿠폰은 1장만 사용할 수 있습니다.' %>
+      </p>
 
       <div class="flex-1 overflow-y-auto px-6 py-4">
         <% if (!_coupons.length) { %>
@@ -37,25 +45,30 @@
             <% _coupons.forEach(function (c) { %>
               <li>
                 <button type="button"
+                        <%= c.applicable ? '' : 'disabled' %>
                         onclick="selectCoupon(this)"
+                        data-group="<%= _group %>"
                         data-user-coupon-id="<%= c.id %>"
                         data-name="<%= c.name %>"
-                        data-amount="<%= c.discount_amount %>"
-                        data-min-purchase="<%= c.min_order_amount || 0 %>"
-                        class="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-[var(--gh-primary)] hover:bg-gray-50 transition">
+                        data-discount="<%= c.discount %>"
+                        class="w-full text-left px-4 py-3 rounded-lg border transition
+                               <%= c.applicable
+                                   ? 'border-gray-200 hover:border-[var(--gh-primary)] hover:bg-gray-50'
+                                   : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed' %>">
                   <div class="flex items-center justify-between gap-3">
                     <div class="min-w-0">
                       <p class="text-sm font-medium text-gray-800 truncate"><%= c.name %></p>
-                      <p class="mt-0.5 text-xs text-gray-400">
-                        <% if (c.min_order_amount) { %>
-                          <%= won(c.min_order_amount) %>원 이상 구매 시
-                        <% } else { %>
-                          최소 주문금액 없음
-                        <% } %>
+                      <p class="mt-0.5 text-xs <%= c.applicable ? 'text-gray-400' : 'text-red-500' %>">
+                        <%= c.applicable
+                            ? (c.minOrder ? won(c.minOrder) + '원 이상 구매 시' : '최소 주문금액 없음')
+                            : c.reason %>
                       </p>
                     </div>
-                    <span class="shrink-0 text-base font-bold text-[var(--gh-primary)]">
-                      <%= won(c.discount_amount) %>원
+                    <span class="shrink-0 text-right">
+                      <span class="block text-base font-bold text-[var(--gh-primary)]"><%= c.benefit %></span>
+                      <% if (c.applicable) { %>
+                        <span class="block text-xs text-gray-400">-<%= won(c.discount) %>원</span>
+                      <% } %>
                     </span>
                   </div>
                 </button>
@@ -66,7 +79,7 @@
       </div>
 
       <div class="px-6 py-4 border-t border-gray-100">
-        <button type="button" onclick="closeCouponModal()"
+        <button type="button" onclick="closeCouponModal('<%= _group %>')"
                 class="w-full py-2.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200">
           닫기
         </button>

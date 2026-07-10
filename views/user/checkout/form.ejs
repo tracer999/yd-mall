@@ -20,6 +20,7 @@
                 <% if (error === 'coupon_min') { %>쿠폰 최소 주문금액을 만족하지 않습니다.<% } %>
                 <% if (error === 'coupon_limit') { %>이 쿠폰의 전체 사용 한도가 모두 소진되었습니다.<% } %>
                 <% if (error === 'coupon_reserved') { %>이미 다른 주문에 사용 중인 쿠폰입니다.<% } %>
+                <% if (error === 'coupon_scope') { %>이 쿠폰을 적용할 수 있는 상품이 장바구니에 없습니다.<% } %>
             </span>
         </div>
     <% } %>
@@ -32,7 +33,9 @@
         <input type="hidden" name="guest" value="<%= isGuest ? '1' : '0' %>">
         <%# 공동구매 바로구매일 때만 값이 있다. postForm 이 이 값으로 공동구매가를 재계산한다. %>
         <input type="hidden" name="group_buy_id" value="<%= query.group_buy_id || '' %>">
+        <%# 주문 쿠폰 1장 + 배송비 쿠폰 1장 (쿠폰 문서 §6-1). 금액은 보내지 않는다 — 서버가 계산한다. %>
         <input type="hidden" name="user_coupon_id" id="userCouponIdInput">
+        <input type="hidden" name="shipping_coupon_id" id="shippingCouponIdInput">
 
         <!-- Left Column: Info -->
         <div class="lg:col-span-2 space-y-8">
@@ -140,6 +143,10 @@
                         </span>
                         <span id="shippingExtraText">+ <%= Number(shipping.extraFee).toLocaleString() %>원</span>
                     </div>
+                    <div id="shippingDiscountRow" class="flex justify-between text-red-600 hidden">
+                        <span>배송비 쿠폰</span>
+                        <span id="shippingDiscountText">- 0원</span>
+                    </div>
                 </div>
 
                 <p id="freeShipHint" class="text-xs text-[var(--gh-primary)] bg-green-50 rounded px-3 py-2 <%= shipping.remainingForFree > 0 ? '' : 'hidden' %>">
@@ -154,11 +161,23 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">쿠폰</label>
                             <div class="flex justify-between items-center">
-                                <span id="selectedCouponName" class="text-sm text-gray-500">적용된 쿠폰 없음</span>
-                                <button type="button" onclick="openCouponModal()" class="text-sm text-green-600 hover:underline">쿠폰 선택</button>
+                                <span id="selectedCouponName-ORDER" class="text-sm text-gray-500">적용된 쿠폰 없음</span>
+                                <button type="button" onclick="openCouponModal('ORDER')" class="text-sm text-green-600 hover:underline">쿠폰 선택</button>
                             </div>
-                            <button type="button" id="removeCouponBtn" onclick="removeCoupon()" class="text-xs text-red-500 hover:underline hidden mt-1">적용 취소</button>
+                            <button type="button" id="removeCouponBtn-ORDER" onclick="removeCoupon('ORDER')" class="text-xs text-red-500 hover:underline hidden mt-1">적용 취소</button>
+                            <p class="text-xs text-gray-400 mt-1">주문 쿠폰은 1장만 사용할 수 있습니다.</p>
                         </div>
+
+                        <% if (shippingCoupons.length) { %>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">배송비 쿠폰</label>
+                            <div class="flex justify-between items-center">
+                                <span id="selectedCouponName-SHIPPING" class="text-sm text-gray-500">적용된 쿠폰 없음</span>
+                                <button type="button" onclick="openCouponModal('SHIPPING')" class="text-sm text-green-600 hover:underline">쿠폰 선택</button>
+                            </div>
+                            <button type="button" id="removeCouponBtn-SHIPPING" onclick="removeCoupon('SHIPPING')" class="text-xs text-red-500 hover:underline hidden mt-1">적용 취소</button>
+                        </div>
+                        <% } %>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">포인트</label>
@@ -260,7 +279,10 @@
         } else {
             hint.classList.add('hidden');
         }
-        updateSummary();
+
+        // 배송비가 사라지면 배송비 쿠폰을 떼어 낸다. 붙여 두면 소모만 되고 혜택이 없다.
+        if (shippingFee === 0 && selected.SHIPPING.id) removeCoupon('SHIPPING');
+        else updateSummary();
     }
 
     // Same as buyer
@@ -304,46 +326,60 @@
         updateSummary();
     }
 
-    // Coupon
-    function openCouponModal() {
-        const modal = document.getElementById('couponModal');
+    /*
+     * 쿠폰은 두 그룹이다 — ORDER(주문 쿠폰) · SHIPPING(배송비 쿠폰). 각각 1장.
+     * 할인액은 서버가 판정해 data-discount 로 실어 보냈다. 여기서 다시 계산하지 않는다.
+     * 단 배송비 쿠폰은 배송비가 바뀌면 상한도 바뀌므로, 표시 시점에 shippingFee 로 다시 자른다.
+     */
+    const selected = { ORDER: { id: '', discount: 0 }, SHIPPING: { id: '', discount: 0 } };
+    const INPUT_ID = { ORDER: 'userCouponIdInput', SHIPPING: 'shippingCouponIdInput' };
+
+    function openCouponModal(group) {
+        const modal = document.getElementById('couponModal-' + group);
         if (modal) modal.style.display = 'flex';
     }
-    function closeCouponModal() {
-        const modal = document.getElementById('couponModal');
+    function closeCouponModal(group) {
+        const modal = document.getElementById('couponModal-' + group);
         if (modal) modal.style.display = 'none';
     }
-    function removeCoupon() {
-        couponDiscount = 0;
-        document.getElementById('userCouponIdInput').value = '';
-        document.getElementById('selectedCouponName').textContent = '적용된 쿠폰 없음';
-        document.getElementById('removeCouponBtn').classList.add('hidden');
+    function removeCoupon(group) {
+        selected[group] = { id: '', discount: 0 };
+        document.getElementById(INPUT_ID[group]).value = '';
+        document.getElementById('selectedCouponName-' + group).textContent = '적용된 쿠폰 없음';
+        document.getElementById('removeCouponBtn-' + group).classList.add('hidden');
         updateSummary();
-        updatePoints(); 
+        updatePoints();
     }
     function selectCoupon(element) {
-        const dataset = element.dataset;
-        const minOrder = parseInt(dataset.minPurchase || 0);
-        if (totalAmount < minOrder) {
-            alert(`최소 주문금액 ${minOrder.toLocaleString()}원 이상이어야 사용 가능합니다.`);
-            return;
-        }
-        let discount = parseInt(dataset.amount);
-        if (discount > totalAmount) discount = totalAmount;
-        couponDiscount = discount;
-        document.getElementById('userCouponIdInput').value = dataset.userCouponId;
-        document.getElementById('selectedCouponName').textContent = dataset.name;
-        document.getElementById('removeCouponBtn').classList.remove('hidden');
-        closeCouponModal();
+        const d = element.dataset;
+        const group = d.group;
+        selected[group] = { id: d.userCouponId, discount: parseInt(d.discount, 10) || 0 };
+        document.getElementById(INPUT_ID[group]).value = d.userCouponId;
+        document.getElementById('selectedCouponName-' + group).textContent = d.name;
+        document.getElementById('removeCouponBtn-' + group).classList.remove('hidden');
+        closeCouponModal(group);
         updateSummary();
         updatePoints();
     }
 
     function updateSummary() {
+        couponDiscount = selected.ORDER.discount;
+        // 배송비 쿠폰은 배송비를 초과할 수 없다 (서버도 같은 상한을 강제한다)
+        const shippingDiscount = Math.min(selected.SHIPPING.discount, shippingFee);
+
         document.getElementById('couponDiscountText').textContent = '-' + couponDiscount.toLocaleString() + '원';
         document.getElementById('pointDiscountText').textContent = '-' + pointDiscount.toLocaleString() + '원';
+
+        const sdRow = document.getElementById('shippingDiscountRow');
+        if (shippingDiscount > 0) {
+            document.getElementById('shippingDiscountText').textContent = '-' + shippingDiscount.toLocaleString() + '원';
+            sdRow.classList.remove('hidden');
+        } else {
+            sdRow.classList.add('hidden');
+        }
+
         // 무료배송 판정은 쿠폰·적립금 차감 전 상품금액 기준이다. 여기서 shippingFee 를 다시 깎지 않는다.
-        const final = Math.max(0, totalAmount - couponDiscount - pointDiscount + shippingFee);
+        const final = Math.max(0, totalAmount - couponDiscount - pointDiscount + shippingFee - shippingDiscount);
         document.getElementById('finalAmountText').textContent = final.toLocaleString() + '원';
     }
 
@@ -352,5 +388,8 @@
 
 <%# 공용 파티셜은 views/partials/ 에 있다. 여기서 '../partials' 는 views/user/partials 를 가리켜 include 가 실패했다. %>
 <% if (!isGuest) { %>
-  <%- include('../../partials/coupon_modal', { coupons: userCoupons }) %>
+  <%- include('../../partials/coupon_modal', { group: 'ORDER', coupons: orderCoupons }) %>
+  <% if (shippingCoupons.length) { %>
+    <%- include('../../partials/coupon_modal', { group: 'SHIPPING', coupons: shippingCoupons }) %>
+  <% } %>
 <% } %>

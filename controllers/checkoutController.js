@@ -2,6 +2,10 @@ const pool = require('../config/db');
 const groupBuySvc = require('../services/groupBuy/groupBuyService');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
 const { redeemCouponCode, reserveCouponForOrder } = require('../services/coupon/couponIssueService');
+const {
+    combinationGroup, couponableAmount, calcOrderDiscount, calcShippingDiscount,
+    meetsMinOrder, benefitLabel,
+} = require('../services/coupon/discountCalculator');
 
 /*
  * ── 공동구매 연동 (docs/사이트개선/group_buy_design_and_development.md §9) ──
@@ -19,6 +23,57 @@ function groupBuyErrorRedirect(line) {
     return line.slug
         ? `/group-buy/${encodeURIComponent(line.slug)}?error=${line.reason}`
         : '/group-buy';
+}
+
+/*
+ * 쿠폰 적용범위(scope_json) 판정에 필요한 상품 속성. 주문 라인마다 실어 나른다.
+ * 이 컬럼들이 없으면 카테고리·브랜드·뱃지 쿠폰이 전 상품에 걸린다.
+ */
+const PRODUCT_SCOPE_COLS = `p.id AS product_id, p.name, p.price,
+    p.category_id, p.brand_category_id, p.product_badge`;
+
+function toScopeItem(row) {
+    return {
+        product_id: row.product_id,
+        name: row.name,
+        price: row.price,
+        category_id: row.category_id,
+        brand_id: row.brand_category_id,
+        badges: row.product_badge ? String(row.product_badge).split(',') : [],
+    };
+}
+
+/**
+ * 지금 쓸 수 있는 쿠폰 (미사용 + 미점유 + 유효기간 내 + 몰 스코프).
+ *
+ *  · 유효기간은 `COALESCE(uc.expires_at, c.valid_to)` — valid_days 로 발급된 쿠폰은 개인별 만료일이 있다.
+ *  · 다른 PENDING 주문이 점유 중인 쿠폰은 제외한다(C2). 30분 넘게 방치된 점유는 무시한다
+ *    — 점유 해제 배치가 없으므로 조회 시 나이로 거른다(§6-2 각주).
+ *  · `uc.id` 를 `user_coupon_id` 로 내보낸다. `c.id` 는 쿠폰 마스터 id 다 — 섞으면 안 된다.
+ */
+async function loadUsableCoupons(userId, mallId) {
+    const [rows] = await pool.query(
+        `SELECT uc.id AS user_coupon_id, c.*
+           FROM user_coupons uc
+           JOIN coupons c ON uc.coupon_id = c.id
+          WHERE uc.user_id = ? AND uc.used_at IS NULL AND c.status = 'ACTIVE'
+            AND (c.mall_id IS NULL OR c.mall_id = ?)
+            AND (uc.reserved_order_id IS NULL OR uc.reserved_at < NOW() - INTERVAL 30 MINUTE)
+            AND (c.valid_from IS NULL OR c.valid_from <= NOW())
+            AND (COALESCE(uc.expires_at, c.valid_to) IS NULL OR COALESCE(uc.expires_at, c.valid_to) >= NOW())`,
+        [userId, mallId]
+    );
+    return rows;
+}
+
+/** 전체 사용 한도(max_total_uses) 재검증 (C4). 발급 한도(issue_limit)와 다른 축이다. */
+async function usageLimitReached(coupon) {
+    if (coupon.max_total_uses == null) return false;
+    const [[row]] = await pool.query(
+        'SELECT COUNT(*) AS c FROM user_coupons WHERE coupon_id = ? AND used_at IS NOT NULL',
+        [coupon.id]
+    );
+    return Number(row.c) >= Number(coupon.max_total_uses);
 }
 
 /**
@@ -68,7 +123,7 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
 
         // 쿠폰·적립금·배송비는 **주문 행이 유일한 근거**다. 요청에서 읽지 않는다(배송비 문서 §1-1).
         const [[orderRow]] = await conn.query(
-            `SELECT user_id, coupon_discount, point_used, user_coupon_id,
+            `SELECT user_id, coupon_discount, point_used, user_coupon_id, shipping_coupon_id,
                     subtotal_amount, shipping_fee, shipping_discount, total_amount
                FROM orders WHERE id = ?`,
             [orderId]
@@ -102,13 +157,12 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
         if (orderRow && orderRow.user_id) {
             const userId = orderRow.user_id;
             const pointUsed = Number(orderRow.point_used) || 0;
-            const userCouponId = orderRow.user_coupon_id;
 
-            if (userCouponId) {
-                // 점유(RESERVED) → 사용(USED). 점유 흔적을 지운다.
+            // 점유(RESERVED) → 사용(USED). 주문 쿠폰과 배송비 쿠폰 둘 다 소모한다.
+            for (const ucId of [orderRow.user_coupon_id, orderRow.shipping_coupon_id].filter(Boolean)) {
                 await conn.query(
                     'UPDATE user_coupons SET used_at = NOW(), order_id = ?, reserved_order_id = NULL, reserved_at = NULL WHERE id = ?',
-                    [orderId, userCouponId]
+                    [orderId, ucId]
                 );
             }
 
@@ -208,17 +262,16 @@ exports.getForm = async (req, res) => {
 
     if (cart === '1' && req.user) {
         const [rows] = await pool.query(
-            `SELECT c.id AS cart_id, c.quantity, p.id AS product_id, p.name, p.price, p.main_image, p.thumbnail_image
+            `SELECT c.id AS cart_id, c.quantity, ${PRODUCT_SCOPE_COLS}, p.main_image, p.thumbnail_image
              FROM carts c
              JOIN products p ON c.product_id = p.id
              WHERE c.user_id = ? AND p.status = 'ON'`,
             [req.user.id]
         );
         rows.forEach((r) => {
-            const price = r.price;
             const qty = r.quantity || 1;
-            items.push({ product_id: r.product_id, name: r.name, price, quantity: qty, image: r.main_image || r.thumbnail_image });
-            totalAmount += price * qty;
+            items.push({ ...toScopeItem(r), quantity: qty, image: r.main_image || r.thumbnail_image });
+            totalAmount += r.price * qty;
         });
     } else if (group_buy_id && product_id && quantity) {
         // 공동구매 바로구매 — 단가는 group_buy_product.group_buy_price 로 서버가 확정한다.
@@ -226,12 +279,12 @@ exports.getForm = async (req, res) => {
         if (!line.ok) return res.redirect(groupBuyErrorRedirect(line));
 
         const [[p]] = await pool.query(
-            'SELECT id, name, main_image, thumbnail_image FROM products WHERE id = ?', [line.product.product_id]
+            `SELECT ${PRODUCT_SCOPE_COLS}, p.main_image, p.thumbnail_image FROM products p WHERE p.id = ?`,
+            [line.product.product_id]
         );
         items = [{
-            product_id: line.product.product_id,
-            name: p ? p.name : line.product.name,
-            price: line.unitPrice,
+            ...(p ? toScopeItem(p) : { product_id: line.product.product_id, name: line.product.name }),
+            price: line.unitPrice,           // 공동구매가가 상품 정가를 이긴다
             quantity: line.quantity,
             image: p ? (p.main_image || p.thumbnail_image) : null,
         }];
@@ -240,40 +293,21 @@ exports.getForm = async (req, res) => {
         const pid = parseInt(product_id, 10);
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
         const [rows] = await pool.query(
-            'SELECT id, name, price, main_image, thumbnail_image FROM products WHERE id = ? AND status = "ON"',
+            `SELECT ${PRODUCT_SCOPE_COLS}, p.main_image, p.thumbnail_image FROM products p WHERE p.id = ? AND p.status = 'ON'`,
             [pid]
         );
         if (rows.length === 0) return res.redirect('/products');
         const p = rows[0];
-        const price = p.price;
-        items = [{ product_id: p.id, name: p.name, price, quantity: qty, image: p.main_image || p.thumbnail_image }];
-        totalAmount = price * qty;
+        items = [{ ...toScopeItem(p), quantity: qty, image: p.main_image || p.thumbnail_image }];
+        totalAmount = p.price * qty;
     }
 
     if (items.length === 0) return res.redirect('/products');
 
     const user = req.user || null;
-    let userCoupons = [];
     let pointsBalance = 0;
     let pointMinUse = 1000;
     if (user) {
-        /*
-         * 사용 가능한 쿠폰: 미사용 + 미점유 + 유효기간 내.
-         *  · 유효기간은 `COALESCE(uc.expires_at, c.valid_to)` — valid_days 로 발급된 쿠폰은 개인별 만료일이 있다.
-         *  · 다른 PENDING 주문이 점유 중인 쿠폰은 제외한다(C2). 30분 넘게 방치된 점유는 무시한다
-         *    — 점유 해제 배치가 없으므로 조회 시 나이로 거른다(§6-2 각주).
-         */
-        const [ucRows] = await pool.query(
-            `SELECT uc.id, uc.coupon_id, c.name, c.discount_amount, c.min_order_amount
-             FROM user_coupons uc
-             JOIN coupons c ON uc.coupon_id = c.id
-             WHERE uc.user_id = ? AND uc.used_at IS NULL AND c.status = 'ACTIVE'
-               AND (uc.reserved_order_id IS NULL OR uc.reserved_at < NOW() - INTERVAL 30 MINUTE)
-               AND (c.valid_from IS NULL OR c.valid_from <= NOW())
-               AND (COALESCE(uc.expires_at, c.valid_to) IS NULL OR COALESCE(uc.expires_at, c.valid_to) >= NOW())`,
-            [user.id]
-        );
-        userCoupons = ucRows;
         const [[uRow]] = await pool.query('SELECT points_balance FROM users WHERE id = ?', [user.id]);
         pointsBalance = (uRow && uRow.points_balance) || 0;
         pointMinUse = Number(global.systemSettings?.point_min_use || 1000) || 1000;
@@ -297,6 +331,35 @@ exports.getForm = async (req, res) => {
         receiverZipcode: prefilled.receiver_zipcode,
     });
 
+    /*
+     * 쿠폰을 두 그룹으로 나눠 넘긴다 (§6-1).
+     *   ORDER    → 주문 쿠폰 1장 (user_coupon_id)
+     *   SHIPPING → 배송비 쿠폰 1장 (shipping_coupon_id)
+     * 적용 가능/불가 사유도 서버가 판정한다 — 뷰가 조건을 다시 조립하지 않는다(§7-3).
+     */
+    const usable = user ? await loadUsableCoupons(user.id, req.mallId || 1) : [];
+    const options = usable.map((c) => {
+        const group = combinationGroup(c);
+        const couponable = couponableAmount(items, c);
+        const ok = meetsMinOrder(c, couponable);
+        const discount = group === 'SHIPPING'
+            ? calcShippingDiscount(c, shipping.fee)
+            : calcOrderDiscount(c, couponable);
+        return {
+            id: c.user_coupon_id,
+            name: c.name,
+            group,
+            benefit: benefitLabel(c),
+            minOrder: Number(c.min_order_amount) || 0,
+            couponable,
+            discount,
+            applicable: ok && discount > 0,
+            reason: !ok
+                ? `${Number(c.min_order_amount).toLocaleString('ko-KR')}원 이상 구매 시 사용 가능 (현재 ${couponable.toLocaleString('ko-KR')}원)`
+                : (discount === 0 ? (group === 'SHIPPING' ? '배송비가 없어 사용할 수 없습니다' : '할인 대상 상품이 없습니다') : null),
+        };
+    });
+
     res.render('user/checkout/form', {
         title: '주문/결제',
         items,
@@ -304,7 +367,8 @@ exports.getForm = async (req, res) => {
         isGuest,
         prefilled,
         query: req.query,
-        userCoupons: userCoupons || [],
+        orderCoupons: options.filter((o) => o.group === 'ORDER'),
+        shippingCoupons: options.filter((o) => o.group === 'SHIPPING'),
         pointsBalance: typeof pointsBalance === 'number' ? pointsBalance : 0,
         pointMinUse: typeof pointMinUse === 'number' ? pointMinUse : 1000,
         shipping,
@@ -395,7 +459,7 @@ exports.postForm = async (req, res) => {
         buyer_name, buyer_email, buyer_phone,
         receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
         shipping_message,
-        user_coupon_id, point_use_amount
+        user_coupon_id, shipping_coupon_id, point_use_amount
     } = req.body;
     const isGuest = req.body.guest === '1';
 
@@ -406,7 +470,7 @@ exports.postForm = async (req, res) => {
     let items = [];
     if (cart === '1' && req.user) {
         const [rows] = await pool.query(
-            `SELECT c.quantity, p.id AS product_id, p.name, p.price, p.stock
+            `SELECT c.quantity, ${PRODUCT_SCOPE_COLS}, p.stock
              FROM carts c JOIN products p ON c.product_id = p.id
              WHERE c.user_id = ? AND p.status = 'ON'`,
             [req.user.id]
@@ -417,17 +481,16 @@ exports.postForm = async (req, res) => {
             if (qty > stock) {
                 return res.redirect(`/cart?error=stock&product=${r.product_id}&max=${stock}`);
             }
-            const price = r.price;
-            items.push({ product_id: r.product_id, name: r.name, price, quantity: qty });
+            items.push({ ...toScopeItem(r), quantity: qty });
         }
     } else if (group_buy_id && product_id && quantity) {
         // 주문서를 거치지 않고 이 POST 를 직접 두드릴 수 있으므로 여기서도 다시 검증한다.
         const line = await groupBuySvc.resolveLine(req.mallId || 1, group_buy_id, product_id, quantity);
         if (!line.ok) return res.redirect(groupBuyErrorRedirect(line));
 
+        const [[p]] = await pool.query(`SELECT ${PRODUCT_SCOPE_COLS} FROM products p WHERE p.id = ?`, [line.product.product_id]);
         items = [{
-            product_id: line.product.product_id,
-            name: line.product.name,
+            ...(p ? toScopeItem(p) : { product_id: line.product.product_id, name: line.product.name }),
             price: line.unitPrice,
             quantity: line.quantity,
             source_type: 'GROUP_BUY',
@@ -436,63 +499,91 @@ exports.postForm = async (req, res) => {
     } else if (product_id && quantity) {
         const pid = parseInt(product_id, 10);
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
-        const [rows] = await pool.query('SELECT id, name, price, stock FROM products WHERE id = ? AND status = "ON"', [pid]);
+        const [rows] = await pool.query(
+            `SELECT ${PRODUCT_SCOPE_COLS}, p.stock, p.slug FROM products p WHERE p.id = ? AND p.status = 'ON'`, [pid]
+        );
         if (rows.length === 0) return res.redirect('/products');
         const p = rows[0];
         const stock = (p.stock != null && p.stock >= 0) ? p.stock : 0;
         if (qty > stock) {
-            const [[prod]] = await pool.query('SELECT slug FROM products WHERE id = ?', [pid]);
-            const path = (prod && prod.slug) ? `/products/${encodeURIComponent(prod.slug)}` : `/products/view/${pid}`;
+            const path = p.slug ? `/products/${encodeURIComponent(p.slug)}` : `/products/view/${pid}`;
             return res.redirect(`${path}?error=stock&max=${stock}`);
         }
-        const price = p.price;
-        items = [{ product_id: p.id, name: p.name, price, quantity: qty }];
+        items = [{ ...toScopeItem(p), quantity: qty }];
     }
 
     if (items.length === 0) return res.redirect('/products');
 
     const subtotalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+
+    /*
+     * 배송비는 서버가 계산한다 (배송비 문서 §1-1).
+     * 폼에 shipping_fee 필드를 두지 않는다 — 화면 표시값은 참고일 뿐 총액의 근거가 아니다.
+     * 무료배송 판정은 쿠폰·적립금 차감 전 `subtotalAmount` 로 한다 (§1-2).
+     * 배송비 쿠폰보다 **먼저** 구해야 한다 — 배송비 할인이 배송비를 넘을 수 없기 때문이다.
+     */
+    const shipping = await calcShippingFee({
+        mallId: req.mallId || 1,
+        subtotalAmount,
+        receiverZipcode: receiver_zipcode,
+    });
+    const shippingFee = shipping.fee;
+
     let couponDiscount = 0;
+    let shippingDiscount = 0;
     let pointUsed = 0;
     let userCouponId = null;
+    let shippingCouponId = null;
+
+    /**
+     * 선택된 쿠폰을 검증하고 할인액을 돌려준다. 쿼리스트링·폼의 금액은 절대 믿지 않는다.
+     * @returns {{error:string}|{coupon:object, discount:number}}
+     */
+    const validateCoupon = async (userCouponId_, expectedGroup) => {
+        const usable = await loadUsableCoupons(req.user.id, req.mallId || 1);
+        const coupon = usable.find((c) => Number(c.user_coupon_id) === Number(userCouponId_));
+        if (!coupon) return { error: 'coupon' };
+        if (combinationGroup(coupon) !== expectedGroup) return { error: 'coupon' };
+        if (await usageLimitReached(coupon)) return { error: 'coupon_limit' };
+
+        const couponable = couponableAmount(items, coupon);
+        if (!meetsMinOrder(coupon, couponable)) return { error: 'coupon_min' };
+
+        const discount = expectedGroup === 'SHIPPING'
+            ? calcShippingDiscount(coupon, shippingFee)   // ≤ shippingFee 를 계산기가 보장한다 (P9)
+            : calcOrderDiscount(coupon, couponable);      // ≤ couponable 을 계산기가 보장한다
+        return { coupon, discount };
+    };
 
     if (req.user) {
-        // 1. 쿠폰 우선 적용
+        // 1. 주문 쿠폰 (ORDER 그룹) — 1장
         if (user_coupon_id) {
-            const [ucRows] = await pool.query(
-                `SELECT uc.id, uc.coupon_id, c.discount_amount, c.min_order_amount, c.max_total_uses
-                 FROM user_coupons uc
-                 JOIN coupons c ON uc.coupon_id = c.id
-                 WHERE uc.id = ? AND uc.user_id = ? AND uc.used_at IS NULL AND c.status = 'ACTIVE'
-                   AND (c.valid_from IS NULL OR c.valid_from <= NOW())
-                   AND (COALESCE(uc.expires_at, c.valid_to) IS NULL OR COALESCE(uc.expires_at, c.valid_to) >= NOW())`,
-                [user_coupon_id, req.user.id]
-            );
-            if (ucRows.length === 0) {
-                return res.redirect('/checkout?error=coupon&' + new URLSearchParams(req.query).toString());
+            const r = await validateCoupon(user_coupon_id, 'ORDER');
+            if (r.error) return res.redirect(`/checkout?error=${r.error}&` + new URLSearchParams(req.query).toString());
+            // 적용범위(scope_json)에 걸려 할인 대상 상품이 하나도 없으면 쿠폰을 태우지 않는다.
+            if (r.discount === 0) {
+                return res.redirect('/checkout?error=coupon_scope&' + new URLSearchParams(req.query).toString());
             }
-            const uc = ucRows[0];
-
-            // 전체 사용 한도 재검증 (C4). getForm 의 쿠폰 목록 조회는 이걸 보지 않는다.
-            if (uc.max_total_uses != null) {
-                const [[usedRow]] = await pool.query(
-                    'SELECT COUNT(*) AS c FROM user_coupons WHERE coupon_id = ? AND used_at IS NOT NULL',
-                    [uc.coupon_id]
-                );
-                if (Number(usedRow.c) >= Number(uc.max_total_uses)) {
-                    return res.redirect('/checkout?error=coupon_limit&' + new URLSearchParams(req.query).toString());
-                }
-            }
-
-            const minOrder = uc.min_order_amount || 0;
-            if (subtotalAmount < minOrder) {
-                return res.redirect('/checkout?error=coupon_min&' + new URLSearchParams(req.query).toString());
-            }
-            couponDiscount = Math.min(uc.discount_amount, subtotalAmount);
-            userCouponId = user_coupon_id;
+            couponDiscount = r.discount;
+            userCouponId = Number(user_coupon_id);
         }
 
-        // 2. 포인트 적용 (쿠폰 할인 후 남은 금액 기준)
+        /*
+         * 2. 배송비 쿠폰 (SHIPPING 그룹) — 1장. 주문 쿠폰과 동시 적용된다 (§6-1)
+         *
+         * 배송비가 0원이면(무료배송 기준 초과) 할인액도 0이다. 이때 쿠폰을 붙이면 **소모만 되고
+         * 혜택은 없다.** 조용히 떼어 낸다 — 주문을 막을 이유는 없다.
+         */
+        if (shipping_coupon_id) {
+            const r = await validateCoupon(shipping_coupon_id, 'SHIPPING');
+            if (r.error) return res.redirect(`/checkout?error=${r.error}&` + new URLSearchParams(req.query).toString());
+            if (r.discount > 0) {
+                shippingDiscount = r.discount;
+                shippingCouponId = Number(shipping_coupon_id);
+            }
+        }
+
+        // 3. 포인트 (상품 할인 후 남은 상품금액 기준 — 배송비는 포인트로 결제하지 않는다)
         const pointMinUse = Number(global.systemSettings?.point_min_use || 1000) || 1000;
         const reqPoint = Math.abs(Number(point_use_amount) || 0);
         if (reqPoint > 0) {
@@ -511,19 +602,8 @@ exports.postForm = async (req, res) => {
         }
     }
 
-    /*
-     * 배송비는 서버가 계산한다 (배송비 문서 §1-1).
-     * 폼에 shipping_fee 필드를 두지 않는다 — 화면 표시값은 참고일 뿐 총액의 근거가 아니다.
-     * 무료배송 판정은 쿠폰·적립금 차감 전 `subtotalAmount` 로 한다 (§1-2).
-     */
-    const shipping = await calcShippingFee({
-        mallId: req.mallId || 1,
-        subtotalAmount,
-        receiverZipcode: receiver_zipcode,
-    });
-    const shippingFee = shipping.fee;
-    const shippingDiscount = 0; // 배송비 쿠폰은 2차 (쿠폰 문서 P7~P9)
-
+    // 계산 순서는 배송비 문서 §4 와 쿠폰 문서 §9 가 같아야 한다.
+    //   subtotal − coupon − point + shipping_fee − shipping_discount = total
     const totalAmount = Math.max(0, subtotalAmount - couponDiscount - pointUsed + shippingFee - shippingDiscount);
     const orderNumber = generateOrderNumber();
 
@@ -537,18 +617,18 @@ exports.postForm = async (req, res) => {
         await connection.query(
             `INSERT INTO orders (
                 user_id, order_number, status, subtotal_amount, shipping_fee, shipping_discount,
-                total_amount, coupon_discount, point_used, user_coupon_id,
+                total_amount, coupon_discount, point_used, user_coupon_id, shipping_coupon_id,
                 receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
                 shipping_address, shipping_message,
                 buyer_name, buyer_email, buyer_phone
             ) VALUES (?, ?, 'PENDING', ?, ?, ?,
-                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?,
                 ?, ?, ?)`,
             [
                 userId, orderNumber, subtotalAmount, shippingFee, shippingDiscount,
-                totalAmount, couponDiscount, pointUsed, userCouponId,
+                totalAmount, couponDiscount, pointUsed, userCouponId, shippingCouponId,
                 receiver_name, receiver_phone, receiver_zipcode || null, receiver_address || null, receiver_detailed_address || null,
                 shippingAddr || null, shipping_message || null,
                 isGuest ? buyer_name : null, isGuest ? buyer_email : null, isGuest ? buyer_phone : null
@@ -559,10 +639,11 @@ exports.postForm = async (req, res) => {
         /*
          * 쿠폰 점유 (C2). 같은 쿠폰을 두 개의 PENDING 주문이 물면, 먼저 결제되는 쪽만 살고
          * 나머지는 "할인은 받았는데 쿠폰은 안 쓰인" 상태가 된다. 조건부 UPDATE 로 잡는다.
+         * 주문 쿠폰과 배송비 쿠폰을 둘 다 잡는다 — 어느 하나라도 실패하면 주문을 만들지 않는다.
          */
-        if (userCouponId) {
+        for (const ucId of [userCouponId, shippingCouponId].filter(Boolean)) {
             const reserved = await reserveCouponForOrder(connection, {
-                userCouponId, userId: req.user.id, orderId,
+                userCouponId: ucId, userId: req.user.id, orderId,
             });
             if (!reserved) {
                 await connection.rollback();

@@ -11,6 +11,7 @@
 
 const pool = require('../config/db');
 const { claimDownloadCoupon, redeemCouponCode } = require('../services/coupon/couponIssueService');
+const { benefitLabel } = require('../services/coupon/discountCalculator');
 const { COMING_SOON } = require('../routes/feature');
 
 const CLAIM_MESSAGE = {
@@ -84,7 +85,11 @@ exports.getList = async (req, res, next) => {
 
         res.render('user/coupon/list', {
             title: '쿠폰',
-            coupons: visible.map((c) => ({ ...c, buttonState: buttonState(c, !!userId) })),
+            coupons: visible.map((c) => ({
+                ...c,
+                buttonState: buttonState(c, !!userId),
+                benefit: benefitLabel(c),   // 정액·정률·무료배송을 한 곳에서 문구화한다
+            })),
             typeFilter,
             isLoggedIn: !!userId,
             message: req.query.msg || null,
