@@ -2,24 +2,21 @@
   /*
    * 쿠폰존 — 받는 곳 (쿠폰 문서 §7-1)
    * 버튼 상태는 서버(couponController.buttonState)가 판정한다. 여기서 조건을 다시 조립하지 않는다.
+   * 리스트는 적용 대상(전상품/카테고리/브랜드/무료배송)으로 그룹핑하고, 카테고리·브랜드 칩으로 걸러 본다.
    */
   const won = (n) => Number(n || 0).toLocaleString('ko-KR');
   const day = (v) => (v ? new Date(v).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : null);
 
-  const TYPE_TABS = [
-    { key: '',           label: '전체' },
-    { key: 'NEW_SIGNUP', label: '신규회원' },
-    { key: 'EVENT',      label: '이벤트' },
-    { key: 'SEASON',     label: '시즌' },
-  ];
-
   const BTN = {
-    available: { label: '받기',        disabled: false },
-    claimed:   { label: '받음',        disabled: true },
-    sold_out:  { label: '선착순 마감', disabled: true },
-    ended:     { label: '종료',        disabled: true },
-    login:     { label: '받기',        disabled: false },
+    available:     { label: '받기',        disabled: false },
+    claimed:       { label: '받음',        disabled: true },
+    sold_out:      { label: '선착순 마감', disabled: true },
+    ended:         { label: '종료',        disabled: true },
+    login:         { label: '받기',        disabled: false },
+    code_required: { label: '코드 필요',   disabled: true },
   };
+
+  const activeFilter = filter.category || filter.brand;
 %>
 
 <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -39,65 +36,104 @@
     <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"><%= error %></div>
   <% } %>
 
-  <!-- 분류 탭 -->
-  <div class="flex gap-2 mb-6 overflow-x-auto">
-    <% TYPE_TABS.forEach(function (t) { %>
-      <a href="/coupon<%= t.key ? '?type=' + t.key : '' %>"
-         class="shrink-0 px-4 py-2 rounded-full text-sm no-underline <%= typeFilter === t.key ? 'bg-[var(--gh-primary)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' %>">
-        <%= t.label %>
-      </a>
-    <% }); %>
-  </div>
-
-  <!-- 쿠폰 카드 -->
-  <div class="space-y-3">
-    <% if (!coupons.length) { %>
-      <p class="py-16 text-center text-sm text-gray-400">해당 분류에 받을 수 있는 쿠폰이 없습니다.</p>
-    <% } %>
-
-    <% coupons.forEach(function (c) {
-         const btn = BTN[c.buttonState];
-         const remaining = c.issue_limit != null ? Math.max(0, Number(c.issue_limit) - Number(c.issued_count)) : null;
-    %>
-      <div class="flex items-stretch border border-gray-200 rounded-xl overflow-hidden bg-white <%= btn.disabled ? 'opacity-60' : '' %>">
-        <div class="flex-1 p-5 min-w-0">
-          <p class="text-xl font-bold text-gray-900"><%= c.benefit %></p>
-          <p class="mt-1 text-sm text-gray-600 truncate"><%= c.name %></p>
-
-          <p class="mt-2 text-xs text-gray-500">
-            <% if (c.min_order_amount) { %><%= won(c.min_order_amount) %>원 이상 구매 시<% } else { %>최소 주문금액 없음<% } %>
-          </p>
-          <p class="mt-0.5 text-xs text-gray-400">
-            <% if (c.valid_days) { %>받은 날부터 <%= c.valid_days %>일<% } else if (day(c.valid_to)) { %>~ <%= day(c.valid_to) %><% } %>
-            <% if (remaining != null) { %>
-              · 선착순 <%= won(c.issue_limit) %>명 (<%= won(remaining) %> 남음)
-            <% } %>
-          </p>
-        </div>
-
-        <div class="shrink-0 flex items-center px-5 border-l border-dashed border-gray-200">
-          <% if (c.buttonState === 'login') { %>
-            <a href="/auth/login" class="px-5 py-2.5 rounded-lg bg-[var(--gh-primary)] text-white text-sm font-semibold no-underline hover:bg-[var(--gh-primary-dark)]">
-              로그인하고 받기
-            </a>
-          <% } else if (btn.disabled) { %>
-            <button type="button" disabled class="px-5 py-2.5 rounded-lg bg-gray-100 text-gray-400 text-sm font-semibold cursor-not-allowed">
-              <%= btn.label %>
-            </button>
-          <% } else { %>
-            <form method="POST" action="/coupon/<%= c.id %>/claim">
-              <button type="submit" class="px-6 py-2.5 rounded-lg bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
-                받기
-              </button>
-            </form>
-          <% } %>
-        </div>
+  <!-- 카테고리 / 브랜드 필터 칩 (자동발급 아닌 쿠폰 소개, §req3) -->
+  <% if (targets.categories.length || targets.brands.length) { %>
+    <div class="mb-6 space-y-2">
+      <div class="flex flex-wrap gap-2">
+        <a href="/coupon" class="px-3 py-1.5 rounded-full text-xs no-underline <%= !activeFilter ? 'bg-[var(--gh-primary)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' %>">전체</a>
+        <% targets.categories.forEach(function (t) { %>
+          <a href="/coupon?category=<%= t.id %>" class="px-3 py-1.5 rounded-full text-xs no-underline <%= Number(filter.category) === t.id ? 'bg-[var(--gh-primary)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' %>">
+            <%= t.name %>
+          </a>
+        <% }); %>
+        <% targets.brands.forEach(function (t) { %>
+          <a href="/coupon?brand=<%= t.id %>" class="px-3 py-1.5 rounded-full text-xs no-underline <%= Number(filter.brand) === t.id ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' %>">
+            <%= t.name %>
+          </a>
+        <% }); %>
       </div>
-    <% }); %>
-  </div>
+    </div>
+  <% } %>
+
+  <!-- 그룹 섹션 -->
+  <% if (!totalCount) { %>
+    <p class="py-16 text-center text-sm text-gray-400">해당 조건에 받을 수 있는 쿠폰이 없습니다.</p>
+  <% } %>
+
+  <% groups.forEach(function (group) { %>
+    <section class="mb-8">
+      <% if (!activeFilter) { %>
+        <div class="mb-3">
+          <h2 class="text-base font-bold text-gray-900"><%= group.label %></h2>
+          <p class="text-xs text-gray-400"><%= group.desc %></p>
+        </div>
+      <% } %>
+
+      <div class="space-y-3">
+        <% group.coupons.forEach(function (c) {
+             const btn = BTN[c.buttonState];
+             const remaining = c.issue_limit != null ? Math.max(0, Number(c.issue_limit) - Number(c.issued_count)) : null;
+        %>
+          <div class="flex items-stretch border border-gray-200 rounded-xl overflow-hidden bg-white <%= btn.disabled && c.buttonState !== 'code_required' ? 'opacity-60' : '' %>">
+
+            <!-- 썸네일 -->
+            <a href="/coupon/<%= c.id %>" class="shrink-0 w-24 sm:w-28 bg-gray-50 flex items-center justify-center no-underline">
+              <% if (c.thumbnail_url) { %>
+                <img src="<%= c.thumbnail_url %>" alt="<%= c.name %>" class="w-full h-full object-cover">
+              <% } else { %>
+                <span class="text-3xl">🎟️</span>
+              <% } %>
+            </a>
+
+            <!-- 정보 -->
+            <a href="/coupon/<%= c.id %>" class="flex-1 p-4 sm:p-5 min-w-0 no-underline">
+              <p class="text-xl font-bold text-gray-900"><%= c.benefit %></p>
+              <p class="mt-1 text-sm text-gray-700 truncate"><%= c.name %></p>
+              <% if (c.summary) { %>
+                <p class="mt-0.5 text-xs text-gray-500 line-clamp-1"><%= c.summary %></p>
+              <% } %>
+
+              <p class="mt-2 text-xs text-gray-500">
+                <% if (c.min_order_amount) { %><%= won(c.min_order_amount) %>원 이상 구매 시<% } else { %>최소 주문금액 없음<% } %>
+              </p>
+              <p class="mt-0.5 text-xs text-gray-400">
+                <% if (c.valid_days) { %>받은 날부터 <%= c.valid_days %>일<% } else if (day(c.valid_to)) { %>~ <%= day(c.valid_to) %><% } %>
+                <% if (remaining != null) { %>
+                  · 선착순 <%= won(c.issue_limit) %>명 (<%= won(remaining) %> 남음)
+                <% } %>
+              </p>
+            </a>
+
+            <!-- 액션 -->
+            <div class="shrink-0 flex items-center px-4 sm:px-5 border-l border-dashed border-gray-200">
+              <% if (c.buttonState === 'code_required') { %>
+                <a href="#coupon-code" class="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-500 text-sm font-semibold no-underline hover:bg-gray-200 text-center leading-tight">
+                  코드<br>입력
+                </a>
+              <% } else if (c.buttonState === 'login') { %>
+                <a href="/auth/login" class="px-4 py-2.5 rounded-lg bg-[var(--gh-primary)] text-white text-sm font-semibold no-underline hover:bg-[var(--gh-primary-dark)]">
+                  받기
+                </a>
+              <% } else if (btn.disabled) { %>
+                <button type="button" disabled class="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-400 text-sm font-semibold cursor-not-allowed">
+                  <%= btn.label %>
+                </button>
+              <% } else { %>
+                <form method="POST" action="/coupon/<%= c.id %>/claim">
+                  <button type="submit" class="px-5 py-2.5 rounded-lg bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
+                    받기
+                  </button>
+                </form>
+              <% } %>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </section>
+  <% }); %>
 
   <!-- 쿠폰 코드 등록 (C5) -->
-  <div class="mt-10 border-t border-gray-100 pt-6">
+  <div id="coupon-code" class="mt-10 border-t border-gray-100 pt-6 scroll-mt-24">
     <h2 class="text-sm font-semibold text-gray-900 mb-2">쿠폰 코드가 있으신가요?</h2>
     <% if (isLoggedIn) { %>
       <form method="POST" action="/coupon/apply-code" class="flex gap-2">

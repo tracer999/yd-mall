@@ -34,6 +34,11 @@ function toIntOrNull(v) {
     return Number.isFinite(n) ? n : null;
 }
 
+const nullIfBlank = (v) => {
+    const s = String(v ?? '').trim();
+    return s === '' ? null : s;
+};
+
 /** `datetime-local` 값을 MySQL DATETIME 으로. 빈 값은 NULL. */
 function toDateTime(v) {
     const s = String(v ?? '').trim();
@@ -83,6 +88,10 @@ function normalizeForm(body) {
     return {
         value: {
             name: String(body.name || '').trim(),
+            thumbnail_url: nullIfBlank(body.thumbnail_url),                      // 쿠폰존 카드 썸네일
+            summary: nullIfBlank(body.summary),                                 // 리스트 한 줄 소개
+            detail_content: nullIfBlank(body.detail_content),                   // 상세 본문(HTML)
+            notice: nullIfBlank(body.notice),                                   // 유의사항(HTML)
             mall_id: toIntOrNull(body.mall_id),                                  // NULL = 전 몰 공용
             coupon_type: couponType,
             issue_method: issueMethod,
@@ -149,9 +158,43 @@ async function renderForm(req, res, title, coupon) {
         title,
         coupon,
         malls,
+        tinymceKey: process.env.TINYMCE_KEY || '',
         error: req.query.error || null,
     });
 }
+
+/**
+ * 적용 대상 picker 자동완성 — 카테고리(NORMAL)·브랜드(BRAND)를 이름으로 검색한다.
+ * 브랜드는 별도 테이블이 아니라 categories.type='BRAND' 다(1379행이라 드롭다운 불가).
+ */
+exports.searchTargets = async (req, res) => {
+    try {
+        const type = req.query.type === 'BRAND' ? 'BRAND' : 'NORMAL';
+        const q = String(req.query.q || '').trim();
+        if (!q) return res.json([]);
+        const [rows] = await pool.query(
+            'SELECT id, name FROM categories WHERE type = ? AND name LIKE ? ORDER BY name LIMIT 20',
+            [type, `%${q}%`]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'search failed' });
+    }
+};
+
+/** picker 프리필용 — id 목록을 이름과 함께 돌려준다. */
+exports.resolveTargets = async (req, res) => {
+    try {
+        const ids = String(req.query.ids || '').split(',').map((s) => parseInt(s, 10)).filter(Boolean);
+        if (!ids.length) return res.json([]);
+        const [rows] = await pool.query('SELECT id, name, type FROM categories WHERE id IN (?)', [ids]);
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'resolve failed' });
+    }
+};
 
 exports.getCreate = async (req, res) => {
     try {
@@ -168,12 +211,14 @@ exports.postCreate = async (req, res) => {
     const f = parsed.value;
     try {
         await pool.query(
-            `INSERT INTO coupons (name, mall_id, code, coupon_type, issue_method, benefit_type,
+            `INSERT INTO coupons (name, thumbnail_url, summary, detail_content, notice,
+                                  mall_id, code, coupon_type, issue_method, benefit_type,
                                   discount_amount, discount_rate, max_discount_amount, scope_json, min_order_amount,
                                   valid_from, valid_to, valid_days, max_total_uses, is_active, status,
                                   download_start_at, download_end_at, issue_limit)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [f.name, f.mall_id, f.code, f.coupon_type, f.issue_method, f.benefit_type,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [f.name, f.thumbnail_url, f.summary, f.detail_content, f.notice,
+             f.mall_id, f.code, f.coupon_type, f.issue_method, f.benefit_type,
              f.discount_amount, f.discount_rate, f.max_discount_amount, f.scope_json, f.min_order_amount,
              f.valid_from, f.valid_to, f.valid_days, f.max_total_uses, isActiveMirror(f.status), f.status,
              f.download_start_at, f.download_end_at, f.issue_limit]
@@ -254,12 +299,14 @@ exports.postEdit = async (req, res) => {
     const f = parsed.value;
     try {
         await pool.query(
-            `UPDATE coupons SET name=?, mall_id=?, code=?, coupon_type=?, issue_method=?, benefit_type=?,
+            `UPDATE coupons SET name=?, thumbnail_url=?, summary=?, detail_content=?, notice=?,
+                    mall_id=?, code=?, coupon_type=?, issue_method=?, benefit_type=?,
                     discount_amount=?, discount_rate=?, max_discount_amount=?, scope_json=?, min_order_amount=?,
                     valid_from=?, valid_to=?, valid_days=?, max_total_uses=?,
                     is_active=?, status=?, download_start_at=?, download_end_at=?, issue_limit=?
              WHERE id=?`,
-            [f.name, f.mall_id, f.code, f.coupon_type, f.issue_method, f.benefit_type,
+            [f.name, f.thumbnail_url, f.summary, f.detail_content, f.notice,
+             f.mall_id, f.code, f.coupon_type, f.issue_method, f.benefit_type,
              f.discount_amount, f.discount_rate, f.max_discount_amount, f.scope_json, f.min_order_amount,
              f.valid_from, f.valid_to, f.valid_days, f.max_total_uses, isActiveMirror(f.status), f.status,
              f.download_start_at, f.download_end_at, f.issue_limit, id]

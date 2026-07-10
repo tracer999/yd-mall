@@ -42,6 +42,32 @@
                             value="<%= coupon ? coupon.name : '' %>" placeholder="예: 신규 가입 3,000원 할인">
                     </div>
 
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">한 줄 소개 (요약)</label>
+                        <input type="text" name="summary" maxlength="255"
+                            value="<%= coupon && coupon.summary ? coupon.summary : '' %>" placeholder="예: 여름맞이 전상품 특가 쿠폰!">
+                        <p class="text-xs text-gray-400 mt-1">쿠폰존 카드에 혜택 아래로 노출됩니다.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">썸네일 이미지</label>
+                        <div class="flex items-start gap-4">
+                            <div id="thumbPreview" class="w-24 h-24 shrink-0 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+                                <% if (coupon && coupon.thumbnail_url) { %>
+                                    <img src="<%= coupon.thumbnail_url %>" alt="" class="w-full h-full object-cover">
+                                <% } else { %>
+                                    <span class="text-2xl text-gray-300">🎟️</span>
+                                <% } %>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <input type="hidden" name="thumbnail_url" id="thumbnailUrl" value="<%= coupon && coupon.thumbnail_url ? coupon.thumbnail_url : '' %>">
+                                <input type="file" id="thumbFile" accept="image/*" class="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
+                                <p id="thumbHint" class="text-xs text-gray-400 mt-1">JPG·PNG 이미지를 올리면 자동 업로드됩니다.</p>
+                                <button type="button" id="thumbClear" class="text-xs text-red-500 hover:underline mt-1 <%= coupon && coupon.thumbnail_url ? '' : 'hidden' %>">이미지 제거</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">목적 (분류)</label>
@@ -72,6 +98,24 @@
                             </select>
                             <p class="text-xs text-gray-400 mt-1">쿠폰은 삭제하지 않고 종료합니다.</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 상세 소개 -->
+            <div class="bg-white shadow-sm rounded-xl border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-100">
+                    <h3 class="text-lg font-semibold text-gray-800">상세 소개</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">쿠폰존 상세 페이지(<code>/coupon/:id</code>)에 노출됩니다.</p>
+                </div>
+                <div class="px-6 py-5 space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">상세 본문</label>
+                        <textarea name="detail_content" id="detailEditor"><%= coupon && coupon.detail_content ? coupon.detail_content : '' %></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">유의사항</label>
+                        <textarea name="notice" id="noticeEditor"><%= coupon && coupon.notice ? coupon.notice : '' %></textarea>
                     </div>
                 </div>
             </div>
@@ -128,16 +172,45 @@
                 <div class="px-6 py-4 border-b border-gray-100">
                     <h3 class="text-lg font-semibold text-gray-800">적용 대상</h3>
                 </div>
-                <div class="px-6 py-5">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">포함/제외 규칙 (JSON)</label>
-                    <p class="text-xs text-gray-500 mb-2">
-                        비우면 전 상품에 적용됩니다. <code>exclude</code> 가 <code>include</code> 보다 우선합니다.
+                <div class="px-6 py-5 space-y-5">
+                    <p class="text-xs text-gray-500">
+                        비우면 <strong>전 상품</strong>에 적용됩니다. 카테고리·브랜드를 지정하면 해당 상품에만 적용되고, 쿠폰존에서 그 분류로 조회됩니다.
                     </p>
-                    <textarea name="scope_json" rows="5" class="w-full font-mono text-xs border-gray-300 rounded-md"
-                        placeholder='{"include":{"categoryIds":[10,20]},"exclude":{"badges":["DEADLINE_SALE"]}}'><%= scopeText %></textarea>
-                    <p class="text-xs text-gray-400 mt-1">
-                        키: <code>categoryIds</code> · <code>brandIds</code> · <code>productIds</code> · <code>badges</code>
-                    </p>
+
+                    <!-- 카테고리 (include) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">적용 카테고리</label>
+                        <input type="text" id="categorySearch" autocomplete="off" placeholder="카테고리명 검색"
+                            class="w-full border-gray-300 rounded-md text-sm">
+                        <div id="categoryResults" class="hidden mt-1 border border-gray-200 rounded-md bg-white shadow-sm max-h-48 overflow-y-auto text-sm"></div>
+                        <div id="categoryChips" class="flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+
+                    <!-- 브랜드 (include) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">적용 브랜드</label>
+                        <input type="text" id="brandSearch" autocomplete="off" placeholder="브랜드명 검색"
+                            class="w-full border-gray-300 rounded-md text-sm">
+                        <div id="brandResults" class="hidden mt-1 border border-gray-200 rounded-md bg-white shadow-sm max-h-48 overflow-y-auto text-sm"></div>
+                        <div id="brandChips" class="flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+
+                    <!-- 뱃지 제외 (exclude) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">제외할 상품 뱃지</label>
+                        <p class="text-xs text-gray-500 mb-2">체크한 뱃지가 붙은 상품은 이 쿠폰에서 제외됩니다.</p>
+                        <div class="flex flex-wrap gap-3" id="badgeExclude">
+                            <% ['BEST','NEW','RECOMMEND','DEADLINE_SALE','GREENHUB_SPECIAL'].forEach(function (b) { %>
+                                <label class="inline-flex items-center gap-1.5 text-sm text-gray-700">
+                                    <input type="checkbox" class="badge-exclude rounded border-gray-300" value="<%= b %>">
+                                    <span><%= b %></span>
+                                </label>
+                            <% }); %>
+                        </div>
+                    </div>
+
+                    <!-- picker 가 직렬화해 넣는다. 사용자가 직접 JSON 을 쓰지 않는다. -->
+                    <input type="hidden" name="scope_json" id="scopeJson" value="<%= scopeText %>">
                 </div>
             </div>
 
@@ -282,6 +355,187 @@
         numInputs.forEach(function(input) {
             input.value = unformatNumber(input.value);
         });
+    });
+})();
+</script>
+
+<!-- 상세 에디터 -->
+<% if (tinymceKey) { %>
+<script src="https://cdn.tiny.cloud/1/<%= tinymceKey %>/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+    tinymce.init({
+        selector: '#detailEditor, #noticeEditor',
+        plugins: 'image link lists table code',
+        toolbar: 'undo redo | blocks | bold italic | alignleft aligncenter alignright | bullist numlist | link image | code',
+        height: 320,
+        menubar: false,
+        images_upload_url: '/admin/uploads/tinymce',
+        setup: function (editor) {
+            // 제출 직전 에디터 내용을 textarea 로 동기화
+            editor.on('init', function () {
+                editor.getElement().form.addEventListener('submit', function () { editor.save(); });
+            });
+        },
+    });
+</script>
+<% } else { %>
+<script>
+    ['detailEditor', 'noticeEditor'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) { el.rows = 8; el.className = 'w-full border-gray-300 rounded-md shadow-sm text-sm'; }
+    });
+</script>
+<% } %>
+
+<!-- 썸네일 업로드 + 적용대상 picker -->
+<script>
+(function () {
+    // ── 썸네일 업로드 (공용 /admin/uploads/tinymce 재사용)
+    const thumbFile = document.getElementById('thumbFile');
+    const thumbUrl = document.getElementById('thumbnailUrl');
+    const thumbPreview = document.getElementById('thumbPreview');
+    const thumbHint = document.getElementById('thumbHint');
+    const thumbClear = document.getElementById('thumbClear');
+
+    function setThumb(url) {
+        thumbUrl.value = url || '';
+        if (url) {
+            thumbPreview.innerHTML = '<img src="' + url + '" alt="" class="w-full h-full object-cover">';
+            thumbClear.classList.remove('hidden');
+        } else {
+            thumbPreview.innerHTML = '<span class="text-2xl text-gray-300">🎟️</span>';
+            thumbClear.classList.add('hidden');
+        }
+    }
+    if (thumbFile) {
+        thumbFile.addEventListener('change', function () {
+            const file = this.files && this.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('file', file);
+            thumbHint.textContent = '업로드 중...';
+            fetch('/admin/uploads/tinymce', { method: 'POST', body: fd })
+                .then((r) => r.json())
+                .then((data) => {
+                    if (data.location) { setThumb(data.location); thumbHint.textContent = '업로드 완료'; }
+                    else { thumbHint.textContent = '업로드 실패: ' + (data.error || '오류'); }
+                })
+                .catch(() => { thumbHint.textContent = '업로드 실패'; });
+        });
+    }
+    if (thumbClear) thumbClear.addEventListener('click', function () { setThumb(''); thumbFile.value = ''; });
+
+    // ── 적용대상 picker
+    const scopeInput = document.getElementById('scopeJson');
+    let scope = {};
+    try { scope = scopeInput.value ? JSON.parse(scopeInput.value) : {}; } catch (e) { scope = {}; }
+    scope.include = scope.include || {};
+    scope.exclude = scope.exclude || {};
+
+    // 선택된 대상: id -> name
+    const picked = { category: new Map(), brand: new Map() };
+
+    function chip(kind, id, name) {
+        const el = document.createElement('span');
+        el.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs';
+        el.innerHTML = '<span></span><button type="button" class="text-blue-400 hover:text-blue-700">&times;</button>';
+        el.querySelector('span').textContent = name;
+        el.querySelector('button').addEventListener('click', function () {
+            picked[kind].delete(id);
+            renderChips(kind);
+        });
+        return el;
+    }
+    function renderChips(kind) {
+        const box = document.getElementById(kind + 'Chips');
+        box.innerHTML = '';
+        picked[kind].forEach(function (name, id) { box.appendChild(chip(kind, id, name)); });
+    }
+
+    function wireSearch(kind, type) {
+        const input = document.getElementById(kind + 'Search');
+        const results = document.getElementById(kind + 'Results');
+        let timer = null;
+        input.addEventListener('input', function () {
+            const q = this.value.trim();
+            clearTimeout(timer);
+            if (!q) { results.classList.add('hidden'); return; }
+            timer = setTimeout(function () {
+                fetch('/admin/coupons/search-targets?type=' + type + '&q=' + encodeURIComponent(q))
+                    .then((r) => r.json())
+                    .then((rows) => {
+                        results.innerHTML = '';
+                        if (!rows.length) { results.classList.add('hidden'); return; }
+                        rows.forEach(function (row) {
+                            const item = document.createElement('div');
+                            item.className = 'px-3 py-2 hover:bg-gray-50 cursor-pointer';
+                            item.textContent = row.name;
+                            item.addEventListener('click', function () {
+                                picked[kind].set(row.id, row.name);
+                                renderChips(kind);
+                                input.value = '';
+                                results.classList.add('hidden');
+                            });
+                            results.appendChild(item);
+                        });
+                        results.classList.remove('hidden');
+                    });
+            }, 200);
+        });
+        document.addEventListener('click', function (e) {
+            if (!results.contains(e.target) && e.target !== input) results.classList.add('hidden');
+        });
+    }
+    wireSearch('category', 'NORMAL');
+    wireSearch('brand', 'BRAND');
+
+    // 뱃지 제외 프리필
+    const excludeBadges = new Set(Array.isArray(scope.exclude.badges) ? scope.exclude.badges : []);
+    document.querySelectorAll('.badge-exclude').forEach(function (cb) {
+        cb.checked = excludeBadges.has(cb.value);
+    });
+
+    // 기존 카테고리/브랜드 프리필 — id 를 이름으로 해석
+    const prefillCat = Array.isArray(scope.include.categoryIds) ? scope.include.categoryIds : [];
+    const prefillBrand = Array.isArray(scope.include.brandIds) ? scope.include.brandIds : [];
+    const allIds = prefillCat.concat(prefillBrand);
+    if (allIds.length) {
+        fetch('/admin/coupons/resolve-targets?ids=' + allIds.join(','))
+            .then((r) => r.json())
+            .then((rows) => {
+                const nameMap = {};
+                rows.forEach(function (row) { nameMap[row.id] = row.name; });
+                prefillCat.forEach(function (id) { picked.category.set(Number(id), nameMap[id] || ('#' + id)); });
+                prefillBrand.forEach(function (id) { picked.brand.set(Number(id), nameMap[id] || ('#' + id)); });
+                renderChips('category');
+                renderChips('brand');
+            });
+    }
+
+    // 제출 시 scope_json 직렬화 (사용자가 JSON 을 직접 쓰지 않는다)
+    document.querySelector('form').addEventListener('submit', function () {
+        const include = {};
+        const exclude = {};
+        // 손대지 않는 키(productIds 등)는 원본 scope 에서 보존
+        if (Array.isArray(scope.include.productIds) && scope.include.productIds.length) include.productIds = scope.include.productIds;
+        if (Array.isArray(scope.include.badges) && scope.include.badges.length) include.badges = scope.include.badges;
+        if (Array.isArray(scope.exclude.productIds) && scope.exclude.productIds.length) exclude.productIds = scope.exclude.productIds;
+        if (Array.isArray(scope.exclude.categoryIds) && scope.exclude.categoryIds.length) exclude.categoryIds = scope.exclude.categoryIds;
+        if (Array.isArray(scope.exclude.brandIds) && scope.exclude.brandIds.length) exclude.brandIds = scope.exclude.brandIds;
+
+        const catIds = Array.from(picked.category.keys());
+        const brandIds = Array.from(picked.brand.keys());
+        if (catIds.length) include.categoryIds = catIds;
+        if (brandIds.length) include.brandIds = brandIds;
+
+        const badges = Array.from(document.querySelectorAll('.badge-exclude'))
+            .filter((cb) => cb.checked).map((cb) => cb.value);
+        if (badges.length) exclude.badges = badges;
+
+        const result = {};
+        if (Object.keys(include).length) result.include = include;
+        if (Object.keys(exclude).length) result.exclude = exclude;
+        scopeInput.value = Object.keys(result).length ? JSON.stringify(result) : '';
     });
 })();
 </script>

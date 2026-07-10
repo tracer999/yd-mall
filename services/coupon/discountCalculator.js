@@ -137,6 +137,31 @@ function meetsMinOrder(coupon, couponable) {
     return couponable >= (Number(coupon.min_order_amount) || 0);
 }
 
+/*
+ * ── 쿠폰존 그룹핑 (적용 대상 기준)
+ *
+ * 리스트를 "전 상품 / 카테고리 전용 / 브랜드 전용 / 무료배송"으로 나눈다.
+ * 우선순위: 배송비 쿠폰 > 브랜드 include > 카테고리 include > 전 상품.
+ */
+function scopeGroup(coupon) {
+    if (isShippingCoupon(coupon)) return 'SHIPPING';
+    const scope = parseScope(coupon);
+    const include = (scope && scope.include) || {};
+    if (hasAny(include.brandIds)) return 'BRAND';
+    if (hasAny(include.categoryIds)) return 'CATEGORY';
+    return 'ALL';
+}
+
+/** 쿠폰 scope 의 include 대상 id 들. 쿠폰존의 카테고리/브랜드 필터 칩을 만든다. */
+function scopeIncludeIds(coupon) {
+    const scope = parseScope(coupon);
+    const include = (scope && scope.include) || {};
+    return {
+        categoryIds: Array.isArray(include.categoryIds) ? include.categoryIds.map(Number) : [],
+        brandIds: Array.isArray(include.brandIds) ? include.brandIds.map(Number) : [],
+    };
+}
+
 /** 화면 표시용 혜택 문구. */
 function benefitLabel(coupon) {
     switch (coupon.benefit_type) {
@@ -157,6 +182,8 @@ module.exports = {
     isShippingCoupon,
     combinationGroup,
     parseScope,
+    scopeGroup,
+    scopeIncludeIds,
     itemInScope,
     couponableAmount,
     calcOrderDiscount,
