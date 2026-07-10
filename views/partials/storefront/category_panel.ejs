@@ -88,23 +88,25 @@
                 <% }); %>
               </ul>
             </div>
+          <% } %>
 
-            <%# ── 프로모션 ── 1뎁스의 이미지 + 간략 설명. 오른쪽 끝 고정. %>
-            <% if (node.logo_image_path || node.description) { %>
-              <div class="hidden group-hover/d1:block absolute top-0 bottom-0 right-0 z-10 bg-white p-5"
-                   style="width: <%= WP %>px;">
-                <% if (node.logo_image_path) { %>
-                  <div class="w-full aspect-[4/5] overflow-hidden rounded-lg bg-gray-50">
-                    <img src="<%= node.logo_image_path %>" alt="<%= node.name %>"
-                         class="w-full h-full object-cover" loading="lazy">
-                  </div>
-                <% } %>
-                <p class="mt-3 text-sm font-bold text-gray-900 truncate"><%= node.name %></p>
-                <% if (node.description) { %>
-                  <p class="mt-1 text-xs text-gray-500 line-clamp-2"><%= node.description %></p>
-                <% } %>
-              </div>
-            <% } %>
+          <%# ── 프로모션 ── 1뎁스의 이미지 + 간략 설명. 오른쪽 끝 고정.
+              자식이 없는 1뎁스에도 띄운다(mall 1 은 설명만 있고 자식이 거의 없다).
+              단 anyChildren 이 false 면 패널이 좁은 리스트라 둘 곳이 없으므로 생략한다. %>
+          <% if (anyChildren && (node.logo_image_path || node.description)) { %>
+            <div class="hidden group-hover/d1:block absolute top-0 bottom-0 right-0 z-10 bg-white p-5"
+                 style="width: <%= WP %>px;">
+              <% if (node.logo_image_path) { %>
+                <div class="w-full aspect-[4/5] overflow-hidden rounded-lg bg-gray-50">
+                  <img src="<%= node.logo_image_path %>" alt="<%= node.name %>"
+                       class="w-full h-full object-cover" loading="lazy">
+                </div>
+              <% } %>
+              <p class="mt-3 text-sm font-bold text-gray-900 truncate"><%= node.name %></p>
+              <% if (node.description) { %>
+                <p class="mt-1 text-xs text-gray-500 line-clamp-2"><%= node.description %></p>
+              <% } %>
+            </div>
           <% } %>
         </li>
       <% }); %>
