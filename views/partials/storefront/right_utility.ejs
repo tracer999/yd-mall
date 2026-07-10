@@ -60,6 +60,26 @@
     #scrollTopBtn { display: none !important; }
   }
 
+  /* 레일 헤더 — '바로접속' ON/OFF. 장식이 아니라 실제로 레일 본문을 접는다. */
+  .yd-rail__head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 8px 4px;
+    border-bottom: 1px solid #f1f2f4;
+    background: none;
+    border-left: 0; border-right: 0; border-top: 0;
+    width: 100%;
+    cursor: pointer;
+  }
+  .yd-rail__head-label { font-size: 11px; font-weight: 700; color: #4b5563; letter-spacing: -.02em; }
+  .yd-rail__head-state { font-size: 11px; font-weight: 800; color: var(--gh-accent); }
+  .yd-rail[data-collapsed="true"] .yd-rail__body { display: none; }
+  .yd-rail[data-collapsed="true"] .yd-rail__head-state { color: #9ca3af; }
+
+  .yd-rail__body { display: flex; flex-direction: column; }
+
   .yd-rail__item {
     position: relative;
     display: flex;
@@ -124,9 +144,26 @@
   .yd-recent__item img { width: 40px; height: 40px; object-fit: contain; border: 1px solid #f1f2f4; border-radius: 6px; background: #fff; }
   .yd-recent__name { font-size: 11px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .yd-recent__item:hover .yd-recent__name { color: var(--gh-primary); }
+
+  /* 레일에 직접 노출하는 최근 본 상품 썸네일 (참조몰: capture/image7.png).
+     localStorage 기반이라 서버가 알 수 없다 → 항목이 있을 때만 JS 가 이 블록을 드러낸다. */
+  .yd-rail__recent { padding: 8px 6px; border-top: 1px solid #f1f2f4; }
+  .yd-rail__recent[hidden] { display: none; }
+  .yd-rail__recent-title { font-size: 10px; font-weight: 700; color: #6b7280; text-align: center; margin-bottom: 6px; }
+  .yd-rail__recent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; }
+  .yd-rail__recent-grid a { display: block; border: 1px solid #f1f2f4; border-radius: 4px; overflow: hidden; background: #fff; }
+  .yd-rail__recent-grid img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; }
+  .yd-rail__recent-grid a:hover { border-color: var(--gh-primary); }
 </style>
 
-<aside class="yd-rail" aria-label="바로가기 유틸리티">
+<aside class="yd-rail" aria-label="바로가기 유틸리티" data-collapsed="false">
+  <!-- 레일 헤더: 바로접속 ON/OFF (상태는 localStorage 에 남는다) -->
+  <button type="button" class="yd-rail__head" id="yd-rail-toggle" aria-expanded="true" aria-controls="yd-rail-body">
+    <span class="yd-rail__head-label">바로접속</span>
+    <span class="yd-rail__head-state" id="yd-rail-state">ON</span>
+  </button>
+
+  <div class="yd-rail__body" id="yd-rail-body">
   <!-- Login Box (시스템 고정) -->
   <% if (user) { %>
     <a href="/mypage" class="yd-rail__item" title="마이쇼핑">
@@ -147,6 +184,11 @@
       <i class="bi <%= icon %>" aria-hidden="true"></i>
       <span class="yd-rail__label"><%= m.name %></span>
     </button>
+    <%# 썸네일 미리보기 — 아이콘 바로 아래에 붙인다(그 라벨이 제목 역할).
+        실제 항목이 있을 때만 JS 가 드러낸다. 아이콘 클릭 = 전체 목록 패널. %>
+    <div class="yd-rail__recent" id="yd-rail-recent" hidden>
+      <div class="yd-rail__recent-grid" id="yd-rail-recent-grid"></div>
+    </div>
   <%   } else { %>
     <a href="<%= m.href %>" class="yd-rail__item" title="<%= m.name %>">
       <i class="bi <%= icon %>" aria-hidden="true"></i>
@@ -186,8 +228,9 @@
       <span class="yd-rail__label"><%= _topItem.name %></span>
     </button>
   <% } %>
+  </div><!-- /.yd-rail__body -->
 
-  <!-- 최근 본 상품 패널 -->
+  <!-- 최근 본 상품 패널 (아이콘 클릭 시 전체 목록) -->
   <div class="yd-recent" id="yd-recent-panel" hidden>
     <p class="yd-recent__title">최근 본 상품</p>
     <div id="yd-recent-list"></div>
@@ -251,6 +294,46 @@
 
   var topBtn = document.getElementById('yd-rail-top');
   if (topBtn) topBtn.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+  // 레일에 직접 노출하는 최근 본 상품 썸네일 (최대 4개, 2x2).
+  // 항목이 없으면 블록 자체를 숨긴다 — 빈 껍데기를 보여주지 않는다.
+  (function renderRailThumbs() {
+    var box = document.getElementById('yd-rail-recent');
+    var grid = document.getElementById('yd-rail-recent-grid');
+    if (!box || !grid) return;
+    var list = readRecent().slice(0, 4);
+    if (list.length === 0) { box.setAttribute('hidden', ''); return; }
+    grid.innerHTML = list.map(function (p) {
+      return '<a href="' + esc(p.url) + '" title="' + esc(p.name) + '">'
+           + '<img src="' + esc(p.image || '/images/placeholder.png') + '" alt="' + esc(p.name) + '" loading="lazy">'
+           + '</a>';
+    }).join('');
+    box.removeAttribute('hidden');
+  })();
+
+  // '바로접속' ON/OFF — 실제로 레일 본문을 접고 상태를 기억한다.
+  (function railToggle() {
+    var RAIL_KEY = 'yd_rail_collapsed';
+    var rail = document.querySelector('.yd-rail');
+    var btn = document.getElementById('yd-rail-toggle');
+    var state = document.getElementById('yd-rail-state');
+    if (!rail || !btn || !state) return;
+
+    function apply(collapsed) {
+      rail.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      state.textContent = collapsed ? 'OFF' : 'ON';
+    }
+    var saved = false;
+    try { saved = localStorage.getItem(RAIL_KEY) === '1'; } catch (e) {}
+    apply(saved);
+
+    btn.addEventListener('click', function () {
+      var next = rail.getAttribute('data-collapsed') !== 'true';
+      apply(next);
+      try { localStorage.setItem(RAIL_KEY, next ? '1' : '0'); } catch (e) {}
+    });
+  })();
 })();
 </script>
 
