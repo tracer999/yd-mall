@@ -513,7 +513,7 @@ ssh tracer999@192.168.1.2
 | [`docs/team/session.md`](./docs/team/session.md) | 세션 인계 파일 (세션 시작 시 먼저 읽음) |
 | `docs/사이트개선/admin_dev_plan.md` | 관리자 개선 계획서 (A·B 트랙) |
 | `docs/사이트개선/frontend_dev_plan.md` | 프론트 개선 계획서 |
-| `docs/admin/`, `docs/user/` | 개발자 문서 (화면별) |
+| `docs/develop_guide/{admin,user}/` | 개발자 문서 (화면별) |
 | `docs/manual/{admin,user,coding_guide}/` | 온라인 매뉴얼 소스 — `/manual` 라우트가 렌더 |
 | `docs/design_guide_admin.md`, `docs/design_guide_user.md` | 디자인 가이드 |
 | `docs/실행가이드.md`, `docs/ssl_setup.md`, `docs/logs.md` | 운영 가이드 |

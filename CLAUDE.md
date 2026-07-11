@@ -228,7 +228,7 @@ SSL 은 와일드카드 인증서(`/data/ssl_cert/ydata.co.kr_2026/_wildcard_.yd
 | `docs/사이트개선/admin_dev_plan.md` | 관리자 개선 계획서 (A·B 트랙) |
 | `docs/사이트개선/frontend_dev_plan.md` | 프론트 개선 계획서 |
 | `docs/manual/` | 온라인 매뉴얼 소스(마크다운) — `/manual` 라우트가 `marked` 로 렌더 |
-| `docs/admin/`, `docs/user/` | 개발자 문서 |
+| `docs/develop_guide/{admin,user}/` | 개발자 문서 (화면별) |
 | `docs/design_guide_admin.md`, `docs/design_guide_user.md` | 디자인 가이드 |
 
 ## 테스트
