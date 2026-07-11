@@ -120,7 +120,7 @@
 
 1. 세 값 중 하나라도 없으면 `fail?reason=missing`.
 2. `orders` 에서 order_number 로 주문을 다시 읽어 **`status='PENDING'` 이 아니면** `fail?reason=invalid` (중복 승인·이미 처리된 주문 차단).
-3. **`order.total_amount !== parseInt(amount)` 이면 `fail?reason=amount`** — 결제 금액 위·변조 차단. 승인 요청에도 DB 의 금액(`expectedAmount`)을 실어 보냅니다.
+3. **`order.total_amount !== parseInt(amount)` 이면 `fail?reason=amount`** — 결제 금액 위·변조 차단. 승인 요청에 싣는 `expectedAmount` 는 `parseInt(amount)` 이지만, 이 대조를 통과했으므로 `order.total_amount` 와 값이 같습니다(다르면 여기서 이미 걸러짐).
 4. secretKey 미설정이면 `fail?reason=config`.
 5. `validateStockForOrder(order.id)` — 승인 전 재고 확인. 부족하면 `fail?reason=stock`(결제 승인 자체를 하지 않음).
 6. **토스 승인:** `POST https://api.tosspayments.com/v1/payments/confirm` (Basic 인증 = base64(`secretKey:`)), body `{ paymentKey, orderId, amount: expectedAmount }`. 응답이 실패면 `fail?reason=approve`.
