@@ -3,12 +3,20 @@
 ## 1. 개요
 
 - **Base URL:** `/admin/banners`  
-- **관련 테이블:** `banners`, `categories`  
-- **컨트롤러:** `controllers/admin/bannerController.js`  
-- **뷰:** `views/admin/banners/list.ejs`, `views/admin/banners/form.ejs`  
-- **이미지 업로드:** Multer 필드명 `banner_image`, 저장 경로 `public/uploads/banners/`
+- **관련 테이블:** `banners`, `hero_slide`, `categories`, `products`  
+- **컨트롤러:** `controllers/admin/bannerController.js`, `controllers/admin/heroSlideController.js`  
+- **라우트:** `routes/admin/banners.js` (`routes/admin.js` 에서 `requireMenuAccess('/admin/banners')` 로 마운트)  
+- **뷰:** `views/admin/banners/list.ejs`, `views/admin/banners/form.ejs`, `views/admin/banners/hero-slides/list.ejs`, `views/admin/banners/hero-slides/form.ejs`  
+- **이미지 업로드:** Multer 필드명 `banner_image` / `mobile_banner_image` (배너), `slide_image` (슬라이드). 저장 경로 `public/uploads/banners/`, DB 에는 `/uploads/banners/파일명`
 
-메인 배너, 카테고리 배너, 팝업 배너를 등록·수정·삭제합니다.
+이 화면은 **두 종류의 데이터**를 관리합니다.
+
+1. **메인 슬라이더 (`hero_slide`)** — 홈 히어로의 상품 쇼케이스 슬라이드. `/admin/banners/hero-slides` 하위.
+2. **배너 (`banners`)** — 메인(레거시)·카테고리·팝업·브랜드·메뉴별 배너. `/admin/banners` 본체.
+
+목록 상단 탭이 `메인 슬라이더 | 메인 배너(레거시) | 카테고리 배너 | 팝업 배너 | 브랜드 배너 | 메뉴별 배너` 6개로 구성됩니다(`views/admin/banners/list.ejs`).
+
+> **몰 스코프:** `hero_slide` 만 `mall_id` 컬럼을 가지며 `req.adminMallId`(`middleware/adminMallContext.js`)로 스코프됩니다. **`banners` 테이블에는 `mall_id` 가 없어 전 몰 공용**입니다.
 
 ---
 
@@ -16,110 +24,214 @@
 
 | 메서드 | URL | 핸들러 | 설명 |
 |--------|-----|--------|------|
-| GET | `/admin/banners` | getList | 배너 목록 (type 쿼리: MAIN/CATEGORY/POPUP) |
-| GET | `/admin/banners/add` | getAdd | 배너 등록 폼 |
+| GET | `/admin/banners/hero-slides` | heroSlide.getList | 메인 슬라이더 목록 (MAIN/FEATURE 슬롯별) |
+| GET | `/admin/banners/hero-slides/add` | heroSlide.getAdd | 슬라이드 등록 폼 (`?slot=MAIN\|FEATURE`) |
+| POST | `/admin/banners/hero-slides/add` | heroSlide.postAdd | 슬라이드 등록 (multipart, `slide_image`) |
+| GET | `/admin/banners/hero-slides/edit/:id` | heroSlide.getEdit | 슬라이드 수정 폼 |
+| POST | `/admin/banners/hero-slides/edit/:id` | heroSlide.postEdit | 슬라이드 수정 (multipart) |
+| POST | `/admin/banners/hero-slides/delete` | heroSlide.postDelete | 슬라이드 삭제 |
+| GET | `/admin/banners` | getList | 배너 목록 (type 쿼리: MAIN/CATEGORY/POPUP/BRAND/MENU) |
+| GET | `/admin/banners/add` | getAdd | 배너 등록 폼 (`?type=` 로 기본 타입 선택) |
 | POST | `/admin/banners/add` | postAdd | 배너 등록 처리 (multipart, `upload.fields`) |
 | GET | `/admin/banners/edit/:id` | getEdit | 배너 수정 폼 |
 | POST | `/admin/banners/edit/:id` | postEdit | 배너 수정 처리 (multipart, `upload.fields`) |
 | POST | `/admin/banners/delete` | postDelete | 배너 삭제 |
 
----
-
-## 3. 목록 조회 (GET /admin/banners)
-
-- **쿼리 파라미터:** `type` (기본 MAIN) — MAIN / CATEGORY / POPUP
-- **쿼리:** `banners` LEFT JOIN `categories` (카테고리명), `WHERE banner_type = ?`, `ORDER BY display_order ASC, created_at DESC`  
-- **표시:** 썸네일(image_url), 제목(title), 배너 타입(메인/카테고리/팝업), 대상 카테고리명, 링크 URL, 사용중/중지 뱃지, 수정/삭제 버튼  
-- **뷰 전달:** `banners`, `currentType`, `title: '배너 관리'`
+> `hero-slides/*` 는 `/add`·`/edit/:id` 보다 **먼저** 마운트해 경로 충돌을 피합니다(`routes/admin/banners.js`).  
+> 업로드 에러는 공통 핸들러가 처리합니다. `LIMIT_FILE_SIZE` → **413** (`업로드 파일은 {MAX_UPLOAD_FILE_MB}MB 이하만 가능합니다.`), 그 외 Multer 오류 → **400**.
 
 ---
 
-## 4. 배너 등록 폼 (GET /admin/banners/add)
+## 3. 배너 타입과 노출 위치
 
-- **동작:** 카테고리 목록 조회 후 `banner: null`, `categories` 와 함께 폼 렌더링  
-- **뷰:** `admin/banners/form.ejs`
+| 폼 타입 | 저장 형태 | 프론트 노출 위치 (소스) |
+|---------|-----------|------------------------|
+| MAIN (메인 배너 · **레거시**) | `banner_type='MAIN'` | 홈 히어로. `hero_variant='full_banner'` 일 때만 사용, 상위 6건 (`controllers/mainController.js:28`). `mobile_image_url` 이 있는 건만 모바일 히어로로 사용 |
+| CATEGORY (카테고리 배너) | `banner_type='CATEGORY'`, `category_id` | 카테고리 목록 상단 1건 (`controllers/productController.js:125`) |
+| POPUP (팝업 배너) | `banner_type='POPUP'` | 홈 팝업 레이어 1건, 게시 기간 필터 적용 (`controllers/mainController.js:55`) |
+| BRAND (브랜드 배너) | `banner_type='BRAND'`, `category_id`(=브랜드 카테고리) | 브랜드 필터 목록 상단 1건, 카테고리 배너가 없을 때만 (`controllers/productController.js:153`) |
+| MENU (메뉴별 배너) | `banner_type='CATEGORY'` + `category_id=NULL` + **`group_key='menu:{key}'`** | 기능 메뉴 목록 페이지 상단 (`controllers/productController.js:86`, `services/display/bannerService.js` 경유) |
 
-### 4.1 폼 필드
+### 3.1 메뉴별 배너 (group_key 재사용)
+
+`banners.banner_type` enum 에는 `MENU` 값이 없습니다. 스키마 변경을 피하려고 **`group_key` 네임스페이스**로 구현되어 있습니다 (`controllers/admin/bannerController.js:4-21`).
+
+- 저장: `banner_type='CATEGORY'`, `category_id=NULL`, `group_key='menu:{key}'`
+- 대상 목록(`MENU_BANNER_TARGETS`): `BEST`(/best), `NEW`(/new), `DEAL`(/deal/today)
+- 소비: `routes/feature.js` 의 preset 이 `menuKey` 를 주입 → `productController` 가 `bannerService.getByGroup('menu:{key}', { limit: 1 })` 로 조회
+- 새 메뉴에 배너를 붙이려면 `MENU_BANNER_TARGETS` + `routes/feature.js` preset 두 곳만 추가
+
+### 3.2 group_key 보존 규칙
+
+`banners.group_key` 는 이 화면 밖에서도 쓰입니다 — SDUI `promotion_banner` 섹션이 `group_key` 로 배너 묶음을 가져갑니다(`services/display/resolvers/promotion_banner.js`, → [페이지 빌더](./page_builder.md)).
+
+그래서 `resolveBannerTarget()`(`bannerController.js:143`)은:
+
+- MENU 타입 → `group_key='menu:{key}'` 로 덮어씀
+- 비-MENU 타입 → 폼의 hidden `existing_group_key` 를 **그대로 보존**(예: `home_promo`). 단 `menu:` 접두어는 메뉴별 배너 전용이므로 일반 타입으로 전환 시 제거
+- 목록 조회에서도 일반 타입 탭에는 `group_key LIKE 'menu:%'` 배너가 섞이지 않도록 제외
+
+> **주의:** 게시 기간(`start_date`/`end_date`) 필터는 **팝업 배너와 `bannerService` 경유 조회(메뉴별·`promotion_banner`)에만** 적용됩니다. MAIN·CATEGORY·BRAND 직접 쿼리는 `is_active` 만 보고 기간을 무시합니다.
+
+---
+
+## 4. 목록 조회 (GET /admin/banners)
+
+- **쿼리 파라미터:** `type` (기본 `MAIN`) — MAIN / CATEGORY / POPUP / BRAND / MENU
+- **쿼리:**  
+  - `type=MENU` → `WHERE b.group_key LIKE 'menu:%'` (banner_type 무시), `ORDER BY group_key, display_order, created_at DESC`  
+  - 그 외 → `WHERE b.banner_type = ? AND (b.group_key IS NULL OR b.group_key NOT LIKE 'menu:%')`, `ORDER BY display_order ASC, created_at DESC`  
+  - 두 경우 모두 `LEFT JOIN categories` (카테고리/브랜드명)
+- **표시:** 썸네일(image_url), 제목, 타입 뱃지(메인/카테고리/브랜드/팝업/메뉴별), 대상(메뉴 라벨 · 카테고리/브랜드명 · "메인 팝업 레이어" · "전체 메인 영역 노출"), 링크 URL, 게시 기간, 사용중/중지 뱃지, 수정/삭제 버튼
+- **뷰 전달:** `banners`, `currentType`, `menuTargets`, `title: '배너 관리'`
+
+---
+
+## 5. 배너 등록 폼 (GET /admin/banners/add)
+
+- **동작:** `?type=` 을 기본 선택값(`currentType`)으로 받고, 전체 카테고리(`id, name, type`) 조회 후 `banner: null` 로 폼 렌더링  
+- **뷰:** `admin/banners/form.ejs`  
+- **뷰 전달:** `banner`, `categories`, `currentType`, `menuTargets`, `currentMenuKey`, `maxUploadFileMb`
+
+### 5.1 폼 필드
 
 | name | 타입 | 필수 | 설명 |
 |------|------|------|------|
-| banner_type | radio | - | MAIN(메인 배너) / CATEGORY(카테고리 배너) / POPUP(팝업 배너), 기본 MAIN |
-| category_id | select | CATEGORY일 때 | 카테고리 선택 (카테고리 배너일 때만 노출) |
+| banner_type | radio | - | MAIN / CATEGORY / POPUP / BRAND / MENU, 기본은 `currentType` |
+| menu_target | select | MENU일 때 | 노출 메뉴 (BEST / NEW / DEAL) — MENU 선택 시에만 노출 |
+| category_id | select | CATEGORY·BRAND일 때 | 카테고리/브랜드 선택. JS 가 `data-type` 으로 옵션을 필터(BRAND 타입은 `type='BRAND'` 카테고리만) |
 | title | text | - | 배너 제목 |
-| banner_image | file | O | 배너 이미지 (PC) |
-| mobile_banner_image | file | - | 모바일용 배너 이미지 (없으면 PC 이미지 사용) |
-
-> **권장 사이즈 & 비율 요약**
->
-> - 메인 배너: 1920×600px (가로:세로 3.2:1), 2배 해상도 작업 시 3840×1200px
-> - 카테고리 배너: 900×200px (가로:세로 약 4.5:1), 2배 해상도 작업 시 1800×400px
-> - 팝업 배너: 960×960px (가로:세로 1:1, 정사각형), 2배 해상도 작업 시 1920×1920px
-> - **모바일 배너 (메인용):** 800×1200px (가로:세로 2:3, 세로형), 2배 해상도 작업 시 1600×2400px
->
-> 해상도는 배율(1배/2배 등)에 따라 키워도 되지만, **각 배너의 가로:세로 비율은 유지**해서 제작해 주세요.
+| banner_image | file | 신규 등록 시 O | 배너 이미지 (PC). 수정 시엔 선택 |
+| mobile_banner_image | file | - | 모바일용 배너 이미지 (없으면 PC 이미지 사용). 폼 스크립트가 PC 필드 뒤에 주입 |
+| existing_image / existing_mobile_image | hidden | - | 수정 시 기존 이미지 경로 유지용 |
+| existing_group_key | hidden | - | 이 화면과 무관한 `group_key` 보존용 (3.2 참고) |
 | link_url | text | - | 클릭 시 이동 URL (내부 경로 또는 외부 URL) |
 | display_order | number | - | 노출 순서, 기본 0 |
 | start_date | date | - | 게시 시작일 |
 | end_date | date | - | 게시 종료일 |
-| is_active | checkbox | - | 활성화 여부 (1/0) |
+| is_active | checkbox | - | 활성화 여부 (1/0), 신규는 기본 체크 |
 
-- **저장 시:** banner_type이 CATEGORY가 아니면 category_id는 null로 저장  
-- **이미지:** `banner_image`, `mobile_banner_image` 필드명으로 Multer가 `public/uploads/banners/`에 저장, DB에는 `/uploads/banners/파일명` 형태로 저장
+> **권장 사이즈 & 비율 요약** (`form.ejs` 의 `updateSizeGuide()` 가 타입별로 안내)
+>
+> - 메인 배너: 1920×600px (3.2:1), 2배 3840×1200px
+> - 카테고리 배너: 900×200px (약 4.5:1), 2배 1800×400px
+> - 팝업 배너: 960×960px (1:1), 2배 1920×1920px
+> - 브랜드 배너: 900×200px (약 4.5:1), 2배 1800×400px
+> - 메뉴별 배너: 1200×260px (약 4.6:1), 2배 2400×520px
+> - **모바일 배너:** 390×422px, 2배 780×844px
+>
+> 해상도는 배율(1배/2배 등)에 따라 키워도 되지만, **각 배너의 가로:세로 비율은 유지**해서 제작해 주세요.  
+> 클라이언트 스크립트가 `maxUploadFileMb`(기본 20MB) 초과 파일을 업로드 전에 alert 으로 차단합니다.
 
 ---
 
-## 5. 배너 등록 처리 (POST /admin/banners/add)
+## 6. 배너 등록 처리 (POST /admin/banners/add)
 
-- **enctype:** `multipart/form-data`, `upload.fields([...])`  
+- **enctype:** `multipart/form-data`, `upload.fields([banner_image, mobile_banner_image])`  
 - **로직:**  
-  - `banner_type === 'CATEGORY'` 이면 type='CATEGORY', category_id 사용  
-  - 아니면 type='MAIN', category_id=null  
-  - `image_url`, `mobile_image_url` = 업로드 파일 있으면 `/uploads/banners/` + 파일명  
-- **INSERT 컬럼:** banner_type, category_id, title, image_url, mobile_image_url, link_url, display_order, is_active(0/1), start_date, end_date  
-- **성공 시:** `res.redirect('/admin/banners')`
+  - `resolveBannerTarget(banner_type, category_id, menu_target, null)` 로 `storedType` / `categoryId` / `groupKey` / `redirectType` 결정  
+  - `banner_type='MENU'` → `storedType='CATEGORY'`, `categoryId=null`, `groupKey='menu:{key}'`  
+  - `banner_type` 이 MAIN/CATEGORY/POPUP/BRAND 이외면 MAIN 으로 강제. `category_id` 는 CATEGORY·BRAND 일 때만 저장  
+  - `image_url`, `mobile_image_url` = 업로드 파일 있으면 `/uploads/banners/` + 파일명, 없으면 null  
+- **INSERT 컬럼:** banner_type, category_id, **group_key**, title, image_url, (mobile_image_url), link_url, display_order, is_active(0/1), start_date, end_date  
+- **하위호환:** `hasMobileImageColumn()` 이 `INFORMATION_SCHEMA` 로 `banners.mobile_image_url` 존재 여부를 1회 확인·캐시하며, 없으면 해당 컬럼을 뺀 INSERT 를 실행합니다  
+- **성공 시:** `res.redirect('/admin/banners?type=' + redirectType)`
 
 ---
 
-## 6. 배너 수정 폼 (GET /admin/banners/edit/:id)
+## 7. 배너 수정 (GET/POST /admin/banners/edit/:id)
 
-- **동작:** 해당 id의 배너 1건 조회, 없으면 `/admin/banners`로 리다이렉트. 카테고리 목록 조회 후 `banner`, `categories`, `currentType`과 함께 폼 렌더링  
-- **뷰:** `admin/banners/form.ejs` (등록과 동일한 폼, banner 값 채워서 사용)
-
----
-
-## 7. 배너 수정 처리 (POST /admin/banners/edit/:id)
-
-- **enctype:** `multipart/form-data`, `upload.fields([...])`  
-- **파라미터:** URL `id`, body에 title, link_url, display_order, is_active, banner_type, category_id, start_date, end_date  
-- **이미지:** 새 파일 있으면 교체, 없으면 기존 `image_url`, `mobile_image_url` 유지  
-- **성공 시:** `res.redirect('/admin/banners?type=' + type)`
+- **GET:** 해당 id 배너 1건 조회(없으면 `/admin/banners` 리다이렉트). `group_key` 가 `menu:` 로 시작하면 폼에서 **MENU 타입**으로 다루고 `currentMenuKey` 를 채웁니다. 카테고리 목록과 함께 동일 폼 렌더링  
+- **POST:** URL `id`, body 의 title·link_url·display_order·is_active·banner_type·category_id·menu_target·start_date·end_date  
+  - 이미지: 새 파일 있으면 교체, 없으면 `existing_image` / `existing_mobile_image` 유지  
+  - `resolveBannerTarget(..., req.body.existing_group_key)` 로 기존 `group_key` 보존  
+- **성공 시:** `res.redirect('/admin/banners?type=' + redirectType)`
 
 ---
 
 ## 8. 배너 삭제 (POST /admin/banners/delete)
 
 - **파라미터:** `id` (body)  
-- **동작:** `DELETE FROM banners WHERE id = ?` 후 `/admin/banners`로 리다이렉트  
+- **동작:** `DELETE FROM banners WHERE id = ?` 후 `/admin/banners`(type 없이) 리다이렉트  
 - **뷰:** 삭제 전 `confirm('삭제하시겠습니까?')` 실행
 
 ---
 
-## 9. DB 스키마 (banners)
+## 9. 메인 슬라이더 관리 (hero_slide)
+
+`/admin/banners/hero-slides` — 홈 히어로의 **상품 쇼케이스** 변형에 쓰이는 슬라이드입니다.
+
+- **몰 스코프:** 모든 조회/저장/삭제가 `mall_id = req.adminMallId`(없으면 1) 조건으로 동작합니다.
+- **슬롯:** `MAIN`(중앙 슬라이더) / `FEATURE`(우측 추천 카드). 목록은 `mainSlides` / `featureSlides` 로 나눠 전달.
+- **상품 연결:** `product_id` 로 상품과 연결하며, `label` / `headline` / `image_url` / `link_url` 을 비우면 **상품 정보로 폴백**합니다(라벨→공급사명, 헤드라인→상품명, 이미지→대표이미지, 링크→상품 상세). 가격·할인율·재고는 항상 상품에서 가져옵니다.
+- **프론트 연결:** `mainController.buildHomeContext()` 가 `hero_variant`(사이트 설정 또는 `?hero=` 쿼리)를 보고 결정합니다.
+  - `full_banner` → `banners` 의 MAIN 배너 사용
+  - `product_showcase` → `hero_slide` 를 `mall_id` 로 조회, `slot=MAIN` 슬라이드 + `slot=FEATURE` 첫 1건 사용
+
+### 9.1 슬라이드 폼 필드
+
+| name | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| slot | radio | - | MAIN / FEATURE (기본 MAIN, 허용값 외에는 MAIN 으로 강제) |
+| product_id | number | - | 연결 상품 ID (FK `products`, `ON DELETE SET NULL`) |
+| label | text | - | 라벨 태그 (비우면 상품 공급사명) |
+| headline | text | - | 헤드라인 (비우면 상품명) |
+| slide_image | file | - | 프로모션 이미지 (비우면 상품 대표이미지). 중앙 슬라이더는 원형 노출이라 1:1 권장 |
+| existing_image | hidden | - | 수정 시 기존 이미지 유지 |
+| link_url | text | - | 커스텀 링크 (비우면 상품 상세) |
+| sort_order | number | - | 노출 순서, 기본 0 |
+| is_active | checkbox | - | 노출 활성화 (1/0), 신규는 기본 체크 |
+
+- 모든 처리 후 `/admin/banners/hero-slides` 로 리다이렉트합니다.
+
+---
+
+## 10. DB 스키마
+
+### 10.1 banners
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | id | INT PK | 배너 ID |
-| banner_type | ENUM('MAIN','CATEGORY','POPUP') | 메인/카테고리/팝업 |
-| category_id | INT FK NULL | 카테고리 배너일 때만 |
-| title | VARCHAR(100) | 제목 |
-| image_url | VARCHAR(255) | 이미지 경로 |
-| mobile_image_url | VARCHAR(255) | 모바일용 이미지 경로 |
-| link_url | VARCHAR(255) | 링크 URL |
+| banner_type | ENUM('MAIN','CATEGORY','POPUP','BRAND') DEFAULT 'MAIN' | **MENU 값은 없음** (3.1 참고) |
+| group_key | VARCHAR(50) NULL | 배너 그룹 키. `menu:{key}` = 메뉴별 배너, 그 외는 SDUI `promotion_banner` 섹션 데이터소스 |
+| category_id | INT FK NULL | CATEGORY/BRAND 타입일 때 대상 (`ON DELETE SET NULL`) |
+| title | VARCHAR(100) NULL | 제목 |
+| image_url | VARCHAR(255) NOT NULL | 이미지 경로 |
+| mobile_image_url | VARCHAR(255) NULL | 모바일용 이미지 경로 |
+| link_url | VARCHAR(255) NULL | 링크 URL |
 | display_order | INT DEFAULT 0 | 노출 순서 |
-| is_active | TINYINT 0/1 | 활성화 |
+| is_active | TINYINT(1) DEFAULT 1 | 활성화 |
 | start_date, end_date | DATE NULL | 게시 기간 |
 | created_at | TIMESTAMP | 생성일시 |
 
+- 인덱스: `idx_banners_group_key (group_key, display_order)`, `fk_banners_category (category_id)`
+- **`mall_id` 컬럼 없음** — 전 몰 공용
+
+### 10.2 hero_slide
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | INT PK | 슬라이드 ID |
+| mall_id | BIGINT DEFAULT 1 | 몰 스코프 |
+| slot | ENUM('MAIN','FEATURE') DEFAULT 'MAIN' | MAIN=중앙 슬라이더, FEATURE=우측 카드 |
+| product_id | INT FK NULL | 연결 상품 (`products`, ON DELETE SET NULL) |
+| label | VARCHAR(50) NULL | 수동 라벨 |
+| headline | VARCHAR(200) NULL | 커스텀 헤드라인 (없으면 상품명) |
+| image_url | VARCHAR(255) NULL | 프로모션 이미지 (없으면 상품 대표이미지) |
+| link_url | VARCHAR(500) NULL | 커스텀 링크 (없으면 상품 상세) |
+| sort_order | INT DEFAULT 0 | 노출 순서 |
+| is_active | TINYINT(1) DEFAULT 1 | 활성화 |
+| created_at / updated_at | TIMESTAMP | 생성/수정 일시 |
+
+- 인덱스: `idx_hero_mall_slot (mall_id, slot, sort_order)`
+
 ---
 
-*Last Updated: 2026-02-07*
+## 11. 관련 문서
+
+- 페이지 빌더(SDUI) — `group_key` 로 배너를 소비하는 `promotion_banner` 섹션: [page_builder.md](./page_builder.md)
+
+---
+
+*Last Updated: 2026-07-11*

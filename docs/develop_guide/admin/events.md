@@ -125,7 +125,7 @@
 `id`, `event_id`(FK CASCADE), `coupon_id`(FK CASCADE, **int** — coupons.id 가 int), `sort_order`
 유니크: `uk_event_coupon (event_id, coupon_id)`
 
-> **테이블만 존재하고 어디서도 읽고 쓰지 않습니다.** 쿠폰팩(COUPON_PACK)을 열려면 이 테이블 + `participate()` 지급 로직을 연결해야 합니다.
+> **테이블만 존재하고 런타임 코드가 읽지도 쓰지도 않습니다.** 저장소 전체(`.js`/`.ejs`/`.sql`)에서 `event_coupon` 이 나오는 곳은 생성 DDL(`scripts/migrate_event.sql:64-77`)과 주석 2줄(`controllers/admin/eventController.js:20`, `:220`)뿐입니다. 쿠폰팩(COUPON_PACK)을 열려면 이 테이블을 읽는 관리자 UI + `participate()` 의 쿠폰 지급 로직(`couponController` 의 `issued_by='ADMIN'` 경로)을 새로 연결해야 합니다.
 
 ### 5.4 상태 모델
 

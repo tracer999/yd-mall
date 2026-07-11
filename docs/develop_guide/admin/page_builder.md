@@ -238,7 +238,7 @@ UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로
 | data_source_id | bigint | `product_group.id` — **FK 없음** |
 | config_json | json | 섹션별 설정 |
 | visible_start_at / visible_end_at | datetime | 노출 기간 |
-| visible_on_pc / visible_on_mobile | tinyint(1) DEFAULT 1 | |
+| visible_on_pc / visible_on_mobile | tinyint(1) DEFAULT 1 | **저장·발행만 되고 렌더에 반영되지 않는다** (§8 참고) |
 | is_active | tinyint(1) DEFAULT 1 | |
 | created_at / updated_at | datetime | |
 
@@ -292,6 +292,7 @@ UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로
 - **레지스트리에서 타입을 지우면 그 섹션은 조용히 사라진다.** `resolveSections()` 가 미등록 타입을 스킵한다. 에디터는 `isUnknownType` 으로 표시만 한다.
 - **`product_group` 을 비활성/삭제하면 참조 섹션이 빈다.** FK 가 없으므로 DB 가 막아주지 않는다 — 컨트롤러 가드가 유일한 방어선이다. 스크립트로 직접 UPDATE/DELETE 하면 가드를 우회한다.
 - **`custom_html` 은 관리자 입력이라도 신뢰하지 않는다.** 저장(`pageBuilderService.updateSection`)·렌더(`resolvers/custom_html.js`) 양쪽에서 새니타이즈한다. 허용 태그/속성/스킴은 `services/display/htmlSanitizer.js` 화이트리스트 참고(`script`·`iframe`·`on*`·`javascript:` 차단).
+- **`visible_on_pc` / `visible_on_mobile` 는 현재 아무 데도 적용되지 않는다.** 에디터 체크박스(`public/js/admin/page-builder.js:123-124`)로 켜고 끌 수 있고 `page_section` 에 저장되며 스냅샷에도 들어가지만, `displayService` 의 노출 필터는 `is_active` + 노출기간만 본다. 어떤 렌더러 EJS 도 이 값을 읽지 않는다(코드 전역 검색 기준). 디바이스별 노출 제어가 필요하면 렌더 단에 구현해야 한다.
 - **미리보기 몰**은 `req.adminMallId` 기준이다. 관리자가 스토어프론트를 `?mall=2` 로 보고 있어도 미리보기는 편집 중인 몰을 렌더한다. → [`malls.md`](./malls.md)
 - `ranking_tabs` 리졸버의 `loadHomeCategories(shared.hasUser)` 는 **`mallId` 를 넘기지 않아** `_shared.js` 기본값 1(건강식품관)로 카테고리를 뽑는다(`services/display/resolvers/ranking_tabs.js`). 다른 몰에서도 mall 1 카테고리 탭이 나온다.
 - `promotion_banner` 는 `banners.group_key` 로만 조회한다. 배너 관리에서 `group_key` 를 비워두면 섹션이 스킵된다. → [`banners.md`](./banners.md)

@@ -207,8 +207,8 @@ TinyMCE 이미지 업로드는 `POST /admin/uploads/tinymce`로 처리되며, `{
 | 로그인·2FA | `controllers/admin/authController.js` | `views/admin/login.ejs` |
 | 대시보드 | `controllers/admin/dashboardController.js` | `views/admin/dashboard.ejs`, `search_logs.ejs`, `traffic_sources_detail.ejs`, `popular_products_detail.ejs` |
 | 카테고리 | `controllers/admin/categoryController.js` | `views/admin/categories/` |
-| 기능 메뉴 | `controllers/admin/featureMenuController.js` | `views/admin/feature-menus/` |
-| 시스템 메뉴 | `controllers/admin/menuController.js` 외 | `views/admin/system-menus/` |
+| 기능 메뉴 | `controllers/admin/featureMenuController.js` (`getList`/`postSave`) | `views/admin/feature-menus/` |
+| 시스템 메뉴 | `controllers/admin/featureMenuController.js` (`getSystemList`/`postSystemSave`) | `views/admin/system-menus/` |
 | 헤더 설정 | `controllers/admin/headerSettingsController.js` | `views/admin/header-settings/` |
 | 메뉴 미리보기 | `controllers/admin/menuPreviewController.js` | `views/admin/menu-preview/` |
 | 상품 | `controllers/admin/productController.js` | `views/admin/products/` |

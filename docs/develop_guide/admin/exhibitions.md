@@ -18,7 +18,7 @@
 - **컨트롤러:** `controllers/admin/exhibitionController.js`
 - **서비스:** `services/exhibition/exhibitionService.js` (관리자·고객 공용 읽기 경로 + enum 정의)
 - **뷰:** `views/admin/exhibitions/list.ejs`, `views/admin/exhibitions/edit.ejs` (등록·수정 공용)
-- **이미지 업로드:** `middleware/upload.js` (Multer), 필드 4종 `list_thumbnail` / `pc_hero_image` / `mobile_hero_image` / `og_image` (`routes/admin/exhibitions.js:22-27`)
+- **이미지 업로드:** `middleware/upload.js` (Multer), 필드 4종 `list_thumbnail` / `pc_hero_image` / `mobile_hero_image` / `og_image` (`routes/admin/exhibitions.js:22-27`). 저장 경로 `public/uploads/exhibitions/` (`middleware/upload.js:17-22`, `47-48`), 이미지 MIME 만 허용, 상한 `MAX_UPLOAD_FILE_MB`(기본 20MB)
 - **권한:** `admin_menus.visible_roles = super_admin,admin,content_admin` (DB, id=44)
 
 ---

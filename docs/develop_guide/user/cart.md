@@ -9,12 +9,15 @@
 
 모든 장바구니 기능은 로그인 필수입니다. 비로그인 시 `/auth/login`으로 리다이렉트됩니다.
 
+헤더의 장바구니 뱃지 수량은 `middleware/cartData.js` 가 매 요청마다 `SUM(carts.quantity)` 로 구해 `res.locals.cartCount` 에 싣습니다(비로그인은 0).
+
 ---
 
 ## 2. 장바구니 목록 (GET /cart)
 
 - **동작:** carts + products 조인으로 해당 user_id의 장바구니 항목 조회. 수량·금액 합계 계산 후 뷰에 전달.
-- **전달 변수:** title, items, totalQuantity, totalAmount, currentUser, stockError (?error=stock&max= 시 표시).
+- **배송비:** `services/shipping/shippingCalculator.calcShippingFee({ mallId, subtotalAmount })` 로 몰별 정책(`shipping_policy`)을 조회해 `shipping` 을 전달합니다. 배송지가 아직 없으므로 **지역 할증 없이 기본 배송비만** 계산합니다(무료배송 임박 안내용). 계산 규칙은 [주문/결제](./checkout.md) §4 참고.
+- **전달 변수:** title, items, totalQuantity, totalAmount, shipping(fee, baseFee, extraFee, zone, isFree, freeThreshold, remainingForFree), currentUser, stockError (?error=stock&max= 시 표시).
 
 ---
 
@@ -40,14 +43,16 @@
 
 ## 6. 전체 구매 (POST /cart/checkout)
 
-- **동작:** 장바구니 항목으로 주문 1건 생성(orders + order_items), status='PAID'로 저장 후 해당 사용자 장바구니 비우기. 주문 번호 생성 규칙: ORD-YYYYMMDD-XXX. 완료 후 `/cart/complete?orderNumber=...`로 리다이렉트. 장바구니가 비어 있으면 `/cart`로 리다이렉트.
+- **동작:** 장바구니 항목으로 주문 1건 생성(orders + order_items), status='PAID'로 저장 후 해당 사용자 장바구니 비우기(한 트랜잭션). 주문 번호 생성 규칙: ORD-YYYYMMDD-XXX(3자리 난수). 완료 후 `/cart/complete?orderNumber=...`로 리다이렉트. 장바구니가 비어 있으면 `/cart`로 리다이렉트.
+- ⚠️ **간이 경로입니다.** 결제(토스)·배송비·쿠폰·포인트·재고 차감을 전혀 거치지 않습니다. 실제 구매 흐름은 `/checkout?cart=1`([주문/결제](./checkout.md))이며, 장바구니 화면의 주문 버튼도 그쪽을 씁니다.
 
 ---
 
 ## 7. 주문 완료 (GET /cart/complete)
 
-- **동작:** 로그인 필수. query.orderNumber 전달. 뷰: `user/cart_complete`, title: '주문 완료', orderNumber, currentUser.
+- **동작:** 로그인 필수. `query.orderNumber` 로 **본인(user_id) 주문**을 1건 조회해 `orderSummary` 를 구성합니다 — subtotal_amount, total_amount, coupon_discount, point_used, payment_method + order_items 기반 items 배열(item_id(slug 우선), item_name, price, quantity, item_brand, item_category, currency='KRW'). 조회에 실패하면 `orderSummary = null` 로 두고 그대로 렌더합니다(전자상거래 이벤트 전송용 데이터).
+- **뷰:** `user/cart_complete` — title: '주문 완료', orderNumber, orderSummary, currentUser.
 
 ---
 
-*Last Updated: 2026-02-08*
+*Last Updated: 2026-07-11*
