@@ -16,8 +16,6 @@ const SORT_ORDERS = {
     review: '(SELECT COALESCE(AVG(r.rating),0) FROM reviews r WHERE r.product_id = products.id) DESC, '
         + '(SELECT COUNT(*) FROM reviews r WHERE r.product_id = products.id) DESC, created_at DESC',
     new: 'created_at DESC',
-    // 아울렛 할인율순.
-    discount: 'discount_rate DESC, created_at DESC',
 };
 
 /** 정렬 탭(캡처 순서). value 는 SORT_ORDERS 키와 1:1. */
@@ -66,11 +64,7 @@ exports.getList = async (req, res) => {
     const sort = SORT_ORDERS[q.sort] ? q.sort : 'new';
     const distributionBadge = q.distributionBadge || '';
     const productBadge = q.badge || '';
-    // 아울렛: 할인율 하한 필터(구간 칩). 사용자가 ?minDiscount=30 으로 구간을 고른다.
-    const minDiscount = Number(q.minDiscount) > 0 ? Math.min(Number(q.minDiscount), 100) : 0;
-    // 아울렛 전용 화면 요소(최대 할인 배너 + 구간 필터)는 기능 메뉴에서만 켠다.
-    const isOutlet = !!(req.featurePreset && req.featurePreset.isOutlet);
-    // 상품그룹 소스(오늘특가 등) — 관리자가 product_group_item 으로 수동 매핑한 상품만 노출.
+    // 상품그룹 소스(오늘특가·베스트 등) — 관리자가 product_group_item 으로 수동 매핑한 상품만 노출.
     // 사용자 쿼리로는 못 바꾸게 featurePreset 에서만 읽는다.
     const groupId = Number(req.featurePreset && req.featurePreset.groupId) || 0;
 
@@ -91,7 +85,6 @@ exports.getList = async (req, res) => {
     // 메뉴별 배너 (파트2 틀) — 기능 메뉴(routes/feature.js)가 preset 으로 menuKey 를 주입한다.
     // group_key='menu:{key}' 배너를 조회해 목록 상단에 노출한다. (bannerService: is_active·기간 필터 적용)
     let menuBanner = null;
-    let maxDiscount = null; // 아울렛 최대 할인율 배너용
 
     try {
         const menuKey = q.menuKey || null;
@@ -201,29 +194,10 @@ exports.getList = async (req, res) => {
             if (pageTitle === '전체상품') pageTitle = '와이디몰특가';
         }
 
-        // 상품그룹 소스: 관리자가 수동 매핑한 상품만. (오늘특가 등 manual 그룹)
+        // 상품그룹 소스: 관리자가 수동 매핑한 상품만. (오늘특가·베스트 등 manual 그룹)
         if (groupId > 0) {
             query += " AND id IN (SELECT product_id FROM product_group_item WHERE product_group_id = ?)";
             params.push(groupId);
-        }
-
-        // 아울렛: 할인율 하한 필터. 구간 미선택(minDiscount=0)이면 할인 상품 전체(>0).
-        if (isOutlet) {
-            const floor = minDiscount > 0 ? minDiscount : 1;
-            query += " AND discount_rate >= ?";
-            params.push(floor);
-            if (pageTitle === '전체상품') pageTitle = '아울렛';
-            // 배너용 최대 할인율(구간 필터와 무관하게 전체 기준).
-            const [[mx]] = await pool.query(
-                `SELECT MAX(discount_rate) AS mx FROM products
-                  WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}
-                    AND discount_rate > 0`,
-                [mallId]
-            );
-            maxDiscount = mx && mx.mx ? mx.mx : null;
-        } else if (minDiscount > 0) {
-            query += " AND discount_rate >= ?";
-            params.push(minDiscount);
         }
 
         // 페이지네이션
@@ -313,9 +287,6 @@ exports.getList = async (req, res) => {
             menuBanner,
             categoryNav,
             sortTabs: SORT_TABS,
-            isOutlet,
-            maxDiscount,
-            currentMinDiscount: minDiscount,
             seo,
             pagination: { page, perPage, total, totalPages }
         });

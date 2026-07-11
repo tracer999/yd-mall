@@ -1,211 +1,195 @@
 # 관리자 화면 디자인 가이드 (Admin UI Design Guide)
 
-이 문서는 쇼핑몰 관리자 화면(관리자 콘솔)을 작업할 때, 사람이 직접 UI를 수정하거나 Copilot / Gemini 등의 AI 도구로 작업할 때 참고할 수 있는 **공통 레이아웃, 컴포넌트, 타이포그래피, 상호작용 패턴**을 정리한 가이드입니다.
+관리자 콘솔을 작업할 때 참고하는 **공통 레이아웃, 컴포넌트, 타이포그래피, 상호작용 패턴** 가이드입니다. 사람이 직접 수정할 때나 AI 도구로 작업할 때 모두 기준으로 삼습니다.
 
 ## 1. 기술 스택 및 구조
 
-- **템플릿 엔진**: EJS
-- **레이아웃 시스템**: `express-ejs-layouts` 를 사용하며, 관리자는 `views/layouts/admin_layout.ejs` 를 공통 레이아웃으로 사용합니다.
+- **템플릿 엔진**: EJS + `express-ejs-layouts`. 관리자 공통 레이아웃은 `views/layouts/admin_layout.ejs`
 - **스타일링**:
-  - Tailwind CSS 빌드 결과 (`public/css/style.css`)
-  - 일부 관리자 전용 커스텀 CSS (사이드바 링크, 스크롤바, fade-in 애니메이션 등)는 `admin_layout.ejs` 의 `<style>` 태그에 포함
-- **주요 관리자 뷰 위치**: `views/admin/**`
-  - 대시보드: `views/admin/dashboard.ejs`
-  - 설정: `views/admin/settings/form.ejs`
-  - 상품: `views/admin/products/*.ejs`
-  - 회원: `views/admin/users/*.ejs`
-  - 기타(쿠폰, 포인트, 배송, 방문자, 배너, 카테고리 등)는 각각의 디렉터리에 존재
+  - Tailwind CSS 4.x 빌드 결과 (`public/css/style.css`)
+  - 관리자 전용 커스텀 CSS(사이드바 링크, 키컬러 변수, 스크롤바 등)는 `admin_layout.ejs` 의 `<style>` 태그에 인라인으로 포함
+- **폰트**: **Pretendard** (CDN, `admin_layout.ejs` 에서 로드)
+- **아이콘**: Bootstrap Icons (CDN, `bi bi-*`)
+- **주요 관리자 뷰**: `views/admin/**` (대시보드 `dashboard.ejs`, 이하 기능별 디렉터리)
 
-- **라우팅**: `routes/admin.js`
-  - `/admin/login` / `/admin/logout` : 관리자 인증
-  - `/admin` : 대시보드 (요약 지표, 주문현황, 검색 통계 등)
-  - `/admin/settings` : 회사 정보, 브랜드 컬러, 시스템 설정 등
-  - `/admin/site-settings`, `/admin/sys-settings` : 세부 설정 화면
-  - `/admin/products`, `/admin/users`, `/admin/banners`, `/admin/menus` 등: 각 기능별 관리 화면
+### 1.1 라우팅
 
-## 2. 공통 레이아웃 (admin_layout.ejs)
+진입점은 `routes/admin.js` 이고, 기능별 서브라우트는 `routes/admin/*.js` 로 분리돼 있습니다.
 
-### 2.1 전체 구조
+```
+/admin/login · /admin/logout       인증 (adminAuth 미들웨어 이전)
+/admin                             대시보드
+/admin/design-guide                디자인 가이드 프리뷰 페이지
+/admin/products, /users, /orders … 각 기능별 관리 화면 (routes/admin/*.js)
+/admin/settings, /site-settings, /sys-settings   설정
+```
 
-`views/layouts/admin_layout.ejs` 는 다음과 같은 3단 구조를 가집니다.
+**접근 제어 체인** — `/admin` 마운트 시 다음 순서로 통과합니다.
 
-1. **좌측 사이드바(Aside)**
-   - 배경: `bg-sky-100` (연한 블루 톤)
-   - 상단 로고 영역
-     - `siteSettings.logo_url` 이 있는 경우, 로고 이미지를 카드 형태로 표시
-     - 없으면 `siteSettings.company_name` 또는 "Admin Pro" 텍스트 로고를 표시
-   - 네비게이션 메뉴
-     - DB 기반 `adminMenus` 배열을 순회하여 메뉴를 출력
-     - 현재 경로(`res.locals.path`) 기준으로 활성 메뉴에 `active text-white` 클래스를 적용
-   - 하단 사용자 프로필 영역
-     - 로그인한 관리자 이름, 역할(최고관리자/회원관리자/컨텐츠관리자 등)을 표시
-     - 로그아웃 버튼 제공
+1. `adminMenu` — DB 기반 사이드바 메뉴 트리(`adminMenuTree`)를 `res.locals` 에 주입
+2. `adminAuth` — 세션 체크 (`/login`, `/logout` 제외)
+3. `adminMallContext` — 편집 대상 몰(`adminMalls`, `adminMallId`) 주입
+4. 라우트별 `requireMenuAccess('/admin/xxx')` — `admin_menus.visible_roles` CSV 기반 RBAC
 
-2. **상단 고정 헤더(Header)**
-   - 높이 `h-16`, 흰 배경 + blur (`bg-white/80 backdrop-blur-md`)
-   - 좌측: 모바일 사이드바 토글 버튼 + 페이지 타이틀/서브타이틀
-   - 우측: 알림 아이콘(벨) + "사이트 바로가기" 버튼
-   - 타이틀/서브타이틀
-     - `title` 변수가 있으면 사용, 없으면 기본값 `Overview`
-     - `subtitle` 변수가 있으면 사용, 없으면 기본 문구 `관리자 패널에 오신 것을 환영합니다.`
+새 관리자 화면을 추가할 때는 **`admin_menus` 테이블에 메뉴 행이 있어야 사이드바에 노출되고 접근 권한도 부여됩니다.**
 
-3. **메인 컨텐츠 영역(Main)**
-   - 스크롤 가능한 영역: `main.flex-1.overflow-y-auto.p-4 sm:p-6 lg:p-8`
-   - 내부 컨테이너: `max-w-7xl mx-auto pb-10`
-   - 컨텐츠 카드: `admin-main-content bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 min-h-[calc(100vh-180px)]`
-   - 실제 각 페이지의 마크업은 `<%- body %>` 로 삽입됩니다.
+## 2. 공통 레이아웃 (`admin_layout.ejs`)
 
-### 2.2 사이드바 상호작용
+### 2.1 브랜드 키컬러 변수
 
-- **데스크톱에서 너비 축소/확장**
-  - `#sidebarCollapseBtn` 클릭 시, `w-56` ↔ `w-20` 클래스를 토글하여 좁은 아이콘형 사이드바로 접을 수 있습니다.
-  - 로고/텍스트/메뉴 라벨/하단 프로필 영역은 축소 시 숨기고, 확장 시 다시 표시합니다.
+사이드바 색상은 하드코딩이 아니라 `site_settings` 의 브랜드 컬러에서 파생됩니다. (사용자 화면 `main_layout.ejs` 와 동일한 기준)
 
-- **모바일에서 슬라이드 인/아웃**
-  - `#sidebarToggle` 버튼 클릭 시 좌측에서 슬라이드 인
-  - `#sidebarOverlay` 를 클릭하면 다시 슬라이드 아웃
-  - `-translate-x-full` 클래스 토글과 오버레이의 `opacity`/`hidden` 토글을 통해 애니메이션 처리
+```css
+:root {
+  --admin-key-main:        /* siteSettings.brand_main_color  */
+  --admin-key-strong:      /* siteSettings.brand_dark_color  */
+  --admin-key-soft:        /* siteSettings.brand_light_color */
+  --admin-key-soft-strong: color-mix(in srgb, var(--admin-key-main) 40%, var(--admin-key-soft) 60%);
+}
+```
 
-- **메뉴 활성화 규칙**
-  - `adminMenus` 배열의 각 `menu.path` 와 현재 `path` 를 비교해 active 상태를 계산합니다.
-  - `/admin` 는 정확히 `/admin` 인 경우만 활성, 나머지는 `path.startsWith(menu.path)` 로 하위 경로도 활성 처리
+관리자 전용 유틸리티 클래스:
+
+| 클래스 | 용도 |
+|--------|------|
+| `.admin-sidebar-bg` | 사이드바 배경 (`--admin-key-soft`) |
+| `.admin-sidebar-border` | 로고 영역 경계선 톤 |
+| `.admin-sidebar-bottom` | 하단 프로필 바 (`--admin-key-soft-strong`) |
+| `.admin-key-btn` | 키컬러 버튼 (사이드바 접기 버튼 등) |
+| `.sidebar-link` / `.sidebar-link.active` | 메뉴 링크. active 는 main→strong 그라데이션 + 그림자 |
+
+> 관리자 화면의 **강조색은 키컬러**, 그 외 액션 버튼/뱃지는 Tailwind 의 Blue/Green/Red/Amber 팔레트를 그대로 씁니다.
+
+### 2.2 전체 구조 (3단)
+
+**1) 좌측 사이드바 (`<aside id="sidebarMenu">`, `w-56`)**
+
+- 배경 `.admin-sidebar-bg` (브랜드 연한색)
+- 상단 로고 영역(높이 64px): `siteSettings.logo_url` 이 있으면 흰 카드 안에 이미지, 없으면 `company_name` 또는 `Admin Pro` 텍스트
+- 네비게이션: **`adminMenuTree` 기반 2뎁스 트리**
+  - `isGroup: true` 행은 링크가 아닌 **그룹 헤더**(`path` 가 null)
+  - 잎(leaf) 메뉴만 `<a>` 링크
+  - `adminMenuTree` 가 없으면 평면 `adminMenus` 로 폴백
+- 하단 프로필 바 `.admin-sidebar-bottom`: 관리자 이름·역할 + 로그아웃
+
+**2) 상단 헤더 (`<header>`, `h-16`)**
+
+- `bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0`
+- 좌측: 모바일 사이드바 토글 + 페이지 타이틀(`title`, 기본 `Overview`) / 서브타이틀(`subtitle`)
+- 우측: **몰 선택기**(`adminMalls.length > 1` 일 때만 노출, amber 톤 select) → 알림 벨 → "사이트 바로가기"
+
+**3) 메인 컨텐츠 (`<main>`)**
+
+```
+main.flex-1.overflow-y-auto.p-4 sm:p-6 lg:p-8
+  └ div.max-w-7xl.mx-auto.pb-10
+      └ div.admin-main-content.bg-white.rounded-2xl.shadow-sm.border.border-gray-100.p-6 sm:p-8
+          └ <%- body %>
+```
+
+각 페이지 마크업은 **이미 흰색 카드 안에** 들어갑니다. 페이지 최상단에 또 흰 카드를 겹치지 마세요.
+
+### 2.3 사이드바 상호작용
+
+- **데스크톱 접기**: `#sidebarCollapseBtn` 클릭 → `w-56` ↔ `w-20` 토글. 로고/메뉴 라벨/하단 프로필은 축소 시 숨김
+- **모바일 슬라이드**: `#sidebarToggle` 로 열고 `#sidebarOverlay` 클릭으로 닫음 (`-translate-x-full` 토글)
+- **활성 규칙**: `/admin` 은 정확히 일치할 때만, 나머지는 `path.startsWith(menu.path)` → `active text-white` 클래스 부여
 
 ## 3. 공통 컴포넌트 및 패턴
 
-### 3.1 상단 헤더 영역
-
-- 페이지별 컨트롤러에서 `res.render` 호출 시 다음 패턴을 권장합니다.
+### 3.1 렌더 호출 패턴
 
 ```js
 res.render('admin/some_view', {
   layout: 'layouts/admin_layout',
   title: '페이지 타이틀',
-  subtitle: '이 페이지에서 사용하는 기능에 대한 짧은 설명',
-  // ...기타 데이터
+  subtitle: '이 화면에서 하는 일에 대한 짧은 설명',
+  // ...데이터
 });
 ```
 
-- `subtitle` 를 채워두면, 관리자들이 각 화면의 역할을 빠르게 이해할 수 있습니다.
+`subtitle` 을 채워두면 관리자가 화면의 역할을 빠르게 파악할 수 있습니다.
 
-### 3.2 목록/테이블 화면 공통 구조
+### 3.2 목록/테이블 화면
 
 대표 예: `views/admin/products/list.ejs`, `views/admin/users/list.ejs`
 
-- 상단 컨트롤 바
-  - 좌측: 해당 화면 설명 텍스트 (`text-sm text-gray-500`)
-  - 우측: 검색 폼/등록 버튼 등 액션
-- 본문 카드
-  - `div.bg-white.overflow-hidden.shadow-sm.rounded-lg` 안에 `<table>` 을 배치
-  - `<thead>`: `bg-gray-50`, 컬럼 헤더는 `text-xs font-medium text-gray-500 uppercase tracking-wider`
-  - `<tbody>`: `divide-y divide-gray-200`, 행 hover 시 `hover:bg-gray-50`
-- 버튼 스타일 예시
-  - 기본 액션 버튼: `h-[38px] px-4 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500`
-  - 보조 버튼(상태 변경 등): 색상만 green/yellow/red/amber 등으로 변경
+- 상단 컨트롤 바: 좌측 설명(`text-sm text-gray-500`) + 우측 검색 폼/등록 버튼
+- 테이블: `<thead>` 는 `bg-gray-50`, 헤더 셀은 `text-xs font-medium text-gray-500 uppercase tracking-wider`. `<tbody>` 는 `divide-y divide-gray-200 hover:bg-gray-50`
+- 상태 뱃지: `bg-green-100 text-green-800` 류의 소프트 톤
+- 기본 액션 버튼: `h-[38px] px-4 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500`
 
-### 3.3 폼/설정 화면 공통 구조
+### 3.3 폼/설정 화면
 
 대표 예: `views/admin/settings/form.ejs`
 
-- 페이지 상단에는 현재 탭 설명 텍스트 (회사 정보 vs 시스템 설정)를 표시
-- 탭 내 섹션들은 `bg-white overflow-hidden shadow-sm rounded-lg` 블록으로 나누어 구성합니다.
-- **입력 필드 공통 클래스** (이미 적용됨)
-  - 대부분의 `<input>`, `<textarea>` 는 다음 클래스를 사용합니다.
+- 섹션 블록: `bg-white overflow-hidden shadow-sm rounded-lg` (또는 `border border-gray-100 rounded-xl`)
+- 입력 필드 공통 클래스:
 
 ```html
 class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
 ```
 
-- 라벨/보조 설명 텍스트
-  - 라벨: `block text-sm font-medium text-gray-700 mb-1`
-  - 설명: `text-xs text-gray-500 mb-2`
+- 라벨: `block text-sm font-medium text-gray-700 mb-1`
+- 보조 설명: `text-xs text-gray-500 mb-2`
 
-이 규칙을 지키면, 관리자 전체 폼 UI 가 일관된 느낌을 유지합니다.
-
-## 4. 주요 화면별 디자인 요약
+## 4. 주요 화면별 요약
 
 ### 4.1 대시보드 (`/admin` → `views/admin/dashboard.ejs`)
 
-- 상단 요약 카드 4개
-  - 각 카드: `bg-색상 text-white rounded-lg shadow-sm p-6`
-  - 색상 예시: Blue(회원 수), Green(총 상품), Yellow(새 문의), Cyan(오늘 방문)
-- 주문 현황
-  - 그리드 형태의 상태 카드 (`bg-white border rounded-lg p-4`)
-  - 상태별 건수를 크게 표시하는 텍스트
-- 최근 가입 회원 / 검색 통계
-  - 2열 카드 레이아웃 (`grid grid-cols-1 lg:grid-cols-2 gap-6`)
-  - 내부는 리스트/태그/버튼 등을 이용한 정보 카드 패턴
+- 상단 요약 카드(회원/상품/문의/방문 등): `bg-색상 text-white rounded-lg shadow-sm p-6`
+- 주문 현황: 상태별 건수 카드 그리드 (`bg-white border rounded-lg p-4`)
+- 최근 가입 회원 / 검색 통계 / 유입 경로: `grid grid-cols-1 lg:grid-cols-2 gap-6` 카드 레이아웃
+- 드릴다운 화면(`search_logs.ejs`, `traffic_sources_detail.ejs`, `popular_products_detail.ejs`)이 별도로 있습니다.
 
 ### 4.2 설정 (`/admin/settings` → `views/admin/settings/form.ejs`)
 
-- 탭 구조 (기본 정보관리 / 시스템 설정)
-  - 상단 탭 네비게이션: `border-b` + 탭 링크 2개
-  - 활성 탭은 `border-blue-500 text-blue-600`, 비활성 탭은 그레이 톤
-- 회사 정보 탭
-  - 회사 기본 정보 섹션 (회사명, 사업자 번호, 주소, 연락처)
-  - 헤더/푸터 슬로건, 회사 소개, SNS 링크 섹션
-  - 브랜드 키 컬러 섹션 (기본/진한/연한색 + 팔레트 프리셋 + 자동 생성 버튼)
-  - 로고 설정 섹션 (현재 로고 프리뷰 + 파일 업로드)
-- 시스템 탭
-  - 에디터/AI 설정, 소셜 로그인, 포인트, 결제, SMTP 설정 등의 섹션
-  - 각 섹션은 같은 카드 패턴(`bg-white rounded-lg shadow-sm border`)을 그대로 사용
+- 탭 구조(기본 정보관리 / 시스템 설정). 활성 탭 `border-blue-500 text-blue-600`
+- 회사 정보 탭: 회사 기본정보 · 슬로건/소개/SNS · **브랜드 키컬러**(기본/진한/연한 + 팔레트 프리셋 + 자동 생성) · 로고 업로드
+- 시스템 탭: 에디터/AI, 소셜 로그인, 포인트, 결제, SMTP 등
+- 여기서 저장한 값은 DB `system_settings` 에 들어가 **`.env` 값을 덮어씁니다.**
 
-### 4.3 리스트 화면 (상품, 회원 등)
+### 4.3 SDUI 계열 화면 (페이지 빌더 · 섹션 · 테마)
 
-- `views/admin/products/list.ejs`, `views/admin/users/list.ejs` 등에서 공통 패턴을 사용합니다.
-- AI/개발자가 새로운 리스트 화면을 만들 때는 위 파일들에서 다음 요소를 복사해 사용하는 것을 권장:
-  - 상단 설명/검색/등록 버튼 블록
-  - 표 헤더 스타일
-  - 행 hover, 상태 뱃지 스타일 (`bg-green-100 text-green-800` 등)
+- `/admin/page-builder` — `page` / `page_section` 을 편집. 섹션 타입별 설정 폼 스키마는 `services/display/sectionRegistry.js` 가 관장
+- `/admin/theme-settings` — 테마 토큰(`--yd-*`: 폰트, radius, 섹션 간격, 컨테이너 폭, 카드 스타일)을 편집
+- `/admin/header-settings`, `/admin/feature-menus`, `/admin/system-menus`, `/admin/menu-preview` — 스토어프론트 내비게이션 구성
 
-## 5. AI / 개발자를 위한 작업 가이드
+이 화면들은 **사용자 화면의 렌더 결과를 바꾸는 설정 UI** 입니다. 새 섹션 타입을 추가할 때는 리졸버(`services/display/resolvers/`) · 뷰 · 설정 폼 스키마를 함께 등록해야 합니다.
 
-### 5.1 새로운 관리자 페이지를 만들 때
+## 5. 새 관리자 페이지를 만들 때
 
-1. **레이아웃 지정**
-   - 관리자 뷰는 반드시 `layout: 'layouts/admin_layout'` 를 사용합니다.
-
-2. **타이틀/서브타이틀 설정**
-
-```js
-res.render('admin/xxx', {
-  layout: 'layouts/admin_layout',
-  title: 'XXX 관리',
-  subtitle: 'XXX 데이터를 조회/수정하는 화면입니다.',
-  // ...
-});
-```
-
-3. **페이지 레이아웃 기본 골격**
+1. **레이아웃**: 반드시 `layout: 'layouts/admin_layout'`
+2. **타이틀/서브타이틀** 지정 (§3.1)
+3. **메뉴 등록**: `admin_menus` 테이블에 행을 추가하고 `visible_roles` 를 설정해야 사이드바 노출 + `requireMenuAccess` 통과
+4. **라우트**: `routes/admin/xxx.js` 로 분리하고 `routes/admin.js` 에서 `requireMenuAccess` 와 함께 마운트
+5. **기본 골격**
 
 ```html
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
   <p class="text-sm text-gray-500">이 화면의 간단 설명</p>
-  <!-- 검색 폼 / 액션 버튼 등 -->
+  <!-- 검색 폼 / 액션 버튼 -->
 </div>
 
-<div class="bg-white overflow-hidden shadow-sm rounded-lg">
+<!-- admin-main-content 가 이미 흰 카드이므로, 내부는 섹션 단위로 나눈다 -->
+<div class="overflow-hidden rounded-lg border border-gray-100">
   <!-- 테이블 / 폼 / 카드 컨텐츠 -->
 </div>
 ```
 
-4. **색상/컴포넌트 일관성 유지**
-   - 버튼: 기존 화면에서 사용하는 Blue/Green/Red/Amber 톤을 재사용
-   - 배경: 메인 영역은 `bg-gray-50/50`, 카드 내부는 흰색 배경 + 옅은 그림자
+6. **색상 일관성**: 키컬러는 사이드바/강조에, 액션 버튼은 기존 Blue/Green/Red/Amber 톤 재사용
 
-### 5.2 AI 프롬프트 팁 (Copilot/Gemini 등)
+### 5.1 AI 도구 프롬프트 팁
 
-- 다음과 같은 정보를 함께 제공하면 AI 가 관리자 UI 를 일관되게 생성하는 데 도움이 됩니다.
-  - "Tailwind 기반 관리자 레이아웃 (admin_layout.ejs) 사용"
-  - "상단 타이틀/서브타이틀과 중앙 흰색 카드(admin-main-content)가 기본 구조"
-  - "기존 products/users 리스트 화면과 스타일을 맞춰 달라"
-  - "인풋은 관리자 공통 인풋 클래스(w-full rounded-md border-gray-200 px-3 py-2 text-sm ...) 를 사용"
+- "Tailwind 기반 관리자 레이아웃(`admin_layout.ejs`) 사용, 폰트는 Pretendard"
+- "본문은 이미 `admin-main-content` 흰 카드 안이므로 카드를 중첩하지 말 것"
+- "기존 `views/admin/products/list.ejs` 와 테이블·버튼 스타일을 맞출 것"
+- "인풋은 관리자 공통 클래스(`w-full rounded-md border border-gray-200 px-3 py-2 text-sm ...`) 사용"
+- "브랜드 키컬러는 `--admin-key-main/-strong/-soft` CSS 변수로 이미 정의돼 있음"
 
-## 6. 관리자 디자인 예시 페이지
+## 6. 디자인 프리뷰 페이지
 
-- 예시 페이지 EJS: `views/admin/design_guide.ejs`
-- URL(예시 제안): `/admin/design-guide`
-- 목적
-  - 관리자 레이아웃 안에서 공통 레이아웃/컴포넌트가 실제로 어떻게 보이는지 한눈에 확인
-  - 새로운 관리자 페이지를 만들 때 복사해 쓸 수 있는 샘플 구조 제공
+- URL: **`/admin/design-guide`** (실제 동작하는 라우트, `routes/admin.js`)
+- 템플릿: `views/admin/design_guide.ejs`
 
-> 실제 예시 UI 구현은 `views/admin/design_guide.ejs` 를 참고하세요.
+관리자 레이아웃 안에서 공통 컴포넌트가 실제로 어떻게 보이는지 확인하고, 새 화면을 만들 때 복사해 쓸 샘플 구조를 제공합니다.

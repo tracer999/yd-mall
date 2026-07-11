@@ -22,10 +22,35 @@ function preset(featurePreset) {
     };
 }
 
-// 베스트 — 조회수 기준 인기 상품
-// menuKey: 메뉴별 배너(group_key='menu:{key}') 매칭용. 관리자 bannerController.MENU_BANNER_TARGETS 와 1:1.
-// 상위 100 으로 캡한다(capLimit). 순위 번호는 붙이지 않는다(그건 랭킹의 몫).
-router.get('/best', preset({ sort: 'best', capLimit: 100, menuKey: 'BEST' }), productController.getList);
+/*
+ * 베스트 — 관리자가 상품그룹(manual)에서 직접 고른 상품이 우선이다.
+ *   - 소스 그룹: 몰별 '베스트' 상품그룹. 홈의 베스트 그리드와 같은 그룹을 공유한다
+ *     → 관리자가 한 곳만 관리하면 홈·GNB 가 함께 바뀐다.
+ *   - 수동 지정이 0건인 몰만 조회수 상위 100 으로 자동 폴백한다(빈 화면 방지).
+ *     관리자가 상품을 담는 순간 자동으로 수동 모드로 전환된다.
+ *   - 순위 번호는 붙이지 않는다(그건 랭킹의 몫).
+ * menuKey: 메뉴별 배너(group_key='menu:{key}') 매칭용. 관리자 bannerController.MENU_BANNER_TARGETS 와 1:1.
+ */
+router.get('/best', async (req, res, next) => {
+    try {
+        const mallId = req.mallId || 1;
+        const [[grp]] = await pool.query(
+            `SELECT g.id,
+                    (SELECT COUNT(*) FROM product_group_item i WHERE i.product_group_id = g.id) AS items
+               FROM product_group g
+              WHERE g.mall_id = ? AND g.is_active = 1 AND g.group_type = 'manual'
+                AND g.name LIKE '%베스트%'
+              ORDER BY g.id LIMIT 1`,
+            [mallId]
+        );
+        req.featurePreset = (grp && grp.items > 0)
+            ? { groupId: grp.id, menuKey: 'BEST' }
+            : { sort: 'best', capLimit: 100, menuKey: 'BEST' };
+        return productController.getList(req, res);
+    } catch (e) {
+        return next(e);
+    }
+});
 
 // 신상품 — NEW 뱃지 상품만(최신순). 전체 카탈로그를 최신순 정렬하면 "신상품 = 전체"가 되므로
 // 뱃지로 자른다. productController 에 badge==='NEW' 분기(FIND_IN_SET)가 이미 있다.
@@ -191,27 +216,14 @@ router.get('/live', comingSoon('live'));
 router.get('/ranking', comingSoon('ranking'));
 
 /*
- * 아울렛 — 할인 상품(discount_rate>0)을 할인율순으로. 몰에 할인 상품이 0건이면
- * 빈 그리드 대신 준비중 랜딩으로 폴백한다(mall=1 은 항상 0건 — gnb §2-2).
- * 목록/필터는 productController.getList 를 재사용하고, isOutlet 프리셋으로 전용 슬롯만 켠다.
+ * 아울렛 — 준비중 랜딩 유지.
+ *
+ * 아울렛은 '할인율 필터 목록'이 아니라 **몰 안의 몰(shop-in-shop)** 이다.
+ * 아울렛 전용 상품 + 자체 카테고리 + 전용 관리자 메뉴가 필요한 신규 모듈이라
+ * 상품그룹이나 discount_rate 필터로는 표현할 수 없다.
+ * → 설계·결정사항: docs/사이트개선/outlet_design_and_development.md
  */
-router.get('/outlet', async (req, res, next) => {
-    try {
-        const mallId = req.mallId || 1;
-        const visFilter = req.user ? "visibility IN ('PUBLIC','MEMBER_ONLY')" : "visibility = 'PUBLIC'";
-        const [[{ c }]] = await pool.query(
-            `SELECT COUNT(*) c FROM products
-              WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${visFilter}
-                AND discount_rate > 0`,
-            [mallId]
-        );
-        if (!c) return comingSoon('outlet')(req, res);
-        req.featurePreset = { isOutlet: true, sort: 'discount' };
-        return productController.getList(req, res);
-    } catch (e) {
-        return next(e);
-    }
-});
+router.get('/outlet', comingSoon('outlet'));
 
 /*
  * 멤버십 — 정적 제도 소개(안 A). 등급 산정을 하지 않는다(데이터 부족, gnb §2-9).

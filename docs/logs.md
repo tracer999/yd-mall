@@ -1,74 +1,66 @@
 # 로그 및 로테이션
 
+운영 서버 프로젝트 경로는 **`/data/yd-mall`** 입니다. 로그는 모두 그 아래 `logs/` 에 쌓입니다.
+
 ## 로그 파일 구성
 
 | 파일 | 생성 주체 | 내용 |
 |------|-----------|------|
-| `logs/pm2-out.log` | PM2 | stdout (console.log 등) |
-| `logs/pm2-error.log` | PM2 | stderr (console.error 등) |
-| `logs/access.log` | 앱 | HTTP 접속 로그 |
+| `logs/pm2-out.log` | PM2 (`ecosystem.config.cjs`) | stdout (console.log 등) |
+| `logs/pm2-error.log` | PM2 (`ecosystem.config.cjs`) | stderr (console.error 등) |
+| `logs/access.log` | 앱 (`app.js`) | HTTP 접속 로그 (IP, 로그인 상태, 응답시간 등) |
+
+- PM2 로그 경로·포맷은 `ecosystem.config.cjs` 의 `out_file` / `error_file` / `log_date_format` 에 정의돼 있습니다.
+- `access.log` 는 `app.js` 가 `fs.createWriteStream(..., { flags: 'a' })` 로 **파일 디스크립터를 열어둔 채** 직접 씁니다. 이 때문에 로테이션 방식이 중요합니다(아래 `copytruncate` 참고).
+- 프록시 뒤에 있으므로 클라이언트 IP 는 `X-Forwarded-For` 첫 항목을 사용합니다(`app.set('trust proxy', 1)`).
 
 ---
 
-## 날짜별 로테이션 설정
+## 1. pm2-out.log, pm2-error.log — pm2-logrotate
 
-### 1. pm2-out.log, pm2-error.log (PM2 로그)
-
-PM2 전용 모듈 **pm2-logrotate**를 사용합니다.
+PM2 전용 모듈 **pm2-logrotate** 를 사용합니다.
 
 ```bash
-# pm2-logrotate 설치
+# 설치
 pm2 install pm2-logrotate
 
 # 설정 확인
 pm2 conf pm2-logrotate
 ```
 
-**기본 설정 예시** (로그 30일 보관):
+**설정 예시** (30일 보관):
 
 ```bash
-# 로테이션 주기 (cron 형식): 매일 0시
-pm2 set pm2-logrotate:rotateInterval '0 0 * * *'
-
-# 보관 일수
-pm2 set pm2-logrotate:retain 30
-
-# 압축 저장
-pm2 set pm2-logrotate:compress true
-
-# 최대 파일 크기 (예: 10M 초과 시 로테이션)
-pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:rotateInterval '0 0 * * *'   # 매일 0시
+pm2 set pm2-logrotate:retain 30                    # 30일 보관
+pm2 set pm2-logrotate:compress true                # gzip 압축
+pm2 set pm2-logrotate:max_size 10M                 # 10M 초과 시 즉시 로테이션
 ```
 
 로테이션된 파일은 `logs/pm2-out.log.YYYY-MM-DD` 형식으로 생성됩니다.
 
 ---
 
-### 2. access.log (앱 접속 로그)
+## 2. access.log — OS logrotate
 
-PM2가 관리하지 않으므로 **logrotate**(Ubuntu 기본 포함)를 사용합니다.
+PM2 가 관리하지 않으므로 **logrotate**(Ubuntu 기본 포함)를 사용합니다.
 
-#### (1) logrotate 설치 확인
+### (1) 설치 확인
 
 ```bash
-# Ubuntu: 대부분 기본 설치됨
 which logrotate
-# 없으면 설치
+# 없으면
 sudo apt update && sudo apt install logrotate
 ```
 
-#### (2) 설정 파일 생성
-
-프로젝트 경로를 실제 배포 경로로 바꿉니다 (예: `/home/ubuntu/dev-mall`).
+### (2) 설정 파일 생성
 
 ```bash
 sudo nano /etc/logrotate.d/dev-mall
 ```
 
-다음 내용 입력 (`/home/ubuntu/dev-mall`을 실제 경로로 변경):
-
 ```
-/home/ubuntu/dev-mall/logs/access.log {
+/data/yd-mall/logs/access.log {
     daily
     rotate 30
     compress
@@ -78,6 +70,7 @@ sudo nano /etc/logrotate.d/dev-mall
     copytruncate
     dateext
     dateformat -%Y-%m-%d
+    su root root
 }
 ```
 
@@ -89,53 +82,57 @@ sudo nano /etc/logrotate.d/dev-mall
 | `delaycompress` | 가장 최근 1개는 압축하지 않음 |
 | `missingok` | 파일 없어도 에러 없이 넘어감 |
 | `notifempty` | 빈 파일은 로테이션하지 않음 |
-| `copytruncate` | 파일 복사 후 원본 비움 (앱 재시작 불필요) |
+| **`copytruncate`** | **필수.** 앱이 파일 디스크립터를 열어둔 채 append 하므로, 파일을 rename 하면 앱은 계속 옛 inode 에 쓴다. 복사 후 원본을 비우는 방식이라야 앱 재시작 없이 로테이션된다. |
 | `dateext` | 날짜를 파일명에 포함 |
-| `dateformat -%Y-%m-%d` | `access.log-2026-02-07` 형식 |
+| `dateformat -%Y-%m-%d` | `access.log-2026-07-11` 형식 |
+| `su root root` | 로그 디렉터리 소유자가 root 가 아닐 때 권한 경고 방지 (필요 시 실제 소유자로 변경) |
 
-#### (3) 설정 검증
+### (3) 검증
 
 ```bash
-# 문법 검사 및 시뮬레이션 (실제 로테이션 안 함)
+# 문법 검사 + 시뮬레이션 (실제 로테이션 안 함)
 sudo logrotate -d /etc/logrotate.d/dev-mall
 ```
 
-#### (4) 수동 실행 (테스트)
+### (4) 수동 실행 (테스트)
 
 ```bash
-# 강제 로테이션 실행 (테스트용)
 sudo logrotate -f /etc/logrotate.d/dev-mall
-
-# 결과 확인: access.log-YYYY-MM-DD 또는 access.log.1 등 생성됨
-ls -la /home/ubuntu/dev-mall/logs/
+ls -la /data/yd-mall/logs/
 ```
 
-#### (5) 자동 실행 (cron)
+### (5) 자동 실행
 
-Ubuntu는 `/etc/cron.daily/logrotate`로 **매일 자동 실행**됩니다. 별도 cron 등록은 필요 없습니다.
+Ubuntu 는 `/etc/cron.daily/logrotate` (또는 systemd `logrotate.timer`)로 **매일 자동 실행**됩니다. 별도 cron 등록은 필요 없습니다.
 
 ```bash
-# cron.daily 실행 여부 확인 (보통 매일 06:25)
 ls -la /etc/cron.daily/logrotate
-cat /etc/cron.daily/logrotate
+systemctl status logrotate.timer   # systemd 기반인 경우
 ```
 
-특정 시간(예: 0시)에 실행하려면 `/etc/cron.d/`에 직접 등록:
-
-```bash
-sudo nano /etc/cron.d/dev-mall-logrotate
-```
+특정 시각(예: 0시)에 돌리고 싶다면 `/etc/cron.d/` 에 직접 등록합니다.
 
 ```
-# 매일 0시에 access.log 로테이션
+# /etc/cron.d/dev-mall-logrotate
 0 0 * * * root /usr/sbin/logrotate /etc/logrotate.d/dev-mall
 ```
 
 ---
 
-### 요약
+## 3. 로그 보기
+
+```bash
+cd /data/yd-mall
+./dev-mall.sh logs                  # pm2 logs dev-mall --lines 50
+pm2 logs dev-mall --err             # 에러만
+tail -f logs/access.log             # 접속 로그 실시간
+```
+
+---
+
+## 요약
 
 | 로그 | 로테이션 도구 | 비고 |
 |------|---------------|------|
-| pm2-out.log, pm2-error.log | pm2-logrotate | `pm2 install pm2-logrotate` |
-| access.log | logrotate | OS 표준, `/etc/logrotate.d/` 에 설정 |
+| `pm2-out.log`, `pm2-error.log` | pm2-logrotate | `pm2 install pm2-logrotate` |
+| `access.log` | OS logrotate | `/etc/logrotate.d/dev-mall`, **`copytruncate` 필수** |
