@@ -20,6 +20,7 @@ router.get('/', c.getList);
 router.post('/', c.postCreate);
 
 router.post('/config', c.postConfig);
+router.post('/schedule', c.postSchedule);
 router.post('/calculate', c.postCalculate);
 
 router.get('/:id', requireNumericId('id'), c.getDetail);

@@ -43,6 +43,13 @@ async function getList(req, res, next) {
         const config = await bestRankingService.getScoreConfig(mallId);
         const runs = await bestRankingService.getLastRuns(mallId);
 
+        // 집계 스케줄 — 서버 crontab 은 5분마다 best_ranking_cron.sh 를 부를 뿐이고,
+        // 무엇을 언제 돌릴지는 이 표가 정한다. 주기를 바꾸러 서버에 들어갈 필요가 없다.
+        const [schedules] = await pool.query(
+            `SELECT period, enabled, interval_minutes FROM best_ranking_schedule
+              ORDER BY FIELD(period, 'REALTIME','DAILY','WEEKLY','MONTHLY')`
+        );
+
         // 탭 추가 폼의 선택지. 이미 그룹이 있는 카테고리·브랜드는 제외한다(중복 탭 방지).
         const [categories] = await pool.query(
             `SELECT c.id, c.name, c.depth
@@ -66,6 +73,7 @@ async function getList(req, res, next) {
             groups,
             config,
             runs,
+            schedules,
             categories,
             brands,
             periods: bestRankingService.PERIODS,
@@ -164,6 +172,47 @@ async function postConfig(req, res, next) {
         );
 
         res.redirect('/admin/best-groups?success=' + encodeURIComponent('가중치를 저장했습니다. 집계를 다시 실행해야 순위에 반영됩니다.'));
+    } catch (e) {
+        next(e);
+    }
+}
+
+/**
+ * POST /admin/best-groups/schedule — 집계 스케줄 저장
+ *
+ * 서버 crontab 은 건드리지 않는다. 5분마다 도는 best_ranking_cron.sh 가 이 표를 읽어
+ * "주기가 된 기간"만 실행한다(--scheduled). 크론 라인은 한 줄이고 영원히 안 바뀐다.
+ *
+ * ⚠️ 스케줄은 **몰 공통**이다(best_ranking_schedule 에 mall_id 가 없다).
+ *    배치가 전 몰을 함께 돌기 때문이다. 몰별로 주기를 다르게 하려면 컬럼을 추가해야 한다.
+ */
+async function postSchedule(req, res, next) {
+    try {
+        const periods = bestRankingService.PERIOD_KEYS;
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            for (const p of periods) {
+                const enabled = req.body[`enabled_${p}`] ? 1 : 0;
+                // 5분 미만은 무의미하다 — 크론이 5분마다 깨어난다. 1일 상한.
+                const mins = Math.min(Math.max(Number(req.body[`interval_${p}`]) || 60, 5), 1440);
+                await conn.query(
+                    `INSERT INTO best_ranking_schedule (period, enabled, interval_minutes)
+                     VALUES (?, ?, ?)
+                     ON DUPLICATE KEY UPDATE enabled = VALUES(enabled),
+                                             interval_minutes = VALUES(interval_minutes)`,
+                    [p, enabled, mins]
+                );
+            }
+            await conn.commit();
+        } catch (e) {
+            await conn.rollback();
+            throw e;
+        } finally {
+            conn.release();
+        }
+
+        res.redirect('/admin/best-groups?success=' + encodeURIComponent('집계 스케줄을 저장했습니다.'));
     } catch (e) {
         next(e);
     }
@@ -341,6 +390,7 @@ module.exports = {
     postUpdate,
     postDelete,
     postConfig,
+    postSchedule,
     postCalculate,
     getDetail,
     getProductSearch,
