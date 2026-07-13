@@ -463,7 +463,8 @@
              * 여기서 body 위에 얹는다(기존 화면을 대체하지 않고 덧붙인다).
              */
         %>
-        <% if (typeof menuShowcase !== 'undefined' && menuShowcase) { %>
+        <%# menuShowcase 는 배열이다(배너 → 상품 순). 빈 배열은 truthy 라 length 로 판별한다. %>
+        <% if (typeof menuShowcase !== 'undefined' && Array.isArray(menuShowcase) && menuShowcase.length) { %>
             <%- include('../partials/storefront/menu_showcase') %>
         <% } %>
         <%- body %>

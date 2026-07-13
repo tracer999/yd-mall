@@ -165,7 +165,7 @@ exports.getHomePreview = async (req, res) => {
             });
         } catch (e) {
             console.error('[preview] menuShowcase:', e.message);
-            res.locals.menuShowcase = null;
+            res.locals.menuShowcase = [];
         }
 
         // 미리보기는 **항상 라이브 page_section(작업본)** 을 본다. 발행 스냅샷이 아니다.

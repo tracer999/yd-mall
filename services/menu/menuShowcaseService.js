@@ -3,24 +3,26 @@ const productGroupService = require('../display/productGroupService');
 const bannerService = require('../display/bannerService');
 
 /*
- * 메뉴 쇼케이스 — 각 GNB 메뉴 페이지 **상단에 얹는** 캐러셀 1개.
+ * 메뉴 쇼케이스 — 각 GNB 메뉴 페이지 **상단에 얹는** 캐러셀.
  *
- * 두 가지 종류가 있고, 어느 쪽인지는 데이터가 정한다.
- *   1) 상품형 — product_group.menu_code = '{feature_code}' 인 그룹이 있으면 그 그룹의 상품.
+ * 한 메뉴에 최대 두 개가 순서대로 쌓인다. 둘 다 선택 사항이고, 있는 것만 렌더한다.
+ *   1) 배너형 — banners.group_key = 'menu:{feature_code}' 이미지 배너. **위**에 온다.
+ *   2) 상품형 — product_group.menu_code = '{feature_code}' 인 그룹의 상품. 배너 **아래**.
  *      (쇼핑특가='추천 특가', 베스트='추천 베스트', 신상품='주목할 신상품')
- *   2) 배너형 — 위 그룹이 없으면 banners.group_key = 'menu:{feature_code}' 이미지 배너.
- *      (이벤트·기획전·브랜드·전문관·아울렛·쿠폰·멤버십·공동구매·쇼핑라이브)
+ *
+ * 예전에는 상품형이 있으면 배너를 조회조차 하지 않았다(early return). 그래서 베스트·신상품·
+ * 쇼핑특가에는 배너를 등록해도 노출될 곳이 없었고, 관리자 화면에서 그 메뉴를 아예 숨겨야 했다.
+ * 이제 둘은 공존한다 — 배너는 어느 메뉴에나 걸 수 있다.
  *
  * ⚠️ 페이지를 '교체'하지 않는다. SDUI page(slug) 경로로 붙이면 컨트롤러가 그리던
  *    본문(상품 목록 등)이 통째로 사라진다. 그래서 미들웨어가 res.locals 에 실어
  *    main_layout 이 <%- body %> **위에** 렌더한다 — 기존 화면은 그대로 두고 덧붙이는 방식.
  */
 
-/** 배너 노출이 불가능하거나 의미 없는 메뉴 — 쇼케이스 대상에서 제외한다. */
+/** 노출될 페이지 자체가 없는 메뉴 — 쇼케이스 대상에서 제외한다. */
 const EXCLUDED = new Set([
     'CATEGORY',   // 드롭다운(고정), 자체 페이지 없음
     'RANKING',    // /ranking → /best 로 301. 자체 페이지가 없어 노출될 곳이 없다.
-    'RECOMMEND',  // 개발 전 — 탭만 구성
 ]);
 
 /** 상품형 메뉴의 상품 풀. 관리자 상품 피커가 이 풀로만 후보를 좁힌다. */
@@ -112,40 +114,47 @@ async function getProductGroupForMenu(mallId, menuCode) {
 }
 
 /**
- * 경로에 해당하는 쇼케이스를 조립한다. 없으면 null (→ 아무것도 렌더하지 않음).
+ * 경로에 해당하는 쇼케이스들을 렌더 순서대로 조립한다.
+ * 배열 순서가 곧 화면 순서다 — 배너가 먼저, 상품 캐러셀이 뒤.
  *
  * @param {string} reqPath
  * @param {{ mallId?: number, hasUser?: boolean }} opts
- * @returns {Promise<{kind:'product'|'banner', menuCode:string, title:string, items:Array, perView:number}|null>}
+ * @returns {Promise<Array<{kind:'product'|'banner', menuCode:string, title:string, items:Array, perView:number}>>}
  */
 async function getForPath(reqPath, { mallId = 1, hasUser = false } = {}) {
     const menuCode = await resolveMenuCode(reqPath);
-    if (!menuCode) return null;
+    if (!menuCode) return [];
 
-    // 1) 상품형 — 메뉴에 걸린 상품그룹이 있으면 그것이 우선한다.
+    const showcases = [];
+
+    // 1) 배너형 — group_key='menu:{feature_code}'
+    const banners = await bannerService.getByGroup(`menu:${menuCode}`, { limit: 12 });
+    if (banners.length > 0) {
+        showcases.push({
+            kind: 'banner',
+            menuCode,
+            title: '',
+            items: banners,
+            perView: 2,
+        });
+    }
+
+    // 2) 상품형 — 메뉴에 걸린 상품그룹
     const group = await getProductGroupForMenu(mallId, menuCode);
     if (group) {
         const items = await productGroupService.resolve(group, { hasUser, limit: 12 });
-        if (items.length === 0) return null;
-        return {
-            kind: 'product',
-            menuCode,
-            title: group.showcase_title || group.name,
-            items,
-            perView: 3,
-        };
+        if (items.length > 0) {
+            showcases.push({
+                kind: 'product',
+                menuCode,
+                title: group.showcase_title || group.name,
+                items,
+                perView: 3,
+            });
+        }
     }
 
-    // 2) 배너형 — group_key='menu:{feature_code}'
-    const banners = await bannerService.getByGroup(`menu:${menuCode}`, { limit: 12 });
-    if (banners.length === 0) return null;
-    return {
-        kind: 'banner',
-        menuCode,
-        title: '',
-        items: banners,
-        perView: 2,
-    };
+    return showcases;
 }
 
 module.exports = {

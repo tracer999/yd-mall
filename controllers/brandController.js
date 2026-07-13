@@ -27,8 +27,10 @@ exports.getHome = async (req, res) => {
         const rootCategories = await brandSvc.getRootCategories(mallId);
         const activeRoot = Number(req.query.root) || (rootCategories[0]?.id ?? null);
 
-        const [popular, newBrands, catBrands, weeklyBenefits, listing, initialCounts, likedBrandIds] =
+        const [showcase, popular, newBrands, catBrands, weeklyBenefits, listing, initialCounts, likedBrandIds] =
             await Promise.all([
+                // 인기 브랜드를 '상품 캐러셀 한 줄'로 보여준다. 로고가 없는 몰2에서도 화면이 채워진다.
+                brandSvc.getShowcaseBrands(mallId, { limit: 6, perBrand: 10, hasUser: !!req.user }),
                 brandSvc.getPopular(mallId, 12),
                 brandSvc.getNewBrands(mallId, 6),
                 activeRoot ? brandSvc.getBrandsByRootCategory(mallId, activeRoot, 12) : [],
@@ -43,6 +45,7 @@ exports.getHome = async (req, res) => {
 
         res.render('user/brands/home', {
             title: '브랜드',
+            showcase,
             popular, newBrands, rootCategories, activeRoot, catBrands, weeklyBenefits,
             listing,
             initialBuckets: INITIAL_BUCKETS,

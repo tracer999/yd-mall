@@ -285,6 +285,79 @@ async function getBrand(mallId, brandId) {
     return row;
 }
 
+/*
+ * 브랜드 쇼케이스 — 브랜드 한 줄 = 해시태그 + 특집전 제목 + 상품 캐러셀.
+ *
+ * 로고 타일 그리드는 브랜드를 '이름'으로만 보여준다. 몰2는 로고가 0개라 그 화면이 특히 빈약하다.
+ * 쇼케이스는 브랜드를 **상품으로** 보여준다 — 로고가 없어도 화면이 채워진다.
+ *
+ * N+1 을 피한다: 브랜드 6개면 쿼리 6번이 아니라, 상품 1번 + 태그 1번이다.
+ * 브랜드별 상위 N개는 윈도우 함수로 한 방에 자른다(MySQL 8).
+ */
+async function getShowcaseBrands(mallId, { limit = 6, perBrand = 10, hasUser = false } = {}) {
+    // 인기 브랜드를 그대로 쓴다 — 폴백 사다리(점수 → 상품수 → 최근)가 이미 들어 있다.
+    // 상품이 캐러셀을 채울 만큼 있어야 하므로 여유 있게 뽑아 거른다.
+    const candidates = await getPopular(mallId, limit * 3);
+    const brands = candidates.filter(b => Number(b.product_count) >= 4).slice(0, limit);
+    if (!brands.length) return [];
+
+    const ids = brands.map(b => b.id);
+
+    // 브랜드별 상품 상위 perBrand개 — 노출 상품만, 품절은 뒤로.
+    const [prodRows] = await pool.query(`
+        SELECT * FROM (
+            SELECT ${PRODUCT_CARD}, p.brand_category_id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.brand_category_id
+                       ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT'),
+                                p.discount_rate DESC, p.view_count DESC, p.id DESC
+                   ) AS rn
+            FROM products p
+            WHERE p.mall_id = ? AND p.brand_category_id IN (?) AND ${P_LIVE} AND ${vis(hasUser)}
+        ) t
+        WHERE t.rn <= ?
+    `, [mallId, ids, perBrand]);
+
+    await dealSvc.applyDeals(prodRows);
+
+    // 해시태그 = 이 브랜드가 실제로 파는 카테고리 상위 3개. 지어내지 않고 데이터에서 뽑는다.
+    const [tagRows] = await pool.query(`
+        SELECT * FROM (
+            SELECT bcs.category_id AS brand_id, c.name,
+                   ROW_NUMBER() OVER (PARTITION BY bcs.category_id ORDER BY bcs.product_count DESC) AS rn
+            FROM brand_category_stat bcs
+            JOIN categories c ON c.id = bcs.cat_id
+            WHERE bcs.mall_id = ? AND bcs.category_id IN (?)
+        ) t
+        WHERE t.rn <= 3
+    `, [mallId, ids]);
+
+    const productsOf = new Map();
+    prodRows.forEach(p => {
+        if (!productsOf.has(p.brand_category_id)) productsOf.set(p.brand_category_id, []);
+        productsOf.get(p.brand_category_id).push(p);
+    });
+    const tagsOf = new Map();
+    tagRows.forEach(t => {
+        if (!tagsOf.has(t.brand_id)) tagsOf.set(t.brand_id, []);
+        tagsOf.get(t.brand_id).push(t.name);
+    });
+
+    return brands
+        .map(b => ({
+            ...b,
+            products: productsOf.get(b.id) || [],
+            tags: tagsOf.get(b.id) || [],
+            // "슐틸루스터 소형가전 특집전" — 브랜드명 + 대표 카테고리.
+            // 대표 카테고리가 없으면 브랜드명만 쓴다(억지로 만들지 않는다).
+            showcaseTitle: b.topCategoryName
+                ? `${b.name} ${b.topCategoryName} 특집전`
+                : `${b.name} 특집전`,
+        }))
+        // 상품을 못 채운 브랜드는 캐러셀이 성립하지 않는다. 빈 줄을 만드느니 뺀다.
+        .filter(b => b.products.length >= 4);
+}
+
 /** 브랜드가 취급하는 카테고리 (상세관 필터) */
 async function getBrandCategories(mallId, brandId) {
     const [rows] = await pool.query(`
@@ -388,7 +461,7 @@ async function getLikedBrandIds(userId) {
 }
 
 module.exports = {
-    listBrands, getInitialCounts, getPopular, getNewBrands,
+    listBrands, getInitialCounts, getPopular, getNewBrands, getShowcaseBrands,
     getRootCategories, getBrandsByRootCategory, searchBrands,
     getBrand, getBrandCategories, getBrandProducts, getBrandBest,
     getRelatedBrands, getLikedBrandIds, PAGE_SIZE

@@ -13,15 +13,27 @@ const menuShowcaseService = require('../../services/menu/menuShowcaseService');
  * 대상 목록은 **feature_menu 에서 동적으로** 읽는다(예전엔 BEST/NEW/DEAL 3개가 하드코딩돼
  * 실제 GNB 메뉴와 어긋났다). key 는 feature_menu.feature_code 다.
  *
- * 상품형 메뉴(쇼핑특가·베스트·신상품)는 여기서 뺀다 — 그쪽은 이미지 배너가 아니라
- * 상품 큐레이션(product_group.menu_code)으로 관리하고, 상품그룹이 배너보다 우선하므로
- * 배너를 등록해도 노출되지 않는다(menuShowcaseService.getForPath).
+ * 켜져 있는 GNB 메뉴는 **전부** 배너 대상이다. 예전에는 상품형 메뉴(쇼핑특가·베스트·신상품)를
+ * 뺐는데, 상품그룹이 걸린 메뉴에서 배너가 조회조차 되지 않았기 때문이다. 이제 배너와 상품
+ * 캐러셀은 공존하므로(배너가 위) 그 메뉴들도 배너를 걸 수 있다.
  */
 
-/** 배너로 관리하는 메뉴만 (상품 큐레이션 메뉴 제외) */
+/** 배너를 걸 수 있는 메뉴 = 켜져 있는 GNB 메뉴 전부 */
 async function getBannerMenuTargets(mallId = 1) {
-    const targets = await menuShowcaseService.getMenuTargets(mallId);
-    return targets.filter(t => !t.pool);
+    return menuShowcaseService.getMenuTargets(mallId);
+}
+
+/** 메뉴별 배너 등록 건수 — 서브탭에 표시해 어디에 배너가 있는지 한눈에 보이게 한다. */
+async function getMenuBannerCounts() {
+    const [rows] = await pool.query(`
+        SELECT group_key, COUNT(*) AS cnt
+        FROM banners
+        WHERE group_key LIKE 'menu:%'
+        GROUP BY group_key
+    `);
+    const counts = {};
+    for (const r of rows) counts[r.group_key.slice('menu:'.length)] = Number(r.cnt);
+    return counts;
 }
 
 let hasMobileImageColumnCache = null;
@@ -45,17 +57,37 @@ async function hasMobileImageColumn() {
 
 exports.getList = async (req, res) => {
     try {
+        const mallId = req.mallId || 1;
         const type = req.query.type || 'MAIN';
+        const menuTargets = await getBannerMenuTargets(mallId);
+
         let banners;
+        let currentMenuKey = '';
+        let menuBannerCounts = {};
+        let menuProductGroup = null;
+
         if (type === 'MENU') {
-            // 메뉴별 배너는 group_key='menu:%' 로 식별한다 (banner_type 무시).
-            [banners] = await pool.query(`
-                SELECT b.*, c.name AS category_name
-                FROM banners b
-                LEFT JOIN categories c ON b.category_id = c.id
-                WHERE b.group_key LIKE 'menu:%'
-                ORDER BY b.group_key ASC, b.display_order ASC, b.created_at DESC
-            `);
+            // 메뉴별 탭은 메뉴 하나를 골라 그 메뉴의 배너만 보여준다(서브탭). 기본은 첫 메뉴.
+            const requested = req.query.menu;
+            currentMenuKey = menuTargets.some(t => t.key === requested)
+                ? requested
+                : (menuTargets[0]?.key || '');
+            menuBannerCounts = await getMenuBannerCounts();
+
+            // 이 메뉴에 상품 캐러셀도 걸려 있는지 — 배너는 그 위에 함께 노출된다는 안내를 위해.
+            if (currentMenuKey) {
+                menuProductGroup = await menuShowcaseService.getProductGroupForMenu(mallId, currentMenuKey);
+            }
+
+            [banners] = currentMenuKey
+                ? await pool.query(`
+                    SELECT b.*, c.name AS category_name
+                    FROM banners b
+                    LEFT JOIN categories c ON b.category_id = c.id
+                    WHERE b.group_key = ?
+                    ORDER BY b.display_order ASC, b.created_at DESC
+                `, [`menu:${currentMenuKey}`])
+                : [[]];
         } else {
             // 일반 타입 배너에는 메뉴별 배너(group_key='menu:%')가 섞이지 않도록 제외한다.
             [banners] = await pool.query(`
@@ -66,12 +98,16 @@ exports.getList = async (req, res) => {
                 ORDER BY b.display_order ASC, b.created_at DESC
             `, [type]);
         }
+
         res.render('admin/banners/list', {
             layout: 'layouts/admin_layout',
             title: '배너 관리',
             banners,
             currentType: type,
-            menuTargets: await getBannerMenuTargets(req.mallId || 1)
+            currentMenuKey,
+            menuTargets,
+            menuBannerCounts,
+            menuProductGroup
         });
     } catch (err) {
         console.error(err);
@@ -82,6 +118,11 @@ exports.getList = async (req, res) => {
 exports.getAdd = async (req, res) => {
     try {
         const type = req.query.type || 'MAIN';
+        const menuTargets = await getBannerMenuTargets(req.mallId || 1);
+        // 목록의 메뉴 서브탭에서 '배너 등록'을 누르면 그 메뉴가 골라진 채로 열린다.
+        const requested = req.query.menu;
+        const currentMenuKey = menuTargets.some(t => t.key === requested) ? requested : '';
+
         const [categories] = await pool.query('SELECT id, name, type FROM categories ORDER BY display_order ASC, id ASC');
         res.render('admin/banners/form', {
             layout: 'layouts/admin_layout',
@@ -89,8 +130,8 @@ exports.getAdd = async (req, res) => {
             banner: null,
             categories,
             currentType: type,
-            menuTargets: await getBannerMenuTargets(req.mallId || 1),
-            currentMenuKey: '',
+            menuTargets,
+            currentMenuKey,
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
         });
     } catch (err) {
@@ -155,12 +196,22 @@ function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGrou
             err.statusCode = 400;
             throw err;
         }
-        return { storedType: 'CATEGORY', categoryId: null, groupKey: `menu:${menuTarget}`, redirectType: 'MENU' };
+        return {
+            storedType: 'CATEGORY', categoryId: null, groupKey: `menu:${menuTarget}`,
+            redirectType: 'MENU', menuKey: menuTarget
+        };
     }
     const type = ['MAIN', 'CATEGORY', 'POPUP', 'BRAND'].includes(bannerType) ? bannerType : 'MAIN';
     const categoryId = (type === 'CATEGORY' || type === 'BRAND') && categoryIdRaw ? Number(categoryIdRaw) || null : null;
     const groupKey = existingGroupKey && !String(existingGroupKey).startsWith('menu:') ? existingGroupKey : null;
-    return { storedType: type, categoryId, groupKey, redirectType: type };
+    return { storedType: type, categoryId, groupKey, redirectType: type, menuKey: '' };
+}
+
+/** 저장 후 돌아갈 목록 URL — 메뉴별 배너는 방금 편집한 메뉴 서브탭으로 되돌린다. */
+function listUrl(redirectType, menuKey) {
+    return redirectType === 'MENU' && menuKey
+        ? `/admin/banners?type=MENU&menu=${encodeURIComponent(menuKey)}`
+        : `/admin/banners?type=${redirectType}`;
 }
 
 exports.getEdit = async (req, res) => {

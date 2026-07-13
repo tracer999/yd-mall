@@ -1,0 +1,75 @@
+<%
+  /*
+   * 브랜드 쇼케이스 한 줄 — #해시태그 + 특집전 제목 + 좌우 화살표 + 상품 카드 캐러셀
+   *
+   * 로고 타일은 브랜드를 '이름'으로 보여준다. 몰2는 로고가 0개라 그 화면이 특히 비어 보인다.
+   * 이 줄은 브랜드를 **상품으로** 보여준다 — 로고가 없어도 화면이 채워진다.
+   *
+   * 해시태그는 지어내지 않는다. 그 브랜드가 실제로 파는 카테고리 상위 3개다(brand_category_stat).
+   *
+   * 캐러셀은 scroll-snap + scrollBy 다. 라이브러리를 쓰지 않는다 —
+   * JS 가 죽어도 손가락으로 밀면 그대로 동작한다(모바일에서는 그게 기본 조작이다).
+   *
+   * locals: brand (products, tags, showcaseTitle 포함), isLiked
+   */
+  const b = brand;
+  const rid = `bsc-${b.id}`;
+%>
+
+<section class="mb-12" data-showcase="<%= b.id %>">
+
+  <%# ── 헤더 ── %>
+  <div class="flex items-end justify-between gap-4 mb-4">
+    <div class="min-w-0">
+      <% if (b.tags && b.tags.length) { %>
+        <p class="flex flex-wrap gap-x-2 gap-y-1 mb-1.5">
+          <% b.tags.forEach(function (t) { %>
+            <span class="text-[13px] text-gray-400">#<%= t %></span>
+          <% }) %>
+        </p>
+      <% } %>
+      <h3 class="text-xl sm:text-2xl font-bold text-gray-900 truncate">
+        <a href="/brands/<%= b.id %>" class="hover:text-[var(--gh-primary)] no-underline">
+          <%= b.showcaseTitle %>
+        </a>
+      </h3>
+    </div>
+
+    <%# 화살표 — 캐러셀이 스크롤 가능할 때만 의미가 있다. 끝에 닿으면 JS 가 흐리게 만든다. %>
+    <div class="shrink-0 flex items-center gap-1.5">
+      <button type="button" data-scroll="prev" aria-label="이전 상품"
+              class="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500
+                     hover:border-gray-400 hover:text-gray-900 disabled:opacity-30 disabled:hover:border-gray-200
+                     disabled:hover:text-gray-500 disabled:cursor-default transition">
+        <i class="bi bi-chevron-left text-sm"></i>
+      </button>
+      <button type="button" data-scroll="next" aria-label="다음 상품"
+              class="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500
+                     hover:border-gray-400 hover:text-gray-900 disabled:opacity-30 disabled:hover:border-gray-200
+                     disabled:hover:text-gray-500 disabled:cursor-default transition">
+        <i class="bi bi-chevron-right text-sm"></i>
+      </button>
+    </div>
+  </div>
+
+  <%# ── 상품 캐러셀 ── %>
+  <div data-track
+       class="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory
+              [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <% b.products.forEach(function (p) { %>
+      <div class="snap-start shrink-0 w-[45%] sm:w-[31%] lg:w-[23.5%]">
+        <%- include('../product_card', { product: p, opts: { showTopBadge: false } }) %>
+      </div>
+    <% }) %>
+
+    <%# 브랜드관으로 보내는 마지막 카드 — 캐러셀 끝에서 갈 곳을 준다 %>
+    <a href="/brands/<%= b.id %>"
+       class="snap-start shrink-0 w-[45%] sm:w-[31%] lg:w-[23.5%] no-underline
+              flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200
+              text-gray-500 hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition min-h-[220px]">
+      <i class="bi bi-arrow-right-circle text-2xl"></i>
+      <span class="text-sm font-medium">브랜드관 전체보기</span>
+      <span class="text-xs text-gray-400"><%= Number(b.product_count || 0).toLocaleString() %>개 상품</span>
+    </a>
+  </div>
+</section>
