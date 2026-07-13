@@ -318,50 +318,82 @@ navigationService 렌더 조건에 3번째 게이트를 추가한다:
 
 ---
 
-## 6. 현재 상태 · 즉시 조치
+## 6. 남은 이슈 — 형제 메뉴의 빈 메뉴 문제
+
+아울렛은 콘텐츠 게이트(§4-5)로 해결했다. 그런데 **`GROUP_BUY`(공동구매)·`LIVE`(쇼핑라이브)는
+아직 아울렛이 이전에 있던 상태 그대로다** — `module_ready=1` + `is_enabled=1` + `comingSoon` 랜딩.
+즉 GNB 에 있는데 누르면 준비중이다.
+
+두 메뉴는 모듈 자체가 없어 게이트로 풀 수 없다(셀 콘텐츠가 없다). 정책 결정이 필요하다.
 
 ```text
-/outlet                     → comingSoon('outlet') 준비중 랜딩 (routes/feature.js:267)
-feature_menu.OUTLET         → module_ready = 1
-mall_feature_menu           → mall 1·2 모두 is_enabled = 1, sort_order = 9
-                              ⚠️ 결과: GNB 에 노출 중인데 누르면 준비중 → 빈 메뉴
-아울렛 관련 테이블           → 없음
-아울렛 관리자 메뉴           → 없음
+안 A) 그대로 둔다                  — "곧 나온다"는 신호로 남긴다. 단 죽은 링크다.
+안 B) module_ready = 0 으로 내린다  — "모듈이 없으면 GNB 에 없다"를 규칙으로 못 박는다. (권장)
+                                     모듈을 만들면 다시 1 로 올린다.
 ```
 
-**즉시 조치 (§1-4 결정 2) — 사용자 승인 후 실행. 한 줄이면 된다.**
+→ **사용자 결정 대기.** 이번 아울렛 작업 범위 밖이라 손대지 않았다.
 
-```sql
--- 모듈이 아직 없다는 사실을 그대로 반영한다. 라우트·문서·feature_menu 카탈로그는 유지.
-UPDATE feature_menu SET module_ready = 0 WHERE feature_code = 'OUTLET';
-```
+---
 
-`navigationService` 의 렌더 조건이 `is_enabled AND module_ready` 이므로 **이 한 줄로 두 몰 GNB 에서 동시에 사라진다.**
-`mall_feature_menu.is_enabled` 는 건드리지 않는다 — 그건 **모듈 개발 후 몰별 활성화**에 쓸 스위치다(§4-3).
-관리자가 실수로 `is_enabled = 1` 해도 `module_ready = 0` 이면 뜨지 않는다(이중 안전장치).
-모듈을 실제로 개발한 시점에 다시 1 로 올린다.
+## 7. 구현 결과 (2026-07-13)
 
-**함께 결정할 것 — 형제 메뉴**
+### 7-1. 산출물
 
-`GROUP_BUY`·`LIVE` 도 아울렛과 **똑같이** `module_ready=1` + `is_enabled=1` + `comingSoon` 랜딩이다.
-아울렛만 내리면 준비중 메뉴가 GNB 에 둘 남는다.
+| # | 파일 | 역할 |
+|---|---|---|
+| 1 | `scripts/migrate_outlet.sql` | `outlet_product`·`outlet_setting` 생성, `categories.type` 에 `OUTLET` 추가, `admin_menus` 2행 |
+| 2 | `scripts/seed_outlet_demo.sql` | mall 2 데모 시드(카테고리 4 + 상품 42). 되돌리기 SQL 주석 포함 |
+| 3 | `services/outlet/outletService.js` | 상수·검증·조회. **가격을 만들지 않는다**는 불변식의 소재지 |
+| 4 | `controllers/outletController.js` | 고객 `/outlet`. 0건이면 `COMING_SOON.outlet` 폴백 |
+| 5 | `routes/outlet.js` + `app.js` | `app.use('/outlet', ...)`. `feature.js` 의 comingSoon 라우트는 제거 |
+| 6 | `views/user/outlet/list.ejs` | 사유·카테고리·가격대 3축 필터. 공용 `product_card.ejs` 재사용 |
+| 7 | `views/user/products/detail.ejs` | 아울렛 고지 블록(구매 버튼 위). `outletInfo` 없으면 안 그린다 |
+| 8 | `controllers/admin/outletController.js` | 상품 CRUD + 카테고리 CRUD + 몰 설정 |
+| 9 | `routes/admin/outlet.js` + `routes/admin.js` | `/admin/outlet` |
+| 10 | `views/admin/outlet/{list,edit,categories}.ejs` | GNB 노출 상태 배너 · 사유별 필수항목 동적 폼 |
+| 11 | `services/menu/navigationService.js` | **콘텐츠 게이트** — `CONTENT_GATES` 맵. 다른 메뉴에도 재사용 가능 |
+| 12 | `tables.sql` | 스키마 동기화 |
+
+### 7-2. 설계 불변식이 코드 어디에 있는가
+
+| 불변식 | 지키는 곳 |
+|---|---|
+| **이중 가격 없음** | `outlet_product` 에 가격 컬럼이 아예 없다. 서비스가 `products` 에서만 가격을 읽는다 |
+| **아울렛 ≠ 할인율 필터** | 상품을 뽑는 유일한 경로가 `outlet_product` 매핑이다. `discount_rate` 로 긁는 쿼리가 없다 |
+| **허위 할인 차단** | `outletService.validate()` — `outlet_setting.min_discount_rate` 미달이면 등록 거부 |
+| **하자 고지 강제** | 같은 함수 — 리퍼브·전시·훼손은 등급 필수, B·C 등급은 하자 설명 필수 |
+| **빈 메뉴 차단** | `navigationService.CONTENT_GATES.OUTLET` + 컨트롤러 0건 폴백 (이중 방어) |
+
+### 7-3. 검증 결과
 
 ```text
-안 A) 아울렛만 내린다              — 이번 검토 범위. 단 GNB 정책이 안에서 어긋난 채 남는다.
-안 B) 준비중 메뉴 정책을 통일한다   — GROUP_BUY·LIVE 도 module_ready = 0.
-                                    "모듈이 없으면 GNB 에 없다" 를 규칙으로 못 박는다. (권장)
+mall 1 (건강식품관, 아울렛 0건)
+  홈 GNB          → 아울렛 없음          ✅ 콘텐츠 게이트가 숨김
+  /outlet 직접    → 준비중 랜딩           ✅ 컨트롤러 폴백
+
+mall 2 (종합관, 아울렛 42건)
+  홈 GNB          → 아울렛 노출           ✅ 42 ≥ 임계치 30
+  /outlet         → 42개, 사유 배지 정상   ✅
+  ?type=DISPLAY   → B급 배지 + 하자 고지   ✅
+  ?type=REFURB…   → C급 배지 + 하자 고지   ✅
+  상품 상세        → 아울렛 고지 블록 노출  ✅
+
+관리자 검증
+  할인율 0% 상품 등록      → 거부 "최소 할인율(20%)에 미달합니다"        ✅
+  리퍼브 + 등급 없음       → 거부 "상태 등급(A/B/C)이 필수입니다"        ✅
+  B등급 + 하자 설명 없음    → 거부 "B·C 등급은 하자 고지 내용이 필수"     ✅
+  임박상품 + 유통기한 없음  → 거부 "유통기한을 입력해야 합니다"           ✅
+  정상 등록                → 302 성공, DB 반영 확인                    ✅
 ```
-→ **사용자 결정 대기.**
 
-**착수 순서** (기획전과 동일)
+### 7-4. 운영 메모
 
-```text
-1. outlet_product / OUTLET 카테고리 스키마          (§4-1, §4-2)
-2. 관리자 CRUD + 몰 단위 설정                       (§4-3)
-3. mall 2 에 실제 이월상품 등록 (임계치 30건 이상)
-4. 고객 라우트 교체 + 빈 메뉴 게이트                (§4-4, §4-5)
-5. feature_menu.module_ready = 1, mall 2 만 is_enabled = 1
-```
-
-> `dev = prod` DB 다. 고객 라우트를 먼저 열면 운영에 빈 화면이 뜬다.
-> **0건이면 준비중 랜딩 폴백을 유지**한다.
+- **mall 1 은 아울렛을 켜지 않는다.** 상품이 0건이라 게이트가 알아서 숨긴다. 수동 조작 불필요.
+- **`seed_outlet_demo.sql` 은 개발용 데모다.** 실제 운영 상품을 정할 때 지우고 다시 담아야 한다.
+  ```sql
+  DELETE FROM outlet_product WHERE mall_id = 2;
+  DELETE FROM categories WHERE mall_id = 2 AND type = 'OUTLET';
+  ```
+- **임계치(기본 30)는 관리자 화면에서 몰별로 바꾼다.** 0 으로 두면 항상 노출된다(1건이어도).
+- 아울렛 상품의 할인율을 바꾸려면 **상품 관리에서 상품 가격을 고친다.** 아울렛에는 가격 입력란이 없다.
