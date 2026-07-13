@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const featureMenuSync = require('../../services/menu/featureMenuSync');
 
 /*
  * 일반 메뉴 관리 (B2) / 시스템 메뉴 설정 (B4)
@@ -65,6 +66,13 @@ async function renderScreen(screen, req, res) {
     const MALL_ID = req.adminMallId || 1;
     const placeholders = screen.positions.map(() => '?').join(',');
 
+    /*
+     * 카탈로그에 있는데 이 몰에 행이 없는 메뉴를 먼저 채운다.
+     * 안 하면 이 화면에는 보이는 메뉴가(LEFT JOIN) 스토어프론트에는 안 나온다(INNER JOIN).
+     * 예전엔 그 어긋남이 "저장을 눌러야 비로소 몰에 나타난다"로 드러났다.
+     */
+    await featureMenuSync.ensureMallFeatureMenus(MALL_ID);
+
     const [rows] = await pool.query(`
         SELECT
             f.feature_code, f.default_name, f.default_path, f.position,
@@ -92,6 +100,36 @@ async function renderScreen(screen, req, res) {
     const [[cfg]] = await pool.query(
         'SELECT max_gnb_items, max_custom_items FROM navigation_config WHERE mall_id = ?', [MALL_ID]
     );
+    const config = cfg || { max_gnb_items: 8, max_custom_items: 3 };
+
+    /*
+     * GNB 상한 초과분을 계산해 화면에 알린다.
+     *
+     * navigationService 는 후보를 sort_order 로 정렬한 뒤 max_gnb_items 로 **조용히 자른다**.
+     * 상한에 딱 찬 상태에서 메뉴를 하나 더 켜면 맨 뒤 메뉴가 소리 없이 사라진다 —
+     * 관리자 화면에는 "켜짐"으로 남아 있어서 운영자는 원인을 알 수 없다. 그래서 여기서 세어 준다.
+     *
+     * 카테고리 버튼(CATEGORY)은 최좌측 고정이라 상한 계산에서 빠진다(GNB 조립과 같은 규칙).
+     * 커스텀 메뉴도 같은 상한을 나눠 쓰므로 그 몫까지 합쳐 봐야 진짜 여유가 보인다.
+     */
+    let gnbLimit = null;
+    if (screen.showGnbLimit) {
+        const gnbRows = rows.filter(r => r.position === 'gnb' && r.feature_code !== 'CATEGORY');
+        const enabledCount = gnbRows.filter(r => Number(r.is_enabled) === 1 && Number(r.module_ready) === 1).length;
+        const [[customRow]] = await pool.query(
+            "SELECT COUNT(*) AS cnt FROM custom_menu WHERE mall_id = ? AND is_enabled = 1 AND location = 'gnb'", [MALL_ID]
+        );
+        const customCount = Math.min(Number(customRow.cnt) || 0, Number(config.max_custom_items) || 0);
+        const max = Number(config.max_gnb_items) || 8;
+        const total = enabledCount + customCount;
+        gnbLimit = {
+            max,
+            enabledCount,
+            customCount,
+            total,
+            overflow: Math.max(0, total - max), // 0 보다 크면 뒤에서부터 이만큼 잘려 나간다
+        };
+    }
 
     res.render(screen.view, {
         layout: 'layouts/admin_layout',
@@ -99,7 +137,8 @@ async function renderScreen(screen, req, res) {
         screen,
         groups,
         badgeTypes: BADGE_TYPES,
-        config: cfg || { max_gnb_items: 8, max_custom_items: 3 },
+        config,
+        gnbLimit,
         saved: req.query.saved === '1',
     });
 }

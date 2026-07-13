@@ -8,29 +8,51 @@
    *   title        : 섹션 제목
    *   products     : 상품 배열
    *   maxCount     : 최대 노출 수 (기본 8)
-   *   moreHref     : '더 보기' 링크
+   *   moreHref     : '더 보기' 링크 (레지스트리 필드명은 moreLink — 둘 다 받는다)
    *   moreBtnClass : '더 보기' 버튼 클래스
+   *
+   * ⚠️ 스타일 로컬(sectionClass/badgeText/…)은 **전부 선택**이다.
+   *    이 값들은 시드가 config_json 에 직접 박아 둔 것이고 sectionRegistry.fields 에는 없다.
+   *    그래서 페이지 빌더 팔레트로 새로 추가한 섹션에는 값이 없고, 예전에는 그때
+   *    출력 태그가 ReferenceError 를 던져 섹션이 통째로 스킵됐다
+   *    (= 추가했는데 아무것도 안 나옴). 기본값으로 받아 낸다.
    */
+  const _has = (v) => typeof v !== 'undefined' && v !== null && v !== '';
   const _max = (typeof maxCount !== 'undefined' && maxCount) ? maxCount : 8;
   const _items = (products || []).slice(0, _max);
+
+  const _sectionClass = _has(typeof sectionClass !== 'undefined' ? sectionClass : null)
+    ? sectionClass : 'py-12 bg-white';
+  const _badgeText = (typeof badgeText !== 'undefined' && badgeText) ? badgeText : '';
+  const _badgeClass = (typeof badgeClass !== 'undefined' && badgeClass)
+    ? badgeClass
+    : 'inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-[var(--gh-primary)] text-white mb-2';
+  const _title = (typeof title !== 'undefined' && title) ? title : '';
+  const _moreHref = (typeof moreHref !== 'undefined' && moreHref) ? moreHref
+    : ((typeof moreLink !== 'undefined' && moreLink) ? moreLink : '');
+  const _moreBtnClass = (typeof moreBtnClass !== 'undefined' && moreBtnClass)
+    ? moreBtnClass
+    : 'inline-flex items-center gap-2 px-6 py-2.5 border border-gray-300 rounded-full text-sm font-medium text-gray-700 hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition';
 %>
 <% if (_items.length > 0) { %>
-<section class="<%= sectionClass %>">
+<section class="<%= _sectionClass %>">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-10">
-      <span class="<%= badgeClass %>"><%= badgeText %></span>
-      <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+      <% if (_badgeText) { %><span class="<%= _badgeClass %>"><%= _badgeText %></span><% } %>
+      <h2 class="text-2xl font-extrabold text-gray-900"><%= _title %></h2>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
       <% _items.forEach(product => { %>
         <%- include('../product_card', { product }) %>
       <% }); %>
     </div>
-    <div class="mt-8 text-center">
-      <a href="<%= moreHref %>" class="<%= moreBtnClass %>">
-        더 보기 <i class="bi bi-chevron-right text-xs"></i>
-      </a>
-    </div>
+    <% if (_moreHref) { %>
+      <div class="mt-8 text-center">
+        <a href="<%= _moreHref %>" class="<%= _moreBtnClass %>">
+          더 보기 <i class="bi bi-chevron-right text-xs"></i>
+        </a>
+      </div>
+    <% } %>
   </div>
 </section>
 <% } %>

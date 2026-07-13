@@ -246,6 +246,7 @@ const EMPTY_REASON = {
   brand_carousel: '상품이 등록된 브랜드 카테고리가 없습니다.',
   category_showcase: '상품이 담긴 카테고리가 없습니다.',
   promotion_banner: '배너 관리에 그룹 키로 묶인 배너가 없습니다.',
+  kakao_cta: '카카오 채널이 설정되지 않았습니다. 사이트 설정에서 채널을 연결하면 나타납니다.',
   recent_product: '최근 본 상품은 방문자마다 다릅니다. 관리자에게는 비어 보이는 것이 정상입니다.',
   new_by_category: '최근 등록된 신상품이 없습니다.',
   new_by_brand: '최근 등록된 신상품이 없습니다.',
@@ -259,7 +260,7 @@ async function pickDataSource(def, mallId) {
   const [rows] = await pool.query(`
     SELECT g.id
       FROM product_group g
-      JOIN product_group_item i ON i.group_id = g.id
+      JOIN product_group_item i ON i.product_group_id = g.id
      WHERE g.is_active = 1 AND g.mall_id = ?
      GROUP BY g.id
      HAVING COUNT(i.product_id) > 0

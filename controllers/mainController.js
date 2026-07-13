@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const displayService = require('../services/display/displayService');
 const dealSvc = require('../services/deal/dealService');
+const menuShowcaseService = require('../services/menu/menuShowcaseService');
 
 // 카카오채널 URL 정규화 (siteSettings 기반)
 function computeKakaoUrl(siteSettings) {
@@ -149,6 +150,23 @@ exports.getHomePreview = async (req, res) => {
             : await builder.getHomePage(req.mallId); // status 무필터 → 미발행 draft 도 잡는다
 
         if (!page) return res.status(404).send('페이지를 찾을 수 없습니다.');
+
+        /*
+         * 메뉴 쇼케이스는 middleware/menuShowcase 가 **요청 경로**로 판별한다. 미리보기의 요청
+         * 경로는 늘 /admin/page-builder/preview 라 무엇에도 매칭되지 않아, 스토어프론트에는
+         * 있는 캐러셀이 미리보기에서만 통째로 사라졌다. 편집 중인 페이지가 실제로 서비스될
+         * 경로로 다시 판별해 준다(홈은 '/' 라 매칭 대상이 없다 — 원래 쇼케이스가 없는 게 맞다).
+         */
+        const storefrontPath = page.page_type === 'home' ? '/' : '/' + (page.slug || '');
+        try {
+            res.locals.menuShowcase = await menuShowcaseService.getForPath(storefrontPath, {
+                mallId: req.mallId,
+                hasUser: !!req.user,
+            });
+        } catch (e) {
+            console.error('[preview] menuShowcase:', e.message);
+            res.locals.menuShowcase = null;
+        }
 
         // 미리보기는 **항상 라이브 page_section(작업본)** 을 본다. 발행 스냅샷이 아니다.
         // 그게 "발행 전에 확인한다"의 의미다.

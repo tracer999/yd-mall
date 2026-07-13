@@ -103,6 +103,19 @@ app.set('layout', 'layouts/main_layout'); // Default layout for user
 
 async function startServer() {
     await loadSystemSettingsAndApplyEnv();
+
+    /*
+     * 카탈로그(feature_menu)에 있는데 몰별 행(mall_feature_menu)이 없는 메뉴를 채운다.
+     * 행이 없으면 스토어프론트 INNER JOIN 에서 빠져 그 몰에 영영 안 나온다 —
+     * 관리자 화면에는 보이는데 몰에는 없는 어긋남의 원인이었다.
+     */
+    try {
+        const created = await require('./services/menu/featureMenuSync').ensureAllMalls();
+        if (created > 0) console.log(`[menu] 몰별 메뉴 ${created}건 백필`);
+    } catch (err) {
+        // 메뉴 백필 실패가 기동을 막을 이유는 없다(기존 메뉴는 그대로 뜬다).
+        console.error('[menu] 백필 실패:', err.message);
+    }
     let sessionStore;
     const pm2Instance = process.env.NODE_APP_INSTANCE;
 

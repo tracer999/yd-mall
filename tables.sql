@@ -910,6 +910,7 @@ CREATE TABLE IF NOT EXISTS `feature_menu` (
   `position` varchar(30) NOT NULL COMMENT '고정 위치: gnb/right_rail/header_util/footer/mobile_quick',
   `required_module` varchar(50) DEFAULT NULL COMMENT '필요 기능 모듈',
   `module_ready` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=모듈 구현됨(렌더 허용)',
+  `default_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '새 몰/신규 카탈로그 메뉴의 기본 ON/OFF. 몰별 행이 없을 때 백필이 이 값을 쓴다',
   `is_system` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=시스템 메뉴(삭제 불가)',
   `is_required` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=항상 노출(끌 수 없음)',
   `default_sort_order` int NOT NULL DEFAULT '0',

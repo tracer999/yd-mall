@@ -41,6 +41,36 @@
     </div>
   </div>
 
+  <%/* 상한 초과는 navigationService 가 조용히 잘라낸다 — 관리자에는 '켜짐'으로 남아
+       운영자가 원인을 알 수 없다. 잘리는 개수를 명시해야 "왜 안 보이지"가 안 생긴다. */%>
+  <% const _gl = typeof gnbLimit !== 'undefined' ? gnbLimit : null; %>
+  <% if (_gl) { %>
+    <% if (_gl.overflow > 0) { %>
+      <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+        <div class="flex items-start gap-2">
+          <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
+          <div>
+            <p><strong>GNB 상한을 <%= _gl.overflow %>개 초과했습니다 — 뒤쪽 <%= _gl.overflow %>개 메뉴가 스토어프론트에 나오지 않습니다.</strong></p>
+            <p class="mt-1">
+              현재 켜진 GNB <%= _gl.total %>개(기능 <%= _gl.enabledCount %> + 커스텀 <%= _gl.customCount %>) / 상한 <%= _gl.max %>개.
+              메뉴를 끄거나, <a href="/admin/header-settings" class="underline font-medium">헤더 설정</a>에서 최대 노출 수를 늘리세요.
+            </p>
+          </div>
+        </div>
+      </div>
+    <% } else if (_gl.total >= _gl.max) { %>
+      <div class="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+        <div class="flex items-start gap-2">
+          <i class="bi bi-exclamation-circle-fill mt-0.5"></i>
+          <div>
+            <p><strong>GNB 슬롯이 가득 찼습니다 (<%= _gl.total %>/<%= _gl.max %>).</strong></p>
+            <p class="mt-1">지금 메뉴를 하나 더 켜면 맨 뒤 메뉴가 스토어프론트에서 밀려납니다.</p>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  <% } %>
+
   <form method="POST" action="<%= screen.path %>">
     <% _groups.forEach(function (group) { %>
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
