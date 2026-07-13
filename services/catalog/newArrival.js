@@ -72,6 +72,12 @@ function newBrandPredicate(alias = 'c') {
 /** 신상품 정렬 — 판매 시작일 최신순. 미지정(NULL)은 뒤로. */
 const NEW_PRODUCT_ORDER = 'sale_start_date IS NULL ASC, sale_start_date DESC, id DESC';
 
+/** 별칭이 붙은 테이블용 신상품 정렬. (예: newProductOrder('p') → 'p.sale_start_date IS NULL ASC, …') */
+function newProductOrder(alias = 'p') {
+    const c = alias ? `${alias}.` : '';
+    return `${c}sale_start_date IS NULL ASC, ${c}sale_start_date DESC, ${c}id DESC`;
+}
+
 function daysAgo(days) {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -121,4 +127,5 @@ module.exports = {
     newProductDays,
     newBrandDays,
     NEW_PRODUCT_ORDER,
+    newProductOrder,
 };

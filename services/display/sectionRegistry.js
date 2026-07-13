@@ -142,5 +142,36 @@ module.exports = {
     fields: [
       { key: 'html', label: '커스텀 HTML (저장·렌더 시 새니타이즈)', type: 'textarea', default: '' }
     ]
+  },
+
+  // ── 신상품 랜딩(/new) 컴포넌트 ────────────────────────────────
+  // 상품을 product_group 이 아니라 신상품 술어(services/catalog/newArrival)로 직접 조회한다.
+  // 카테고리·브랜드별로 묶는 구조라 단일 그룹으로 표현할 수 없기 때문이다.
+  new_by_category: {
+    view: 'partials/sections/new_by_category',
+    label: '카테고리별 신상품',
+    dataSource: null,
+    fields: [
+      Object.assign({}, FIELD.maxCount, { label: '탭별 상품 수', max: 24, default: 8 }),
+      { key: 'maxCategory', label: '탭(카테고리) 수', type: 'number', min: 1, max: 12, default: 6 }
+    ]
+  },
+  new_by_brand: {
+    view: 'partials/sections/new_by_brand',
+    label: '브랜드별 신상품',
+    dataSource: null,
+    fields: [
+      Object.assign({}, FIELD.maxCount, { label: '브랜드별 상품 수', max: 20, default: 6 }),
+      { key: 'maxBrand', label: '브랜드 수', type: 'number', min: 1, max: 12, default: 5 }
+    ]
+  },
+  new_brand_list: {
+    view: 'partials/sections/new_brand_list',
+    label: '신규 입점 브랜드',
+    dataSource: null,
+    fields: [
+      Object.assign({}, FIELD.maxCount, { label: '브랜드 수', max: 24, default: 8 }),
+      { key: 'productCount', label: '브랜드별 대표 상품 수', type: 'number', min: 0, max: 6, default: 3 }
+    ]
   }
 };

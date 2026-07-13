@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const groupBuySvc = require('../services/groupBuy/groupBuyService');
+const dealSvc = require('../services/deal/dealService');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
 const { redeemCouponCode, reserveCouponForOrder } = require('../services/coupon/couponIssueService');
 const {
