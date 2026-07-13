@@ -1,0 +1,61 @@
+<%
+  /*
+   * 특가 카운트다운 스크립트 (공용).
+   *
+   * /deals 페이지와 홈의 deal_carousel 섹션이 함께 쓴다. 한 페이지에 여러 번 include 될 수
+   * 있으므로(섹션 여러 개) 등록은 1회만 한다 — 가드가 없으면 타이머가 중복으로 돌면서
+   * 같은 노드를 여러 번 갱신한다.
+   *
+   * 대상: [data-deal-countdown="<종료 epoch(ms)>"] 안의 .deal-countdown-text
+   */
+%>
+<script>
+(function () {
+  if (window.__ydDealCountdownReady) return;
+  window.__ydDealCountdownReady = true;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function tick() {
+    const nodes = document.querySelectorAll('[data-deal-countdown]');
+    if (!nodes.length) return;
+
+    const now = Date.now();
+    let expired = false;
+
+    nodes.forEach(function (el) {
+      const end = Number(el.dataset.dealCountdown);
+      const text = el.querySelector('.deal-countdown-text');
+      if (!text) return;
+
+      const diff = end - now;
+      if (diff <= 0) {
+        text.textContent = '특가 종료';
+        el.classList.remove('text-rose-600');
+        el.classList.add('text-gray-400');
+        expired = true;
+        return;
+      }
+
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      text.textContent = h > 0
+        ? h + '시간 ' + pad(m) + '분 ' + pad(s) + '초 남음'
+        : pad(m) + '분 ' + pad(s) + '초 남음';
+    });
+
+    /*
+     * 특가가 끝났는데 특가가를 계속 보여주면, 장바구니·주문서에서 정가로 튀어 혼란을 준다.
+     * 서버가 다시 판정하도록 새로고침한다.
+     */
+    if (expired) {
+      clearInterval(window.__ydDealTimer);
+      setTimeout(function () { location.reload(); }, 3000);
+    }
+  }
+
+  window.__ydDealTimer = setInterval(tick, 1000);
+  tick();
+})();
+</script>

@@ -76,6 +76,21 @@ module.exports = {
       FIELD.moreLink
     ]
   },
+  /*
+   * 쇼핑특가 캐러셀 — dataSource 는 null 이다. 상품그룹이 아니라 **활성 특가**(deal)를 본다.
+   * 기간·시간창·요일·선착순이 맞는 상품만 나오고, 특가가 없으면 섹션 자체가 스킵된다.
+   */
+  deal_carousel: {
+    view: 'partials/sections/deal_carousel',
+    label: '쇼핑특가 캐러셀',
+    dataSource: null,
+    fields: [
+      { key: 'dealCategoryCode', label: '특가 카테고리 코드 (비우면 전체)', type: 'text', default: '' },
+      Object.assign({}, FIELD.maxCount, { default: 12 }),
+      FIELD.columnsPerView,
+      Object.assign({}, FIELD.moreLink, { default: '/deals' })
+    ]
+  },
   brand_carousel: {
     view: 'partials/sections/brand_carousel',
     label: '브랜드 캐러셀',

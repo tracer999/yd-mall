@@ -251,6 +251,25 @@ UPDATE deal_item
 
 ---
 
+### 6.3 홈 캐러셀 — `deal_carousel` 섹션
+
+홈의 `오늘의 특가` 캐러셀(`page_section` id=16)은 옛 상품그룹(`product_group` #4) 수동
+큐레이션이었다. 새 특가 엔진을 바라보도록 **섹션 타입 자체를 교체**했다.
+
+| | 기존 | 신규 |
+|---|---|---|
+| `section_type` | `product_carousel` | **`deal_carousel`** |
+| `title` | 오늘의 특가 | **쇼핑특가** |
+| `data_source_id` | 4 (product_group) | **NULL** |
+| 데이터 | 관리자가 그룹에 담은 상품 | **활성 특가**(dealService) |
+
+- `dataSource: null` 이다 — 상품그룹이 아니라 특가를 본다. `config.dealCategoryCode` 로
+  특정 카테고리만 뽑을 수 있고(예: `TIME`), 비우면 전 카테고리를 이어 붙인다.
+- **활성 특가가 0건이면 리졸버가 `null` 을 리턴해 섹션 자체가 사라진다.** 타임특가 시간이
+  끝나면 다음 요청부터 홈에서 자동으로 내려간다(빈 캐러셀 방지).
+- 카운트다운 스크립트는 `/deals` 와 공유한다(`partials/sections/_deal_countdown.ejs`).
+  한 페이지에 여러 번 include 돼도 타이머는 1회만 등록된다.
+
 ## 7. 관리자
 
 | 화면 | 경로 | 내용 |

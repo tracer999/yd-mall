@@ -1,0 +1,94 @@
+<%
+  /*
+   * 쇼핑특가 캐러셀 (docs/사이트개선/shopping_deal_design.md)
+   *
+   * product_carousel 과 표현은 같지만 데이터 소스가 다르다 — product_group(수동 큐레이션)이
+   * 아니라 **활성 특가**(services/deal/dealService)다. 기간·시간창·요일·선착순이 맞는 상품만
+   * 리졸버가 넘겨주므로, 특가가 하나도 없으면 이 섹션은 아예 렌더되지 않는다(리졸버가 null).
+   *
+   * 상품 카드는 공용 product_card 를 그대로 쓴다 — 리졸버가 price/original_price/discount_rate 를
+   * 이미 특가로 덮어놨으므로 카드는 특가의 존재를 몰라도 된다. 카드 아래 특가 메타
+   * (타임특가 카운트다운 · 선착순 잔여)만 얹는다.
+   *
+   * locals (config_json):
+   *   title            : 섹션 제목
+   *   products         : 특가 상품 배열 (리졸버 주입, 각 항목에 .deal)
+   *   dealCategoryCode : 특정 특가 카테고리만 (비우면 전체)
+   *   maxCount         : 최대 노출 수 (기본 12)
+   *   columnsPerView   : PC 뷰당 표시 수 (기본 4)
+   *   moreLink         : '더 보기' 링크 (기본 /deals)
+   */
+  const _max = (typeof maxCount !== 'undefined' && maxCount) ? Number(maxCount) : 12;
+  const _items = (products || []).slice(0, _max);
+  const _perView = (typeof columnsPerView !== 'undefined' && columnsPerView) ? Number(columnsPerView) : 4;
+  const _more = (typeof moreLink !== 'undefined' && moreLink) ? moreLink : '/deals';
+  const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-12 bg-white';
+  const _badgeText = (typeof badgeText !== 'undefined' && badgeText) ? badgeText : '';
+  const _badgeClass = (typeof badgeClass !== 'undefined' && badgeClass) ? badgeClass : 'brand-chip inline-block px-3 py-1 rounded-full text-xs font-bold mb-3';
+%>
+<% if (_items.length > 0) { %>
+<section class="<%= _sectionClass %>">
+  <%- include('./_carousel_base') %>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" data-yd-carousel>
+    <div class="flex items-end justify-between mb-6 gap-4">
+      <div class="text-left">
+        <% if (_badgeText) { %><span class="<%= _badgeClass %>"><%= _badgeText %></span><% } %>
+        <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" class="yd-carousel__nav" data-yd-prev aria-label="이전 상품">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button type="button" class="yd-carousel__nav" data-yd-next aria-label="다음 상품">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="yd-carousel__track" data-yd-track style="--yd-per-view: <%= _perView %>">
+      <% _items.forEach(product => { %>
+        <div>
+          <%- include('../product_card', { product }) %>
+
+          <% if (product.deal) { %>
+            <div class="mt-2 space-y-1.5">
+              <% if (product.deal.closesAtEpoch) { %>
+                <div class="flex items-center gap-1.5 text-xs font-medium text-rose-600"
+                     data-deal-countdown="<%= product.deal.closesAtEpoch %>">
+                  <i class="bi bi-clock"></i>
+                  <span class="deal-countdown-text">남은 시간 계산 중…</span>
+                </div>
+              <% } %>
+
+              <% if (product.deal.qtyLimit) {
+                   const _pct = Math.min(100, Math.round((product.deal.soldQty / product.deal.qtyLimit) * 100));
+              %>
+                <div>
+                  <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div class="h-full rounded-full bg-rose-500" style="width: <%= _pct %>%"></div>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-500">
+                    <%= product.deal.qtyLimit %>개 한정 ·
+                    <span class="font-semibold text-rose-600"><%= product.deal.remainQty %>개</span> 남음
+                  </p>
+                </div>
+              <% } %>
+            </div>
+          <% } %>
+        </div>
+      <% }); %>
+    </div>
+
+    <% if (_more) { %>
+      <div class="mt-8 text-center">
+        <a href="<%= _more %>" class="brand-pill--ghost inline-flex items-center gap-1 px-5 py-2.5 rounded-full text-sm font-semibold">
+          더 보기 <i class="bi bi-chevron-right text-xs"></i>
+        </a>
+      </div>
+    <% } %>
+  </div>
+
+  <%- include('./_deal_countdown') %>
+</section>
+<% } %>
