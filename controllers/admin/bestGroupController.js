@@ -69,7 +69,9 @@ async function getList(req, res, next) {
         );
 
         res.render('admin/best_groups/list', {
+            layout: 'layouts/admin_layout',
             title: '베스트/랭킹 관리',
+            subtitle: '고객 베스트/랭킹 화면의 탭·점수 기준·집계 스케줄을 관리합니다.',
             groups,
             config,
             runs,
@@ -272,7 +274,9 @@ async function getDetail(req, res, next) {
         });
 
         res.render('admin/best_groups/detail', {
+            layout: 'layouts/admin_layout',
             title: `베스트/랭킹 — ${group.name}`,
+            subtitle: 'MD 픽(수동 고정)을 관리하고 고객 화면과 같은 순위를 미리 봅니다.',
             group,
             pins,
             preview: products,
