@@ -5,6 +5,7 @@ const productController = require('../controllers/productController');
 const bestController = require('../controllers/bestController');
 const dealController = require('../controllers/dealController');
 const displayService = require('../services/display/displayService');
+const membershipInfo = require('../services/membership/membershipInfo');
 
 /*
  * 기능 메뉴 표준 URL (M3)
@@ -149,14 +150,7 @@ const COMING_SOON = {
         primary: { label: '신상품 보기', href: '/new' },
         secondary: { label: '고객센터', href: '/cs' },
     },
-    ranking: {
-        name: '랭킹',
-        icon: 'bi-trophy',
-        description: '카테고리별·기간별 인기 상품 순위를 준비하고 있습니다.<br>지금은 조회수 기준 베스트 상품을 먼저 만나보세요.',
-        bullets: ['카테고리별 실시간 순위', '주간·월간 랭킹', '급상승 상품'],
-        primary: { label: '베스트 상품 보기', href: '/best' },
-        secondary: { label: '전체 상품', href: '/products' },
-    },
+    // 랭킹 항목은 삭제했다 — 베스트가 랭킹 엔진을 흡수해 /ranking 은 /best 로 301 한다.
     outlet: {
         name: '아울렛',
         icon: 'bi-tags',
@@ -251,7 +245,16 @@ function comingSoon(key) {
 // COMING_SOON.coupon 랜딩으로 되돌린다. 여기에 `router.get('/coupon', ...)` 를 남겨두면
 // featureRoutes 가 '/' 에 먼저 마운트되므로 뒤의 app.use('/coupon', ...) 가 영영 닿지 못한다.
 router.get('/live', comingSoon('live'));
-router.get('/ranking', comingSoon('ranking'));
+
+/*
+ * 랭킹 — 베스트에 흡수됐다(2026-07 사용자 결정). GNB 메뉴도 내렸다.
+ *
+ * 베스트가 랭킹 엔진(best_ranking 스냅샷 + 그룹×기간 탭)으로 재설계되면서 '랭킹'이 따로
+ * 존재할 이유가 없어졌다 — 메뉴 이름도 이미 '베스트/랭킹'이다. 준비중 랜딩으로 남겨두면
+ * 같은 기능을 두 곳에서 설명하게 되므로 **영구 이전(301)** 으로 넘긴다.
+ * 라우트를 지우면 북마크·외부 링크가 404 가 된다.
+ */
+router.get('/ranking', (req, res) => res.redirect(301, '/best'));
 
 /*
  * 아울렛 — 준비중 랜딩 유지.
@@ -265,24 +268,19 @@ router.get('/outlet', comingSoon('outlet'));
 
 /*
  * 멤버십 — 정적 제도 소개(안 A). 등급 산정을 하지 않는다(데이터 부족, gnb §2-9).
- * 등급 정의는 테이블 없이 상수로 둔다. 실제 등급 시스템(user_grade + 배치)은 2차.
+ *
+ * GNB 메뉴에서는 내려왔다(2026-07 사용자 결정) — 이제 **이벤트&혜택(/event)의 하위 섹션**으로
+ * 노출한다. 다만 이 라우트는 유지한다: 섹션의 '자세히 보기'가 여기로 오고, 라우트를 지우면
+ * 기존 링크·북마크가 죽는다.
+ *
+ * 등급·혜택 정의는 services/membership/membershipInfo.js 한 곳에 둔다
+ * (이 페이지와 이벤트 페이지가 함께 쓴다 — 두 벌로 갈라지면 반드시 어긋난다).
  */
-const MEMBERSHIP_TIERS = [
-    { code: 'WELCOME', name: '웰컴',   threshold: '가입 시',          rate: '1%', perks: ['기본 적립'] },
-    { code: 'SILVER',  name: '실버',   threshold: '누적 10만원 이상',  rate: '2%', perks: ['기본 적립 상향'] },
-    { code: 'GOLD',    name: '골드',   threshold: '누적 50만원 이상',  rate: '3%', perks: ['적립 상향', '무료배송'], accent: true },
-    { code: 'VIP',     name: 'VIP',    threshold: '누적 200만원 이상', rate: '5%', perks: ['최고 적립', '무료배송', '전용 쿠폰'] },
-];
-const MEMBERSHIP_BENEFITS = [
-    { icon: 'bi-coin',            title: '구매 적립', desc: '등급별 적립률로 구매 금액을 적립금으로 돌려드립니다.' },
-    { icon: 'bi-truck',          title: '배송 혜택', desc: '골드 등급부터 무료배송 혜택이 적용됩니다.' },
-    { icon: 'bi-gift',           title: '생일 쿠폰', desc: '생일·기념일에 전용 쿠폰을 드립니다.' },
-];
 router.get('/membership', (req, res) => {
     res.render('user/membership/index', {
         title: '멤버십',
-        tiers: MEMBERSHIP_TIERS,
-        benefits: MEMBERSHIP_BENEFITS,
+        tiers: membershipInfo.TIERS,
+        benefits: membershipInfo.BENEFITS,
         seo: Object.assign({}, res.locals.seo, {
             title: '멤버십 안내',
             description: '구매 실적에 따른 등급별 적립·배송·전용 혜택을 안내합니다.',

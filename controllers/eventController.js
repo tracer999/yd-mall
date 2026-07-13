@@ -1,35 +1,21 @@
 const svc = require('../services/event/eventService');
 const { sanitize } = require('../services/display/htmlSanitizer');
-const { COMING_SOON } = require('../routes/feature');
+const membershipInfo = require('../services/membership/membershipInfo');
 
 /*
  * 이벤트&혜택 (고객) — SSR
  * 설계: docs/사이트개선/gnb_menu_design.md §2-7
  *
- * ── 준비중 랜딩 폴백 (중요) ──────────────────────────
- * `feature_menu.EVENT.module_ready` 는 이미 1 이라 GNB 에 "이벤트&혜택" 메뉴가 떠 있고,
- * 개발 DB 와 운영 DB 가 같다. 발행된 이벤트가 0건인 몰(현재 mall 2)에서 이 컨트롤러가
- * 빈 목록을 렌더하면 운영이 퇴보한다. 그래서 0건이면 준비중 랜딩으로 되돌린다.
+ * ── 이 페이지는 이제 '혜택 허브'다 (2026-07) ─────────
+ * 멤버십이 GNB 에서 내려와 이 페이지의 하위 섹션이 됐다. 그래서 발행 이벤트가 0건이어도
+ * 준비중 랜딩(COMING_SOON.event)으로 되돌리지 않는다 — 상시 혜택·멤버십이라는 보여줄 내용이
+ * 남아 있고, 되돌리면 이벤트가 0건인 몰(mall 2)에서 멤버십이 도달 불가가 된다.
  *
  * 예전 이 URL 은 '/boards/notice'(공지사항) 로 302 했다. 공지사항은 고객센터(/cs)의
  * 하위 항목이지 이벤트가 아니다.
  */
 
 const PHASE_FILTERS = ['all', 'ongoing', 'upcoming', 'ended'];
-
-/** 발행 0건일 때의 랜딩. feature.js 의 comingSoon 과 같은 화면. */
-function renderComingSoon(res) {
-    const feature = COMING_SOON.event;
-    return res.render('user/coming_soon', {
-        title: feature.name,
-        feature,
-        seo: Object.assign({}, res.locals.seo, {
-            title: `${feature.name} (준비 중)`,
-            description: String(feature.description).replace(/<[^>]*>/g, ' '),
-            robots: 'noindex,follow',
-        }),
-    });
-}
 
 function siteMeta(res) {
     const siteSettings = res.locals.siteSettings || {};
@@ -39,11 +25,19 @@ function siteMeta(res) {
     };
 }
 
-/** GET /event */
+/*
+ * GET /event
+ *
+ * ⚠️ 발행 이벤트가 0건이어도 **준비중 랜딩으로 되돌리지 않는다**(2026-07 변경).
+ * 멤버십이 GNB 에서 내려와 이 페이지의 하위 섹션이 됐기 때문이다 — 이제 /event 는
+ * "이벤트 목록"이 아니라 **혜택 허브**이고, 이벤트가 없어도 상시 혜택·멤버십이라는
+ * 보여줄 내용이 있다. 0건이면 목록 자리에만 빈 상태 문구가 뜬다(뷰가 처리).
+ *
+ * 되돌렸다면 이벤트가 0건인 몰(mall 2)에서 멤버십이 통째로 도달 불가가 된다.
+ */
 exports.getList = async (req, res, next) => {
     try {
         const mallId = req.mallId || 1;
-        if (!(await svc.hasAny(mallId))) return renderComingSoon(res);
 
         const phase = PHASE_FILTERS.includes(req.query.phase) ? req.query.phase : 'all';
         const events = await svc.list(mallId, { phase });
@@ -53,6 +47,9 @@ exports.getList = async (req, res, next) => {
             title: '이벤트 & 혜택',
             events,
             phase,
+            // 멤버십 섹션 — 정의는 services/membership/membershipInfo.js 한 곳에 있다.
+            membershipTiers: membershipInfo.TIERS,
+            membershipBenefits: membershipInfo.BENEFITS,
             currentUser: req.user || null,
             seo: Object.assign({}, res.locals.seo, {
                 title: `이벤트 & 혜택 | ${companyName}`,
