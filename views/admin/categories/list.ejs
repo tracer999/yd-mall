@@ -2,13 +2,16 @@
 /* B1 — 카테고리 트리 관리
    탭(상품/테마/브랜드)은 뎁스가 아니라 병렬 분류축이다. 각 탭 안에서 최대 maxDepth 단계까지 계층을 만든다.
    행은 서버에서 이미 부모→자식 순으로 평탄화되어 오고, _depth 로 들여쓰기 한다. */
+/* THEME 탭은 폐기했다 — 테마 5(베스트)·6(신규)은 기능 메뉴(/best, /new)와 다른 결과를 내던
+   잔재였고, 신상품은 판매시작일 기준 자동 판정으로 바뀌었다. */
 const TABS = [
     // 상품(NORMAL) 카테고리는 GNB 메가메뉴에 이미지+설명이 노출되므로 편집 가능하게 한다.
-    { key: 'product', type: 'NORMAL', label: '상품 카테고리', nameLabel: '카테고리명', rows: productCategories || [], hasLogo: true,  hasDesc: true  },
-    { key: 'theme',   type: 'THEME',  label: '테마 카테고리', nameLabel: '테마명',     rows: themeCategories   || [], hasLogo: false, hasDesc: false },
-    { key: 'brand',   type: 'BRAND',  label: '브랜드 카테고리', nameLabel: '브랜드명',  rows: brandCategories   || [], hasLogo: true,  hasDesc: false },
+    { key: 'product', type: 'NORMAL', label: '상품 카테고리', nameLabel: '카테고리명', rows: productCategories || [], hasLogo: true,  hasDesc: true,  hasOnboarded: false },
+    // 브랜드는 입점일을 관리한다 — 신규 입점 브랜드 판정 기준(services/catalog/newArrival).
+    { key: 'brand',   type: 'BRAND',  label: '브랜드 카테고리', nameLabel: '브랜드명',  rows: brandCategories   || [], hasLogo: true,  hasDesc: false, hasOnboarded: true  },
 ];
-const colCount = (tab) => 6 + (tab.hasLogo ? 1 : 0) + (tab.hasDesc ? 1 : 0);
+const colCount = (tab) => 6 + (tab.hasLogo ? 1 : 0) + (tab.hasDesc ? 1 : 0) + (tab.hasOnboarded ? 1 : 0);
+const toDateInput = (v) => v ? new Date(v).toISOString().slice(0, 10) : '';
 
 /* JSON 을 <script> 안에 안전하게 심는다. 카테고리명은 사용자 입력이다. */
 const toJs = (v) => JSON.stringify(v)
@@ -63,6 +66,9 @@ const toJs = (v) => JSON.stringify(v)
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[240px]"><%= tab.nameLabel %></th>
                             <% if (tab.hasDesc) { %>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">간략 설명</th>
+                            <% } %>
+                            <% if (tab.hasOnboarded) { %>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">입점일</th>
                             <% } %>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">상위 카테고리</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-40">노출</th>
@@ -154,6 +160,18 @@ const toJs = (v) => JSON.stringify(v)
                                             <span class="text-xs text-gray-300">—</span>
                                             <%# 값 보존 — 빠지면 postEdit 가 description 을 NULL 로 덮는다. %>
                                             <input form="<%= formId %>" type="hidden" name="description" value="<%= category.description || '' %>">
+                                        <% } %>
+                                    </td>
+                                <% } %>
+
+                                <%# 브랜드 입점일 — 이 날짜로부터 설정 기간 내면 '신규 입점 브랜드'로 노출된다. %>
+                                <% if (tab.hasOnboarded) { %>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <input form="<%= formId %>" type="date" name="onboarded_at"
+                                            value="<%= toDateInput(category.onboarded_at) %>"
+                                            class="w-full text-sm">
+                                        <% if (typeof isNewBrand === 'function' && isNewBrand(category)) { %>
+                                            <span class="mt-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 text-emerald-800">신규 입점</span>
                                         <% } %>
                                     </td>
                                 <% } %>
@@ -287,6 +305,15 @@ const toJs = (v) => JSON.stringify(v)
                                     <input type="text" name="description" maxlength="255" class="w-full"
                                         placeholder="GNB 메가메뉴에 카테고리명 아래로 표시됩니다 (최대 255자)">
                                 </div>
+                                <div class="mb-4 hidden" id="onboardedField">
+                                    <label class="block mb-2 text-sm font-medium text-gray-900">입점일</label>
+                                    <input type="date" name="onboarded_at" class="w-full"
+                                        value="<%= new Date().toISOString().slice(0,10) %>">
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        이 날짜로부터 <strong><%= typeof newBrandDays !== 'undefined' ? newBrandDays : 180 %>일간</strong>
+                                        '신규 입점 브랜드'로 노출됩니다.
+                                    </p>
+                                </div>
                                 <div class="mb-4">
                                     <label class="block mb-2 text-sm font-medium text-gray-900">상위 카테고리</label>
                                     <select name="parent_id" id="modal-parent-select" class="w-full">
@@ -358,7 +385,7 @@ const toJs = (v) => JSON.stringify(v)
     // 카테고리명이 그대로 들어가므로 스크립트 조기 종료 태그나 U+2028/2029 로 깨지지 않게 이스케이프한다.
     const nextDisplayOrderByType = <%- toJs(nextDisplayOrder || { NORMAL: 0, THEME: 0, BRAND: 0 }) %>;
     const parentOptionsByType = <%- toJs(addParentOptions || {}) %>;
-    const typeMap = { product: 'NORMAL', theme: 'THEME', brand: 'BRAND' };
+    const typeMap = { product: 'NORMAL', brand: 'BRAND' };
 
     const tabActiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
     const tabInactiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
@@ -437,7 +464,7 @@ const toJs = (v) => JSON.stringify(v)
 
     function switchTab(tab) {
         currentTab = tab;
-        ['product', 'theme', 'brand'].forEach(key => {
+        ['product', 'brand'].forEach(key => {
             document.getElementById('tab-' + key).className = (key === tab) ? tabActiveClass : tabInactiveClass;
             document.getElementById('content-' + key).classList.toggle('hidden', key !== tab);
         });
@@ -468,9 +495,11 @@ const toJs = (v) => JSON.stringify(v)
 
         const showImage = currentTab === 'brand' || (currentTab === 'product' && isTopLevel);
         const showDesc = currentTab === 'product' && isTopLevel;
+        const showOnboarded = currentTab === 'brand'; // 입점일은 브랜드에만 의미가 있다
 
         document.getElementById('logoUploadField').classList.toggle('hidden', !showImage);
         document.getElementById('descField').classList.toggle('hidden', !showDesc);
+        document.getElementById('onboardedField').classList.toggle('hidden', !showOnboarded);
     }
 
     document.addEventListener('change', (e) => {

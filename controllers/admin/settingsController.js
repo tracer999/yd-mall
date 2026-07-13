@@ -284,6 +284,8 @@ exports.updateSystemSettings = async (req, res) => {
         ['tosspayments_secret_key', req.body.tosspayments_secret_key, '토스페이먼츠 시크릿 키 (서버 결제 승인용)'],
         ['point_accumulate_rate', req.body.point_accumulate_rate, '구매 적립률 (%)'],
         ['point_min_use', req.body.point_min_use, '포인트 최소 사용 단위 (원)'],
+        ['new_product_days', req.body.new_product_days, '신상품 노출 기간(일) — 판매 시작일 기준'],
+        ['new_brand_days', req.body.new_brand_days, '신규 입점 브랜드 노출 기간(일) — 입점일 기준'],
     ];
 
     const sql = `

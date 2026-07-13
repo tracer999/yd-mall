@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const fs = require('fs');
 const path = require('path');
 const { syncProductById, syncProductsByIds, deleteProductById, isShopifySyncEnabled } = require('../../services/shopify/syncService');
+const newArrival = require('../../services/catalog/newArrival');
 
 const OpenAI = require('openai');
 
@@ -331,11 +332,12 @@ exports.getProductSEOView = async (req, res) => {
 
 exports.getList = async (req, res) => {
     try {
+        // theme_category_id 는 전량 NULL 인 죽은 컬럼이라 JOIN 을 걷어냈다(THEME 축 폐기).
         const [products] = await pool.query(`
-            SELECT p.*, c.name as category_name, tc.name as theme_category_name
-            FROM products p 
-            LEFT JOIN categories c ON p.category_id = c.id 
-            LEFT JOIN categories tc ON p.theme_category_id = tc.id
+            SELECT p.*, c.name as category_name, bc.name as brand_category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN categories bc ON p.brand_category_id = bc.id
             ORDER BY p.created_at DESC
         `);
         res.render('admin/products/list', {
@@ -360,6 +362,29 @@ exports.postUpdateStatus = async (req, res) => {
 
     try {
         await pool.query('UPDATE products SET status = ? WHERE id IN (?)', [status, ids]);
+        res.redirect('/admin/products');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+/*
+ * 판매 시작일 일괄 지정.
+ *
+ * 임포트로 들어온 상품은 created_at 이 적재 당일에 몰려 있어 판매 시작일의 근거가 되지 못한다.
+ * 그래서 마이그레이션이 NULL 로 남겼고(= 신상품 아님), 운영이 이 화면에서 실제 날짜를 채운다.
+ */
+exports.postBulkSaleStartDate = async (req, res) => {
+    const { product_ids, sale_start_date } = req.body;
+    const ids = Array.isArray(product_ids) ? product_ids : (product_ids ? [product_ids] : []);
+
+    if (!ids.length) return res.redirect('/admin/products');
+
+    try {
+        // 빈 값이면 미지정으로 되돌린다(신상품에서 제외).
+        const value = sale_start_date && String(sale_start_date).trim() ? sale_start_date : null;
+        await pool.query('UPDATE products SET sale_start_date = ? WHERE id IN (?)', [value, ids]);
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);
@@ -473,7 +498,6 @@ exports.getAdd = async (req, res) => {
     try {
         const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
         const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
-        const [themeCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'THEME' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
         const domain = domainFromSettings.replace(/\/$/, '');
@@ -482,10 +506,10 @@ exports.getAdd = async (req, res) => {
             layout: 'layouts/admin_layout',
             title: '상품 등록',
             productCategories,
-            themeCategories,
             brands,
             product: null,
-            productUrlBase
+            productUrlBase,
+            newProductDays: newArrival.newProductDays()
         });
     } catch (err) {
         console.error(err);
@@ -495,9 +519,9 @@ exports.getAdd = async (req, res) => {
 
 exports.postAdd = async (req, res) => {
     const {
-        category_id, brand_category_id, theme_categories, name, product_code, provider, description, short_description,
+        category_id, brand_category_id, name, product_code, provider, description, short_description,
         video_type, video_url,
-        purchase_price, original_price, price, discount_rate, stock, status,
+        purchase_price, original_price, price, discount_rate, stock, status, sale_start_date,
         is_ai_recommendation, ai_recommendation_content,
         distribution_badge, product_badge, badge_expire_date, visibility
     } = req.body;
@@ -540,6 +564,8 @@ exports.postAdd = async (req, res) => {
             ['discount_rate', discount_rate],
             ['stock', stock],
             ['status', status],
+            // 신상품 판정 앵커. 비워두면 신상품에서 빠지므로 폼이 오늘 날짜를 프리필한다.
+            ['sale_start_date', sale_start_date || null],
             ['is_ai_recommendation', is_ai_recommendation ? 1 : 0],
             ['ai_recommendation_content', ai_recommendation_content],
             ['slug', finalSlug],
@@ -567,14 +593,6 @@ exports.postAdd = async (req, res) => {
             console.error(`[Shopify Sync] 신규 상품 동기화 실패: product_id=${productId}: ${err.message}`);
         });
 
-        // Theme Categories Insert (Multiple)
-        if (theme_categories) {
-            const themes = Array.isArray(theme_categories) ? theme_categories : [theme_categories];
-            const themePromises = themes.map(async (themeId) => {
-                await pool.query('INSERT INTO product_themes (product_id, category_id) VALUES (?, ?)', [productId, themeId]);
-            });
-            await Promise.all(themePromises);
-        }
 
         // Sub Images Insert
         if (req.files['sub_images']) {
@@ -611,8 +629,8 @@ exports.postAdd = async (req, res) => {
 
 exports.postEdit = async (req, res) => {
     const {
-        id, category_id, brand_category_id, theme_categories, name, product_code, provider, description, short_description,
-        purchase_price, original_price, price, discount_rate, stock, status,
+        id, category_id, brand_category_id, name, product_code, provider, description, short_description,
+        purchase_price, original_price, price, discount_rate, stock, status, sale_start_date,
         video_type, video_url, old_image, old_thumbnail, old_video,
         is_ai_recommendation, ai_recommendation_content,
         distribution_badge, product_badge, badge_expire_date, visibility
@@ -665,6 +683,8 @@ exports.postEdit = async (req, res) => {
             ['discount_rate', discount_rate],
             ['stock', stock],
             ['status', status],
+            // 신상품 판정 앵커. 비워두면 신상품에서 빠지므로 폼이 오늘 날짜를 프리필한다.
+            ['sale_start_date', sale_start_date || null],
             ['is_ai_recommendation', is_ai_recommendation ? 1 : 0],
             ['ai_recommendation_content', ai_recommendation_content],
             ['slug', finalSlug],
@@ -690,18 +710,6 @@ exports.postEdit = async (req, res) => {
             console.error(`[Shopify Sync] 상품 수정 동기화 실패: product_id=${id}: ${err.message}`);
         });
 
-        // Theme Categories Update
-        // First delete existing mappings
-        await pool.query('DELETE FROM product_themes WHERE product_id = ?', [id]);
-
-        // Then insert new ones
-        if (theme_categories) {
-            const themes = Array.isArray(theme_categories) ? theme_categories : [theme_categories];
-            const themePromises = themes.map(async (themeId) => {
-                await pool.query('INSERT INTO product_themes (product_id, category_id) VALUES (?, ?)', [id, themeId]);
-            });
-            await Promise.all(themePromises);
-        }
 
         // Handle Sub Images Insert
         if (req.files['sub_images']) {
@@ -800,13 +808,10 @@ exports.getList = async (req, res) => {
         );
 
         const [products] = await pool.query(`
-            SELECT p.*, c.name as category_name,
-            GROUP_CONCAT(tc.name SEPARATOR ', ') as theme_category_names,
-            GROUP_CONCAT(tc.id) as theme_category_ids
+            SELECT p.*, c.name as category_name, bc.name as brand_category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN product_themes pt ON p.id = pt.product_id
-            LEFT JOIN categories tc ON pt.category_id = tc.id
+            LEFT JOIN categories bc ON p.brand_category_id = bc.id
             ${whereClause}
             GROUP BY p.id
             ORDER BY p.created_at DESC
@@ -860,17 +865,7 @@ exports.getDetail = async (req, res) => {
 
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
 
-        // Fetch themes with names
-        const [themes] = await pool.query(`
-            SELECT c.name, c.id 
-            FROM product_themes pt 
-            JOIN categories c ON pt.category_id = c.id 
-            WHERE pt.product_id = ?
-        `, [id]);
-
-        // Attach images and themes to product object
         product.images = images;
-        product.themes = themes;
 
         const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
         const domain = domainFromSettings.replace(/\/$/, '');
@@ -913,14 +908,10 @@ exports.getEdit = async (req, res) => {
 
         const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
         const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
-        const [themeCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'THEME' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
-        const [themes] = await pool.query('SELECT category_id FROM product_themes WHERE product_id = ?', [id]);
 
-        // Attach images and themes to product object
         rows[0].images = images;
-        rows[0].theme_ids = themes.map(t => t.category_id);
 
         const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
         const domain = domainFromSettings.replace(/\/$/, '');
@@ -930,10 +921,10 @@ exports.getEdit = async (req, res) => {
             layout: 'layouts/admin_layout',
             title: '상품 수정',
             productCategories,
-            themeCategories,
             brands,
             product: rows[0],
-            productUrlBase
+            productUrlBase,
+            newProductDays: newArrival.newProductDays()
         });
     } catch (err) {
         console.error(err);

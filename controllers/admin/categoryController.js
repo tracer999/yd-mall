@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { syncCategoryById, deleteCategoryFromShopify } = require('../../services/shopify/categorySync');
 const depthGuard = require('../../services/tree/depthGuard');
+const newArrival = require('../../services/catalog/newArrival');
 
 /*
  * 카테고리 관리 (B1 — 트리 + 최대 3뎁스)
@@ -15,8 +16,10 @@ const depthGuard = require('../../services/tree/depthGuard');
  * 뎁스 제한은 각 type 트리 내부에서 독립 적용하며, 부모는 같은 type 안에서만 고를 수 있다.
  */
 
-const TYPES = ['NORMAL', 'THEME', 'BRAND'];
-const TAB_TO_TYPE = { product: 'NORMAL', theme: 'THEME', brand: 'BRAND' };
+/* THEME 축은 폐기했다(테마 5·6 → /best·/new 로 통합). 기존 THEME 행은 DB 에 남아 있으나
+   관리 화면에서 만들거나 편집하지 않는다. */
+const TYPES = ['NORMAL', 'BRAND'];
+const TAB_TO_TYPE = { product: 'NORMAL', brand: 'BRAND' };
 
 /*
  * 한 페이지에 담는 최상위(1뎁스) 카테고리 수.
@@ -143,13 +146,13 @@ exports.getList = async (req, res) => {
             title: '카테고리 관리',
             categories,
             productCategories: pagedByType.NORMAL,
-            themeCategories: pagedByType.THEME,
             brandCategories: pagedByType.BRAND,
             addParentOptions,
             activeTab,
             pageInfo,
             nextDisplayOrder,
             maxDepth,
+            newBrandDays: newArrival.newBrandDays(),
             error: req.query.error || '',
         });
     } catch (err) {
@@ -181,6 +184,8 @@ exports.postAdd = async (req, res) => {
     const logoFile = req.file;
     const logoPath = logoFile ? '/uploads/brands/' + logoFile.filename : null;
     const description = (req.body.description || '').trim() || null;
+    // 입점일은 브랜드에만 의미가 있다. NORMAL/THEME 에 값이 새어들지 않게 여기서 막는다.
+    const onboardedAt = (allowedType === 'BRAND' && req.body.onboarded_at) ? req.body.onboarded_at : null;
 
     const conn = await pool.getConnection();
     try {
@@ -199,9 +204,9 @@ exports.postAdd = async (req, res) => {
         }
 
         const [result] = await conn.query(
-            `INSERT INTO categories (mall_id, name, display_order, type, logo_image_path, description, parent_id, depth, is_active, pc_visible, mobile_visible)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [MALL_ID, name, nextOrder, allowedType, logoPath, description, parentId, depth,
+            `INSERT INTO categories (mall_id, name, display_order, type, logo_image_path, onboarded_at, description, parent_id, depth, is_active, pc_visible, mobile_visible)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [MALL_ID, name, nextOrder, allowedType, logoPath, onboardedAt, description, parentId, depth,
              toBool(req.body.is_active ?? '1'), toBool(req.body.pc_visible ?? '1'), toBool(req.body.mobile_visible ?? '1')]
         );
 
@@ -233,6 +238,8 @@ exports.postEdit = async (req, res) => {
     let logoPath = req.body.existing_logo || null;
     if (req.file) logoPath = '/uploads/brands/' + req.file.filename;
     const description = (req.body.description || '').trim() || null;
+    // 입점일은 브랜드에만 의미가 있다. NORMAL/THEME 에 값이 새어들지 않게 여기서 막는다.
+    const onboardedAt = (allowedType === 'BRAND' && req.body.onboarded_at) ? req.body.onboarded_at : null;
 
     const conn = await pool.getConnection();
     try {
@@ -255,10 +262,10 @@ exports.postEdit = async (req, res) => {
         await conn.beginTransaction();
         await conn.query(
             `UPDATE categories
-             SET name = ?, display_order = ?, type = ?, logo_image_path = ?, description = ?, parent_id = ?,
+             SET name = ?, display_order = ?, type = ?, logo_image_path = ?, onboarded_at = ?, description = ?, parent_id = ?,
                  is_active = ?, pc_visible = ?, mobile_visible = ?
              WHERE id = ?`,
-            [name, display_order, allowedType, logoPath, description, newParentId,
+            [name, display_order, allowedType, logoPath, onboardedAt, description, newParentId,
              toBool(req.body.is_active), toBool(req.body.pc_visible), toBool(req.body.mobile_visible), nodeId]
         );
 

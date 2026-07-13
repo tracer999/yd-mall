@@ -24,6 +24,7 @@ router.post('/delete', productController.postDelete);
 router.post('/product-image-upload', upload.single('file'), productController.postUploadImage);
 router.post('/generate-ai-recommendation', productController.generateAIRecommendation);
 router.post('/status/update', productController.postUpdateStatus);
+router.post('/sale-start-date/bulk', productController.postBulkSaleStartDate);
 router.post('/visibility', express.json(), productController.postVisibility);
 router.post('/shopify-sync', express.json(), productController.postShopifySync);
 
