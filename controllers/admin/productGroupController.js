@@ -1,6 +1,8 @@
 const pool = require('../../config/db');
 const sectionRegistry = require('../../services/display/sectionRegistry');
 const productGroupService = require('../../services/display/productGroupService');
+const menuShowcaseService = require('../../services/menu/menuShowcaseService');
+const newArrival = require('../../services/catalog/newArrival');
 
 /*
  * 상품 그룹 관리 (B6)
@@ -42,6 +44,57 @@ const GROUP_TYPES = ['manual', 'condition'];
 /** 이 그룹을 데이터 소스로 쓸 수 있는 섹션 타입 */
 const GROUP_SECTION_TYPES = Object.keys(sectionRegistry)
     .filter(k => sectionRegistry[k].dataSource === 'product_group');
+
+/*
+ * 메뉴 쇼케이스 상품 풀 — 그룹에 menu_code 가 걸려 있으면 상품 피커 후보를 그 풀로 좁힌다.
+ * "특가 중 선택 / 베스트 중 선택 / 신상품 중 선택" 이 요구사항이라, 전체 상품 피커로는 안 된다.
+ *
+ * 특가 풀은 **아직 끝나지 않은 특가**에 등록된 상품으로 잡는다 — 지금 이 순간 노출 조건
+ * (시간창·요일·선착순 수량)까지 걸면 저녁 타임특가 상품을 낮에 고를 수 없다.
+ */
+/** 베스트 풀로 인정할 순위 상한 */
+const BEST_POOL_RANK = 50;
+
+const POOL_PREDICATES = {
+    deal: mallId => ({
+        sql: `p.id IN (
+                SELECT di.product_id FROM deal_item di
+                JOIN deal d ON d.id = di.deal_id
+                JOIN deal_category dc ON dc.id = d.deal_category_id
+                WHERE d.is_active = 1 AND dc.is_active = 1 AND NOW() <= d.ends_at AND d.mall_id = ?
+              )`,
+        params: [mallId],
+    }),
+    /*
+     * 베스트 풀 = '전체' 탭 일간 랭킹 상위 BEST_POOL_RANK 위.
+     * best_ranking 은 카테고리·브랜드 탭까지 합쳐 사실상 전 상품에 순위를 매기므로,
+     * 조건 없이 IN 하면 후보가 전체 상품과 다를 게 없어져 "베스트 중 선택"이 무의미해진다.
+     */
+    best: mallId => ({
+        sql: `p.id IN (
+                SELECT b.product_id FROM best_ranking b
+                JOIN best_group g ON g.id = b.group_id AND g.group_type = 'ALL'
+                WHERE b.mall_id = ? AND b.period = 'DAILY' AND b.gender = 'ALL'
+                  AND b.age_band = 'ALL' AND b.rank_no <= ?
+              )`,
+        params: [mallId, BEST_POOL_RANK],
+    }),
+    // 신상품 판정은 services/catalog/newArrival 이 단독 정의한다(판매 시작일 N일 이내 OR NEW 뱃지).
+    new: () => newArrival.newProductPredicate('p'),
+};
+
+const POOL_LABELS = {
+    deal: '특가 상품',
+    best: '베스트 상품',
+    new: '신상품',
+};
+
+/** 그룹의 menu_code → 상품 풀 키 (없으면 null = 전체 상품) */
+function poolForGroup(group) {
+    return group && group.menu_code
+        ? (menuShowcaseService.PRODUCT_POOLS[group.menu_code] || null)
+        : null;
+}
 
 /** 그룹을 참조 중인 섹션들 (삭제·비활성 가드용) */
 async function findReferencingSections(conn, groupId) {
@@ -95,6 +148,30 @@ function normalizeGroupType(v) {
 
 function normalizeSortType(v) {
     return SORT_TYPES.some(s => s.value === v) ? String(v) : 'newest';
+}
+
+/**
+ * 메뉴 쇼케이스 지정 값 정규화.
+ * 목록에 없는 코드는 무시한다(노출될 곳 없는 그룹이 생긴다).
+ * @returns {Promise<{menuCode: string|null, showcaseTitle: string|null}>}
+ */
+async function normalizeMenuShowcase(body, mallId) {
+    const code = String(body.menu_code || '').trim();
+    if (!code) return { menuCode: null, showcaseTitle: null };
+
+    const targets = await menuShowcaseService.getMenuTargets(mallId);
+    const target = targets.find(t => t.key === code);
+    if (!target) return { menuCode: null, showcaseTitle: null };
+
+    const title = String(body.showcase_title || '').trim();
+    return { menuCode: code, showcaseTitle: title ? title.slice(0, 100) : null };
+}
+
+/** UNIQUE(mall_id, menu_code) 충돌 — 한 메뉴에는 쇼케이스 그룹 하나만 걸 수 있다. */
+function menuConflictMessage(err) {
+    return err && err.code === 'ER_DUP_ENTRY'
+        ? '이 메뉴에는 이미 다른 상품 그룹이 걸려 있습니다. 기존 그룹의 메뉴 지정을 먼저 해제하세요.'
+        : null;
 }
 
 /** GET /admin/product-groups */
@@ -155,6 +232,8 @@ async function renderForm(res, group, mallId, extra = {}) {
         preview = await productGroupService.resolve(group, { hasUser: false, limit: 12 });
     }
 
+    const poolKey = poolForGroup(group);
+
     res.render('admin/product-groups/edit', Object.assign({
         layout: 'layouts/admin_layout',
         title: group.id ? '상품 그룹 수정' : '상품 그룹 등록',
@@ -166,6 +245,9 @@ async function renderForm(res, group, mallId, extra = {}) {
         brands,
         sortTypes: SORT_TYPES,
         badges: BADGES,
+        // 메뉴 쇼케이스 — 이 그룹을 어느 GNB 메뉴 상단 캐러셀로 쓸지
+        menuTargets: await menuShowcaseService.getMenuTargets(mallId),
+        poolLabel: poolKey ? POOL_LABELS[poolKey] : null,
         refs: group.id ? await findReferencingSections(null, group.id) : [],
         saved: false,
         error: null,
@@ -176,9 +258,10 @@ async function renderForm(res, group, mallId, extra = {}) {
 exports.getNew = async (req, res) => {
     try {
         await renderForm(res, {
-            id: null, name: '', group_type: 'manual', sort_type: 'newest',
+            id: null, name: '', menu_code: '', showcase_title: '',
+            group_type: 'manual', sort_type: 'newest',
             filter_condition_json: null, is_active: 1,
-        }, req.adminMallId || 1);
+        }, req.adminMallId || 1, { error: req.query.error || null });
     } catch (err) {
         console.error('[productGroup] getNew:', err.message);
         res.status(500).send('Server Error');
@@ -210,11 +293,13 @@ exports.postCreate = async (req, res) => {
         if (!name) return res.redirect('/admin/product-groups/new');
 
         const groupType = normalizeGroupType(req.body.group_type);
+        const { menuCode, showcaseTitle } = await normalizeMenuShowcase(req.body, MALL_ID);
+
         const [r] = await pool.query(`
-            INSERT INTO product_group (mall_id, name, group_type, sort_type, filter_condition_json, is_active)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO product_group (mall_id, name, menu_code, showcase_title, group_type, sort_type, filter_condition_json, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            MALL_ID, name.slice(0, 200), groupType,
+            MALL_ID, name.slice(0, 200), menuCode, showcaseTitle, groupType,
             groupType === 'condition' ? normalizeSortType(req.body.sort_type) : 'manual',
             groupType === 'condition' ? buildFilterJson(null, req.body) : null,
             req.body.is_active ? 1 : 0,
@@ -223,6 +308,8 @@ exports.postCreate = async (req, res) => {
         res.redirect(`/admin/product-groups/${r.insertId}?saved=1`);
     } catch (err) {
         console.error('[productGroup] postCreate:', err.message);
+        const conflict = menuConflictMessage(err);
+        if (conflict) return res.redirect('/admin/product-groups/new?error=' + encodeURIComponent(conflict));
         res.status(500).send('Server Error');
     }
 };
@@ -251,15 +338,17 @@ exports.postUpdate = async (req, res) => {
         }
 
         const groupType = normalizeGroupType(req.body.group_type);
+        const { menuCode, showcaseTitle } = await normalizeMenuShowcase(req.body, MALL_ID);
 
         if (groupType === 'condition') {
             // seed_key 등 UI 밖 키를 보존하며 필터를 갱신한다.
             await pool.query(`
                 UPDATE product_group
-                   SET name = ?, group_type = 'condition', sort_type = ?, filter_condition_json = ?, is_active = ?
+                   SET name = ?, menu_code = ?, showcase_title = ?, group_type = 'condition',
+                       sort_type = ?, filter_condition_json = ?, is_active = ?
                  WHERE id = ? AND mall_id = ?
             `, [
-                name.slice(0, 200), normalizeSortType(req.body.sort_type),
+                name.slice(0, 200), menuCode, showcaseTitle, normalizeSortType(req.body.sort_type),
                 buildFilterJson(group.filter_condition_json, req.body),
                 nextActive, id, MALL_ID,
             ]);
@@ -270,14 +359,17 @@ exports.postUpdate = async (req, res) => {
             // '[object Object]' 가 되어 Invalid JSON 오류가 난다.
             await pool.query(`
                 UPDATE product_group
-                   SET name = ?, group_type = 'manual', sort_type = 'manual', is_active = ?
+                   SET name = ?, menu_code = ?, showcase_title = ?, group_type = 'manual',
+                       sort_type = 'manual', is_active = ?
                  WHERE id = ? AND mall_id = ?
-            `, [name.slice(0, 200), nextActive, id, MALL_ID]);
+            `, [name.slice(0, 200), menuCode, showcaseTitle, nextActive, id, MALL_ID]);
         }
 
         res.redirect(`/admin/product-groups/${id}?saved=1`);
     } catch (err) {
         console.error('[productGroup] postUpdate:', err.message);
+        const conflict = menuConflictMessage(err);
+        if (conflict) return res.redirect(`/admin/product-groups/${id}?error=` + encodeURIComponent(conflict));
         res.status(500).send('Server Error');
     }
 };
@@ -402,6 +494,17 @@ exports.getProductSearch = async (req, res) => {
         else if (inStock === 'n') where.push('p.stock <= 0');
         if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
 
+        // 메뉴 쇼케이스 그룹이면 후보를 그 메뉴의 상품 풀로 좁힌다(특가/베스트/신상품 중 선택).
+        const [[group]] = await pool.query(
+            'SELECT menu_code FROM product_group WHERE id = ? AND mall_id = ?', [req.params.id, MALL_ID]
+        );
+        const poolKey = poolForGroup(group);
+        if (poolKey && POOL_PREDICATES[poolKey]) {
+            const pred = POOL_PREDICATES[poolKey](MALL_ID);
+            where.push(pred.sql);
+            params.push(...pred.params);
+        }
+
         // 이미 이 그룹에 담긴 상품은 후보에서 제외
         where.push('p.id NOT IN (SELECT product_id FROM product_group_item WHERE product_group_id = ?)');
         params.push(req.params.id);
@@ -414,7 +517,11 @@ exports.getProductSearch = async (req, res) => {
             LIMIT 100
         `, params);
 
-        res.json({ products, limited: products.length >= 100 });
+        res.json({
+            products,
+            limited: products.length >= 100,
+            pool: poolKey ? POOL_LABELS[poolKey] : null,
+        });
     } catch (err) {
         console.error('[productGroup] getProductSearch:', err.message);
         res.status(500).json({ products: [] });

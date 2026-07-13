@@ -1,24 +1,28 @@
 const pool = require('../../config/db');
 const upload = require('../../middleware/upload');
+const menuShowcaseService = require('../../services/menu/menuShowcaseService');
 
 /*
- * 메뉴별 배너 대상 (파트2 틀)
+ * 메뉴별 배너
  *
- * "메뉴별 배너"는 스키마 변경 없이 group_key 를 재사용해 관리한다.
- *   저장 형태: banner_type='CATEGORY', category_id=NULL, group_key='menu:{key}'
+ * 스키마 변경 없이 group_key 를 재사용해 관리한다.
+ *   저장 형태: banner_type='CATEGORY', category_id=NULL, group_key='menu:{feature_code}'
  *   → 기존 프론트 경로(MAIN 히어로·CATEGORY/BRAND 매칭·POPUP)에는 걸리지 않고,
- *     productController 의 menuBanner 훅(group_key='menu:{key}')에서만 소비된다.
+ *     middleware/menuShowcase 가 경로로 메뉴를 판별해 상단 캐러셀로 렌더한다.
  *
- * key 는 routes/feature.js 의 preset({ menuKey }) 및 productController 와 1:1 로 맞춘다.
- * 새 메뉴에 배너를 붙이려면 이 목록 + routes/feature.js preset 두 곳만 추가하면 된다.
+ * 대상 목록은 **feature_menu 에서 동적으로** 읽는다(예전엔 BEST/NEW/DEAL 3개가 하드코딩돼
+ * 실제 GNB 메뉴와 어긋났다). key 는 feature_menu.feature_code 다.
+ *
+ * 상품형 메뉴(쇼핑특가·베스트·신상품)는 여기서 뺀다 — 그쪽은 이미지 배너가 아니라
+ * 상품 큐레이션(product_group.menu_code)으로 관리하고, 상품그룹이 배너보다 우선하므로
+ * 배너를 등록해도 노출되지 않는다(menuShowcaseService.getForPath).
  */
-const MENU_BANNER_TARGETS = [
-    { key: 'BEST', label: '베스트 (/best)' },
-    { key: 'NEW', label: '신상품 (/new)' },
-    { key: 'DEAL', label: '쇼핑특가 (/deals)' },
-];
-const MENU_KEYS = MENU_BANNER_TARGETS.map(t => t.key);
-exports.MENU_BANNER_TARGETS = MENU_BANNER_TARGETS;
+
+/** 배너로 관리하는 메뉴만 (상품 큐레이션 메뉴 제외) */
+async function getBannerMenuTargets(mallId = 1) {
+    const targets = await menuShowcaseService.getMenuTargets(mallId);
+    return targets.filter(t => !t.pool);
+}
 
 let hasMobileImageColumnCache = null;
 
@@ -67,7 +71,7 @@ exports.getList = async (req, res) => {
             title: '배너 관리',
             banners,
             currentType: type,
-            menuTargets: MENU_BANNER_TARGETS
+            menuTargets: await getBannerMenuTargets(req.mallId || 1)
         });
     } catch (err) {
         console.error(err);
@@ -85,7 +89,7 @@ exports.getAdd = async (req, res) => {
             banner: null,
             categories,
             currentType: type,
-            menuTargets: MENU_BANNER_TARGETS,
+            menuTargets: await getBannerMenuTargets(req.mallId || 1),
             currentMenuKey: '',
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
         });
@@ -102,10 +106,12 @@ exports.postAdd = async (req, res) => {
     const image_url = bannerImage ? '/uploads/banners/' + bannerImage.filename : null;
     const mobile_image_url = mobileBannerImage ? '/uploads/banners/' + mobileBannerImage.filename : null;
 
-    // 신규 등록 — 보존할 기존 group_key 없음(null).
-    const { storedType, categoryId, groupKey, redirectType } = resolveBannerTarget(banner_type, category_id, req.body.menu_target, null);
-
     try {
+        // 신규 등록 — 보존할 기존 group_key 없음(null).
+        const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
+        const { storedType, categoryId, groupKey, redirectType } =
+            resolveBannerTarget(banner_type, category_id, req.body.menu_target, null, menuKeys);
+
         if (await hasMobileImageColumn()) {
             await pool.query(
                 `INSERT INTO banners (banner_type, category_id, group_key, title, image_url, mobile_image_url, link_url, display_order, is_active, start_date, end_date)
@@ -128,6 +134,7 @@ exports.postAdd = async (req, res) => {
         res.redirect(`/admin/banners?type=${redirectType}`);
     } catch (err) {
         console.error(err);
+        if (err.statusCode === 400) return res.status(400).send(err.message);
         res.status(500).send(`Banner save failed${err.code ? `: ${err.code}` : ''}`);
     }
 };
@@ -140,10 +147,15 @@ exports.postAdd = async (req, res) => {
  *    소비하는 'home_promo')를 가진 배너를 편집할 때 null 로 덮어쓰면 라이브 배너가 사라진다.
  *    단 'menu:' 네임스페이스는 메뉴별 배너 전용이므로, 일반 타입으로 전환되면 제거한다.
  */
-function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGroupKey) {
+function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGroupKey, menuKeys = []) {
     if (bannerType === 'MENU') {
-        const key = MENU_KEYS.includes(menuTarget) ? menuTarget : MENU_KEYS[0];
-        return { storedType: 'CATEGORY', categoryId: null, groupKey: `menu:${key}`, redirectType: 'MENU' };
+        // 목록에 없는 키는 저장하지 않는다 — 노출될 곳이 없는 배너가 생긴다.
+        if (!menuKeys.includes(menuTarget)) {
+            const err = new Error('메뉴 배너 대상이 올바르지 않습니다.');
+            err.statusCode = 400;
+            throw err;
+        }
+        return { storedType: 'CATEGORY', categoryId: null, groupKey: `menu:${menuTarget}`, redirectType: 'MENU' };
     }
     const type = ['MAIN', 'CATEGORY', 'POPUP', 'BRAND'].includes(bannerType) ? bannerType : 'MAIN';
     const categoryId = (type === 'CATEGORY' || type === 'BRAND') && categoryIdRaw ? Number(categoryIdRaw) || null : null;
@@ -175,7 +187,7 @@ exports.getEdit = async (req, res) => {
             categories,
             banner,
             currentType: isMenuBanner ? 'MENU' : banner.banner_type,
-            menuTargets: MENU_BANNER_TARGETS,
+            menuTargets: await getBannerMenuTargets(req.mallId || 1),
             currentMenuKey,
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
         });
@@ -200,10 +212,12 @@ exports.postEdit = async (req, res) => {
         mobile_image_url = '/uploads/banners/' + mobileBannerImage.filename;
     }
 
-    // 편집 — 기존 group_key(existing_group_key)를 넘겨 이 화면과 무관한 group_key 를 보존한다.
-    const { storedType, categoryId, groupKey, redirectType } = resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key);
-
     try {
+        // 편집 — 기존 group_key(existing_group_key)를 넘겨 이 화면과 무관한 group_key 를 보존한다.
+        const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
+        const { storedType, categoryId, groupKey, redirectType } =
+            resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key, menuKeys);
+
         if (await hasMobileImageColumn()) {
             await pool.query(`
                 UPDATE banners SET
@@ -224,6 +238,7 @@ exports.postEdit = async (req, res) => {
         res.redirect(`/admin/banners?type=${redirectType}`);
     } catch (err) {
         console.error(err);
+        if (err.statusCode === 400) return res.status(400).send(err.message);
         res.status(500).send(`Banner update failed${err.code ? `: ${err.code}` : ''}`);
     }
 };

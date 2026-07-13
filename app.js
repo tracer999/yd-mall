@@ -227,6 +227,9 @@ async function startServer() {
     // Cart Data Middleware (for header cart count)
     app.use(require('./middleware/cartData'));
 
+    // 메뉴 쇼케이스 — GNB 메뉴 페이지 상단 캐러셀(상품 큐레이션 / 배너 슬라이드)
+    app.use(require('./middleware/menuShowcase'));
+
     // SEO Defaults Middleware (canonical, robots, OG 기본값)
     app.use(require('./middleware/seoDefaults'));
 

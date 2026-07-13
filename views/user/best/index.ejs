@@ -3,7 +3,8 @@
    * 베스트/랭킹 (고객)
    *
    * 화면 구조 (docs/사이트개선/capture/best2.png 참고)
-   *   [배너]        menu:BEST 배너 그룹
+   *   [쇼케이스]    '추천 베스트' 캐러셀 — 이 뷰가 아니라 main_layout 이 body 위에 렌더한다
+   *                 (middleware/menuShowcase → services/menu/menuShowcaseService)
    *   [그룹 탭]     전체 · 카테고리 · 브랜드 — 가로 스크롤 + 좌우 화살표
    *   [기준시각/기간] "07/13 13시 기준"  |  실시간 · 일간 · 주간 · 월간
    *   [세그먼트]     성별 · 나이대 (데이터 없으면 비활성)
@@ -13,25 +14,13 @@
    * (새로고침·공유·뒤로가기에서 같은 화면이 나와야 한다).
    *
    * locals: groups[], group, period, periods{}, products[], calculatedAt, isEmpty,
-   *         banners[], segmentsEnabled, gender, ageBand, ageBands[]
+   *         segmentsEnabled, gender, ageBand, ageBands[]
    */
-  const _banners = banners || [];
   const _groups = groups || [];
   const _periodKeys = Object.keys(periods);
 %>
 
 <div class="max-w-7xl mx-auto px-4 py-6">
-
-  <% if (_banners.length) { const b = _banners[0]; %>
-    <a href="<%= b.link_url || '#' %>" class="block mb-6 rounded-lg overflow-hidden">
-      <picture>
-        <% if (b.mobile_image_url) { %>
-          <source media="(max-width: 767px)" srcset="<%= b.mobile_image_url %>">
-        <% } %>
-        <img src="<%= b.image_url %>" alt="<%= b.title %>" class="w-full object-cover">
-      </picture>
-    </a>
-  <% } %>
 
   <h1 class="text-2xl font-bold text-gray-900 mb-1">베스트/랭킹</h1>
   <p class="text-sm text-gray-500 mb-6">판매와 좋아요를 합산해 매긴 인기 상품 순위입니다.</p>

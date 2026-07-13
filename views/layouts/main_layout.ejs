@@ -446,6 +446,16 @@
 
     <!-- Main Content -->
     <main class="flex-grow brand-page-surface">
+        <%
+            /*
+             * 메뉴 쇼케이스 — GNB 메뉴 페이지 상단 캐러셀.
+             * middleware/menuShowcase 가 경로로 메뉴를 판별해 주입한다. 컨트롤러는 관여하지 않으므로
+             * 여기서 body 위에 얹는다(기존 화면을 대체하지 않고 덧붙인다).
+             */
+        %>
+        <% if (typeof menuShowcase !== 'undefined' && menuShowcase) { %>
+            <%- include('../partials/storefront/menu_showcase') %>
+        <% } %>
         <%- body %>
     </main>
 

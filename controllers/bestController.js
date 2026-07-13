@@ -1,6 +1,5 @@
 const pool = require('../config/db');
 const bestRankingService = require('../services/best/bestRankingService');
-const bannerService = require('../services/display/bannerService');
 
 /*
  * 베스트/랭킹 (고객)
@@ -56,8 +55,7 @@ async function getIndex(req, res, next) {
             mallId, groupId: group.id, period, hasUser, gender, ageBand, limit: 100,
         });
 
-        const banners = await bannerService.getByGroup('menu:BEST', { limit: 5 });
-
+        // 상단 '추천 베스트' 캐러셀은 middleware/menuShowcase 가 주입하고 main_layout 이 렌더한다.
         res.render('user/best/index', {
             title: '베스트/랭킹',
             groups,
@@ -67,7 +65,6 @@ async function getIndex(req, res, next) {
             products,
             calculatedAt,
             isEmpty,
-            banners,
             segmentsEnabled: segOk,
             gender,
             ageBand,

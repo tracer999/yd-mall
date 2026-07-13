@@ -1,5 +1,4 @@
 const recommendService = require('../services/recommend/recommendService');
-const bannerService = require('../services/display/bannerService');
 const { COMING_SOON } = require('../routes/feature');
 
 /*
@@ -37,12 +36,9 @@ async function getIndex(req, res, next) {
             });
         }
 
-        const banners = await bannerService.getByGroup('menu:RECOMMEND', { limit: 1 });
-
         res.render('user/recommend/index', {
             title: '추천',
             sections,
-            banners,
             currentUser: req.user || null,
             seo: Object.assign({}, res.locals.seo, {
                 title: '추천',
