@@ -16,6 +16,8 @@
 
 목록 상단 탭이 `메인 슬라이더 | 메인 배너(레거시) | 카테고리 배너 | 팝업 배너 | 브랜드 배너 | 메뉴별 배너` 6개로 구성됩니다(`views/admin/banners/list.ejs`).
 
+**메뉴별 배너 탭은 켜져 있는 GNB 메뉴를 전부 서브탭(pill)으로 펼칩니다.** 메뉴 하나를 고르면 그 메뉴의 배너만 보입니다(`?type=MENU&menu={feature_code}`). 서브탭 목록은 `feature_menu` 에서 동적으로 오므로, 메뉴를 켜고 끄면 탭도 따라 바뀝니다.
+
 > **몰 스코프:** `hero_slide` 만 `mall_id` 컬럼을 가지며 `req.adminMallId`(`middleware/adminMallContext.js`)로 스코프됩니다. **`banners` 테이블에는 `mall_id` 가 없어 전 몰 공용**입니다.
 
 ---
@@ -50,16 +52,25 @@
 | CATEGORY (카테고리 배너) | `banner_type='CATEGORY'`, `category_id` | 카테고리 목록 상단 1건 (`controllers/productController.js:125`) |
 | POPUP (팝업 배너) | `banner_type='POPUP'` | 홈 팝업 레이어 1건, 게시 기간 필터 적용 (`controllers/mainController.js:55`) |
 | BRAND (브랜드 배너) | `banner_type='BRAND'`, `category_id`(=브랜드 카테고리) | 브랜드 필터 목록 상단 1건, 카테고리 배너가 없을 때만 (`controllers/productController.js:153`) |
-| MENU (메뉴별 배너) | `banner_type='CATEGORY'` + `category_id=NULL` + **`group_key='menu:{key}'`** | 기능 메뉴 목록 페이지 상단 (`controllers/productController.js:86`, `services/display/bannerService.js` 경유) |
+| MENU (메뉴별 배너) | `banner_type='CATEGORY'` + `category_id=NULL` + **`group_key='menu:{feature_code}'`** | 해당 GNB 메뉴 페이지 **상단** 배너 슬라이드 (`middleware/menuShowcase` → `main_layout` 이 본문 위에 렌더) |
 
 ### 3.1 메뉴별 배너 (group_key 재사용)
 
-`banners.banner_type` enum 에는 `MENU` 값이 없습니다. 스키마 변경을 피하려고 **`group_key` 네임스페이스**로 구현되어 있습니다 (`controllers/admin/bannerController.js:4-21`).
+`banners.banner_type` enum 에는 `MENU` 값이 없습니다. 스키마 변경을 피하려고 **`group_key` 네임스페이스**로 구현되어 있습니다.
 
-- 저장: `banner_type='CATEGORY'`, `category_id=NULL`, `group_key='menu:{key}'`
-- 대상 목록(`MENU_BANNER_TARGETS`): `BEST`(/best), `NEW`(/new), `DEAL`(/deal/today)
-- 소비: `routes/feature.js` 의 preset 이 `menuKey` 를 주입 → `productController` 가 `bannerService.getByGroup('menu:{key}', { limit: 1 })` 로 조회
-- 새 메뉴에 배너를 붙이려면 `MENU_BANNER_TARGETS` + `routes/feature.js` preset 두 곳만 추가
+- 저장: `banner_type='CATEGORY'`, `category_id=NULL`, `group_key='menu:{feature_code}'`
+- 대상 메뉴: **켜져 있는 GNB 메뉴 전부**. `menuShowcaseService.getMenuTargets()` 가 `feature_menu` × `mall_feature_menu(is_enabled=1)` 에서 동적으로 읽습니다. 하드코딩된 목록은 없습니다.
+  - 제외되는 것은 노출될 페이지 자체가 없는 메뉴뿐입니다(`EXCLUDED`): `CATEGORY`(드롭다운, 자체 페이지 없음), `RANKING`(`/ranking` → `/best` 301).
+- 소비: `middleware/menuShowcase` 가 요청 경로를 `feature_menu.default_path` 와 매칭 → `menuShowcaseService.getForPath()` → `main_layout` 이 `<%- body %>` **위에** 렌더. 컨트롤러는 관여하지 않으므로 **새 메뉴는 코드 변경 없이 자동으로 배너를 지원**합니다.
+
+#### 배너와 상품 캐러셀은 공존합니다
+
+한 메뉴에 쇼케이스가 **최대 두 개** 쌓입니다. 순서는 `getForPath()` 가 반환하는 배열 순서 그대로입니다.
+
+1. **배너형** — `banners.group_key='menu:{feature_code}'` → **위**
+2. **상품형** — `product_group.menu_code='{feature_code}'` → 배너 **아래** (쇼핑특가·베스트·신상품에 시드됨)
+
+> 예전에는 상품형이 있으면 배너를 조회조차 하지 않아(early return), 베스트·신상품·쇼핑특가에는 배너를 걸 수 없었고 관리자 화면에서도 그 메뉴들을 숨겼습니다. 지금은 어느 메뉴에나 배너를 걸 수 있습니다. 상품 캐러셀이 함께 걸린 메뉴에서는 관리자 목록·등록 폼이 그 사실을 안내합니다.
 
 ### 3.2 group_key 보존 규칙
 
@@ -77,13 +88,16 @@
 
 ## 4. 목록 조회 (GET /admin/banners)
 
-- **쿼리 파라미터:** `type` (기본 `MAIN`) — MAIN / CATEGORY / POPUP / BRAND / MENU
+- **쿼리 파라미터:**
+  - `type` (기본 `MAIN`) — MAIN / CATEGORY / POPUP / BRAND / MENU
+  - `menu` (`type=MENU` 일 때만) — `feature_code`. 없거나 목록에 없는 값이면 **첫 메뉴**로 폴백합니다.
 - **쿼리:**  
-  - `type=MENU` → `WHERE b.group_key LIKE 'menu:%'` (banner_type 무시), `ORDER BY group_key, display_order, created_at DESC`  
+  - `type=MENU` → `WHERE b.group_key = 'menu:{menu}'` — 고른 메뉴 하나만, `ORDER BY display_order ASC, created_at DESC`  
   - 그 외 → `WHERE b.banner_type = ? AND (b.group_key IS NULL OR b.group_key NOT LIKE 'menu:%')`, `ORDER BY display_order ASC, created_at DESC`  
   - 두 경우 모두 `LEFT JOIN categories` (카테고리/브랜드명)
 - **표시:** 썸네일(image_url), 제목, 타입 뱃지(메인/카테고리/브랜드/팝업/메뉴별), 대상(메뉴 라벨 · 카테고리/브랜드명 · "메인 팝업 레이어" · "전체 메인 영역 노출"), 링크 URL, 게시 기간, 사용중/중지 뱃지, 수정/삭제 버튼
-- **뷰 전달:** `banners`, `currentType`, `menuTargets`, `title: '배너 관리'`
+- **메뉴별 탭 추가 표시:** 메뉴 서브탭(배너 건수 뱃지 포함), 상품 캐러셀이 걸린 메뉴면 공존 안내 + `상품 캐러셀 편집` 링크(`/admin/product-groups/edit/:id`)
+- **뷰 전달:** `banners`, `currentType`, `currentMenuKey`, `menuTargets`, `menuBannerCounts`, `menuProductGroup`, `title: '배너 관리'`
 
 ---
 

@@ -49,10 +49,14 @@
             <select name="menu_target" id="menuTargetSelect"
               class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
               <% (menuTargets || []).forEach(function(t) { %>
-                <option value="<%= t.key %>" <%= currentMenuKey === t.key ? 'selected' : '' %>><%= t.label %></option>
+                <option value="<%= t.key %>" data-pool="<%= t.pool || '' %>" <%= currentMenuKey === t.key ? 'selected' : '' %>><%= t.label %></option>
               <% }) %>
             </select>
             <p class="mt-1 text-xs text-gray-400">선택한 프론트 메뉴 목록 페이지 상단에 이 배너가 노출됩니다.</p>
+            <%# 상품 캐러셀이 걸린 메뉴(쇼핑특가·베스트·신상품)는 배너가 그 위에 함께 뜬다. %>
+            <p id="menuPoolNotice" class="mt-2 hidden rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              이 메뉴에는 상품 캐러셀이 함께 노출됩니다. 배너는 상품 캐러셀 <span class="font-semibold">위</span>에 표시됩니다.
+            </p>
           </div>
 
           <div id="categoryField" class="hidden">
@@ -153,6 +157,16 @@
     const sizeGuide = document.getElementById('bannerSizeGuide');
 
     const categoryIdSelect = document.getElementById('categoryIdSelect');
+    const menuTargetSelect = document.getElementById('menuTargetSelect');
+    const menuPoolNotice = document.getElementById('menuPoolNotice');
+
+    /* 선택한 메뉴에 상품 캐러셀(product_group)이 걸려 있으면 공존 안내를 띄운다. */
+    function updateMenuPoolNotice() {
+      if (!menuTargetSelect || !menuPoolNotice) return;
+      const opt = menuTargetSelect.selectedOptions[0];
+      const hasPool = !!(opt && opt.getAttribute('data-pool'));
+      menuPoolNotice.classList.toggle('hidden', !hasPool);
+    }
 
     function updateCategoryVisibility() {
       const selected = document.querySelector('input[name="banner_type"]:checked');
@@ -250,8 +264,10 @@
 
     typeRadios.forEach(r => r.addEventListener('change', updateCategoryVisibility));
     typeRadios.forEach(r => r.addEventListener('change', updateSizeGuide));
+    if (menuTargetSelect) menuTargetSelect.addEventListener('change', updateMenuPoolNotice);
     updateCategoryVisibility();
     updateSizeGuide();
+    updateMenuPoolNotice();
 
     // Inject mobile image upload field right after PC banner field.
     const pcImageInput = document.getElementById('bannerImageInput');

@@ -1,7 +1,25 @@
+<%
+    /*
+     * 배너 관리 목록.
+     *
+     * 상단 탭 = 배너가 놓이는 자리(메인 슬라이더 · 메인/카테고리/팝업/브랜드 · 메뉴별).
+     * '메뉴별' 탭은 켜져 있는 GNB 메뉴를 **전부** 서브탭으로 펼친다 — 예전에는 상품형 메뉴
+     * (쇼핑특가·베스트·신상품)가 목록에서 빠져 있었다.
+     */
+    const isMenuTab = currentType === 'MENU';
+    const currentMenu = (menuTargets || []).find(t => t.key === currentMenuKey) || null;
+    const addUrl = isMenuTab && currentMenuKey
+        ? `/admin/banners/add?type=MENU&menu=${encodeURIComponent(currentMenuKey)}`
+        : `/admin/banners/add?type=${currentType}`;
+    const returnTo = isMenuTab && currentMenuKey
+        ? `/admin/banners?type=MENU&menu=${encodeURIComponent(currentMenuKey)}`
+        : `/admin/banners?type=${currentType}`;
+%>
+
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
     <p class="text-sm text-gray-500">배너 이미지를 등록하고 노출 영역을 관리합니다.</p>
     <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
-        <a href="/admin/banners/add?type=<%= currentType %>"
+        <a href="<%= addUrl %>"
             class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline uppercase tracking-widest">배너
             등록</a>
     </div>
@@ -30,11 +48,48 @@
             브랜드 배너
         </a>
         <a href="/admin/banners?type=MENU"
-            class="<%= currentType === 'MENU' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            class="<%= isMenuTab ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
             메뉴별 배너
         </a>
     </nav>
 </div>
+
+<% if (isMenuTab) { %>
+    <div class="mb-6">
+        <p class="text-xs text-gray-500 mb-2">배너를 걸 메뉴를 고르세요. 선택한 메뉴 페이지 <span class="font-medium text-gray-700">상단</span>에 배너 슬라이드로 노출됩니다.</p>
+        <div class="flex flex-wrap gap-2">
+            <% (menuTargets || []).forEach(function (t) {
+                   const cnt = (menuBannerCounts || {})[t.key] || 0;
+                   const on = t.key === currentMenuKey;
+            %>
+                <a href="/admin/banners?type=MENU&menu=<%= encodeURIComponent(t.key) %>"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm no-underline transition-colors
+                          <%= on ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-700' %>">
+                    <span><%= t.name %></span>
+                    <span class="text-[11px] font-mono <%= on ? 'text-blue-100' : 'text-gray-400' %>"><%= t.path %></span>
+                    <% if (cnt > 0) { %>
+                        <span class="px-1.5 py-0.5 rounded-full text-[11px] font-semibold <%= on ? 'bg-white/25 text-white' : 'bg-blue-100 text-blue-700' %>"><%= cnt %></span>
+                    <% } %>
+                </a>
+            <% }); %>
+            <% if (!(menuTargets || []).length) { %>
+                <p class="text-sm text-gray-500">켜져 있는 GNB 메뉴가 없습니다. <a href="/admin/menus" class="text-blue-600">메뉴 관리</a>에서 먼저 메뉴를 켜 주세요.</p>
+            <% } %>
+        </div>
+    </div>
+
+    <% if (menuProductGroup) { %>
+        <div class="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <span class="text-sm text-amber-900">
+                <span class="font-semibold"><%= currentMenu ? currentMenu.name : currentMenuKey %></span> 메뉴에는 상품 캐러셀
+                <span class="font-semibold">‘<%= menuProductGroup.showcase_title || menuProductGroup.name %>’</span> 도 함께 걸려 있습니다.
+                배너는 그 <span class="font-semibold">위</span>에 노출됩니다.
+            </span>
+            <a href="/admin/product-groups/edit/<%= menuProductGroup.id %>"
+               class="inline-flex items-center h-[30px] px-3 text-xs font-medium rounded-md border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 no-underline">상품 캐러셀 편집</a>
+        </div>
+    <% } %>
+<% } %>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
     <% banners.forEach(banner=> {
@@ -89,6 +144,7 @@
                         <a href="/admin/banners/edit/<%= banner.id %>"
                             class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
                         <input type="hidden" name="id" value="<%= banner.id %>">
+                        <input type="hidden" name="return_to" value="<%= returnTo %>">
                         <button type="submit"
                             class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
                     </form>
@@ -97,6 +153,12 @@
         </div>
         <% }) %>
             <% if(banners.length===0) { %>
-                <div class="col-span-full text-center py-12 bg-gray-50 rounded-lg text-gray-500">등록된 배너가 없습니다.</div>
+                <div class="col-span-full text-center py-12 bg-gray-50 rounded-lg text-gray-500">
+                    <% if (isMenuTab && currentMenu) { %>
+                        <span class="font-medium text-gray-700"><%= currentMenu.name %></span> 메뉴에 등록된 배너가 없습니다.
+                    <% } else { %>
+                        등록된 배너가 없습니다.
+                    <% } %>
+                </div>
                 <% } %>
 </div>

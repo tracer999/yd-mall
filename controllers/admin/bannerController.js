@@ -150,7 +150,7 @@ exports.postAdd = async (req, res) => {
     try {
         // 신규 등록 — 보존할 기존 group_key 없음(null).
         const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
-        const { storedType, categoryId, groupKey, redirectType } =
+        const { storedType, categoryId, groupKey, redirectType, menuKey } =
             resolveBannerTarget(banner_type, category_id, req.body.menu_target, null, menuKeys);
 
         if (await hasMobileImageColumn()) {
@@ -172,7 +172,7 @@ exports.postAdd = async (req, res) => {
                 ]
             );
         }
-        res.redirect(`/admin/banners?type=${redirectType}`);
+        res.redirect(listUrl(redirectType, menuKey));
     } catch (err) {
         console.error(err);
         if (err.statusCode === 400) return res.status(400).send(err.message);
@@ -266,7 +266,7 @@ exports.postEdit = async (req, res) => {
     try {
         // 편집 — 기존 group_key(existing_group_key)를 넘겨 이 화면과 무관한 group_key 를 보존한다.
         const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
-        const { storedType, categoryId, groupKey, redirectType } =
+        const { storedType, categoryId, groupKey, redirectType, menuKey } =
             resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key, menuKeys);
 
         if (await hasMobileImageColumn()) {
@@ -286,7 +286,7 @@ exports.postEdit = async (req, res) => {
                 storedType, categoryId, groupKey, title, image_url, link_url, display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null, id
             ]);
         }
-        res.redirect(`/admin/banners?type=${redirectType}`);
+        res.redirect(listUrl(redirectType, menuKey));
     } catch (err) {
         console.error(err);
         if (err.statusCode === 400) return res.status(400).send(err.message);
@@ -298,7 +298,9 @@ exports.postDelete = async (req, res) => {
     const { id } = req.body;
     try {
         await pool.query('DELETE FROM banners WHERE id = ?', [id]);
-        res.redirect('/admin/banners');
+        // 보던 탭으로 되돌린다. 외부 URL 로 튕기지 않도록 배너 목록 경로만 허용한다.
+        const back = String(req.body.return_to || '');
+        res.redirect(back.startsWith('/admin/banners') ? back : '/admin/banners');
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
