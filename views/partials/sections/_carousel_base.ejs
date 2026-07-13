@@ -165,10 +165,13 @@
       }
 
       /* PC 는 자유 스크롤도 허용하므로 실제 scrollLeft 에서 index 를 역산한다.
-         모바일은 JS 가 위치를 정하므로 이 경로를 타지 않는다(스크롤 이벤트 자체가 없음). */
+         모바일은 드래그 중에도 scrollLeft 가 계속 바뀌므로 역산하면 index 가 두 번
+         밀린다(드래그로 1 + touchend 에서 1). 위치는 JS 가 정하니 역산하지 않는다. */
       function syncFromScroll() {
-        var s = step() * perView();
-        if (s > 0) index = Math.round(track.scrollLeft / s);
+        if (!isMobile()) {
+          var s = step() * perView();
+          if (s > 0) index = Math.round(track.scrollLeft / s);
+        }
         sync();
       }
 
@@ -207,7 +210,9 @@
       function endDrag(e) {
         if (!dragging || !horizontal) { dragging = false; return; }
         dragging = false;
-        var dx = (e.changedTouches ? e.changedTouches[0].clientX : startX) - startX;
+        /* touchcancel 은 changedTouches 가 비어 있을 수 있다 */
+        var touch = e.changedTouches && e.changedTouches.length ? e.changedTouches[0] : null;
+        var dx = (touch ? touch.clientX : startX) - startX;
         var dt = Math.max(1, e.timeStamp - startTime);
         var flick = Math.abs(dx) / dt > 0.4;                  // 빠른 플릭은 짧게 밀어도 넘긴다
         var far = Math.abs(dx) > track.clientWidth * 0.2;
