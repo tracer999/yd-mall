@@ -34,7 +34,15 @@ ON DUPLICATE KEY UPDATE
 -- ─────────────────────────────────────────────────────────
 -- 2. 몰별 노출 설정 (mall_feature_menu) — 몰 1·2
 --    is_enabled = 1 이지만 module_ready = 0 이라 아직 GNB 에 뜨지 않는다.
---    sort_order: 추천은 베스트(3) 다음, 전문관은 브랜드(6) 다음에 오도록.
+--
+--    sort_order 는 기존 메뉴와 **일부러 겹치게** 둔다. 남의 순서를 바꾸면 운영 GNB 가 바뀐다.
+--    동점은 navigationService 가 f.default_sort_order 로 푼다
+--    (ORDER BY f.position, m.sort_order, f.default_sort_order).
+--
+--      RECOMMEND  sort_order=4, default=4  vs  EXHIBITION sort_order=4, default=6
+--        → 추천이 기획전보다 앞. 결과: … 베스트(3) · **추천** · 기획전 …
+--      SPECIALTY  sort_order=7, default=7  vs  NEW_PRODUCT sort_order=7, default=4
+--        → 신상품이 앞. 결과: … 브랜드(6) · 신상품(7) · **전문관** · 랭킹 …
 -- ─────────────────────────────────────────────────────────
 --
 -- ⚠️ 두 가지 함정을 함께 피한 형태다.

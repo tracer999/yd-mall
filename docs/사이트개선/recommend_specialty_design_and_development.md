@@ -272,6 +272,13 @@ end_at          = NULL          -- 무기한 = 상시
 UPDATE feature_menu SET module_ready = 1 WHERE feature_code IN ('RECOMMEND','SPECIALTY');
 ```
 
+**켜면 GNB 순서는 이렇게 된다.** `sort_order` 를 기존 메뉴와 일부러 겹치게 두었다 — 남의 순서를 바꾸면 운영 GNB 가 바뀌기 때문이다. 동점은 `navigationService` 가 `feature_menu.default_sort_order` 로 푼다.
+
+```
+카테고리 · 오늘특가 · 베스트 · [추천] · 기획전 · 이벤트&혜택 · 브랜드 · 신상품 · [전문관] · 랭킹 · 공동구매 …
+                                 ↑ sort 4(default 4) < 기획전 4(default 6)      ↑ sort 7(default 7) > 신상품 7(default 4)
+```
+
 ### 7-2. ⚠️ GNB 슬롯이 이미 꽉 찼다
 
 `navigation_config.max_gnb_items = 12` 이고, 현재 활성 GNB 기능 메뉴가 **정확히 12개**다(카테고리 제외). 추천·전문관을 켜면 **뒤 2개가 잘려 사라진다**(`navigationService` 가 뒤에서 자른다).
