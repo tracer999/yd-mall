@@ -1,0 +1,77 @@
+<%
+  /*
+   * 랭킹 상품 리스트 (베스트/랭킹 본문)
+   *
+   * 이 파티셜은 두 곳에서 쓴다:
+   *   1. user/best/index.ejs      최초 SSR
+   *   2. GET /best/tab (AJAX)     탭 전환 시 이 조각만 갈아끼운다
+   * 그래서 **탭·필터 UI를 여기 넣지 않는다** — 갈아끼울 때 자기 자신을 지우게 된다.
+   *
+   * locals: products[], calculatedAt, isEmpty
+   *   product.rank_no      최종 노출 순위 (핀 병합 후 1..N 재번호)
+   *   product.is_pinned    관리자 수동 고정(MD 픽)
+   *   product.prev_rank_no 직전 산출 순위 (급상승 표시). 신규 진입은 null
+   */
+  const _products = products || [];
+
+  function rankDelta(p) {
+    if (p.is_pinned) return null;                    // 핀은 순위 변동 개념이 없다
+    if (p.prev_rank_no == null) return { type: 'new' };
+    const d = p.prev_rank_no - p.rank_no;
+    if (d === 0) return { type: 'same' };
+    return { type: d > 0 ? 'up' : 'down', value: Math.abs(d) };
+  }
+
+  function fmtBase(dt) {
+    if (!dt) return null;
+    const d = new Date(dt);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${mm}/${dd} ${d.getHours()}시 기준`;
+  }
+  const _base = fmtBase(calculatedAt);
+%>
+
+<div class="flex items-center justify-between mb-4">
+  <p class="text-xs text-gray-500 flex items-center gap-1">
+    <i class="bi bi-clock"></i>
+    <%= _base || '아직 집계되지 않았습니다' %>
+  </p>
+  <p class="text-xs text-gray-400">판매 · 좋아요 합산 순위</p>
+</div>
+
+<% if (isEmpty) { %>
+  <div class="py-20 text-center">
+    <i class="bi bi-trophy text-5xl text-gray-200"></i>
+    <p class="mt-4 text-gray-500">아직 이 조건의 랭킹이 집계되지 않았습니다.</p>
+    <p class="mt-1 text-sm text-gray-400">다른 카테고리나 기간을 선택해 보세요.</p>
+  </div>
+<% } else { %>
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-8">
+    <% _products.forEach(function (product) { const _d = rankDelta(product); %>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-lg font-bold <%= product.rank_no <= 3 ? 'text-[var(--gh-primary)]' : 'text-gray-800' %>">
+            <%= String(product.rank_no).padStart(2, '0') %>
+          </span>
+
+          <% if (product.is_pinned) { %>
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 border border-[var(--gh-primary)] text-[var(--gh-primary)] rounded">
+              MD PICK
+            </span>
+          <% } else if (_d && _d.type === 'new') { %>
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 border border-gray-300 text-gray-500 rounded">NEW</span>
+          <% } else if (_d && _d.type === 'up') { %>
+            <span class="text-[10px] text-red-500 font-semibold"><i class="bi bi-caret-up-fill"></i><%= _d.value %></span>
+          <% } else if (_d && _d.type === 'down') { %>
+            <span class="text-[10px] text-blue-500 font-semibold"><i class="bi bi-caret-down-fill"></i><%= _d.value %></span>
+          <% } else if (_d && _d.type === 'same') { %>
+            <span class="text-[10px] text-gray-300">-</span>
+          <% } %>
+        </div>
+
+        <%- include('../../partials/product_card', { product, opts: { imageHeightClass: 'h-44' } }) %>
+      </div>
+    <% }); %>
+  </div>
+<% } %>

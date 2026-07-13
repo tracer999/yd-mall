@@ -35,6 +35,23 @@ module.exports = {
     dataSource: 'product_group',
     fields: [FIELD.maxCount, FIELD.columns, FIELD.moreLink]
   },
+  /*
+   * 베스트/랭킹 — 판매·좋아요 합산 순위를 홈에 띄운다(GNB /best 와 같은 스냅샷).
+   * dataSource 는 null 이다. 상품그룹이 아니라 **best_group** 을 보므로 페이지 빌더의
+   * 상품그룹 셀렉터를 쓸 수 없다. 대신 groupId 를 config 로 받고, 0 이면 '전체' 그룹을 자동 선택한다.
+   */
+  best_ranking: {
+    view: 'partials/sections/product_grid_section',
+    label: '베스트/랭킹',
+    dataSource: null,
+    fields: [
+      { key: 'groupId', label: '랭킹 탭 ID (0 = 전체)', type: 'number', min: 0, max: 999999, default: 0 },
+      { key: 'period', label: '기간', type: 'select', options: ['REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY'], default: 'DAILY' },
+      FIELD.maxCount,
+      FIELD.columns,
+      FIELD.moreLink
+    ]
+  },
   category_showcase: {
     view: 'partials/sections/category_showcase',
     label: '카테고리별 상품',

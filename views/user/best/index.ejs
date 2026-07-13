@@ -1,0 +1,185 @@
+<%
+  /*
+   * 베스트/랭킹 (고객)
+   *
+   * 화면 구조 (docs/사이트개선/capture/best2.png 참고)
+   *   [배너]        menu:BEST 배너 그룹
+   *   [그룹 탭]     전체 · 카테고리 · 브랜드 — 가로 스크롤 + 좌우 화살표
+   *   [기준시각/기간] "07/13 13시 기준"  |  실시간 · 일간 · 주간 · 월간
+   *   [세그먼트]     성별 · 나이대 (데이터 없으면 비활성)
+   *   [순위 그리드]  _ranking_list.ejs
+   *
+   * 탭 전환은 GET /best/tab 으로 본문만 갈아끼운다. URL 은 history.replaceState 로 맞춘다
+   * (새로고침·공유·뒤로가기에서 같은 화면이 나와야 한다).
+   *
+   * locals: groups[], group, period, periods{}, products[], calculatedAt, isEmpty,
+   *         banners[], segmentsEnabled, gender, ageBand, ageBands[]
+   */
+  const _banners = banners || [];
+  const _groups = groups || [];
+  const _periodKeys = Object.keys(periods);
+%>
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+
+  <% if (_banners.length) { const b = _banners[0]; %>
+    <a href="<%= b.link_url || '#' %>" class="block mb-6 rounded-lg overflow-hidden">
+      <picture>
+        <% if (b.mobile_image_url) { %>
+          <source media="(max-width: 767px)" srcset="<%= b.mobile_image_url %>">
+        <% } %>
+        <img src="<%= b.image_url %>" alt="<%= b.title %>" class="w-full object-cover">
+      </picture>
+    </a>
+  <% } %>
+
+  <h1 class="text-2xl font-bold text-gray-900 mb-1">베스트/랭킹</h1>
+  <p class="text-sm text-gray-500 mb-6">판매와 좋아요를 합산해 매긴 인기 상품 순위입니다.</p>
+
+  <!-- 그룹 탭 (가로 스크롤) -->
+  <div class="relative flex items-center gap-2 mb-5">
+    <button type="button" id="grpPrev"
+            class="hidden md:flex shrink-0 w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+
+    <div id="grpStrip" class="flex-1 flex gap-2 overflow-x-auto scroll-smooth"
+         style="scrollbar-width: none; -ms-overflow-style: none;">
+      <% _groups.forEach(function (g) { const on = g.id === group.id; %>
+        <button type="button"
+                class="best-tab shrink-0 px-4 py-2 rounded-full text-sm whitespace-nowrap transition
+                       <%= on ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' %>"
+                data-group="<%= g.id %>">
+          <%= g.name %>
+        </button>
+      <% }); %>
+    </div>
+
+    <button type="button" id="grpNext"
+            class="hidden md:flex shrink-0 w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50">
+      <i class="bi bi-chevron-right"></i>
+    </button>
+  </div>
+
+  <!-- 기간 탭 + 세그먼트 -->
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-gray-200">
+    <div class="flex items-center gap-1">
+      <% _periodKeys.forEach(function (k) { const on = k === period; %>
+        <button type="button"
+                class="best-period px-3 py-1.5 text-sm rounded transition
+                       <%= on ? 'font-semibold text-gray-900' : 'text-gray-400 hover:text-gray-600' %>"
+                data-period="<%= k %>">
+          <% if (on) { %><i class="bi bi-check text-xs"></i><% } %><%= periods[k].label %>
+        </button>
+      <% }); %>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <% if (!segmentsEnabled) { %>
+        <span class="text-xs text-gray-400 flex items-center gap-1"
+              title="회원 성별·연령 데이터가 쌓이면 자동으로 켜집니다">
+          <i class="bi bi-info-circle"></i> 성별·연령별 랭킹 준비 중
+        </span>
+      <% } %>
+
+      <select id="segGender" class="text-sm border border-gray-200 rounded px-2 py-1.5 disabled:bg-gray-50 disabled:text-gray-300"
+              <%= segmentsEnabled ? '' : 'disabled' %>>
+        <option value="ALL" <%= gender === 'ALL' ? 'selected' : '' %>>성별 전체</option>
+        <option value="M" <%= gender === 'M' ? 'selected' : '' %>>남성</option>
+        <option value="F" <%= gender === 'F' ? 'selected' : '' %>>여성</option>
+      </select>
+
+      <select id="segAge" class="text-sm border border-gray-200 rounded px-2 py-1.5 disabled:bg-gray-50 disabled:text-gray-300"
+              <%= segmentsEnabled ? '' : 'disabled' %>>
+        <option value="ALL" <%= ageBand === 'ALL' ? 'selected' : '' %>>연령 전체</option>
+        <% ageBands.forEach(function (a) { %>
+          <option value="<%= a %>" <%= ageBand === a ? 'selected' : '' %>><%= a %>대</option>
+        <% }); %>
+      </select>
+    </div>
+  </div>
+
+  <div id="rankBody" class="pt-6">
+    <%- include('./_ranking_list', { products, calculatedAt, isEmpty }) %>
+  </div>
+</div>
+
+<script>
+(function () {
+  const strip = document.getElementById('grpStrip');
+  const body  = document.getElementById('rankBody');
+
+  // 현재 선택 상태. 서버가 정규화해 내려준 값에서 출발한다.
+  const state = {
+    group:  <%= group.id %>,
+    period: '<%= period %>',
+    gender: '<%= gender %>',
+    age:    '<%= ageBand %>'
+  };
+
+  function qs() {
+    const p = new URLSearchParams({ group: state.group, period: state.period });
+    if (state.gender !== 'ALL') p.set('gender', state.gender);
+    if (state.age    !== 'ALL') p.set('age', state.age);
+    return p.toString();
+  }
+
+  async function reload() {
+    body.style.opacity = '0.4';
+    try {
+      const res = await fetch('/best/tab?' + qs(), { headers: { 'X-Requested-With': 'fetch' } });
+      if (!res.ok) throw new Error(res.status);
+      body.innerHTML = await res.text();
+      // 새로고침·공유·뒤로가기에서 같은 화면이 나오도록 URL 을 맞춘다
+      history.replaceState(null, '', '/best?' + qs());
+    } catch (e) {
+      // 부분 렌더가 실패하면 전체 페이지 이동으로 폴백한다(빈 본문을 남기지 않는다)
+      location.href = '/best?' + qs();
+    } finally {
+      body.style.opacity = '';
+    }
+  }
+
+  strip.querySelectorAll('.best-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.group = Number(btn.dataset.group);
+      strip.querySelectorAll('.best-tab').forEach(function (b) {
+        const on = b === btn;
+        b.className = 'best-tab shrink-0 px-4 py-2 rounded-full text-sm whitespace-nowrap transition '
+          + (on ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
+      });
+      reload();
+    });
+  });
+
+  document.querySelectorAll('.best-period').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.period = btn.dataset.period;
+      document.querySelectorAll('.best-period').forEach(function (b) {
+        const on = b === btn;
+        b.className = 'best-period px-3 py-1.5 text-sm rounded transition '
+          + (on ? 'font-semibold text-gray-900' : 'text-gray-400 hover:text-gray-600');
+        b.innerHTML = (on ? '<i class="bi bi-check text-xs"></i>' : '') + b.dataset.label;
+      });
+      reload();
+    });
+    btn.dataset.label = btn.textContent.trim();
+  });
+
+  const g = document.getElementById('segGender');
+  const a = document.getElementById('segAge');
+  if (g) g.addEventListener('change', function () { state.gender = g.value; reload(); });
+  if (a) a.addEventListener('change', function () { state.age = a.value; reload(); });
+
+  // 그룹 탭 좌우 스크롤
+  const step = 240;
+  const prev = document.getElementById('grpPrev');
+  const next = document.getElementById('grpNext');
+  if (prev) prev.addEventListener('click', function () { strip.scrollBy({ left: -step, behavior: 'smooth' }); });
+  if (next) next.addEventListener('click', function () { strip.scrollBy({ left:  step, behavior: 'smooth' }); });
+})();
+</script>
+
+<style>
+  #grpStrip::-webkit-scrollbar { display: none; }
+</style>

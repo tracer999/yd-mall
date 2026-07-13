@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const productController = require('../controllers/productController');
+const bestController = require('../controllers/bestController');
 
 /*
  * 기능 메뉴 표준 URL (M3)
@@ -23,34 +24,18 @@ function preset(featurePreset) {
 }
 
 /*
- * 베스트 — 관리자가 상품그룹(manual)에서 직접 고른 상품이 우선이다.
- *   - 소스 그룹: 몰별 '베스트' 상품그룹. 홈의 베스트 그리드와 같은 그룹을 공유한다
- *     → 관리자가 한 곳만 관리하면 홈·GNB 가 함께 바뀐다.
- *   - 수동 지정이 0건인 몰만 조회수 상위 100 으로 자동 폴백한다(빈 화면 방지).
- *     관리자가 상품을 담는 순간 자동으로 수동 모드로 전환된다.
- *   - 순위 번호는 붙이지 않는다(그건 랭킹의 몫).
- * menuKey: 메뉴별 배너(group_key='menu:{key}') 매칭용. 관리자 bannerController.MENU_BANNER_TARGETS 와 1:1.
+ * 베스트/랭킹 — 판매·좋아요를 합산한 자동 순위 + 관리자 수동 고정(MD 픽).
+ *
+ * 예전에는 '베스트'가 상품그룹(manual) 큐레이션이었다. 지금은 **랭킹 엔진**이다.
+ *   - 점수: 판매 × 5 + 좋아요 × 3 + 조회 × 0 (가중치는 best_score_config 에서 조정)
+ *   - 배치(scripts/calc_best_ranking.js)가 best_ranking 스냅샷에 산출해 둔다.
+ *   - MD 가 미는 상품은 best_pin 으로 얹는다(조회 시점 병합 — 즉시 반영).
+ *
+ * 목록형 화면(productController.getList)이 아니라 전용 컨트롤러를 쓴다.
+ * 순위 번호·기준 시각·그룹×기간 탭은 getList 의 계약에 없다.
  */
-router.get('/best', async (req, res, next) => {
-    try {
-        const mallId = req.mallId || 1;
-        const [[grp]] = await pool.query(
-            `SELECT g.id,
-                    (SELECT COUNT(*) FROM product_group_item i WHERE i.product_group_id = g.id) AS items
-               FROM product_group g
-              WHERE g.mall_id = ? AND g.is_active = 1 AND g.group_type = 'manual'
-                AND g.name LIKE '%베스트%'
-              ORDER BY g.id LIMIT 1`,
-            [mallId]
-        );
-        req.featurePreset = (grp && grp.items > 0)
-            ? { groupId: grp.id, menuKey: 'BEST' }
-            : { sort: 'best', capLimit: 100, menuKey: 'BEST' };
-        return productController.getList(req, res);
-    } catch (e) {
-        return next(e);
-    }
-});
+router.get('/best', bestController.getIndex);
+router.get('/best/tab', bestController.getTab);
 
 // 신상품 — NEW 뱃지 상품만(최신순). 전체 카탈로그를 최신순 정렬하면 "신상품 = 전체"가 되므로
 // 뱃지로 자른다. productController 에 badge==='NEW' 분기(FIND_IN_SET)가 이미 있다.

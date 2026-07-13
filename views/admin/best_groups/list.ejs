@@ -1,0 +1,284 @@
+<%
+  /*
+   * 베스트/랭킹 관리 — 목록
+   *
+   * 세 블록: 집계 상태 / 점수 가중치 / 탭(그룹) 목록.
+   *
+   * 자동 랭킹은 여기서 편집하지 않는다. 순위를 손대려면 그룹 상세의 **MD 픽**을 쓴다.
+   * 스냅샷을 직접 고쳐 봐야 다음 배치에 덮인다.
+   */
+  const _groups = groups || [];
+  const _runs = runs || [];
+  const _periodKeys = Object.keys(periods);
+
+  const fmtAgo = (dt) => {
+    if (!dt) return '없음';
+    const m = Math.floor((Date.now() - new Date(dt).getTime()) / 60000);
+    if (m < 1) return '방금';
+    if (m < 60) return `${m}분 전`;
+    if (m < 1440) return `${Math.floor(m / 60)}시간 전`;
+    return `${Math.floor(m / 1440)}일 전`;
+  };
+  const runOf = (p) => _runs.find(r => r.period === p);
+
+  const typeLabel = { ALL: '전체', CATEGORY: '카테고리', BRAND: '브랜드', CUSTOM: '커스텀' };
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">베스트/랭킹 관리</h1>
+    <p class="mt-1 text-sm text-gray-500">
+      고객 <a href="/best" target="_blank" class="text-indigo-600 underline">베스트/랭킹</a> 화면의 탭과 점수 기준을 관리합니다.
+      순위는 <strong>배치가 자동 산출</strong>하며, 밀고 싶은 상품은 각 탭의 <strong>MD 픽</strong>으로 고정합니다.
+    </p>
+  </div>
+
+  <% if (success) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> <%= success %>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-center gap-2">
+      <i class="bi bi-exclamation-triangle-fill"></i> <%= error %>
+    </div>
+  <% } %>
+
+  <!-- 집계 상태 -->
+  <div class="mb-6 bg-white border border-gray-200 rounded-lg p-5">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1">
+        <h2 class="text-base font-semibold text-gray-900 mb-3">집계 상태</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <% _periodKeys.forEach(function (p) { const r = runOf(p); %>
+            <div class="px-3 py-2 rounded border border-gray-100 bg-gray-50">
+              <p class="text-xs text-gray-500"><%= periods[p].label %></p>
+              <p class="text-sm font-semibold <%= r && r.status === 'FAILED' ? 'text-red-600' : 'text-gray-900' %>">
+                <%= r ? fmtAgo(r.finished_at || r.started_at) : '없음' %>
+                <% if (r && r.status === 'FAILED') { %><span class="text-xs">(실패)</span><% } %>
+              </p>
+              <p class="text-[11px] text-gray-400"><%= r ? `${r.row_count}건` : '미집계' %></p>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+      <form method="POST" action="/admin/best-groups/calculate">
+        <button type="submit"
+                class="inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+          <i class="bi bi-arrow-clockwise mr-1.5"></i> 지금 집계
+        </button>
+      </form>
+    </div>
+    <p class="mt-3 text-xs text-gray-400">
+      배치: <code>node scripts/calc_best_ranking.js</code> — cron 으로 주기 실행합니다. 집계는 몇 초가 걸립니다.
+    </p>
+  </div>
+
+  <!-- 점수 가중치 -->
+  <div class="mb-6 bg-white border border-gray-200 rounded-lg p-5">
+    <h2 class="text-base font-semibold text-gray-900 mb-1">점수 가중치</h2>
+    <p class="text-xs text-gray-500 mb-4">
+      점수 = 판매수량 × 판매점수 + 좋아요 × 좋아요점수 + 조회수 × 조회점수.
+      <strong>바꾼 뒤에는 집계를 다시 실행</strong>해야 순위에 반영됩니다.
+    </p>
+    <form method="POST" action="/admin/best-groups/config" class="flex flex-wrap items-end gap-4">
+      <label class="block">
+        <span class="text-xs text-gray-600">판매 1건</span>
+        <input type="number" name="weight_sales" value="<%= config.weight_sales %>" min="0" max="1000"
+               class="mt-1 w-24 h-[38px] px-3 border border-gray-300 rounded-md text-sm">
+      </label>
+      <label class="block">
+        <span class="text-xs text-gray-600">좋아요 1건</span>
+        <input type="number" name="weight_like" value="<%= config.weight_like %>" min="0" max="1000"
+               class="mt-1 w-24 h-[38px] px-3 border border-gray-300 rounded-md text-sm">
+      </label>
+      <label class="block">
+        <span class="text-xs text-gray-600">조회 1건</span>
+        <input type="number" name="weight_view" value="<%= config.weight_view %>" min="0" max="1000"
+               class="mt-1 w-24 h-[38px] px-3 border border-gray-300 rounded-md text-sm">
+      </label>
+      <label class="block">
+        <span class="text-xs text-gray-600">노출 순위 수</span>
+        <input type="number" name="rank_limit" value="<%= config.rank_limit %>" min="1" max="200"
+               class="mt-1 w-24 h-[38px] px-3 border border-gray-300 rounded-md text-sm">
+      </label>
+      <button type="submit"
+              class="h-[38px] px-4 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
+        가중치 저장
+      </button>
+    </form>
+    <p class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+      <i class="bi bi-exclamation-triangle"></i>
+      조회수는 <strong>누적값</strong>입니다(기간별 조회 로그가 없습니다). 조회 점수를 0 보다 크게 올리면
+      일간·실시간 랭킹에도 누적 조회수가 섞입니다.
+    </p>
+  </div>
+
+  <!-- 탭 추가 -->
+  <div class="mb-6 bg-white border border-gray-200 rounded-lg p-5">
+    <h2 class="text-base font-semibold text-gray-900 mb-4">탭 추가</h2>
+    <form method="POST" action="/admin/best-groups" class="flex flex-wrap items-end gap-3">
+      <label class="block">
+        <span class="text-xs text-gray-600">유형</span>
+        <select name="group_type" id="bgType"
+                class="mt-1 h-[38px] px-3 border border-gray-300 rounded-md text-sm bg-white">
+          <% groupTypes.forEach(function (t) { %>
+            <option value="<%= t.value %>"><%= t.label %></option>
+          <% }); %>
+        </select>
+      </label>
+
+      <label class="block" id="bgCatWrap">
+        <span class="text-xs text-gray-600">카테고리</span>
+        <select name="ref_id" id="bgCat"
+                class="mt-1 h-[38px] px-3 border border-gray-300 rounded-md text-sm bg-white max-w-[240px]">
+          <option value="">선택하세요</option>
+          <% (categories || []).forEach(function (c) { %>
+            <option value="<%= c.id %>" data-name="<%= c.name %>"><%= '　'.repeat(c.depth - 1) %><%= c.name %></option>
+          <% }); %>
+        </select>
+      </label>
+
+      <label class="block hidden" id="bgBrandWrap">
+        <span class="text-xs text-gray-600">브랜드</span>
+        <select name="ref_id_brand" id="bgBrand" disabled
+                class="mt-1 h-[38px] px-3 border border-gray-300 rounded-md text-sm bg-white max-w-[240px]">
+          <option value="">선택하세요</option>
+          <% (brands || []).forEach(function (b) { %>
+            <option value="<%= b.id %>" data-name="<%= b.name %>"><%= b.name %></option>
+          <% }); %>
+        </select>
+      </label>
+
+      <label class="block">
+        <span class="text-xs text-gray-600">탭 이름</span>
+        <input type="text" name="name" id="bgName" required maxlength="100" placeholder="자동 입력됩니다"
+               class="mt-1 w-44 h-[38px] px-3 border border-gray-300 rounded-md text-sm">
+      </label>
+
+      <label class="block">
+        <span class="text-xs text-gray-600">순서</span>
+        <input type="number" name="sort_order" value="0" min="0"
+               class="mt-1 w-20 h-[38px] px-3 border border-gray-300 rounded-md text-sm">
+      </label>
+
+      <label class="flex items-center gap-1.5 h-[38px]" id="bgDescWrap">
+        <input type="checkbox" name="include_descendants" value="1" checked class="rounded border-gray-300">
+        <span class="text-xs text-gray-600">하위 카테고리 포함</span>
+      </label>
+
+      <button type="submit"
+              class="h-[38px] px-4 text-sm font-semibold rounded-md bg-gray-900 text-white hover:bg-gray-800">
+        <i class="bi bi-plus-lg mr-1"></i> 추가
+      </button>
+    </form>
+  </div>
+
+  <!-- 탭 목록 -->
+  <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-gray-600 text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left font-medium">순서</th>
+          <th class="px-4 py-3 text-left font-medium">탭 이름</th>
+          <th class="px-4 py-3 text-left font-medium">유형</th>
+          <th class="px-4 py-3 text-right font-medium">집계된 순위</th>
+          <th class="px-4 py-3 text-right font-medium">MD 픽</th>
+          <th class="px-4 py-3 text-center font-medium">노출</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <% if (!_groups.length) { %>
+          <tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">탭이 없습니다. 위에서 추가하세요.</td></tr>
+        <% } %>
+        <% _groups.forEach(function (g) { %>
+          <tr class="<%= g.is_active ? '' : 'bg-gray-50 text-gray-400' %>">
+            <td class="px-4 py-3 text-gray-500"><%= g.sort_order %></td>
+            <td class="px-4 py-3">
+              <a href="/admin/best-groups/<%= g.id %>" class="font-medium text-indigo-600 hover:underline">
+                <%= g.name %>
+              </a>
+            </td>
+            <td class="px-4 py-3 text-gray-600">
+              <%= typeLabel[g.group_type] || g.group_type %>
+              <% if (g.ref_name) { %>
+                <span class="text-xs text-gray-400">· <%= g.ref_name %></span>
+              <% } %>
+              <% if (g.group_type === 'CATEGORY' && g.include_descendants) { %>
+                <span class="text-[11px] text-gray-400">(하위 포함)</span>
+              <% } %>
+            </td>
+            <td class="px-4 py-3 text-right <%= g.ranked_count ? 'text-gray-700' : 'text-amber-600' %>">
+              <%= g.ranked_count ? `${g.ranked_count}건` : '미집계' %>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <% if (g.pin_count) { %>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <%= g.pin_count %>
+                </span>
+              <% } else { %>
+                <span class="text-gray-300">—</span>
+              <% } %>
+            </td>
+            <td class="px-4 py-3 text-center">
+              <% if (g.is_active) { %>
+                <span class="text-green-600"><i class="bi bi-check-circle-fill"></i></span>
+              <% } else { %>
+                <span class="text-gray-300"><i class="bi bi-slash-circle"></i></span>
+              <% } %>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <form method="POST" action="/admin/best-groups/<%= g.id %>/delete" class="inline"
+                    onsubmit="return confirm('「<%= g.name %>」 탭을 삭제합니다. 집계된 순위와 MD 픽도 함께 삭제됩니다.');">
+                <button type="submit" class="text-xs text-red-500 hover:text-red-700">삭제</button>
+              </form>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  const type  = document.getElementById('bgType');
+  const cat   = document.getElementById('bgCat');
+  const brand = document.getElementById('bgBrand');
+  const name  = document.getElementById('bgName');
+  const catWrap   = document.getElementById('bgCatWrap');
+  const brandWrap = document.getElementById('bgBrandWrap');
+  const descWrap  = document.getElementById('bgDescWrap');
+
+  // 브랜드 select 의 name 은 ref_id_brand 다. 브랜드 유형일 때만 ref_id 로 바꿔 보낸다
+  // (두 select 가 동시에 ref_id 를 들고 있으면 빈 값이 뒤에서 덮어쓴다).
+  function sync() {
+    const t = type.value;
+    const isCat   = t === 'CATEGORY';
+    const isBrand = t === 'BRAND';
+
+    catWrap.classList.toggle('hidden', !isCat);
+    brandWrap.classList.toggle('hidden', !isBrand);
+    descWrap.classList.toggle('hidden', !isCat);
+
+    cat.disabled   = !isCat;
+    brand.disabled = !isBrand;
+    cat.name   = isCat   ? 'ref_id' : 'ref_id_cat';
+    brand.name = isBrand ? 'ref_id' : 'ref_id_brand';
+
+    if (t === 'ALL' && !name.value) name.value = '전체';
+  }
+
+  function autoName(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    if (opt && opt.dataset.name) name.value = opt.dataset.name;
+  }
+
+  type.addEventListener('change', sync);
+  cat.addEventListener('change', function () { autoName(cat); });
+  brand.addEventListener('change', function () { autoName(brand); });
+  sync();
+})();
+</script>

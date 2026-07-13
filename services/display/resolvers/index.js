@@ -12,6 +12,7 @@ module.exports = {
     hero: require('./hero'),
     value_proposition: require('./value_proposition'),
     product_grid: require('./product_grid'),
+    best_ranking: require('./best_ranking'),
     category_showcase: require('./category_showcase'),
     kakao_cta: require('./kakao_cta'),
 
