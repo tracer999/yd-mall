@@ -16,11 +16,13 @@
  *    시연/개발 환경 전용이다. 운영에서 관리자가 만든 특가가 있으면 함께 사라진다.
  *
  * 기간은 넉넉히(60일) 잡는다 — 시연 도중 특가가 만료돼 화면이 비는 일이 없도록.
+ *
+ * **활성 몰 전부**에 시드한다. 몰은 세션(`?mall=`)에 고정되므로, 한 몰에만 넣으면
+ * 다른 몰을 보고 있는 손님에게는 특가가 0건이라 '준비중' 랜딩이 뜬다.
+ * 특정 몰만 시드하려면 인자로 넘긴다:  node scripts/seed_deals.js 2
  */
 require('../config/env');
 const pool = require('../config/db');
-
-const MALL_ID = 1;
 
 /** 특가 카테고리 (code 로 upsert) */
 const CATEGORIES = [
@@ -93,73 +95,86 @@ function dealPrice(price, discount) {
     return Math.max(100, Math.min(p, price - 100));
 }
 
+async function seedMall(conn, mallId, mallName) {
+    console.log(`\n[mall ${mallId}] ${mallName}`);
+
+    // 1) 카테고리 upsert
+    for (const c of CATEGORIES) {
+        await conn.query(
+            `INSERT INTO deal_category
+                (mall_id, code, name, description, schedule_type, badge_text, badge_color, sort_order, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE
+                name = VALUES(name), description = VALUES(description),
+                schedule_type = VALUES(schedule_type), badge_text = VALUES(badge_text),
+                badge_color = VALUES(badge_color), sort_order = VALUES(sort_order), is_active = 1`,
+            [mallId, c.code, c.name, c.desc, c.schedule, c.badge, c.color, c.sort]
+        );
+    }
+    const [cats] = await conn.query('SELECT id, code FROM deal_category WHERE mall_id = ?', [mallId]);
+    const catId = Object.fromEntries(cats.map((c) => [c.code, c.id]));
+
+    // 2) 기존 특가 전부 제거 (deal_item 은 CASCADE)
+    const [del] = await conn.query('DELETE FROM deal WHERE mall_id = ?', [mallId]);
+    if (del.affectedRows) console.log(`  기존 특가 ${del.affectedRows}건 삭제`);
+
+    // 3) 상품 풀 — 캠페인끼리 겹치지 않게 순서대로 나눠 쓴다.
+    const needed = DEALS.reduce((n, d) => n + d.items.length, 0);
+    const [products] = await conn.query(
+        `SELECT id, name, price FROM products
+          WHERE mall_id = ? AND status = 'ON' AND visibility = 'PUBLIC'
+            AND price >= 8000 AND stock >= 10
+          ORDER BY id LIMIT ?`,
+        [mallId, needed]
+    );
+    if (products.length < needed) {
+        console.log(`  ⚠️ 상품 부족 (${products.length}/${needed}) — 건너뜀`);
+        return;
+    }
+
+    // 4) 특가 생성
+    let cursor = 0;
+    for (const d of DEALS) {
+        const [dr] = await conn.query(
+            `INSERT INTO deal (mall_id, deal_category_id, title, subtitle, starts_at, ends_at,
+                               daily_start_time, daily_end_time, weekdays, priority, sort_order, is_active)
+             VALUES (?, ?, ?, ?, DATE(NOW()), DATE_ADD(DATE(NOW()), INTERVAL ? DAY), ?, ?, ?, ?, ?, 1)`,
+            [mallId, catId[d.category], d.title, d.subtitle, d.days,
+             d.daily ? d.daily[0] : null, d.daily ? d.daily[1] : null,
+             d.weekdays || null, d.priority, d.sort]
+        );
+
+        const rows = d.items.map((it, i) => {
+            const p = products[cursor++];
+            const [limit, sold] = it.qty || [null, 0];
+            return [dr.insertId, p.id, dealPrice(p.price, it.discount), limit, sold, i + 1];
+        });
+        await conn.query(
+            `INSERT INTO deal_item (deal_id, product_id, deal_price, qty_limit, sold_qty, sort_order)
+             VALUES ?`,
+            [rows]
+        );
+
+        const when = d.daily ? `매일 ${d.daily[0].slice(0, 5)}~${d.daily[1].slice(0, 5)}` : '기간 내 상시';
+        const wd = d.weekdays ? ` / 요일 ${d.weekdays}` : '';
+        console.log(`  ${d.title.padEnd(12)} 상품 ${String(rows.length).padStart(2)}개  ${when}${wd}`);
+    }
+}
+
 (async () => {
+    const only = Number.parseInt(process.argv[2], 10);
     const conn = await pool.getConnection();
     try {
-        await conn.beginTransaction();
-
-        // 1) 카테고리 upsert
-        for (const c of CATEGORIES) {
-            await conn.query(
-                `INSERT INTO deal_category
-                    (mall_id, code, name, description, schedule_type, badge_text, badge_color, sort_order, is_active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-                 ON DUPLICATE KEY UPDATE
-                    name = VALUES(name), description = VALUES(description),
-                    schedule_type = VALUES(schedule_type), badge_text = VALUES(badge_text),
-                    badge_color = VALUES(badge_color), sort_order = VALUES(sort_order), is_active = 1`,
-                [MALL_ID, c.code, c.name, c.desc, c.schedule, c.badge, c.color, c.sort]
-            );
-        }
-        const [cats] = await conn.query('SELECT id, code FROM deal_category WHERE mall_id = ?', [MALL_ID]);
-        const catId = Object.fromEntries(cats.map((c) => [c.code, c.id]));
-
-        // 2) 기존 특가 전부 제거 (deal_item 은 CASCADE)
-        const [del] = await conn.query('DELETE FROM deal WHERE mall_id = ?', [MALL_ID]);
-        console.log(`기존 특가 ${del.affectedRows}건 삭제`);
-
-        // 3) 상품 풀 — 캠페인끼리 겹치지 않게 순서대로 나눠 쓴다.
-        const needed = DEALS.reduce((n, d) => n + d.items.length, 0);
-        const [pool_] = await conn.query(
-            `SELECT id, name, price FROM products
-              WHERE mall_id = ? AND status = 'ON' AND visibility = 'PUBLIC'
-                AND price >= 8000 AND stock >= 10
-              ORDER BY id LIMIT ?`,
-            [MALL_ID, needed]
+        const [malls] = await conn.query(
+            `SELECT id, name FROM mall WHERE is_active = 1 ${Number.isFinite(only) ? 'AND id = ?' : ''} ORDER BY id`,
+            Number.isFinite(only) ? [only] : []
         );
-        if (pool_.length < needed) {
-            throw new Error(`상품이 부족하다: ${pool_.length}/${needed}`);
-        }
+        if (malls.length === 0) throw new Error('시드할 몰이 없다');
 
-        // 4) 특가 생성
-        let cursor = 0;
-        for (const d of DEALS) {
-            const [dr] = await conn.query(
-                `INSERT INTO deal (mall_id, deal_category_id, title, subtitle, starts_at, ends_at,
-                                   daily_start_time, daily_end_time, weekdays, priority, sort_order, is_active)
-                 VALUES (?, ?, ?, ?, DATE(NOW()), DATE_ADD(DATE(NOW()), INTERVAL ? DAY), ?, ?, ?, ?, ?, 1)`,
-                [MALL_ID, catId[d.category], d.title, d.subtitle, d.days,
-                 d.daily ? d.daily[0] : null, d.daily ? d.daily[1] : null,
-                 d.weekdays || null, d.priority, d.sort]
-            );
-
-            const rows = d.items.map((it, i) => {
-                const p = pool_[cursor++];
-                const [limit, sold] = it.qty || [null, 0];
-                return [dr.insertId, p.id, dealPrice(p.price, it.discount), limit, sold, i + 1];
-            });
-            await conn.query(
-                `INSERT INTO deal_item (deal_id, product_id, deal_price, qty_limit, sold_qty, sort_order)
-                 VALUES ?`,
-                [rows]
-            );
-
-            const when = d.daily ? `매일 ${d.daily[0].slice(0, 5)}~${d.daily[1].slice(0, 5)}` : '기간 내 상시';
-            const wd = d.weekdays ? ` / 요일 ${d.weekdays}` : '';
-            console.log(`  ${d.title.padEnd(12)} 상품 ${String(rows.length).padStart(2)}개  ${when}${wd}`);
-        }
-
+        await conn.beginTransaction();
+        for (const m of malls) await seedMall(conn, m.id, m.name);
         await conn.commit();
+
         console.log('\n시드 완료.');
     } catch (e) {
         await conn.rollback();
