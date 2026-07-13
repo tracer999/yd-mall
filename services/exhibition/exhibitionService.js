@@ -231,13 +231,62 @@ async function getPublicBySlug(mallId, slug) {
     return row ? decorate(row) : null;
 }
 
-/** id → slug 301 리다이렉트용. 커스텀 메뉴(link_target)가 id 만 들고 있다(§3). */
-async function getPublicSlugById(mallId, id) {
-    const [[row]] = await pool.query(
-        "SELECT slug FROM exhibition WHERE mall_id = ? AND id = ? AND status = 'PUBLISHED' LIMIT 1",
-        [mallId, Number(id)]
-    );
-    return row ? row.slug : null;
+/*
+ * 상세가 실제로 열리는 기획전만 통과시키는 조건.
+ *
+ * 목록 노출(list_visible)은 보지 않는다 — 커스텀 메뉴는 목록을 거치지 않고 상세로 바로 가므로,
+ * "목록에서만 숨긴 기획전"을 메뉴로 거는 것은 정상적인 운영이다.
+ */
+const LINKABLE_WHERE = `
+    mall_id = ?
+      AND status = 'PUBLISHED'
+      AND NOT (ended_access_policy = 'BLOCK' AND end_at IS NOT NULL AND end_at < NOW())
+`;
+
+/**
+ * 커스텀 메뉴(link_type = EXHIBITION)가 가리킬 수 있는 대상을 id 로 찾는다.
+ *
+ * 여기서 돌아오지 않는 id 는 상세가 열리지 않는 대상(미발행·삭제·타몰·종료차단)이다.
+ * navigationService 는 이 결과에 없는 메뉴를 렌더하지 않는다(죽은 링크 차단).
+ *
+ * decorate() 를 태워 `detailPath` 를 함께 준다 — 전문관이면 /specialty/{slug} 다.
+ * 메뉴가 이 값을 그대로 쓰면 id URL → slug 301 을 거치지 않는다.
+ *
+ * @returns {Promise<Map<number, object>>} id → decorate 된 행
+ */
+async function getLinkTargetsByIds(mallId, ids) {
+    const list = [...new Set((ids || []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+    if (!list.length) return new Map();
+
+    const [rows] = await pool.query(`
+        SELECT id, slug, title, exhibition_type, start_at, end_at, ended_access_policy, ended_purchase_policy
+          FROM exhibition
+         WHERE ${LINKABLE_WHERE}
+           AND id IN (${list.map(() => '?').join(',')})
+    `, [mallId, ...list]);
+
+    const now = new Date();
+    return new Map(rows.map(r => [Number(r.id), decorate(r, now)]));
+}
+
+/** 관리자 커스텀 메뉴 대상 선택기(picker)용 — 메뉴로 걸 수 있는 기획전·전문관 전부 */
+async function getLinkableList(mallId) {
+    const [rows] = await pool.query(`
+        SELECT id, slug, title, exhibition_type, start_at, end_at, ended_access_policy, ended_purchase_policy
+          FROM exhibition
+         WHERE ${LINKABLE_WHERE}
+         ORDER BY (exhibition_type = '${SPECIALTY_TYPE}') DESC, title ASC
+    `, [mallId]);
+
+    const now = new Date();
+    return rows.map(r => decorate(r, now));
+}
+
+/** id → 정규 상세 경로. /exhibition/view/:id 하위호환 301 에 쓴다. */
+async function getPublicDetailPathById(mallId, id) {
+    const found = await getLinkTargetsByIds(mallId, [id]);
+    const row = found.get(Number(id));
+    return row ? row.detailPath : null;
 }
 
 /** 활성 섹션. is_tab=1 인 것만 내부 탭으로 그린다. */
@@ -302,7 +351,9 @@ module.exports = {
     parseJson,
     getPublicList,
     getPublicBySlug,
-    getPublicSlugById,
+    getLinkTargetsByIds,
+    getLinkableList,
+    getPublicDetailPathById,
     getSections,
     getProducts,
     incrementViewCount,

@@ -216,7 +216,7 @@
 |---|---|---|
 | 카테고리 관리 | 🟡 | `/admin/categories` 존재하나 **평면**. `parent_id` 미사용, 트리 UI 없음. **M1에서 `depth·is_active·pc_visible·mobile_visible·slug·mall_id` 컬럼은 추가 완료** |
 | 일반 메뉴 관리 (ON/OFF) | ✅ | **B2 완료.** `/admin/feature-menus` — GNB 13종 |
-| 커스텀 메뉴 관리 | ⬜ | `custom_menu` 테이블 완료, UI 없음 → **B3 (후순위)** |
+| 커스텀 메뉴 관리 | ✅ | **B3 완료.** `/admin/custom-menus` — 개별 기획전·전문관·카테고리·브랜드를 GNB 슬롯에 연결 |
 | 시스템 메뉴 설정 | ✅ | **B4 완료.** `/admin/system-menus` — 헤더 유틸 5 + 우측 레일 5 |
 | 모바일 메뉴 설정 | ⬜ | `pc_visible`/`mobile_visible` 컬럼만 존재 |
 | 메뉴 미리보기 | ✅ | **B7 완료.** `/admin/menu-preview` — `navigationService.getNavigation` 재사용(§3.3.1) |
@@ -522,14 +522,31 @@ GNB 렌더도 배지를 표시하며, `navigationService` 가 `NEW/HOT/SALE` 화
 | `link_url` | `INTERNAL_PAGE`/`EXTERNAL_URL` 일 때만 사용 (**NULL 허용**) |
 | `badge_type` | `NEW` / `HOT` / `SALE` |
 
-**관리자 UI 가 지켜야 할 규칙** (`navigationService` 가 이미 렌더 측에서 강제하고 있음):
-- `EXHIBITION` / `PRODUCT_GROUP` 은 **모듈 미구현** → 저장은 되지만 스토어프론트에 노출되지 않는다.
-  UI 에서 "모듈 미구현" 배지와 함께 비활성 표시할 것 (`feature_menu.module_ready` 와 같은 원칙).
-- `CATEGORY`/`BRAND` 는 `link_target` 이 없으면 렌더에서 제외된다 → **저장 시 필수 검증**.
-- `EXTERNAL_URL` 은 관리자 설정과 무관하게 **항상 새 창 + `rel="noopener noreferrer"`** 로 강제된다.
-- `badge_type` 은 자유 입력 금지, 3값 드롭다운.
+✅ **B3 구현 완료** (2026-07-13). `/admin/custom-menus` — 목록 · 추가/수정 폼 · 사용 토글 · 삭제.
 
-**서버 측 강제 규칙(관리자에서 추가 구현 필요)**: 슬롯 초과 저장 거부 / 메뉴명 10자 제한 / 기간 종료 시 자동 숨김.
+**이 화면의 역할** — 기능 메뉴(feature_menu)는 "전문관 목록"·"기획전 목록"처럼 **모듈 단위**로 고정돼 있다.
+몰마다 성격이 다른 진입점("건강식품관", "○○ 콜라보")은 여기서 만든다. 기획전/전문관을 새로 개발하는 게
+아니라 **이미 만들어 둔 기획전 하나를 골라 GNB 슬롯에 꽂는다.** 개별 전문관을 GNB 에 올리는 몰은 보통
+일반 메뉴 관리에서 '전문관' 목록 메뉴를 끄고 그 자리를 쓴다.
+
+**커스텀 메뉴는 기능 메뉴와 동등한 GNB 항목이다.** `navigationService.getNavigation` 이 두 목록을 하나의
+`sort_order` 축으로 **병합 정렬**한다(과거에는 단순 concat 이라 커스텀이 항상 기능 메뉴 뒤로 밀리고
+총량 초과 시 커스텀만 잘렸다). 동률이면 기능 메뉴가 앞선다(안정 정렬).
+
+**구현된 규칙**:
+- `link_type` = `EXHIBITION` / `CATEGORY` / `BRAND` / `INTERNAL_PAGE` / `EXTERNAL_URL`.
+  `PRODUCT_GROUP` 은 렌더 resolver 가 없어(모듈 미구현) UI 목록에서 제외.
+- **전문관 전용 link_type 은 두지 않는다.** 전문관은 `exhibition` 테이블의 한 유형이므로 `EXHIBITION`
+  하나로 충분하다. 대상 선택기가 '전문관 (상시)' / '기획전' optgroup 으로 갈라 보여준다.
+- 리소스형(`EXHIBITION`/`CATEGORY`/`BRAND`)은 **서버가 대상 id 를 다시 조회**해 같은 몰의 유효한
+  (발행·활성) 대상인지 확인한다. 폼 값을 신뢰하지 않는다.
+- 렌더 측 **죽은 링크 가드**: `navigationService` 가 대상 유효성을 확인하고 `detailPath` 를 함께 받아온다.
+  미발행·삭제·비활성·타몰 대상을 가리키는 메뉴는 켜 두어도 스토어프론트에서 빠진다. 관리자 목록에는
+  '연결 끊김' 으로 표시된다. `feature_menu.module_ready` 와 같은 원칙.
+- 커스텀 메뉴는 **정규 slug URL 을 직접** 들고 간다(`/specialty/{slug}`). 예전처럼 `/exhibition/view/{id}` →
+  301 을 거치지 않는다. 유효성 검증을 위해 어차피 대상을 조회하므로 slug 도 함께 가져오면 된다.
+- `EXTERNAL_URL` 은 항상 새 창 + `rel="noopener noreferrer"` 강제(폼에서도 체크박스를 잠근다).
+- 슬롯 초과 저장 거부(`max_custom_items`) / 메뉴명 20자 / 노출 기간 종료 시 자동 숨김.
 
 **도입하지 않음(YAGNI)**: `tracking_code`(캠페인 분석 소비처 없음)
 

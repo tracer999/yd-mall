@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS `categories` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT '노출 여부',
   `pc_visible` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'PC 노출',
   `mobile_visible` tinyint(1) NOT NULL DEFAULT '1' COMMENT '모바일 노출',
-  `type` enum('NORMAL','THEME','BRAND') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'NORMAL' COMMENT '카테고리 타입 (일반/테마/브랜드 — 뎁스가 아닌 병렬 분류축)',
+  `type` enum('NORMAL','THEME','BRAND','OUTLET') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'NORMAL' COMMENT '카테고리 타입 (일반/테마/브랜드/아울렛 — 뎁스가 아닌 병렬 분류축)',
   `logo_image_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '브랜드 로고 이미지 경로',
   `onboarded_at` date DEFAULT NULL COMMENT '브랜드 입점일 (type=BRAND 에서만 의미. 신규 입점 브랜드 판정 기준)',
   `description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '카테고리/브랜드 설명',
@@ -1230,3 +1230,48 @@ CREATE TABLE IF NOT EXISTS recommend_group_item (
   KEY idx_rgi_group_order (recommend_group_id, sort_order),
   CONSTRAINT fk_rgi_group FOREIGN KEY (recommend_group_id) REFERENCES recommend_group (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='추천 그룹에 담긴 상품 + 순서';
+
+-- ---------------------------------------------------------------------------
+-- 아울렛(Outlet) — 이월·리퍼브·전시·임박 등 '할인 사유'가 있는 상품의 상시 재고 소진 채널
+-- 설계: docs/사이트개선/outlet_design_and_development.md
+--
+-- 가격 컬럼이 없는 것은 의도다. products.original_price/price/discount_rate 를 그대로 쓴다.
+-- 아울렛 전용 가격을 두면 장바구니·주문·결제 검증 경로가 전부 열린다(이중 가격 금지).
+-- ---------------------------------------------------------------------------
+CREATE TABLE `outlet_product` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `mall_id` bigint NOT NULL DEFAULT '1',
+  `product_id` int NOT NULL,
+  `outlet_category_id` int DEFAULT NULL COMMENT 'categories.id (type=OUTLET). NULL=미분류',
+  `outlet_type` enum('SEASON_OFF','DISCONTINUED','OVERSTOCK','DISPLAY','REFURBISHED','PACKAGE_DAMAGE','EXPIRY_SOON') NOT NULL COMMENT '할인 사유. 아울렛의 존재 이유이자 유일한 필수 분류축',
+  `outlet_reason` varchar(255) DEFAULT NULL COMMENT '고객 노출 문구',
+  `condition_grade` enum('A','B','C') DEFAULT NULL COMMENT '리퍼브·전시·훼손만. B/C 는 하자 고지 필수',
+  `defect_description` text COMMENT '하자 고지. 없으면 교환·반품 분쟁이 난다',
+  `expiry_at` date DEFAULT NULL COMMENT 'EXPIRY_SOON 전용',
+  `started_at` datetime DEFAULT NULL COMMENT 'NULL=즉시 시작',
+  `ended_at` datetime DEFAULT NULL COMMENT 'NULL=무기한(재고 소진까지)',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_visible` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_outlet_product` (`mall_id`,`product_id`),
+  KEY `idx_outlet_mall_type` (`mall_id`,`outlet_type`,`is_visible`),
+  KEY `idx_outlet_mall_cat` (`mall_id`,`outlet_category_id`,`is_visible`),
+  KEY `idx_outlet_product` (`product_id`),
+  KEY `idx_outlet_category` (`outlet_category_id`),
+  CONSTRAINT `fk_outlet_product_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_outlet_product_category` FOREIGN KEY (`outlet_category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='아울렛 상품 매핑. 가격은 products 를 그대로 쓴다';
+
+CREATE TABLE `outlet_setting` (
+  `mall_id` bigint NOT NULL,
+  `allowed_types` varchar(255) NOT NULL DEFAULT 'SEASON_OFF,DISCONTINUED,OVERSTOCK,DISPLAY,REFURBISHED,PACKAGE_DAMAGE,EXPIRY_SOON' COMMENT '이 몰이 쓰는 할인 사유(CSV)',
+  `min_discount_rate` int NOT NULL DEFAULT '20' COMMENT '등록 최소 할인율. 허위 할인 방지',
+  `min_product_count` int NOT NULL DEFAULT '30' COMMENT 'GNB 노출 임계치. 미달이면 메뉴가 자동으로 숨는다(빈 메뉴 방지)',
+  `show_in_normal_list` tinyint(1) NOT NULL DEFAULT '1' COMMENT '아울렛 상품을 일반 목록에도 노출할지',
+  `notice_html` text COMMENT '아울렛 공통 고지(교환·반품 조건 차이 등)',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`mall_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='몰별 아울렛 운영 규칙';

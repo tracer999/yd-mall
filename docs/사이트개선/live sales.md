@@ -1,769 +1,592 @@
-1차 MVP 기준 라이브 판매 페이지 구현 설계
+# 쇼핑라이브(Live Shopping) — 설계 및 개발 계획서
 
-기준은 다음입니다.
+> **2026-07-13 전면 개정.** 최초 원고는 플랫폼 중립 일반론(REST JSON API · React 컴포넌트 트리 · SKU 옵션 전제)이었다.
+> dev-mall 의 실제 코드베이스와 대조해 **틀린 전제를 걷어내고**, 형제 문서(`group_buy` · `exhibition` · `recommend_specialty`)의
+> 하우스 스타일로 다시 썼다. 원고에서 살린 것은 **MVP 범위 선긋기 · 방송 상태 머신 · 성과 이벤트 목록** 세 가지다.
+> 개정 근거는 §2-1(폐기한 전제)에 전부 남긴다.
 
-YouTube Live 또는 Vimeo embed
-+ 자체 쇼핑몰 상품/구매 UI
-+ 자체 쿠폰/혜택/공지
-+ 자체 장바구니/바로구매
-+ 최소 관리자 기능
+---
 
-YouTube는 공식적으로 IFrame Player API를 제공하며, 웹사이트 안에 YouTube 플레이어를 삽입하고 JavaScript로 재생 상태 등을 제어할 수 있습니다. 또한 embedded player parameters 문서를 통해 autoplay, controls, playsinline 등 일부 플레이어 옵션을 설정할 수 있습니다. 다만 YouTube 플레이어 자체의 브랜딩과 동작을 완전히 제거하거나 자체 플레이어처럼 만드는 것은 제한적입니다.
+## 0. 한 줄 요약
 
-1. MVP 목표
-목표
+**쇼핑라이브는 "라이브 플랫폼"이 아니라 "영상이 붙은 상품 판매 랜딩 페이지"다.**
+스트리밍은 YouTube/Vimeo 임베드로 외주하고, 우리는 **상품 · 가격 · 쿠폰 · 공지 · 구매 동선**만 만든다.
 
-라이브커머스 플랫폼 전체를 만드는 것이 아니라, 기존 쇼핑몰 안에 라이브 판매 전용 랜딩 페이지를 추가하는 것입니다.
+그리고 **GNB 메뉴는 이미 있다.** 새로 뚫는 게 아니라 **껍데기를 실모듈로 갈아끼우는 작업**이다.
 
-목표:
-사용자가 우리 사이트 안에서 라이브를 보고,
-동시에 상품을 확인하고,
-쿠폰을 받고,
-장바구니 또는 바로구매까지 진행할 수 있게 하는 것
-MVP에서 하지 않는 것
-제외:
-- 자체 스트리밍 서버
-- 자체 라이브 채팅
-- 실시간 시청자 수 정확 집계
-- 실시간 투표/이벤트
-- 쇼호스트 콘솔
-- 방송 중 상품 자동 전환
-- PIP 고도화
-- 자체 VOD 인코딩
+---
 
-초기에는 외부 영상 + 자체 커머스 UI가 핵심입니다.
+## 1. 현재 상태 — 착수점 (2026-07-13 실측)
 
-2. 전체 구조
-[관리자]
-  ├─ 라이브 방송 등록
-  ├─ 외부 영상 URL 등록
-  ├─ 방송 상품 연결
-  ├─ 쿠폰/혜택 연결
-  ├─ 공지 등록
-  └─ 노출 상태 관리
+원고는 "쇼핑라이브 메뉴를 새로 추가한다"를 전제했다. **틀렸다. 이미 3계층 모두 통과해 GNB 에 떠 있다.**
 
-        ↓
+| 계층 | 현재 값 | 뜻 |
+|---|---|---|
+| `feature_menu` id=13 | `LIVE` · `/live` · `position=gnb` · **`module_ready=1`** | 카탈로그에 등재됨 |
+| `mall_feature_menu` | 몰1(sort 9) · 몰2(sort 13) 모두 **`is_enabled=1`** | 두 몰 다 켜져 있음 |
+| 실제 렌더 | **두 몰 GNB 에 '쇼핑라이브' 노출 중** | 고객이 지금 클릭할 수 있다 |
+| `/live` 응답 | `routes/feature.js:247` → `comingSoon('live')` | **준비중 랜딩 껍데기** |
 
-[Backend API]
-  ├─ Live Show API
-  ├─ Live Product API
-  ├─ Coupon API
-  ├─ Cart API
-  ├─ Order API
-  └─ Tracking API
+`COMING_SOON.live` 정의는 `routes/feature.js:145-152` 에 있다(아이콘 `bi-broadcast`, `robots: noindex,follow`).
 
-        ↓
+### 1-1. GNB 슬롯 — 건드리지 않는다
 
-[사용자 라이브 판매 페이지]
-  ├─ 외부 영상 embed
-  ├─ 방송 정보
-  ├─ 대표 상품
-  ├─ 함께 판매 상품
-  ├─ 쿠폰/혜택
-  ├─ 공지
-  ├─ 장바구니
-  └─ 바로구매
-3. 사용자 화면 설계
-3-1. 모바일 화면
+`navigation_config.max_gnb_items = 12`(두 몰 공통)이고, **카테고리를 제외한 활성 GNB 기능 메뉴가 정확히 12개**다.
+`navigationService.js:329` 가 `CATEGORY` 를 분리해 세므로 카테고리는 이 예산에 안 들어간다.
 
-모바일 우선으로 설계해야 합니다. 라이브 판매는 모바일 소비가 많고, 영상과 구매 버튼을 동시에 보여줘야 하기 때문입니다.
+**LIVE 는 이미 그 12개 안에 포함돼 있다.** 따라서:
 
-[상단 Header]
-← 뒤로가기     라이브쇼 제목        공유
+- 새 `feature_menu` 행이 필요 없다.
+- `mall_feature_menu` 를 건드릴 필요가 없다.
+- **슬롯을 늘리거나 다른 메뉴를 내릴 필요가 없다.**
+- `module_ready` 를 1로 올릴 필요도 없다 — 이미 1이다.
 
-[영상 영역]
-YouTube/Vimeo iframe player
-LIVE 배지 / 방송 상태 / 남은 시간
+> ⚠️ 뒤집어 말하면 **DB 를 손대지 않아도 배포 즉시 고객에게 노출된다.** 개발 DB = 배포 서버 DB 다.
+> `/live` 를 실모듈로 교체하는 순간 그게 바로 고객이 보는 화면이다. §9 배포 순서를 지킬 것.
 
-[현재 상품 영역]
-대표 상품 카드
-가격 / 할인 / 쿠폰 / 무료배송
-[쿠폰받기] [바로구매]
+### 1-2. 라우팅 함정 (반드시)
 
-[탭]
-상품 | 혜택 | 공지 | 문의
+`routes/feature.js` 는 `app.use('/', featureRoutes)` 로 **가장 먼저** 마운트된다.
+`feature.js` 안의 `router.get('/live', comingSoon('live'))` 를 **지우지 않으면**, 뒤에 오는
+`app.use('/live', require('./routes/live'))` 는 **영영 닿지 못한다.**
 
-[상품 탭]
-대표 상품
-함께 판매 상품 리스트
+같은 함정이 `routes/feature.js:142-147` 에 이미 두 번 기록돼 있다. 추천·전문관이 밟았던 자리다.
 
-[혜택 탭]
-다운로드 쿠폰
-카드 할인
-적립금
-무료배송 조건
+**할 일: `feature.js` 의 `/live` 핸들러 제거 → `COMING_SOON.live` **정의는 남긴다**(0건 폴백에서 재사용).**
 
-[공지 탭]
-배송 안내
-이벤트 유의사항
-옵션 안내
+---
 
-[하단 고정 바]
-장바구니 | 바로구매
-3-2. PC 화면
-[Header / GNB]
+## 2. 확정 결정
 
-좌측 영역
-├─ 라이브 영상
-├─ 방송 설명
-└─ 공지
+| # | 결정 | 근거 |
+|---|---|---|
+| 1 | **영상은 외부 임베드만.** 자체 스트리밍·자체 채팅 없음 | MVP 본질. 스트리밍 서버는 이 프로젝트 범위 밖 |
+| 2 | **1차는 바로구매만.** 장바구니 담기는 2차 | `carts` 가 5컬럼뿐 — 가격·옵션·출처를 실을 수 없다 (§2-1) |
+| 3 | **옵션 선택 UI 없음. 수량 선택만** | 이 몰에 상품 옵션/SKU 테이블이 **존재하지 않는다** |
+| 4 | **쿠폰은 연결만.** 쿠폰 엔진을 새로 만들지 않는다 | `coupons`·`coupon_download`·`user_coupons` 가 이미 성숙하다 |
+| 5 | **성과 추적은 `order_items.source_type='LIVE_SHOW'`** | 컬럼이 이미 있다. 새 로그 테이블은 3차 |
+| 6 | **Q&A 는 2차로 미룬다** | 이 몰에 상품 Q&A 가 없다. 라이브가 그걸 처음 만들 이유는 없다 (§2-1) |
+| 7 | **가격 확정은 서버에서만.** 화면 가격은 표시용 | `checkoutController.postForm` 재계산 원칙 (기존 관례) |
+| 8 | **0건이면 준비중 랜딩으로 폴백** | 공동구매·이벤트·기획전이 전부 그렇게 한다 |
 
-우측 고정 패널
-├─ 대표 상품
-├─ 가격/혜택
-├─ 옵션 선택
-├─ 쿠폰받기
-├─ 장바구니
-└─ 바로구매
+### 2-1. 폐기한 전제 (되풀이 금지)
 
-하단 영역
-├─ 함께 판매 상품
-├─ 추천 상품
-└─ 공지/문의
+원고가 깔았던 전제 중 **이 코드베이스에서 성립하지 않는 것들**이다. 다시 꺼내지 말 것.
 
-PC에서는 영상과 구매 패널이 동시에 보여야 합니다.
-사용자가 상품 상세로 이동하지 않아도 기본 구매 판단이 가능해야 합니다.
+| 원고 전제 | 실제 | 판정 |
+|---|---|---|
+| `skuId` 로 옵션 선택 (§7-2 Bottom Sheet) | **옵션/SKU 테이블이 없다.** `products` 는 단일 `price` + 단일 `stock`. `variant`/`sku` 는 Shopify 연동 전용 컬럼 | **폐기.** 수량 선택만. `views/user/group-buy/detail.ejs:12` 가 같은 이유로 옵션을 뺐다 |
+| `POST /api/cart/items` 에 `sourceType`/`sourceId` 를 실어 장바구니 담기 | `carts` = `id, user_id, product_id, quantity, created_at`. **가격·옵션·출처 컬럼 전부 없음.** 비로그인 장바구니도 없음(`user_id NOT NULL`) | **1차 폐기.** 라이브가로 담을 방법이 없다. 장바구니는 2차(§10) |
+| REST JSON API (`GET /api/live-shows` 등 13절 전체) | 이 앱은 **SSR EJS**다. 고객 라우트는 렌더, 변경은 **폼 POST + redirect**. 관리자도 EJS 폼 | **전면 교체.** §7 로 다시 씀 |
+| React 컴포넌트 트리 (`LiveShoppingPage` → …) | EJS + partial | **전면 교체.** §6 으로 다시 씀 |
+| 쿠폰 다운로드를 새로 만든다 | **이미 있다.** `POST /coupon/:id/claim` → `couponIssueService.claimDownloadCoupon()` (선착순 슬롯 + `coupon_download` PK 로 1인1회 보장, 한 트랜잭션) | **재사용.** 라이브는 쿠폰을 **연결만** 한다 |
+| 상품 문의(Q&A)를 기존 문의로 붙인다 | `inquiries` 는 **범용 1:1 문의**다. `product_id` 컬럼이 **없고** `title NOT NULL`. 관리자 대시보드의 "상품별 문의 수"는 `kakao_inquiry_logs`(카톡 링크 **클릭 로그**)에서 온다 — 내용도 답변도 없다 | **2차로 이동.** 재사용할 기반이 없다 |
+| `live_show_event_log` 로 자체 이벤트 로깅 | `page_views`·`visitor_logs` 가 이미 돈다. 전환은 `order_items.source_*` 로 잡힌다 | **3차.** 1차엔 과잉 |
+| DDL 의 `product_id BIGINT` / `coupon_id BIGINT` / `user_id BIGINT` | `products.id`·`coupons.id`·`users.id` 는 전부 **`int`** | **교정.** FK 타입 불일치로 생성 자체가 깨진다 |
+| `mall_id` 없는 설계 | 이 몰은 **멀티몰**이다(`mall` 2행: 건강식품관·종합관). 27개 테이블이 `mall_id` 를 쓴다 | **추가.** `live_show.mall_id` 필수 |
 
-4. 핵심 기능 구성
-4-1. 라이브 영상 embed
-기능
-- YouTube Live URL 또는 Video ID 등록
-- iframe embed 생성
-- 방송 상태별 표시
-  - 예정
-  - 방송 중
-  - 종료
-- 종료 후 다시보기 URL 표시
-- 영상 로딩 실패 처리
-- 모바일 inline 재생 옵션 적용
-YouTube embed 예시
-<iframe
-  src="https://www.youtube.com/embed/{videoId}?autoplay=0&controls=1&playsinline=1&rel=0&enablejsapi=1"
-  title="Live shopping video"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  allowfullscreen>
-</iframe>
+---
 
-enablejsapi=1을 사용하면 IFrame Player API로 플레이어 상태를 제어할 수 있고, playsinline은 모바일에서 전체화면 강제 전환을 줄이는 데 사용됩니다. YouTube의 embed parameter는 공식 문서에서 제공되는 범위 내에서만 제어 가능합니다.
+## 3. 방송 상태 머신
 
-주의점
-YouTube embed 한계:
-- YouTube 로고/플레이어 요소가 남을 수 있음
-- 완전한 커스텀 플레이어 UI는 불가
-- 영상 클릭 시 YouTube로 이동 가능성 있음
-- 외부 추천/브랜딩 정책 영향 가능
+원고의 상태 설계는 **그대로 살린다.** 다만 `exhibition`·`group_buy` 의 `status` 관례(varchar(30), `DRAFT` 기본)에 맞춘다.
 
-그래서 MVP에서는 이질감을 완전히 제거하는 것이 아니라 쇼핑몰 UI로 감싸서 완화하는 전략이 맞습니다.
-
-5. 방송 상태 설계
-
-라이브쇼는 상태값이 중요합니다.
-
+```
+DRAFT      = 작성 중 (관리자에게만 보임)
 SCHEDULED  = 방송 예정
 ON_AIR     = 방송 중
 ENDED      = 방송 종료
-HIDDEN     = 비노출
 CANCELLED  = 방송 취소
-상태별 화면
-상태	화면 처리
-방송 예정	썸네일, 방송 시작 시간, 알림 신청, 판매 예정 상품
-방송 중	영상 embed, LIVE 배지, 구매 버튼 활성화
-방송 종료	다시보기 영상, 상품 구매 유지 또는 종료 처리
-비노출	접근 불가 또는 목록 제외
-취소	방송 취소 안내
-상태 계산 방식
+```
 
-초기에는 수동 상태 + 시간 조건 혼합이 적절합니다.
+`HIDDEN` 은 **상태가 아니라 노출 플래그**다(`list_visible`). `exhibition` 이 그렇게 나눈다. 원고처럼 status 에 섞지 않는다.
 
-관리자 상태값 = 기본 기준
-현재 시간 >= start_at && 현재 시간 <= end_at && status = ON_AIR
-→ 방송 중으로 표시
+| 상태 | 목록 | 상세 | 구매 |
+|---|---|---|---|
+| `DRAFT` | 제외 | 404 | — |
+| `SCHEDULED` | 노출(썸네일 + 시작 시각 + D-day) | 예고 화면 · 판매 예정 상품 · 쿠폰 미리 받기 | **불가** |
+| `ON_AIR` | 노출(LIVE 배지) | 영상 임베드 · 구매 버튼 활성 | **가능** |
+| `ENDED` | `ended_access_policy` 에 따름 | 다시보기 영상(있으면) | `ended_purchase_policy` 에 따름 |
+| `CANCELLED` | 제외 | 취소 안내 | 불가 |
 
-관리자가 직접 ON_AIR, ENDED를 바꿀 수 있어야 합니다.
-외부 라이브 URL 방식에서는 실제 방송 시작 여부를 완벽히 자동 감지하기 어렵기 때문입니다.
+### 3-1. 상태는 수동이 기준이다
 
-6. 상품 노출 기능
-6-1. 대표 상품
+**자동 감지하지 않는다.** 외부 URL 임베드 방식에서는 실제 방송 시작을 정확히 알 수 없다.
 
-대표 상품은 라이브 판매 페이지의 핵심 전환 요소입니다.
+```
+관리자 status = 기준값
+표시 보정 = status='SCHEDULED' AND NOW() >= start_at 이면 화면에 "곧 시작" 안내
+```
 
-대표 상품 표시 항목:
-- 상품 이미지
-- 브랜드명
-- 상품명
-- 정상가
-- 판매가
-- 할인율
-- 쿠폰 적용가
-- 무료배송 여부
-- 카드 혜택
-- 리뷰 평점
-- 재고 상태
-- 구매 버튼
-6-2. 함께 판매 상품
-함께 판매 상품:
-- 방송에서 같이 소개되는 상품
-- 세트 상품
-- 옵션 대체 상품
-- 관련 상품
-- 방송 종료 후에도 판매할 상품
-6-3. 상품 역할 구분
-MAIN      = 대표 상품
-RELATED   = 함께 판매 상품
-PINNED    = 현재 강조 상품
-UPSELL    = 추가 구매 추천 상품
-HIDDEN    = 방송 페이지에서는 숨김
+`ON_AIR` ↔ `ENDED` 전환은 **관리자가 버튼으로** 한다. 시간이 지났다고 코드가 멋대로 바꾸지 않는다.
+(`end_at` 이 지난 `ON_AIR` 는 목록에서 "방송 종료됨" 배지로 운영자에게 경고만 띄운다.)
 
-MVP에서는 MAIN, RELATED만 있어도 충분합니다.
+---
 
-7. 구매 UX 설계
-7-1. 권장 구매 방식
+## 4. 데이터 모델
 
-MVP에서는 두 가지 방식을 모두 지원하는 것이 좋습니다.
+**FK 타입 주의**: `products.id`·`coupons.id`·`users.id` = `int`. `live_show.id` 등 신규 PK = `bigint`(`group_buy` 관례).
+`created_at`/`updated_at` 은 `datetime DEFAULT CURRENT_TIMESTAMP` / `ON UPDATE`(역시 `group_buy` 관례).
 
-방식 A:
-상품 상세 페이지 이동
+### 4-1. `live_show`
 
-방식 B:
-라이브 페이지 내 옵션 선택 Bottom Sheet
-
-냉정하게 보면 방식 B가 더 좋지만, 구현 난이도는 더 높습니다.
-
-1차 MVP 추천
-모바일:
-- 대표 상품은 Bottom Sheet 옵션 선택
-- 함께 판매 상품은 상품 상세 이동 가능
-
-PC:
-- 우측 패널에서 옵션 선택
-- 장바구니 / 바로구매 처리
-7-2. 모바일 Bottom Sheet
-[옵션 선택 Bottom Sheet]
-├─ 상품 이미지
-├─ 상품명
-├─ 가격
-├─ 옵션 선택
-├─ 수량 선택
-├─ 쿠폰 적용 가능 여부
-├─ 최종 결제 예상 금액
-├─ 장바구니 담기
-└─ 바로구매
-7-3. 구매 플로우
-사용자 라이브 페이지 진입
-→ 영상 시청
-→ 대표 상품 확인
-→ 쿠폰받기
-→ 옵션 선택
-→ 장바구니 또는 바로구매
-→ 결제 페이지 이동
-
-결제는 기존 쇼핑몰 결제 프로세스를 그대로 사용합니다.
-라이브 기능은 주문/결제 시스템을 새로 만들 필요가 없습니다.
-
-8. 쿠폰/혜택 기능
-8-1. MVP 쿠폰 기능
-- 라이브 전용 쿠폰 연결
-- 쿠폰 다운로드
-- 다운로드 여부 표시
-- 쿠폰 적용 가능 상품 표시
-- 쿠폰 만료 시간 표시
-8-2. 혜택 표시
-혜택 표시 항목:
-- 방송 특가
-- 쿠폰 할인
-- 카드 할인
-- 무료배송
-- 사은품
-- 적립 예정 금액
-8-3. 쿠폰 연결 방식
-live_show_coupon
-├─ live_show_id
-├─ coupon_id
-├─ display_order
-├─ is_primary
-└─ is_active
-
-쿠폰은 기존 쿠폰 엔진을 재사용하고, 라이브쇼에는 연결만 하는 구조가 좋습니다.
-
-9. 공지 기능
-
-채팅을 넣지 않는 대신, MVP에서는 공지를 반드시 넣는 것이 좋습니다.
-
-공지 예시:
-- 방송 중 주문 시 무료배송
-- 특정 옵션은 배송 지연
-- 쿠폰은 방송 종료 후 1시간까지 사용 가능
-- 사은품은 선착순 지급
-- 교환/반품 조건
-공지 표시 위치
-모바일:
-- 탭 영역의 공지 탭
-- 중요 공지는 영상 아래 고정 박스
-
-PC:
-- 영상 아래
-- 우측 구매 패널 하단
-10. 문의/Q&A 기능
-
-MVP에서 실시간 채팅은 제외해도 되지만, 문의 등록은 있으면 좋습니다.
-
-MVP Q&A:
-- 사용자 질문 등록
-- 관리자 답변
-- 공개/비공개 설정
-- 상품별 질문 구분
-
-실시간이 아니어도 됩니다.
-
-실시간 채팅 ≠ 필수
-상품 문의/Q&A = 전환에 도움
-11. 관리자 기능 설계
-
-관리자 메뉴는 다음처럼 추가합니다.
-
-관리자
-└─ 라이브쇼 관리
-    ├─ 라이브쇼 목록
-    ├─ 라이브쇼 등록/수정
-    ├─ 방송 상품 관리
-    ├─ 쿠폰/혜택 연결
-    ├─ 공지 관리
-    ├─ 문의 관리
-    └─ 성과 통계
-11-1. 라이브쇼 등록/수정
-항목	설명
-방송명	라이브 페이지 제목
-방송 설명	간단한 소개
-대표 이미지	방송 전/종료 후 썸네일
-외부 영상 플랫폼	YouTube / Vimeo / 직접 iframe
-영상 ID 또는 URL	YouTube videoId 등
-방송 시작 시간	start_at
-방송 종료 시간	end_at
-방송 상태	예정/방송중/종료/숨김
-다시보기 URL	종료 후 VOD
-노출 여부	목록 노출 여부
-구매 가능 여부	방송 종료 후 구매 가능 여부
-11-2. 방송 상품 관리
-항목	설명
-대표 상품	MAIN 상품 1개
-함께 판매 상품	RELATED 상품 N개
-노출 순서	상품 표시 순서
-방송 전용 문구	“방송 한정 특가” 등
-방송 전용 가격	기존 가격 정책이 있으면 선택
-구매 가능 여부	상품별 제어
-품절 노출 여부	품절이어도 보여줄지
-11-3. 쿠폰/혜택 연결
-항목	설명
-연결 쿠폰	기존 쿠폰 선택
-대표 쿠폰	가장 강조할 쿠폰
-노출 순서	쿠폰 카드 순서
-노출 기간	방송 중/방송 종료 후
-자동 다운로드 여부	비추천. 사용자가 직접 받게 하는 것이 명확함
-11-4. 공지 관리
-항목	설명
-공지 제목	예: 배송 안내
-공지 내용	상세 내용
-중요도	일반/중요
-노출 위치	영상 아래/공지 탭/구매 패널
-노출 기간	시작/종료
-사용 여부	ON/OFF
-12. DB 설계
-12-1. live_show
+```sql
 CREATE TABLE live_show (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  mall_id BIGINT NOT NULL,
-  title VARCHAR(200) NOT NULL,
-  description TEXT NULL,
-  thumbnail_url VARCHAR(500) NULL,
+  id                    BIGINT       NOT NULL AUTO_INCREMENT,
+  mall_id               BIGINT       NOT NULL DEFAULT 1,
 
-  provider VARCHAR(30) NOT NULL,
-  video_id VARCHAR(200) NULL,
-  embed_url VARCHAR(1000) NULL,
-  replay_url VARCHAR(1000) NULL,
+  title                 VARCHAR(200) NOT NULL,
+  slug                  VARCHAR(200) NOT NULL,          -- /live/{slug}
+  summary               VARCHAR(500) NULL,
+  description           TEXT         NULL,              -- 방송 소개 (새니타이즈 필수)
+  notice                TEXT         NULL,              -- 대표 공지 (영상 아래 고정 박스)
 
-  start_at DATETIME NOT NULL,
-  end_at DATETIME NULL,
-  status VARCHAR(30) NOT NULL,
+  list_thumbnail_url    VARCHAR(500) NULL,
+  pc_hero_image_url     VARCHAR(500) NULL,              -- SCHEDULED/ENDED 폴백 이미지
+  mobile_hero_image_url VARCHAR(500) NULL,
+  og_image_url          VARCHAR(500) NULL,
 
-  purchase_enabled BOOLEAN DEFAULT TRUE,
-  replay_enabled BOOLEAN DEFAULT FALSE,
-  is_visible BOOLEAN DEFAULT TRUE,
+  -- 영상: URL 통짜 저장 금지. provider + video_id 만 저장하고 embed URL 은 서버가 조립한다 (§8)
+  provider              VARCHAR(30)  NOT NULL DEFAULT 'YOUTUBE',   -- YOUTUBE | VIMEO
+  video_id              VARCHAR(100) NULL,              -- 방송용 video id
+  replay_provider       VARCHAR(30)  NULL,
+  replay_video_id       VARCHAR(100) NULL,              -- 다시보기 video id (없으면 방송 id 재사용)
 
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
-12-2. live_show_product
+  status                VARCHAR(30)  NOT NULL DEFAULT 'DRAFT',
+  start_at              DATETIME     NOT NULL,
+  end_at                DATETIME     NULL,
+
+  purchase_enabled      TINYINT(1)   NOT NULL DEFAULT 1,
+  ended_purchase_policy VARCHAR(30)  NOT NULL DEFAULT 'DISALLOW',  -- ALLOW | DISALLOW
+  ended_access_policy   VARCHAR(30)  NOT NULL DEFAULT 'ALLOW',     -- ALLOW | DISALLOW
+  replay_enabled        TINYINT(1)   NOT NULL DEFAULT 1,
+
+  list_visible          TINYINT(1)   NOT NULL DEFAULT 1,
+  search_visible        TINYINT(1)   NOT NULL DEFAULT 1,
+  share_enabled         TINYINT(1)   NOT NULL DEFAULT 1,
+
+  view_count            INT          NOT NULL DEFAULT 0,
+
+  created_at            DATETIME     NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at            DATETIME     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_live_show_slug (mall_id, slug),
+  KEY idx_live_show_list (mall_id, status, start_at, end_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+> **FK 관례**: `group_buy`·`exhibition` 은 **`mall_id` 에 FK 를 걸지 않는다**(KEY 만). 자식 매핑 테이블만 FK+CASCADE 를 건다.
+> (`SHOW CREATE TABLE group_buy` / `event_coupon` 확인 — 2026-07-13). 위 DDL 은 그 관례를 따른다.
+
+> `ended_purchase_policy` 기본값이 **`DISALLOW`** 인 이유: 라이브 특가는 "방송 중"이 조건이다.
+> 방송 끝나고도 특가로 사는 게 기본이면 특가의 의미가 없다. (기획전은 반대로 `ALLOW` 가 기본)
+
+### 4-2. `live_show_product`
+
+`group_buy_product` 를 그대로 따른다. **라이브가는 `live_price` 한 컬럼**이면 된다.
+
+```sql
 CREATE TABLE live_show_product (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  live_show_id BIGINT NOT NULL,
-  product_id BIGINT NOT NULL,
+  id                  BIGINT      NOT NULL AUTO_INCREMENT,
+  live_show_id        BIGINT      NOT NULL,
+  product_id          INT         NOT NULL,          -- products.id = int
 
-  role VARCHAR(30) NOT NULL,
-  sort_order INT DEFAULT 0,
+  role                VARCHAR(30) NOT NULL DEFAULT 'MAIN',   -- MAIN | RELATED
+  sort_order          INT         NOT NULL DEFAULT 0,
 
-  live_badge_text VARCHAR(100) NULL,
-  purchase_enabled BOOLEAN DEFAULT TRUE,
-  visible BOOLEAN DEFAULT TRUE,
+  badge_text          VARCHAR(100) NULL,             -- "방송 한정 특가" 등
+  normal_price        INT         NULL,              -- 표시용 정상가 (미입력 시 products.price)
+  live_price          INT         NULL,              -- 라이브가. NULL 이면 상품 원가로 판매
+  discount_rate       INT         NULL,
 
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
-12-3. live_show_coupon
+  min_order_quantity      INT     NOT NULL DEFAULT 1,
+  max_order_quantity      INT     NULL,
+  per_user_limit_quantity INT     NULL,
+
+  purchase_enabled    TINYINT(1)  NOT NULL DEFAULT 1,
+  visible             TINYINT(1)  NOT NULL DEFAULT 1,
+
+  created_at          DATETIME    NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME    NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_live_show_product (live_show_id, product_id),
+  KEY idx_lsp_show (live_show_id, role, sort_order),
+  CONSTRAINT fk_lsp_show    FOREIGN KEY (live_show_id) REFERENCES live_show (id) ON DELETE CASCADE,
+  CONSTRAINT fk_lsp_product FOREIGN KEY (product_id)   REFERENCES products (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**역할은 `MAIN` / `RELATED` 둘뿐이다.** 원고의 `PINNED`/`UPSELL`/`HIDDEN` 은 넣지 않는다
+(`HIDDEN` 은 `visible=0` 이고, `PINNED` 는 실시간 전환 기능 — MVP 제외 항목이다).
+
+`MAIN` 은 **0개 또는 1개**. 애플리케이션이 보장한다(DB 제약으로는 못 건다).
+
+### 4-3. `live_show_coupon`
+
+```sql
 CREATE TABLE live_show_coupon (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  live_show_id BIGINT NOT NULL,
-  coupon_id BIGINT NOT NULL,
+  id            BIGINT     NOT NULL AUTO_INCREMENT,
+  live_show_id  BIGINT     NOT NULL,
+  coupon_id     INT        NOT NULL,          -- coupons.id = int
+  is_primary    TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order    INT        NOT NULL DEFAULT 0,
+  is_active     TINYINT(1) NOT NULL DEFAULT 1,
+  created_at    DATETIME   NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME   NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_live_show_coupon (live_show_id, coupon_id),
+  CONSTRAINT fk_lsc_show   FOREIGN KEY (live_show_id) REFERENCES live_show (id) ON DELETE CASCADE,
+  CONSTRAINT fk_lsc_coupon FOREIGN KEY (coupon_id)    REFERENCES coupons (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
 
-  is_primary BOOLEAN DEFAULT FALSE,
-  sort_order INT DEFAULT 0,
-  is_active BOOLEAN DEFAULT TRUE,
+**연결만 한다.** 다운로드·발급 한도·스코프 판정은 전부 기존 쿠폰 엔진이 한다:
 
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
-12-4. live_show_notice
+- 다운로드: `POST /coupon/:id/claim` (`routes/coupon.js:16`) — 로그인 필수, 선착순 슬롯 + `coupon_download` PK 로 1인1회
+- 적용 판정: `services/coupon/discountCalculator.js` (`scope_json` → `itemInScope()`)
+- 확정: `checkoutController.postForm` 의 `validateCoupon()`
+
+라이브 전용 쿠폰을 만들고 싶으면 **관리자에서 쿠폰을 만들고**(`issue_method='DOWNLOAD'`, `scope_json` 으로 대상 상품 한정)
+**라이브쇼에 연결**한다. 라이브가 쿠폰을 발급하는 게 아니다.
+
+> **자동 다운로드는 넣지 않는다.** 사용자가 직접 받아야 "받았다"는 사실이 명확하다(원고 §11-3 판단 유지).
+
+### 4-4. `live_show_notice`
+
+```sql
 CREATE TABLE live_show_notice (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  live_show_id BIGINT NOT NULL,
+  id               BIGINT       NOT NULL AUTO_INCREMENT,
+  live_show_id     BIGINT       NOT NULL,
+  title            VARCHAR(200) NOT NULL,
+  content          TEXT         NOT NULL,
+  notice_level     VARCHAR(30)  NOT NULL DEFAULT 'NORMAL',      -- NORMAL | IMPORTANT
+  display_location VARCHAR(30)  NOT NULL DEFAULT 'NOTICE_TAB',  -- NOTICE_TAB | UNDER_VIDEO | BUY_PANEL
+  visible_start_at DATETIME     NULL,
+  visible_end_at   DATETIME     NULL,
+  sort_order       INT          NOT NULL DEFAULT 0,
+  is_active        TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at       DATETIME     NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       DATETIME     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_lsn_show (live_show_id, is_active, sort_order),
+  CONSTRAINT fk_lsn_show FOREIGN KEY (live_show_id) REFERENCES live_show (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
 
-  title VARCHAR(200) NOT NULL,
-  content TEXT NOT NULL,
-  notice_level VARCHAR(30) DEFAULT 'NORMAL',
-  display_location VARCHAR(30) DEFAULT 'NOTICE_TAB',
+채팅이 없으므로 **공지가 유일한 방송 중 커뮤니케이션 수단**이다. 1차에 반드시 넣는다(원고 §9 판단 유지).
 
-  visible_start_at DATETIME NULL,
-  visible_end_at DATETIME NULL,
-  is_active BOOLEAN DEFAULT TRUE,
+### 4-5. 1차에서 만들지 않는 테이블
 
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
-12-5. live_show_question
-CREATE TABLE live_show_question (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  live_show_id BIGINT NOT NULL,
-  product_id BIGINT NULL,
-  user_id BIGINT NOT NULL,
+| 원고 테이블 | 처리 |
+|---|---|
+| `live_show_question` | **2차.** 상품 Q&A 자체가 이 몰에 없다. 라이브만 따로 만들면 문의 동선이 두 개가 된다 |
+| `live_show_event_log` | **3차.** `page_views` + `order_items.source_*` 로 1차 지표는 나온다 |
 
-  question_text TEXT NOT NULL,
-  answer_text TEXT NULL,
-  status VARCHAR(30) DEFAULT 'WAITING',
-  is_public BOOLEAN DEFAULT TRUE,
+---
 
-  answered_by BIGINT NULL,
-  answered_at DATETIME NULL,
+## 5. 구매 동선 — 바로구매만
 
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
-12-6. live_show_event_log
-CREATE TABLE live_show_event_log (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  live_show_id BIGINT NOT NULL,
-  user_id BIGINT NULL,
-  session_id VARCHAR(100) NULL,
+**공동구매 선례를 그대로 따른다.** `controllers/groupBuyController.js:16-19` 주석이 근거다.
 
-  event_type VARCHAR(50) NOT NULL,
-  product_id BIGINT NULL,
-  metadata_json JSON NULL,
+```
+라이브 상세에서 [바로구매]
+  → GET /checkout?product_id={id}&quantity={n}&live_show_id={liveId}
+  → checkoutController.getForm   : 라이브가로 표시 (표시용)
+  → checkoutController.postForm  : 라이브가를 서버가 다시 계산 (확정)
+  → 기존 결제 플로우 (토스) 그대로
+```
 
-  created_at DATETIME NOT NULL
-);
-13. API 설계
-13-1. 사용자 API
-GET /api/live-shows
+`postForm` 은 현재 3분기다: `cart=1` / `group_buy_id` / `product_id`.
+여기에 **`live_show_id` 분기를 추가**한다. 분기 안에서 재검증할 것:
 
-라이브쇼 목록 조회.
+| 검증 | 실패 시 |
+|---|---|
+| 라이브쇼가 존재하고 `status IN ('ON_AIR')` (또는 `ENDED` + `ended_purchase_policy='ALLOW'`) | `closed` |
+| `live_show.purchase_enabled = 1` | `closed` |
+| 해당 상품이 이 라이브쇼에 연결됨 + `purchase_enabled=1` + `visible=1` | `disabled` |
+| 상품 `status='ON'`, `stock >= quantity` | `soldout` / `stock` |
+| `min_order_quantity` ≤ quantity ≤ `max_order_quantity` | `min` / `max` |
+| `per_user_limit_quantity` (회원 누적) | `max` |
+| **가격 = `live_price` (없으면 `products.price`)** — 폼이 보낸 금액은 **쓰지 않는다** | — |
 
-GET /api/live-shows/{liveShowId}
+오류는 상세로 되돌려 메시지를 띄운다(`groupBuyController.LINE_ERRORS` 와 같은 방식).
 
-라이브쇼 상세 조회.
+### 5-1. 성과 추적
 
-응답 예시:
+주문 라인에 출처를 남긴다. **컬럼은 이미 있다.**
 
-{
-  "id": 1001,
-  "title": "여름 특가 라이브",
-  "provider": "YOUTUBE",
-  "videoId": "abc123",
-  "embedUrl": "https://www.youtube.com/embed/abc123",
-  "status": "ON_AIR",
-  "startAt": "2026-07-09T20:00:00",
-  "endAt": "2026-07-09T21:00:00",
-  "products": [
-    {
-      "productId": 501,
-      "role": "MAIN",
-      "name": "대표 상품",
-      "salePrice": 39000,
-      "imageUrl": "https://..."
-    }
-  ],
-  "coupons": [],
-  "notices": []
-}
-POST /api/live-shows/{liveShowId}/questions
+```
+order_items.source_type = 'LIVE_SHOW'
+order_items.source_id   = live_show.id
+```
 
-질문 등록.
+> ⚠️ **함정.** `services/deal/dealService.js:172` 는 **`source_type` 이 비어 있는 라인만** 특가 대상으로 잡는다.
+> 라이브 라인에 `source_type='LIVE_SHOW'` 를 넣으면 그 라인엔 쇼핑특가가 **안 붙는다** — 이건 **의도된 동작**이다
+> (라이브가와 특가가 이중으로 먹으면 안 된다). 다만 이 상호작용을 모르고 나중에 "왜 특가가 안 붙지?" 하지 말 것.
 
-POST /api/live-shows/{liveShowId}/events
+`GROUP_BUY` · `DEAL` 에 이어 세 번째 출처 값이다. `varchar(30)` 이라 스키마 변경 없이 추가된다.
 
-이벤트 로그 적재.
+---
 
-예:
+## 6. 화면
 
-{
-  "eventType": "CLICK_BUY",
-  "productId": 501
-}
-13-2. 관리자 API
-GET /admin/api/live-shows
-POST /admin/api/live-shows
-GET /admin/api/live-shows/{id}
-PUT /admin/api/live-shows/{id}
-DELETE /admin/api/live-shows/{id}
-POST /admin/api/live-shows/{id}/products
-PUT /admin/api/live-shows/{id}/products/{mappingId}
-DELETE /admin/api/live-shows/{id}/products/{mappingId}
-POST /admin/api/live-shows/{id}/coupons
-DELETE /admin/api/live-shows/{id}/coupons/{mappingId}
-POST /admin/api/live-shows/{id}/notices
-PUT /admin/api/live-shows/{id}/notices/{noticeId}
-DELETE /admin/api/live-shows/{id}/notices/{noticeId}
-14. 프론트엔드 컴포넌트 설계
-LiveShoppingPage
-├─ LiveHeader
-├─ LiveVideoPlayer
-├─ LiveStatusBadge
-├─ LiveMainProductCard
-├─ LiveBenefitPanel
-├─ LiveProductTabs
-│   ├─ LiveProductList
-│   ├─ LiveCouponList
-│   ├─ LiveNoticeList
-│   └─ LiveQuestionList
-├─ LivePurchaseBottomBar
-└─ OptionBottomSheet
-LiveVideoPlayer
-역할:
-- provider에 따라 player 렌더링
-- YouTube iframe 생성
-- Vimeo iframe 생성
-- fallback thumbnail 표시
-- loading/error 처리
-LiveMainProductCard
-역할:
-- 대표 상품 표시
-- 가격/혜택 표시
-- 쿠폰받기 버튼
-- 구매 버튼
-LivePurchaseBottomBar
-역할:
-- 모바일 하단 고정 CTA
-- 장바구니
-- 바로구매
-- 품절 시 비활성화
-15. 상품/구매 연동 방식
+**모바일 우선.** 라이브는 모바일 소비가 압도적이다.
 
-기존 쇼핑몰에 상품/장바구니/주문 기능이 있다면 그대로 재사용합니다.
+### 6-1. 목록 `/live`
 
-장바구니
-POST /api/cart/items
+```
+[히어로] 진행 중인 방송 (ON_AIR) — 있으면 크게, 영상 썸네일 + LIVE 배지
+[섹션]   방송 예정 (SCHEDULED) — 시작 시각 · D-day
+[섹션]   지난 방송 (ENDED, replay_enabled=1) — 다시보기
+```
 
-요청:
+**발행된 라이브가 0건이면 `COMING_SOON.live` 랜딩으로 폴백**한다(§1-2). 빈 목록을 고객에게 보이지 않는다.
 
-{
-  "productId": 501,
-  "skuId": 9001,
-  "quantity": 1,
-  "sourceType": "LIVE_SHOW",
-  "sourceId": 1001
-}
-바로구매
-POST /api/orders/checkout-ready
+### 6-2. 상세 `/live/{slug}` — 모바일
 
-요청:
+```
+[헤더]        ← 뒤로  ·  방송 제목  ·  공유
+[영상]        iframe (16:9 고정)  ·  LIVE 배지 / 상태 배지
+              SCHEDULED → 히어로 이미지 + 시작 시각 + 카운트다운
+              ENDED     → 다시보기 iframe (없으면 히어로 이미지)
+[중요 공지]   display_location='UNDER_VIDEO' 인 IMPORTANT 공지 (있을 때만)
+[대표 상품]   MAIN 카드 — 이미지 · 브랜드 · 상품명 · 정상가(취소선) · 라이브가 · 할인율 · 뱃지 · 재고
+[탭]          상품 | 혜택 | 공지
+  상품 탭     대표 상품 + 함께 판매 상품(RELATED) 그리드
+  혜택 탭     연결 쿠폰 카드([받기] → POST /coupon/:id/claim) · 무료배송 조건 · 적립 안내
+  공지 탭     live_show_notice 목록
+[하단 고정바] 수량 ▾  ·  [바로구매]     ← 장바구니 버튼 없음 (§2 결정 2)
+```
 
-{
-  "items": [
-    {
-      "productId": 501,
-      "skuId": 9001,
-      "quantity": 1
-    }
-  ],
-  "sourceType": "LIVE_SHOW",
-  "sourceId": 1001
-}
+**옵션 선택 Bottom Sheet 는 만들지 않는다.** 옵션이 없으니 고를 게 없다. **수량만** 고른다.
 
-sourceType, sourceId를 넣어야 라이브쇼별 성과 분석이 가능합니다.
+### 6-3. 상세 — PC
 
-16. 성과 측정
+```
+좌측: 영상 · 방송 소개 · 공지        |   우측(sticky): 대표 상품 · 가격 · 쿠폰 · 수량 · [바로구매]
+하단: 함께 판매 상품 그리드
+```
 
-MVP에서도 성과 로그는 반드시 넣어야 합니다.
-라이브 기능을 유지할 가치가 있는지 판단하려면 데이터가 필요합니다.
+영상과 구매 패널이 **동시에** 보여야 한다. 상품 상세로 이동하지 않아도 구매 판단이 서야 한다.
 
-수집 이벤트
-LIVE_PAGE_VIEW
-VIDEO_PLAY_CLICK
-PRODUCT_CLICK
-COUPON_DOWNLOAD
-CLICK_CART
-CLICK_BUY
-QUESTION_SUBMIT
-ORDER_COMPLETE
-분석 지표
-- 라이브 페이지 조회 수
-- 상품 클릭 수
-- 쿠폰 다운로드 수
-- 장바구니 전환 수
-- 바로구매 클릭 수
-- 주문 완료 수
-- 라이브쇼별 매출
-- 상품별 매출
-성과 연결
+### 6-4. 홈 노출 (선택 · 2차)
 
-주문 테이블 또는 주문 아이템 테이블에 출처를 남기는 것이 좋습니다.
+SDUI 섹션으로 붙인다. 섹션 타입은 현재 **18종**이고 `sectionRegistry.js` 가 단일 소스다.
 
-order_item
-├─ source_type = LIVE_SHOW
-└─ source_id = live_show_id
-17. 라우팅 설계
-/live
-- 라이브쇼 목록
+1. `views/partials/sections/live_carousel.ejs`
+2. `services/display/sectionRegistry.js` 에 `live_carousel` 등록 → **관리자 폼이 자동 생성된다**
+3. `services/display/resolvers/live_carousel.js` + `resolvers/index.js` 맵 등록
 
-/live/{liveShowId}
-- 라이브쇼 상세/판매 페이지
+`displayService.js` 는 **건드리지 않는다**(레지스트리/리졸버 맵 조회로 디스패치).
 
-/live/{liveShowId}/replay
-- 다시보기 페이지, 상세 페이지와 통합 가능
+---
 
-/admin/live-shows
-- 관리자 목록
+## 7. 라우트 (SSR — REST API 아님)
 
-/admin/live-shows/new
-- 관리자 등록
+### 7-1. 고객
 
-/admin/live-shows/{id}/edit
-- 관리자 수정
+| 메서드 | 경로 | 처리 |
+|---|---|---|
+| GET | `/live` | 목록 (0건 → 준비중 랜딩) |
+| GET | `/live/:slug` | 상세 (DRAFT/CANCELLED → 404, ENDED → `ended_access_policy`) |
+| POST | `/coupon/:id/claim` | **기존 라우트 재사용.** 라이브가 새로 만들지 않는다 |
+| GET | `/checkout?product_id=&quantity=&live_show_id=` | **기존 체크아웃.** `postForm` 에 분기만 추가 |
 
-SEO가 필요하면 slug를 추가합니다.
+`/live/{id}/replay` 별도 페이지는 **만들지 않는다.** 상세가 `ENDED` 면 알아서 다시보기를 렌더한다(원고 §17 도 "통합 가능" 이라 적었다).
 
-/live/{slug}
+> **Express 5 함정**: path-to-regexp v8 은 `:id(\d+)` 를 지원하지 않는다. 숫자 검증은 로컬 `requireNumericId` 미들웨어로.
+> `/new` 같은 리터럴 경로는 `/:slug` 보다 **먼저** 선언한다.
 
-예:
+### 7-2. 관리자 `/admin/lives`
 
-/live/summer-beauty-live-2026
-18. 외부 영상 URL 처리
+전부 EJS 폼 POST + redirect (JSON API 아님).
 
-관리자에서 임의 iframe을 그대로 받는 것은 위험합니다.
-XSS, 악성 iframe, 보안 문제가 생길 수 있습니다.
+| 메서드 | 경로 | 처리 |
+|---|---|---|
+| GET | `/admin/lives` | 목록 (상태 필터) |
+| GET | `/admin/lives/new` | 등록 폼 ← `/:id` 보다 먼저 |
+| POST | `/admin/lives` | 등록 |
+| GET | `/admin/lives/:id/edit` | 수정 폼 (상품·쿠폰·공지 탭 포함) |
+| POST | `/admin/lives/:id` | 수정 |
+| POST | `/admin/lives/:id/status` | 상태 전환 (ON_AIR / ENDED / CANCELLED) |
+| POST | `/admin/lives/:id/delete` | 삭제 |
+| POST | `/admin/lives/:id/products` | 상품 연결 (검색 → 담기) |
+| POST | `/admin/lives/:id/products/:mappingId` | 역할·라이브가·순서·수량제한 수정 |
+| POST | `/admin/lives/:id/products/:mappingId/delete` | 연결 해제 |
+| POST | `/admin/lives/:id/coupons` | 쿠폰 연결 |
+| POST | `/admin/lives/:id/coupons/:mappingId/delete` | 연결 해제 |
+| POST | `/admin/lives/:id/notices` | 공지 등록 |
+| POST | `/admin/lives/:id/notices/:noticeId` | 공지 수정 |
+| POST | `/admin/lives/:id/notices/:noticeId/delete` | 공지 삭제 |
 
-권장 입력 방식
-YouTube:
-- videoId만 입력
-- 또는 YouTube URL 입력 후 서버에서 videoId 추출
+**몰 컨텍스트**: 관리자는 `req.adminMallId` 를 쓴다(`MALL_ID = 1` 하드코딩 금지 — `middleware/adminMallContext.js:13`).
 
-Vimeo:
-- videoId만 입력
-- 또는 Vimeo URL 입력 후 서버에서 videoId 추출
+---
 
-직접 iframe:
-- MVP에서는 비추천
-- 허용하더라도 최고관리자만 가능
-검증 규칙
-- 허용 provider만 저장
-- youtube.com, youtu.be, vimeo.com 등 허용 도메인만 처리
-- script 태그 저장 금지
-- iframe HTML 직접 저장 금지
-- 서버에서 embed_url 생성
-19. 보안/운영 체크
-필수
-- 관리자 입력 URL 검증
-- 외부 iframe 허용 도메인 제한
-- 질문 등록 rate limit
-- 로그인 사용자만 질문 가능 여부 설정
-- 쿠폰 중복 다운로드 방지
-- 품절 상품 구매 차단
-- 방송 종료 후 구매 가능 여부 체크
-- 주문 시점 가격 재검증
-특히 중요한 부분
+## 8. 외부 영상 URL 처리 — 보안
 
-라이브 페이지에 표시된 가격만 믿으면 안 됩니다.
-주문 생성 시점에는 반드시 백엔드에서 가격/재고/쿠폰을 다시 계산해야 합니다.
+**관리자가 넣은 iframe HTML 을 그대로 저장하지 않는다.** XSS 통로가 된다.
 
-프론트 가격 = 표시용
-백엔드 가격 = 결제 기준
-20. 개발 우선순위
-Sprint 1: 데이터/관리자 최소 기능
-- live_show 테이블
-- live_show_product 테이블
-- 라이브쇼 등록/수정
-- 영상 URL 등록
-- 대표 상품 연결
-- 함께 판매 상품 연결
-Sprint 2: 사용자 라이브 페이지
-- /live/{id} 페이지
-- 영상 embed
-- 방송 정보 표시
-- 대표 상품 표시
-- 함께 판매 상품 표시
-- 모바일 하단 구매바
-Sprint 3: 구매 연동
-- 옵션 선택 Bottom Sheet
-- 장바구니 연동
-- 바로구매 연동
-- source tracking 적용
-Sprint 4: 쿠폰/공지/Q&A
-- 라이브 쿠폰 연결
-- 쿠폰 다운로드
-- 공지 탭
-- 질문 등록
-- 관리자 답변
-Sprint 5: 통계/운영 개선
-- 이벤트 로그
-- 라이브별 성과 통계
-- 주문/매출 연결
-- 방송 종료 후 다시보기 처리
-21. MVP 최종 기능 범위
-사용자 기능
-- 라이브쇼 목록
-- 라이브쇼 상세 페이지
-- 외부 영상 시청
-- 방송 상태 표시
-- 대표 상품 확인
-- 함께 판매 상품 확인
-- 쿠폰 다운로드
-- 공지 확인
-- 질문 등록
-- 장바구니 담기
-- 바로구매
-- 다시보기
-관리자 기능
-- 라이브쇼 등록/수정/삭제
-- YouTube/Vimeo URL 등록
-- 방송 시간 설정
-- 방송 상태 설정
-- 대표 상품 연결
-- 함께 판매 상품 연결
-- 쿠폰 연결
-- 공지 등록
-- 질문 답변
-- 라이브쇼별 성과 조회
-22. 최종 판단
+### 8-1. 입력 · 저장
 
-1차 MVP는 아래 정도가 가장 적절합니다.
+```
+관리자 입력 : YouTube/Vimeo URL 또는 video id (아무거나)
+서버 파싱   : URL → video id 추출
+저장        : provider ('YOUTUBE'|'VIMEO') + video_id 만
+렌더        : 서버가 embed URL 을 조립
+```
 
-YouTube/Vimeo embed
-+ 라이브 판매 페이지
-+ 대표 상품/함께 판매 상품
-+ 쿠폰/혜택
-+ 공지
-+ 질문 등록
-+ 장바구니/바로구매
-+ 성과 추적
+허용 호스트만 파싱한다: `youtube.com` · `youtu.be` · `www.youtube.com` · `m.youtube.com` · `vimeo.com` · `player.vimeo.com`.
+그 외 도메인, `<script>`, `<iframe>` 문자열이 섞여 들어오면 **거부**한다.
 
-이 구조는 개발 부담이 낮고, 기존 쇼핑몰 소스에 비교적 쉽게 붙일 수 있습니다.
-다만 YouTube embed 기준으로는 외부 플랫폼 느낌이 일부 남습니다. 그래서 화면 전체를 우리 쇼핑몰의 Header, 상품 카드, 구매 패널, 쿠폰 UI로 강하게 감싸는 방식이 중요합니다.
+video id 형식도 검증한다: YouTube `^[A-Za-z0-9_-]{11}$`, Vimeo `^\d+$`.
 
-정리하면, 이 MVP의 본질은 라이브 플랫폼 개발이 아니라 “영상이 포함된 상품 판매 랜딩 페이지”를 만드는 것입니다.
+### 8-2. 렌더
+
+```html
+<!-- YouTube -->
+<iframe src="https://www.youtube.com/embed/{videoId}?autoplay=0&controls=1&playsinline=1&rel=0&modestbranding=1"
+        title="쇼핑라이브" loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen></iframe>
+
+<!-- Vimeo -->
+<iframe src="https://player.vimeo.com/video/{videoId}?playsinline=1"
+        title="쇼핑라이브" loading="lazy"
+        allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+```
+
+`playsinline=1` 로 모바일 전체화면 강제 전환을 줄인다. **`enablejsapi` 는 1차에서 쓰지 않는다** — JS 로 제어할 게 없다.
+
+`description`·`notice` 는 `services/display/htmlSanitizer.js` 의 `sanitize()` 를 반드시 통과시킨다(기존 관례).
+
+### 8-3. YouTube 임베드의 한계 — 받아들인다
+
+- YouTube 로고·플레이어 UI 가 남는다 (`modestbranding` 도 완전히 없애진 못한다)
+- 완전한 커스텀 플레이어는 불가
+- 영상 클릭 시 YouTube 로 이동할 수 있다
+
+**이질감을 없애려 싸우지 않는다.** 대신 **우리 헤더 · 상품 카드 · 가격 · 쿠폰 UI 로 화면을 강하게 감싼다.**
+영상은 화면의 일부일 뿐, 페이지의 주인공은 상품이다.
+
+---
+
+## 9. 배포 순서 (반드시)
+
+**개발 DB = 배포 서버 DB.** `/live` 는 **이미 GNB 에 링크가 걸려 있다.** 순서를 틀리면 고객이 깨진 화면을 본다.
+
+```
+1. 마이그레이션 실행 (scripts/migrate_live_show.sql)
+   → 테이블 4개 CREATE. 아직 아무도 안 읽으므로 무해.
+   → admin_menus INSERT 는 **하지 않는다** (3번에서)
+
+2. 코드 커밋 → push → GitHub Actions → 배포
+   ⚠️ 이 시점에 /live 가 준비중 랜딩 → 실모듈로 바뀐다.
+      발행된 라이브가 0건이므로 컨트롤러가 COMING_SOON.live 로 폴백한다 → 화면은 그대로다. 안전하다.
+      (0건 폴백을 빼먹으면 이 순간 고객에게 빈 목록이 뜬다)
+
+3. 배포 확인 후 admin_menus INSERT
+   → 먼저 넣으면 라우트 없는 사이드바에 404 메뉴가 뜬다
+
+4. 관리자에서 라이브쇼 생성 → DRAFT 로 작업 → 준비되면 SCHEDULED/ON_AIR
+   → 이때부터 /live 에 실제 목록이 뜬다
+```
+
+### 9-1. `admin_menus` INSERT (배포 확인 후 수동 실행)
+
+```sql
+-- parent_id 31 = '페이지/전시 관리' 그룹 — 기획전(3)·공동구매(4)가 사는 곳이다.
+-- (프로모션 그룹 33 은 쿠폰·포인트·이벤트. 라이브는 전시/판매 채널이므로 31)
+INSERT INTO admin_menus (name, path, icon_class, display_order, parent_id, is_active, visible_roles)
+VALUES ('쇼핑라이브 관리', '/admin/lives', 'bi bi-broadcast', 5, 31, 1, 'super_admin,admin,content_admin');
+```
+
+> `requireMenuAccess('/admin/lives')` 의 인자와 `admin_menus.path` 값이 **문자 단위로 일치**해야 한다
+> (`middleware/adminRoleGuard.js:26-29`). 안 맞으면 `content_admin` 이 403 을 맞는다.
+
+### 9-2. 씨드 데이터를 코드로 넣지 않는다
+
+개발 DB = 배포 서버 DB 다. 스크립트가 만든 라이브쇼가 **그대로 고객에게 노출된다.**
+라이브쇼 생성은 관리자 화면에서 운영자가 한다.
+
+---
+
+## 10. 개발 순서
+
+| 스프린트 | 범위 | 산출 |
+|---|---|---|
+| **S1** | 데이터 + 관리자 | 테이블 4개 · `/admin/lives` CRUD · 영상 URL 파싱/검증 · 상품 연결 · 쿠폰 연결 · 공지 |
+| **S2** | 고객 화면 | `/live` 목록(0건 폴백) · `/live/:slug` 상세 · 영상 임베드 · 상태별 렌더 · 대표/함께 상품 · 하단 고정바 |
+| **S3** | 구매 연동 | `checkoutController.postForm` 에 `live_show_id` 분기 · 라이브가 서버 재계산 · `order_items.source_type='LIVE_SHOW'` |
+| **S4** | 혜택 · 공지 | 쿠폰 탭(기존 claim 재사용) · 공지 탭 · 중요 공지 고정 박스 |
+| **S5** (2차) | 확장 | 장바구니 담기(→ `carts` 확장 필요) · 라이브 Q&A · 홈 `live_carousel` 섹션 |
+| **S6** (3차) | 분석 | 이벤트 로그 테이블 · 라이브별 성과 대시보드 |
+
+**S1~S4 가 1차 MVP.** S3 없이 S2 만 나가면 "보기만 하고 못 사는 페이지"가 되므로 **S2·S3 는 함께 배포**한다.
+
+---
+
+## 11. 변경 파일
+
+### 신규
+
+| 파일 | 역할 |
+|---|---|
+| `scripts/migrate_live_show.sql` | 테이블 4개 DDL + `admin_menus` INSERT(주석 처리 — 배포 후 수동) |
+| `services/live/liveService.js` | 목록·상세 조립, 상태 판정, 가격 계산, 영상 URL 파싱/검증 |
+| `controllers/liveController.js` | `/live` · `/live/:slug` (0건 → 준비중 폴백) |
+| `routes/live.js` | |
+| `views/user/live/list.ejs` · `detail.ejs` | |
+| `controllers/admin/liveController.js` | 라이브쇼 CRUD + 상품·쿠폰·공지 관리 |
+| `routes/admin/lives.js` | |
+| `views/admin/lives/list.ejs` · `edit.ejs` | |
+
+### 수정
+
+| 파일 | 변경 |
+|---|---|
+| `routes/feature.js` | **`router.get('/live', comingSoon('live'))` 제거.** `COMING_SOON.live` **정의는 유지**(0건 폴백에서 재사용) |
+| `app.js` | `app.use('/live', require('./routes/live'))` 마운트 |
+| `routes/admin.js` | `router.use('/lives', requireMenuAccess('/admin/lives'), require('./admin/lives'))` |
+| `controllers/checkoutController.js` | `getForm`·`postForm` 에 `live_show_id` 분기 추가 (라이브가 재계산 + source 기록) |
+
+### 건드리지 않는 것
+
+- `feature_menu` · `mall_feature_menu` · `navigation_config` — **이미 다 돼 있다** (§1)
+- `services/coupon/*` — 쿠폰 엔진 재사용
+- `services/display/displayService.js` — SDUI 섹션은 레지스트리 등록만 (2차)
+
+---
+
+## 12. 보안 · 운영 체크
+
+| 항목 | 처리 |
+|---|---|
+| 관리자 영상 URL | 허용 호스트 + video id 정규식 검증. iframe HTML 저장 금지 (§8-1) |
+| `description`/`notice` | `htmlSanitizer.sanitize()` 통과 |
+| **주문 시점 가격 재검증** | `postForm` 에서 `live_price` 를 DB 에서 다시 읽는다. **폼이 보낸 금액은 쓰지 않는다** |
+| 재고 | 결제 확정 시 `completeOrderWithStockAndPaid` 가 `FOR UPDATE` 잠금 + 차감 (기존) |
+| 쿠폰 중복 다운로드 | `coupon_download` PK 가 막는다 (기존) |
+| 방송 종료 후 구매 | `ended_purchase_policy` 체크 (기본 `DISALLOW`) |
+| 품절 구매 | `products.status`/`stock` 체크 |
+| slug 충돌 | `uk_live_show_slug (mall_id, slug)` |
+
+> **원칙: 프론트 가격 = 표시용, 백엔드 가격 = 결제 기준.** 이 몰의 체크아웃은 이미 이 원칙으로 서 있다. 깨지 말 것.
+
+---
+
+## 13. MVP 최종 범위
+
+**고객**
+라이브 목록 · 라이브 상세 · 외부 영상 시청 · 방송 상태 표시 · 대표 상품 · 함께 판매 상품 ·
+라이브가 표시 · 쿠폰 다운로드 · 공지 확인 · **수량 선택 + 바로구매** · 다시보기
+
+**관리자**
+라이브쇼 등록/수정/삭제 · YouTube/Vimeo 등록 · 방송 시간 · 상태 전환 · 대표/함께 상품 연결 ·
+라이브가 · 수량 제한 · 쿠폰 연결 · 공지 관리
+
+**빼는 것 (원고 §1 유지 + 이 몰의 제약)**
+자체 스트리밍 · 실시간 채팅 · 실시간 시청자 수 · 실시간 투표 · 쇼호스트 콘솔 · 방송 중 상품 자동 전환 ·
+PIP · 자체 VOD 인코딩 · **옵션 선택(옵션이 없다)** · **장바구니 담기(2차)** · **Q&A(2차)**

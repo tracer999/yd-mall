@@ -1,0 +1,304 @@
+<%
+  /*
+   * 브랜드 상세관 — 공통 템플릿 (모든 브랜드 자동 생성)
+   * docs/사이트개선/brand_hub_dev_plan.md §5-2
+   *
+   * official_yn + shop_enabled 인 브랜드만 히어로·스토리 등 공식관 확장이 켜진다.
+   *
+   * locals: brand, tab, isLiked, categories, benefits, best, newProducts,
+   *         listing{products,total,page,pages}, related, filters{cat,sort}
+   */
+  const b = brand;
+  const official = b.official_yn && b.shop_enabled;
+  const tabs = [['home','홈'], ['best','베스트'], ['new','신상품'], ['all','전체 상품'], ['benefit','혜택']];
+  const url = (obj) => {
+    const p = new URLSearchParams();
+    Object.entries(obj).forEach(([k, v]) => { if (v) p.set(k, v); });
+    const s = p.toString();
+    return `/brands/${b.id}${s ? '?' + s : ''}`;
+  };
+  const priceRange = (b.min_price != null && b.max_price != null)
+    ? Number(b.min_price).toLocaleString() + '원 ~ ' + Number(b.max_price).toLocaleString() + '원'
+    : null;
+%>
+
+<!-- 히어로 (공식 브랜드관만) -->
+<% if (official && b.hero_image_url) { %>
+  <div class="w-full h-40 sm:h-64 bg-gray-100 overflow-hidden">
+    <img src="<%= b.hero_image_url %>" alt="<%= b.name %>" class="w-full h-full object-cover">
+  </div>
+<% } %>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <!-- 브랜드 헤더 -->
+  <div class="flex flex-col sm:flex-row sm:items-center gap-5 pb-6 border-b border-gray-200">
+    <div class="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white border border-gray-200 overflow-hidden flex items-center justify-center">
+      <% if (b.logo_image_path) { %>
+        <img src="<%= b.logo_image_path %>" alt="<%= b.name %>" class="max-w-full max-h-full object-contain p-2">
+      <% } else if (b.repImages && b.repImages.length) { %>
+        <div class="w-full h-full grid grid-cols-2 gap-px bg-gray-100">
+          <% b.repImages.slice(0, 4).forEach(function (src) { %>
+            <img src="<%= src %>" alt="" class="w-full h-full object-cover">
+          <% }) %>
+        </div>
+      <% } else { %>
+        <span class="text-xl font-bold text-gray-300"><%= b.name.slice(0, 2) %></span>
+      <% } %>
+    </div>
+
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <h1 class="text-2xl font-bold text-gray-900"><%= b.name %></h1>
+        <% if (b.name_en && b.name_en !== b.name) { %>
+          <span class="text-sm text-gray-400"><%= b.name_en %></span>
+        <% } %>
+        <% if (b.official_yn) { %>
+          <span class="px-2 py-0.5 rounded bg-[var(--gh-primary)] text-white text-xs font-semibold">
+            <i class="bi bi-patch-check-fill"></i> 공식 브랜드관
+          </span>
+        <% } %>
+        <% if (b.is_seller) { %>
+          <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs">입점몰</span>
+        <% } %>
+      </div>
+
+      <% if (b.tagline) { %>
+        <p class="mt-1.5 text-sm text-gray-600"><%= b.tagline %></p>
+      <% } %>
+
+      <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
+        <span>상품 <strong class="text-gray-900"><%= Number(b.product_count || 0).toLocaleString() %></strong>개</span>
+        <% if (b.topCategoryName) { %><span class="text-gray-300">·</span><span><%= b.topCategoryName %></span><% } %>
+        <% if (priceRange) { %><span class="text-gray-300">·</span><span><%= priceRange %></span><% } %>
+        <% if (b.onboarded_at) { %>
+          <span class="text-gray-300">·</span>
+          <span>입점 <%= new Date(b.onboarded_at).toISOString().slice(0, 10) %></span>
+        <% } %>
+      </div>
+    </div>
+
+    <button type="button" data-size="lg"
+            class="brand-like-btn shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 rounded-full border transition
+                   <%= isLiked ? 'border-red-200 bg-red-50 text-red-500' : 'border-gray-300 text-gray-600 hover:border-red-300 hover:text-red-400' %>"
+            data-brand-id="<%= b.id %>" data-liked="<%= isLiked ? '1' : '0' %>"
+            aria-pressed="<%= isLiked ? 'true' : 'false' %>">
+      <i class="bi <%= isLiked ? 'bi-heart-fill' : 'bi-heart' %> text-lg"></i>
+      <span class="text-sm font-semibold">관심 브랜드</span>
+    </button>
+  </div>
+
+  <!-- 사용 가능한 쿠폰 -->
+  <% if (benefits && benefits.coupons.length) { %>
+    <div class="mt-5 flex items-center gap-3 p-4 rounded-2xl bg-red-50 border border-red-100">
+      <i class="bi bi-ticket-perforated-fill text-red-500 text-xl shrink-0"></i>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold text-gray-900">사용 가능한 쿠폰 <%= benefits.coupons.length %>장</p>
+        <p class="text-xs text-gray-600 truncate"><%= benefits.coupons.map(c => c.name).join(' · ') %></p>
+      </div>
+      <a href="/coupon?brand=<%= b.id %>"
+         class="shrink-0 px-4 py-2 rounded-full bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition">
+        받기
+      </a>
+    </div>
+  <% } %>
+
+  <!-- 탭 -->
+  <nav class="mt-6 flex gap-1 border-b border-gray-200 overflow-x-auto">
+    <% tabs.forEach(function (t) {
+         // 상품이 적은 브랜드는 탭을 나누지 않는다 — 전체 상품 하나면 충분하다
+         if (b.product_count <= 3 && ['best','new'].includes(t[0])) return;
+         if (t[0] === 'benefit' && (!benefits || benefits.total === 0)) return;
+         const on = tab === t[0]; %>
+      <a href="<%= url({ tab: t[0] === 'home' ? null : t[0] }) %>"
+         class="shrink-0 px-4 py-3 text-sm border-b-2 -mb-px transition
+                <%= on ? 'border-[var(--gh-primary)] text-[var(--gh-primary)] font-bold'
+                       : 'border-transparent text-gray-500 hover:text-gray-900' %>">
+        <%= t[1] %>
+        <% if (t[0] === 'benefit') { %><span class="ml-0.5 text-xs"><%= benefits.total %></span><% } %>
+      </a>
+    <% }) %>
+  </nav>
+
+  <div class="py-8">
+
+    <!-- 홈 탭 — 나머지 탭의 요약 -->
+    <% if (tab === 'home') { %>
+      <% if (official && b.story) { %>
+        <section class="mb-10 p-6 bg-gray-50 rounded-2xl">
+          <h2 class="text-lg font-bold text-gray-900 mb-3">브랜드 스토리</h2>
+          <div class="prose prose-sm max-w-none text-gray-700"><%- b.story %></div>
+        </section>
+      <% } %>
+
+      <% if (benefits && benefits.total > 0) { %>
+        <section class="mb-10">
+          <div class="flex items-end justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-900">진행 중 혜택</h2>
+            <a href="<%= url({ tab: 'benefit' }) %>" class="text-sm text-gray-500 hover:text-[var(--gh-primary)]">전체보기 ›</a>
+          </div>
+          <%- include('./_benefits', { benefits: benefits, brand: b, compact: true }) %>
+        </section>
+      <% } %>
+
+      <% if (best && best.length) { %>
+        <section class="mb-10">
+          <div class="flex items-end justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-900">베스트</h2>
+            <a href="<%= url({ tab: 'best' }) %>" class="text-sm text-gray-500 hover:text-[var(--gh-primary)]">전체보기 ›</a>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <% best.slice(0, 6).forEach(function (product) { %>
+              <%- include('../../partials/product_card', { product }) %>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
+      <% if (newProducts && newProducts.length) { %>
+        <section class="mb-10">
+          <div class="flex items-end justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-900">신상품</h2>
+            <a href="<%= url({ tab: 'new' }) %>" class="text-sm text-gray-500 hover:text-[var(--gh-primary)]">전체보기 ›</a>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <% newProducts.slice(0, 6).forEach(function (product) { %>
+              <%- include('../../partials/product_card', { product }) %>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
+      <% if (categories && categories.length > 1) { %>
+        <section class="mb-10">
+          <h2 class="text-lg font-bold text-gray-900 mb-4">카테고리</h2>
+          <div class="flex flex-wrap gap-2">
+            <% categories.forEach(function (c) { %>
+              <a href="<%= url({ tab: 'all', cat: c.id }) %>"
+                 class="px-4 py-2 rounded-full border border-gray-200 text-sm text-gray-700 hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition">
+                <%= c.name %> <span class="text-gray-400"><%= c.product_count %></span>
+              </a>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
+      <% if (b.product_count <= 3 && listing && listing.products.length) { %>
+        <section class="mb-10">
+          <h2 class="text-lg font-bold text-gray-900 mb-4">전체 상품</h2>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <% listing.products.forEach(function (product) { %>
+              <%- include('../../partials/product_card', { product }) %>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+    <% } %>
+
+    <!-- 베스트 탭 -->
+    <% if (tab === 'best') { %>
+      <% if (!best.length) { %>
+        <p class="py-16 text-center text-gray-500">베스트 상품이 아직 없습니다.</p>
+      <% } else { %>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <% best.forEach(function (product) { %>
+            <%- include('../../partials/product_card', { product }) %>
+          <% }) %>
+        </div>
+      <% } %>
+    <% } %>
+
+    <!-- 신상품 탭 -->
+    <% if (tab === 'new') { %>
+      <% if (!newProducts.length) { %>
+        <p class="py-16 text-center text-gray-500">신상품이 아직 없습니다.</p>
+      <% } else { %>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <% newProducts.forEach(function (product) { %>
+            <%- include('../../partials/product_card', { product }) %>
+          <% }) %>
+        </div>
+      <% } %>
+    <% } %>
+
+    <!-- 전체 상품 탭 -->
+    <% if (tab === 'all') { %>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div class="flex flex-wrap gap-1.5">
+          <a href="<%= url({ tab: 'all', sort: filters.sort }) %>"
+             class="px-3 py-1.5 rounded-full text-xs border transition
+                    <%= !filters.cat ? 'bg-gray-900 border-gray-900 text-white font-semibold' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400' %>">
+            전체 <%= Number(b.product_count).toLocaleString() %>
+          </a>
+          <% (categories || []).forEach(function (c) { const on = Number(filters.cat) === Number(c.id); %>
+            <a href="<%= url({ tab: 'all', cat: c.id, sort: filters.sort }) %>"
+               class="px-3 py-1.5 rounded-full text-xs border transition
+                      <%= on ? 'bg-gray-900 border-gray-900 text-white font-semibold' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400' %>">
+              <%= c.name %> <%= c.product_count %>
+            </a>
+          <% }) %>
+        </div>
+        <div class="flex gap-1.5">
+          <% [['new','신상품순'],['popular','인기순'],['low','낮은가격'],['high','높은가격']].forEach(function (s) {
+               const on = filters.sort === s[0]; %>
+            <a href="<%= url({ tab: 'all', cat: filters.cat, sort: s[0] }) %>"
+               class="px-3 py-1.5 rounded-full text-xs border transition
+                      <%= on ? 'bg-gray-900 border-gray-900 text-white font-semibold' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400' %>">
+              <%= s[1] %>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+      <% if (!listing.products.length) { %>
+        <p class="py-16 text-center text-gray-500">상품이 없습니다.</p>
+      <% } else { %>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <% listing.products.forEach(function (product) { %>
+            <%- include('../../partials/product_card', { product }) %>
+          <% }) %>
+        </div>
+
+        <% if (listing.pages > 1) { %>
+          <nav class="flex justify-center items-center gap-1 mt-10">
+            <% const cur = listing.page;
+               const from = Math.max(1, cur - 2);
+               const to = Math.min(listing.pages, from + 4); %>
+            <% if (cur > 1) { %>
+              <a href="<%= url({ tab: 'all', cat: filters.cat, sort: filters.sort, page: cur - 1 }) %>"
+                 class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">‹</a>
+            <% } %>
+            <% for (let i = from; i <= to; i++) { %>
+              <a href="<%= url({ tab: 'all', cat: filters.cat, sort: filters.sort, page: i }) %>"
+                 class="px-3 py-2 rounded-lg border text-sm transition
+                        <%= i === cur ? 'bg-gray-900 border-gray-900 text-white font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-400' %>"><%= i %></a>
+            <% } %>
+            <% if (cur < listing.pages) { %>
+              <a href="<%= url({ tab: 'all', cat: filters.cat, sort: filters.sort, page: cur + 1 }) %>"
+                 class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">›</a>
+            <% } %>
+          </nav>
+        <% } %>
+      <% } %>
+    <% } %>
+
+    <!-- 혜택 탭 -->
+    <% if (tab === 'benefit') { %>
+      <%- include('./_benefits', { benefits: benefits, brand: b, compact: false }) %>
+    <% } %>
+  </div>
+
+  <!-- 관련 브랜드 -->
+  <% if (related && related.length) { %>
+    <section class="pt-8 border-t border-gray-200">
+      <h2 class="text-lg font-bold text-gray-900 mb-4">관련 브랜드</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+        <% related.forEach(function (rb) { %>
+          <%- include('../../partials/brand/tile', { brand: rb, isLiked: (likedBrandIds || []).map(Number).includes(Number(rb.id)) }) %>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+</div>
+
+<%- include('../../partials/brand/like_script') %>

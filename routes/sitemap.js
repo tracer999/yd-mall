@@ -27,9 +27,17 @@ async function generateSitemap() {
         { url: '/guide', changefreq: 'monthly', priority: 0.4 },
     ];
 
+    // 크롤러는 세션이 없어 기본 몰로 본다. 다른 몰의 카테고리·브랜드를 실으면
+    // 기본 몰에서 열리지 않는 URL 을 색인시키게 된다.
+    const [[defaultMall]] = await pool.query(
+        'SELECT id FROM mall WHERE is_default = 1 AND is_active = 1 LIMIT 1'
+    );
+    const mallId = defaultMall?.id || 1;
+
     // 2. 카테고리 페이지
     const [categories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' ORDER BY display_order ASC"
+        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC",
+        [mallId]
     );
     categories.forEach(cat => {
         links.push({
@@ -39,13 +47,14 @@ async function generateSitemap() {
         });
     });
 
-    // 3. 브랜드 페이지
+    // 3. 브랜드 상세관
     const [brands] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'BRAND' ORDER BY display_order ASC"
+        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC",
+        [mallId]
     );
     brands.forEach(brand => {
         links.push({
-            url: `/products/brand/${brand.id}`,
+            url: `/brands/${brand.id}`,
             changefreq: 'weekly',
             priority: 0.7
         });

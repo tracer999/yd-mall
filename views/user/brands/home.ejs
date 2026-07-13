@@ -1,0 +1,255 @@
+<%
+  /*
+   * 브랜드 홈 — 브랜드 전용 허브
+   * docs/사이트개선/brand_hub_dev_plan.md §5-1
+   *
+   * locals: popular, newBrands, rootCategories, activeRoot, catBrands,
+   *         weeklyBenefits, listing{brands,total,page,pages}, initialCounts,
+   *         initialBuckets, filters{initial,sort}, likedBrandIds
+   */
+  const liked = new Set((likedBrandIds || []).map(Number));
+  const isLiked = (b) => liked.has(Number(b.id));
+  const q = (obj) => {
+    const p = new URLSearchParams();
+    Object.entries(obj).forEach(([k, v]) => { if (v) p.set(k, v); });
+    const s = p.toString();
+    return s ? `?${s}` : '';
+  };
+%>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+
+  <!-- ① 브랜드 검색 -->
+  <section class="mb-10">
+    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">브랜드</h1>
+    <p class="mt-2 text-sm text-gray-600">브랜드별 상품·신상품·베스트·혜택을 한 번에 확인하세요.</p>
+
+    <div class="relative mt-5 max-w-2xl">
+      <i class="bi bi-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+      <input type="text" id="brandSearch" autocomplete="off"
+             placeholder="브랜드명·영문명·초성으로 검색 (예: 나이키, NIKE, ㄴㅇㅋ)"
+             class="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-[var(--gh-primary)] focus:ring-2 focus:ring-[var(--gh-primary)]/20">
+      <div id="brandSearchResults"
+           class="hidden absolute z-30 left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden max-h-96 overflow-y-auto"></div>
+    </div>
+  </section>
+
+  <!-- ② 인기 브랜드 -->
+  <% if (popular && popular.length) { %>
+  <section class="mb-12">
+    <div class="flex items-end justify-between mb-4">
+      <h2 class="text-xl font-bold text-gray-900">인기 브랜드</h2>
+      <a href="<%= q({ sort: 'popular' }) %>#all-brands" class="text-sm text-gray-500 hover:text-[var(--gh-primary)]">전체보기 ›</a>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+      <% popular.forEach(function (b, i) { %>
+        <%- include('../../partials/brand/tile', { brand: b, isLiked: isLiked(b), rank: i + 1 }) %>
+      <% }) %>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- ③ 신규 입점 브랜드 -->
+  <% if (newBrands && newBrands.length) { %>
+  <section class="mb-12">
+    <div class="flex items-end justify-between mb-4">
+      <h2 class="text-xl font-bold text-gray-900">신규 입점 브랜드</h2>
+      <a href="<%= q({ sort: 'new' }) %>#all-brands" class="text-sm text-gray-500 hover:text-[var(--gh-primary)]">전체보기 ›</a>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+      <% newBrands.forEach(function (b) { %>
+        <%- include('../../partials/brand/tile', { brand: b, isLiked: isLiked(b) }) %>
+      <% }) %>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- ④ 카테고리별 브랜드 -->
+  <% if (rootCategories && rootCategories.length) { %>
+  <section class="mb-12">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">카테고리별 브랜드</h2>
+    <div class="flex gap-2 overflow-x-auto pb-2 mb-5 -mx-1 px-1">
+      <% rootCategories.forEach(function (c) { const on = Number(activeRoot) === Number(c.id); %>
+        <a href="<%= q({ root: c.id }) %>#cat-brands"
+           class="shrink-0 px-4 py-2 rounded-full border text-sm whitespace-nowrap transition
+                  <%= on ? 'bg-[var(--gh-primary)] border-[var(--gh-primary)] text-white font-semibold'
+                         : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400' %>">
+          <%= c.name %> <span class="<%= on ? 'text-white/70' : 'text-gray-400' %>"><%= c.brand_count %></span>
+        </a>
+      <% }) %>
+    </div>
+    <div id="cat-brands" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+      <% (catBrands || []).forEach(function (b) { %>
+        <%- include('../../partials/brand/tile', { brand: b, isLiked: isLiked(b) }) %>
+      <% }) %>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- ⑤ 진행 중 브랜드 혜택 -->
+  <% if (weeklyBenefits && weeklyBenefits.length) { %>
+  <section class="mb-12">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">이번 주 브랜드 혜택</h2>
+    <div class="bg-white border border-gray-200 rounded-2xl divide-y divide-gray-100">
+      <% weeklyBenefits.forEach(function (item) { %>
+        <a href="<%= item.url %>" class="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition">
+          <span class="shrink-0 px-2 py-1 rounded text-[11px] font-semibold
+            <%= item.kind === 'COUPON' ? 'bg-red-50 text-red-600'
+              : item.kind === 'DEAL' ? 'bg-orange-50 text-orange-600'
+              : item.kind === 'GROUP_BUY' ? 'bg-blue-50 text-blue-600'
+              : 'bg-emerald-50 text-emerald-600' %>">
+            <%= item.label %>
+          </span>
+          <span class="shrink-0 text-sm font-semibold text-gray-900"><%= item.brand.name %></span>
+          <span class="flex-1 text-sm text-gray-600 truncate"><%= item.title %></span>
+          <% if (item.total > 1) { %>
+            <span class="shrink-0 text-xs text-gray-400">외 <%= item.total - 1 %>건</span>
+          <% } %>
+          <i class="bi bi-chevron-right text-gray-300 shrink-0"></i>
+        </a>
+      <% }) %>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- ⑥ 전체 브랜드 -->
+  <section id="all-brands">
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+      <h2 class="text-xl font-bold text-gray-900">
+        전체 브랜드 <span class="text-gray-400 font-medium text-base">(<%= Number(listing.total).toLocaleString() %>)</span>
+      </h2>
+      <div class="flex gap-1.5">
+        <% const sorts = [['count','상품많은순'],['popular','인기순'],['name','가나다순'],['new','신규순']]; %>
+        <% sorts.forEach(function (s) { const on = filters.sort === s[0]; %>
+          <a href="<%= q({ initial: filters.initial, sort: s[0] }) %>#all-brands"
+             class="px-3 py-1.5 rounded-full text-xs border transition
+                    <%= on ? 'bg-gray-900 border-gray-900 text-white font-semibold'
+                           : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400' %>">
+            <%= s[1] %>
+          </a>
+        <% }) %>
+      </div>
+    </div>
+
+    <!-- 초성 인덱스 -->
+    <div class="flex flex-wrap gap-1 mb-6 p-3 bg-gray-50 rounded-xl">
+      <a href="<%= q({ sort: filters.sort }) %>#all-brands"
+         class="px-2.5 py-1 rounded text-xs font-medium transition
+                <%= !filters.initial ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-white' %>">전체</a>
+      <% initialBuckets.forEach(function (ini) {
+           const cnt = initialCounts[ini] || 0;
+           const on = filters.initial === ini; %>
+        <% if (cnt === 0) { %>
+          <span class="px-2.5 py-1 rounded text-xs text-gray-300 cursor-default"><%= ini %></span>
+        <% } else { %>
+          <a href="<%= q({ initial: ini, sort: filters.sort }) %>#all-brands"
+             class="px-2.5 py-1 rounded text-xs font-medium transition
+                    <%= on ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-white' %>"><%= ini %></a>
+        <% } %>
+      <% }) %>
+    </div>
+
+    <% if (!listing.brands.length) { %>
+      <div class="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-500">
+        해당하는 브랜드가 없습니다.
+      </div>
+    <% } else { %>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+        <% listing.brands.forEach(function (b) { %>
+          <%- include('../../partials/brand/tile', { brand: b, isLiked: isLiked(b) }) %>
+        <% }) %>
+      </div>
+
+      <!-- 페이지네이션 -->
+      <% if (listing.pages > 1) {
+           const cur = listing.page;
+           const from = Math.max(1, cur - 2);
+           const to = Math.min(listing.pages, from + 4); %>
+        <nav class="flex justify-center items-center gap-1 mt-10">
+          <% if (cur > 1) { %>
+            <a href="<%= q({ initial: filters.initial, sort: filters.sort, page: cur - 1 }) %>#all-brands"
+               class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">‹</a>
+          <% } %>
+          <% if (from > 1) { %>
+            <a href="<%= q({ initial: filters.initial, sort: filters.sort, page: 1 }) %>#all-brands"
+               class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">1</a>
+            <span class="px-1 text-gray-400">…</span>
+          <% } %>
+          <% for (let i = from; i <= to; i++) { %>
+            <a href="<%= q({ initial: filters.initial, sort: filters.sort, page: i }) %>#all-brands"
+               class="px-3 py-2 rounded-lg border text-sm transition
+                      <%= i === cur ? 'bg-gray-900 border-gray-900 text-white font-semibold'
+                                    : 'border-gray-200 text-gray-600 hover:border-gray-400' %>"><%= i %></a>
+          <% } %>
+          <% if (to < listing.pages) { %>
+            <span class="px-1 text-gray-400">…</span>
+            <a href="<%= q({ initial: filters.initial, sort: filters.sort, page: listing.pages }) %>#all-brands"
+               class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400"><%= listing.pages %></a>
+          <% } %>
+          <% if (cur < listing.pages) { %>
+            <a href="<%= q({ initial: filters.initial, sort: filters.sort, page: cur + 1 }) %>#all-brands"
+               class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">›</a>
+          <% } %>
+        </nav>
+      <% } %>
+    <% } %>
+  </section>
+</div>
+
+<%- include('../../partials/brand/like_script') %>
+
+<script>
+// 브랜드 검색 자동완성 — /brands/search.json
+(function () {
+    const input = document.getElementById('brandSearch');
+    const box = document.getElementById('brandSearchResults');
+    if (!input || !box) return;
+    let timer = null;
+
+    const render = (rows) => {
+        if (!rows.length) {
+            box.innerHTML = '<div class="px-4 py-6 text-center text-sm text-gray-500">검색 결과가 없습니다.</div>';
+            box.classList.remove('hidden');
+            return;
+        }
+        box.innerHTML = rows.map(function (b) {
+            const thumb = b.logo_image_path
+                ? '<img src="' + b.logo_image_path + '" alt="" class="w-full h-full object-contain p-1">'
+                : (b.repImages && b.repImages[0]
+                    ? '<img src="' + b.repImages[0] + '" alt="" class="w-full h-full object-cover">'
+                    : '<span class="text-xs font-bold text-gray-300">' + b.name.slice(0, 2) + '</span>');
+            const meta = ['상품 ' + Number(b.product_count || 0).toLocaleString() + '개'];
+            if (b.topCategoryName) meta.push(b.topCategoryName);
+            if (b.benefit_count > 0) meta.push('진행 중 혜택 ' + b.benefit_count + '개');
+            return '<a href="/brands/' + b.id + '" class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition">'
+                 + '<span class="shrink-0 w-11 h-11 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex items-center justify-center">' + thumb + '</span>'
+                 + '<span class="min-w-0 flex-1">'
+                 + '<span class="flex items-center gap-1.5">'
+                 + '<span class="text-sm font-semibold text-gray-900 truncate">' + b.name + '</span>'
+                 + (b.official_yn ? '<span class="shrink-0 px-1 py-0.5 rounded bg-[var(--gh-primary)] text-white text-[10px]">공식</span>' : '')
+                 + (b.name_en ? '<span class="shrink-0 text-xs text-gray-400">' + b.name_en + '</span>' : '')
+                 + '</span>'
+                 + '<span class="block text-xs text-gray-500 truncate">' + meta.join(' · ') + '</span>'
+                 + '</span></a>';
+        }).join('');
+        box.classList.remove('hidden');
+    };
+
+    input.addEventListener('input', function () {
+        const kw = input.value.trim();
+        clearTimeout(timer);
+        if (!kw) { box.classList.add('hidden'); return; }
+        timer = setTimeout(async function () {
+            try {
+                const res = await fetch('/brands/search.json?q=' + encodeURIComponent(kw));
+                const data = await res.json();
+                render(data.brands || []);
+            } catch (e) { box.classList.add('hidden'); }
+        }, 200);
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!box.contains(e.target) && e.target !== input) box.classList.add('hidden');
+    });
+})();
+</script>

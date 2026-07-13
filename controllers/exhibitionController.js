@@ -88,18 +88,21 @@ exports.getList = async (req, res) => {
 };
 
 /**
- * GET /exhibition/view/:id — id → slug 301
+ * GET /exhibition/view/:id — id → 정규 상세 URL 301
  *
- * 커스텀 메뉴는 `link_target` 에 숫자 id 만 들고 있다(§3). navigationService 가
- * 메뉴를 그릴 때마다 slug 를 조인해 오지 않도록, id URL 로 보내고 여기서 정규 URL 로 넘긴다.
- * (`/products/view/754` → `/products/{slug}` 와 같은 방식)
+ * 커스텀 메뉴는 이제 slug 경로를 직접 들고 있으므로(navigationService 가 대상 유효성을
+ * 검증하면서 detailPath 를 함께 받아온다) 이 라우트는 외부에 이미 뿌려진 id URL 을 위한
+ * 하위호환 경로다.
+ *
+ * 전문관은 정규 URL 이 /specialty/{slug} 다. /exhibition/{slug} 로 보내면 getDetail 이
+ * 다시 301 하므로(정규 URL 강제) 여기서 곧장 detailPath 로 보낸다 — 301 한 번이면 된다.
  */
 exports.redirectToSlug = async (req, res, next) => {
     const mallId = req.mallId || 1;
     try {
-        const slug = await svc.getPublicSlugById(mallId, req.params.id);
-        if (!slug) return next(); // 404 핸들러로
-        res.redirect(301, `/exhibition/${encodeURIComponent(slug)}`);
+        const detailPath = await svc.getPublicDetailPathById(mallId, req.params.id);
+        if (!detailPath) return next(); // 404 핸들러로
+        res.redirect(301, detailPath);
     } catch (err) {
         console.error('[exhibition] redirectToSlug:', err.message);
         next(err);

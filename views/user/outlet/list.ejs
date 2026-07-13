@@ -1,0 +1,201 @@
+<%
+  /*
+   * 아울렛 (고객) — 목록
+   *
+   * 쇼핑특가와 다른 점을 화면이 스스로 설명해야 한다.
+   * 쇼핑특가는 "지금만 싸다", 아울렛은 "왜 싼지가 상품에 있다".
+   * 그래서 모든 카드에 **할인 사유 배지**가 붙고, 상단 필터의 1축이 사유다.
+   *
+   * 탐색 축은 가격이다 — 기본 정렬이 할인율 높은 순이고 가격대 필터가 앞에 있다.
+   *
+   * 상품 카드는 공용 partials/product_card.ejs 를 그대로 쓴다.
+   * 아울렛 전용 정보(사유·상태등급·하자)는 카드 바깥에 덧그린다 — 공용 카드를 오염시키지 않는다.
+   */
+  const _items = products || [];
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+
+  const TYPE_CLS = {
+    SEASON_OFF:     'bg-blue-600',
+    DISCONTINUED:   'bg-gray-600',
+    OVERSTOCK:      'bg-amber-600',
+    DISPLAY:        'bg-purple-600',
+    REFURBISHED:    'bg-teal-600',
+    PACKAGE_DAMAGE: 'bg-orange-600',
+    EXPIRY_SOON:    'bg-red-600',
+  };
+
+  // 현재 필터를 유지한 채 한 축만 바꾸는 URL
+  const qs = (over = {}) => {
+    const p = new URLSearchParams();
+    const merged = Object.assign({
+      category: active.categoryId, type: active.type, sort: active.sort, price: active.price,
+    }, over);
+    Object.entries(merged).forEach(([k, v]) => { if (v) p.set(k, v); });
+    const s = p.toString();
+    return '/outlet' + (s ? '?' + s : '');
+  };
+  const chip = (on) => on
+    ? 'bg-gray-900 text-white border-gray-900'
+    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400';
+%>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <%# ── 헤더 ─────────────────────────────────────────── %>
+  <header class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">아울렛</h1>
+    <p class="mt-2 text-gray-500">
+      이월·리퍼브·전시·재고정리 — <strong class="text-gray-700">할인 이유가 분명한 상품</strong>을 상시 할인가로.
+    </p>
+  </header>
+
+  <% if (noticeHtml) { %>
+    <div class="mb-6 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+      <i class="bi bi-info-circle-fill mr-1.5"></i><%- noticeHtml %>
+    </div>
+  <% } %>
+
+  <%# ── 할인 사유 필터 — 아울렛의 1축 ─────────────────── %>
+  <% if (types.length) { %>
+    <div class="mb-4">
+      <p class="text-xs font-semibold text-gray-400 mb-2">할인 이유</p>
+      <div class="flex flex-wrap gap-2">
+        <a href="<%= qs({ type: null }) %>"
+           class="px-3 py-1.5 text-sm rounded-full border no-underline transition <%= chip(!active.type) %>">
+          전체
+        </a>
+        <% types.forEach(function (t) { %>
+          <a href="<%= qs({ type: t.code }) %>"
+             class="px-3 py-1.5 text-sm rounded-full border no-underline transition <%= chip(active.type === t.code) %>"
+             title="<%= t.hint %>">
+            <%= t.label %> <span class="text-xs opacity-60"><%= t.count %></span>
+          </a>
+        <% }); %>
+      </div>
+    </div>
+  <% } %>
+
+  <%# ── 카테고리 ─────────────────────────────────────── %>
+  <% if (categories.length) { %>
+    <div class="mb-4">
+      <p class="text-xs font-semibold text-gray-400 mb-2">카테고리</p>
+      <div class="flex flex-wrap gap-2">
+        <a href="<%= qs({ category: null }) %>"
+           class="px-3 py-1.5 text-sm rounded-full border no-underline transition <%= chip(!active.categoryId) %>">
+          전체
+        </a>
+        <% categories.forEach(function (c) { %>
+          <a href="<%= qs({ category: c.id }) %>"
+             class="px-3 py-1.5 text-sm rounded-full border no-underline transition <%= chip(active.categoryId === c.id) %>">
+            <%= c.name %> <span class="text-xs opacity-60"><%= c.product_count %></span>
+          </a>
+        <% }); %>
+      </div>
+    </div>
+  <% } %>
+
+  <%# ── 가격대 + 정렬 ─────────────────────────────────── %>
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-gray-200">
+    <div class="flex flex-wrap gap-2">
+      <a href="<%= qs({ price: null }) %>"
+         class="px-3 py-1.5 text-sm rounded-full border no-underline transition <%= chip(!active.price) %>">
+        전체 가격
+      </a>
+      <% priceBands.forEach(function (b) { %>
+        <a href="<%= qs({ price: b.code }) %>"
+           class="px-3 py-1.5 text-sm rounded-full border no-underline transition <%= chip(active.price === b.code) %>">
+          <%= b.label %>
+        </a>
+      <% }); %>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-gray-500"><strong class="text-gray-900"><%= total %></strong>개</span>
+      <select onchange="location.href=this.value"
+              class="h-[34px] pl-3 pr-8 rounded-md border border-gray-200 text-sm text-gray-700">
+        <% sorts.forEach(function (s) { %>
+          <option value="<%= qs({ sort: s.code }) %>" <%= active.sort === s.code ? 'selected' : '' %>>
+            <%= s.label %>
+          </option>
+        <% }); %>
+      </select>
+    </div>
+  </div>
+
+  <%# ── 상품 그리드 ──────────────────────────────────── %>
+  <% if (_items.length === 0) { %>
+    <div class="py-24 text-center">
+      <i class="bi bi-search text-4xl text-gray-200"></i>
+      <p class="mt-4 text-gray-500">조건에 맞는 아울렛 상품이 없습니다.</p>
+      <a href="/outlet" class="mt-3 inline-block text-sm text-gray-900 underline">필터 초기화</a>
+    </div>
+  <% } else { %>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
+      <% _items.forEach(function (p) { %>
+        <div class="relative">
+          <%# 할인 사유 배지 — 카드 위에 겹쳐 올린다. 아울렛에서 가장 먼저 읽혀야 하는 정보다. %>
+          <div class="absolute top-2 left-2 z-10 flex flex-col items-start gap-1">
+            <span class="px-1.5 py-0.5 text-[10px] font-bold text-white rounded <%= TYPE_CLS[p.outlet_type] || 'bg-gray-600' %>">
+              <%= p.typeLabel %>
+            </span>
+            <% if (p.condition_grade) { %>
+              <span class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-white/95 text-gray-700 border border-gray-200">
+                <%= p.condition_grade %>급
+              </span>
+            <% } %>
+          </div>
+
+          <%- include('../../partials/product_card', {
+                product: p,
+                opts: { showTopBadge: false, showPriceBadge: false },
+              }) %>
+
+          <%# 사유 문구 · 하자 고지 — 카드 아래. 고지는 목록에서도 보여야 클릭 전에 안다. %>
+          <div class="mt-1.5 px-0.5 space-y-1">
+            <% if (p.outlet_reason) { %>
+              <p class="text-xs text-gray-500 leading-snug"><%= p.outlet_reason %></p>
+            <% } %>
+            <% if (p.outlet_type === 'EXPIRY_SOON' && p.expiry_at) { %>
+              <p class="text-xs font-semibold text-red-600">
+                유통기한 <%= new Date(p.expiry_at).toLocaleDateString('ko-KR') %>까지
+              </p>
+            <% } %>
+            <% if (p.defect_description) { %>
+              <p class="text-xs text-orange-700 leading-snug">
+                <i class="bi bi-exclamation-triangle-fill"></i> <%= p.defect_description %>
+              </p>
+            <% } %>
+            <% if (p.stock > 0 && p.stock <= 5) { %>
+              <p class="text-xs font-semibold text-red-600">마지막 <%= p.stock %>개</p>
+            <% } %>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <%# ── 페이지네이션 ─────────────────────────────────── %>
+  <% if (totalPages > 1) { %>
+    <nav class="mt-12 flex items-center justify-center gap-1">
+      <% for (let i = 1; i <= totalPages; i++) { %>
+        <a href="<%= qs({}) + (qs({}).includes('?') ? '&' : '?') + 'page=' + i %>"
+           class="w-9 h-9 inline-flex items-center justify-center text-sm rounded no-underline <%= i === page ? 'bg-gray-900 text-white font-semibold' : 'text-gray-600 hover:bg-gray-100' %>">
+          <%= i %>
+        </a>
+      <% } %>
+    </nav>
+  <% } %>
+
+  <%# ── 아울렛이 무엇인지 ─────────────────────────────── %>
+  <div class="mt-16 pt-8 border-t border-gray-200">
+    <h2 class="text-sm font-bold text-gray-900 mb-3">아울렛 상품이란</h2>
+    <p class="text-sm text-gray-500 leading-relaxed max-w-3xl">
+      아울렛은 <strong class="text-gray-700">기간 한정 할인이 아닙니다.</strong>
+      시즌이 지났거나, 전시·반품 후 재정비했거나, 포장이 손상됐거나, 재고를 정리하는 상품처럼
+      <strong class="text-gray-700">가격이 싼 이유가 상품 자체에 있는</strong> 상품을 모았습니다.
+      그래서 기간이 끝나도 정상가로 돌아가지 않고, 재고가 소진될 때까지 그 가격입니다.
+      상품별 할인 이유와 상태는 각 상품에 표시되어 있으며,
+      리퍼브·전시·포장훼손 상품은 상세 페이지에서 상태와 하자 내용을 반드시 확인해 주세요.
+    </p>
+  </div>
+</div>

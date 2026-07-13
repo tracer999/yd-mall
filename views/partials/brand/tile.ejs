@@ -1,0 +1,89 @@
+<%
+  /*
+   * 브랜드 타일 — 브랜드 허브 공용 컴포넌트
+   *
+   * 몰2는 브랜드 1,354개 중 로고가 0개다. 로고 그리드는 원리적으로 불가능하므로
+   * 로고가 없으면 대표 상품 썸네일 4장 모자이크로 degrade 한다(brand_stat.rep_product_ids).
+   * 몰1은 로고관, 몰2는 썸네일 디렉터리가 되지만 컴포넌트는 하나다.
+   *
+   * locals:
+   *   brand   : brandService 가 decorate 한 브랜드 객체 (repImages, topCategoryName 포함)
+   *   isLiked : 찜 여부
+   *   rank    : 순위 뱃지 (선택)
+   */
+  const b = brand;
+  const liked = typeof isLiked !== 'undefined' && isLiked;
+  const rankNo = typeof rank !== 'undefined' ? rank : null;
+  const imgs = (b.repImages || []).slice(0, 4);
+%>
+<div class="relative group">
+  <a href="/brands/<%= b.id %>"
+     class="block bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-[var(--gh-primary)] hover:shadow-md transition-all">
+
+    <div class="relative aspect-square bg-gray-50">
+      <% if (b.logo_image_path) { %>
+        <div class="absolute inset-0 flex items-center justify-center p-5">
+          <img src="<%= b.logo_image_path %>" alt="<%= b.name %>"
+               loading="lazy"
+               class="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300">
+        </div>
+      <% } else if (imgs.length) { %>
+        <div class="absolute inset-0 grid <%= imgs.length === 1 ? 'grid-cols-1' : 'grid-cols-2' %> gap-px bg-gray-100">
+          <% imgs.forEach(function (src) { %>
+            <div class="overflow-hidden bg-white">
+              <img src="<%= src %>" alt=""
+                   loading="lazy"
+                   class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+            </div>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <span class="text-lg font-bold text-gray-300"><%= b.name.slice(0, 2) %></span>
+        </div>
+      <% } %>
+
+      <% if (rankNo) { %>
+        <span class="absolute top-2 left-2 w-6 h-6 rounded-full bg-gray-900/80 text-white text-xs font-bold flex items-center justify-center">
+          <%= rankNo %>
+        </span>
+      <% } %>
+      <% if (b.official_yn) { %>
+        <span class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-[var(--gh-primary)] text-white text-[10px] font-semibold">
+          공식
+        </span>
+      <% } %>
+    </div>
+
+    <div class="p-3 border-t border-gray-100">
+      <div class="flex items-center gap-1">
+        <span class="text-sm font-semibold text-gray-900 truncate group-hover:text-[var(--gh-primary)]">
+          <%= b.name %>
+        </span>
+        <% if (b.is_seller) { %>
+          <span class="shrink-0 px-1 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px]">입점몰</span>
+        <% } %>
+      </div>
+      <div class="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
+        <span>상품 <%= Number(b.product_count || 0).toLocaleString() %>개</span>
+        <% if (b.topCategoryName) { %>
+          <span class="text-gray-300">·</span>
+          <span class="truncate"><%= b.topCategoryName %></span>
+        <% } %>
+      </div>
+      <% if (b.benefit_count > 0) { %>
+        <div class="mt-1.5 text-xs font-medium text-[var(--gh-primary)]">
+          <i class="bi bi-ticket-perforated"></i> 진행 중 혜택 <%= b.benefit_count %>개
+        </div>
+      <% } %>
+    </div>
+  </a>
+
+  <button type="button"
+          class="brand-like-btn absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center transition hover:bg-white <%= liked ? 'text-red-500' : 'text-gray-300 hover:text-red-400' %>"
+          data-brand-id="<%= b.id %>" data-liked="<%= liked ? '1' : '0' %>"
+          aria-pressed="<%= liked ? 'true' : 'false' %>"
+          title="<%= liked ? '찜 해제' : '관심 브랜드 등록' %>">
+    <i class="bi <%= liked ? 'bi-heart-fill' : 'bi-heart' %> text-sm"></i>
+  </button>
+</div>

@@ -253,6 +253,7 @@ async function startServer() {
     const shopifyRoutes = require('./routes/shopify');
     const featureRoutes = require('./routes/feature');
     const exhibitionRoutes = require('./routes/exhibition');
+    const outletRoutes = require('./routes/outlet');
     const specialtyRoutes = require('./routes/specialty');
     const recommendRoutes = require('./routes/recommend');
     const eventRoutes = require('./routes/event');
@@ -268,6 +269,9 @@ async function startServer() {
     app.use('/', featureRoutes);
     // 기획전 표준 URL(/exhibition) — feature_menu.EXHIBITION.default_path 와 1:1
     app.use('/exhibition', exhibitionRoutes);
+    // 아울렛 표준 URL(/outlet) — 이월·리퍼브·전시·임박 상품의 상시 재고 소진 채널.
+    // 상품이 0건이면 컨트롤러가 준비중 랜딩으로 폴백한다(빈 목록 노출 방지).
+    app.use('/outlet', outletRoutes);
     // 전문관 표준 URL(/specialty) — 상시 운영 매장. exhibition 테이블 재사용(exhibition_type='SPECIALTY')
     app.use('/specialty', specialtyRoutes);
     // 추천 표준 URL(/recommend) — 개인화 + MD 큐레이션 랜딩

@@ -33,6 +33,8 @@ router.use('/categories', requireMenuAccess('/admin/categories'), require('./adm
 router.use('/feature-menus', requireMenuAccess('/admin/feature-menus'), require('./admin/feature-menus'));
 // 헤더 유틸·우측 레일 등 고정 시스템 메뉴의 노출·표시명·순서 (B4)
 router.use('/system-menus', requireMenuAccess('/admin/system-menus'), require('./admin/system-menus'));
+// 몰별 자유 메뉴 — 개별 기획전·전문관·카테고리를 GNB 슬롯에 꽂는다 (B3)
+router.use('/custom-menus', requireMenuAccess('/admin/custom-menus'), require('./admin/custom-menus'));
 // 헤더 레이아웃·GNB 슬롯 정책(navigation_config) (B5)
 router.use('/header-settings', requireMenuAccess('/admin/header-settings'), require('./admin/header-settings'));
 // 스토어프론트 메뉴 조립 결과 미리보기 (B7)
@@ -48,6 +50,9 @@ router.use('/best-groups', requireMenuAccess('/admin/best-groups'), require('./a
 router.use('/recommend-groups', requireMenuAccess('/admin/recommend-groups'), require('./admin/recommend-groups'));
 // 기획전 — 시즌·브랜드·테마별 상품 전시 랜딩
 router.use('/exhibitions', requireMenuAccess('/admin/exhibitions'), require('./admin/exhibitions'));
+// 아울렛 — 이월·리퍼브·전시·임박 등 '할인 사유'가 있는 상품의 상시 재고 소진 채널.
+// 쇼핑특가(기간 한정)와 달리 할인이 끝나면 정상가로 돌아가지 않는다. 가격은 products 를 그대로 쓴다.
+router.use('/outlet', requireMenuAccess('/admin/outlet'), require('./admin/outlet'));
 // 이벤트&혜택 — 응모·쿠폰팩·출석 등 참여/혜택 중심(기획전과 분리)
 router.use('/events', requireMenuAccess('/admin/events'), require('./admin/events'));
 // 공동구매 — 기간·목표수량·공동구매가가 있는 조건부 판매 캠페인(기획전·이벤트와 분리)

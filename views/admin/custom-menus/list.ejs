@@ -1,0 +1,171 @@
+<%
+  /*
+   * 커스텀 메뉴 관리 (B3) — 목록
+   *
+   * 호출부가 넘기는 지역 변수: items, locations, config, gnbEnabledCount, saved, error
+   *
+   * `broken` 은 "켜 뒀지만 대상이 깨져 스토어프론트에 안 나오는" 메뉴다.
+   * navigationService 가 죽은 링크를 렌더에서 빼기 때문에 관리자만 이 사실을 볼 수 있다.
+   */
+  const _items = items || [];
+  const _locations = locations || [];
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6 flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">커스텀 메뉴 관리</h1>
+      <p class="mt-1 text-sm text-gray-500">
+        개별 <strong>기획전·전문관</strong>·카테고리·브랜드를 이 몰만의 메뉴로 만들어 GNB 에 노출합니다.
+        기능 메뉴와 <strong>같은 순서 축</strong>으로 정렬되므로, '전문관' 목록 메뉴를 끄고 그 자리에 개별 전문관을 올릴 수 있습니다.
+      </p>
+    </div>
+    <a href="/admin/custom-menus/add"
+       class="shrink-0 inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline">
+      <i class="bi bi-plus-lg mr-1.5"></i> 메뉴 추가
+    </a>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다. 스토어프론트에 즉시 반영됩니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-center gap-2">
+      <i class="bi bi-exclamation-triangle-fill"></i> <%= error %>
+    </div>
+  <% } %>
+
+  <div class="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+    <div class="flex items-start gap-2">
+      <i class="bi bi-info-circle-fill mt-0.5"></i>
+      <div>
+        <p>
+          GNB 커스텀 슬롯 <strong><%= gnbEnabledCount %> / <%= config.max_custom_items %></strong>개 사용 중
+          (GNB 전체 최대 노출 <%= config.max_gnb_items %>개).
+          슬롯을 늘리려면 <a href="/admin/header-settings" class="underline font-semibold">Header 설정</a>에서 조정하세요.
+        </p>
+        <p class="mt-1">
+          <strong>연결 끊김</strong>으로 표시된 메뉴는 대상이 삭제·미발행·비활성 상태라
+          켜 두어도 스토어프론트에 나오지 않습니다(죽은 링크 방지).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <% if (!_items.length) { %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-16 text-center">
+      <i class="bi bi-signpost-split text-4xl text-gray-300"></i>
+      <p class="mt-3 text-sm text-gray-500">아직 커스텀 메뉴가 없습니다.</p>
+      <a href="/admin/custom-menus/add" class="mt-4 inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline">
+        첫 메뉴 만들기
+      </a>
+    </div>
+  <% } %>
+
+  <% _locations.forEach(function (loc) {
+       const rows = _items.filter(function (m) { return m.location === loc.value; });
+       if (!rows.length) return; %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800"><%= loc.label %></h2>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-semibold text-gray-500 bg-gray-50/60">
+              <th class="px-4 py-2.5 w-16">사용</th>
+              <th class="px-4 py-2.5 w-16">순서</th>
+              <th class="px-4 py-2.5">메뉴 이름</th>
+              <th class="px-4 py-2.5 w-36">링크 유형</th>
+              <th class="px-4 py-2.5">연결 주소</th>
+              <th class="px-4 py-2.5 w-24 text-center">PC / 모바일</th>
+              <th class="px-4 py-2.5 w-28 text-right">관리</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <% rows.forEach(function (m) { %>
+              <tr class="<%= m.broken ? 'bg-red-50/40' : '' %>">
+                <td class="px-4 py-3">
+                  <form method="POST" action="/admin/custom-menus/<%= m.id %>/toggle">
+                    <button type="submit" title="<%= m.is_enabled ? '사용 중 — 클릭하면 끕니다' : '사용 안 함 — 클릭하면 켭니다' %>"
+                            class="<%= m.is_enabled ? 'text-indigo-600' : 'text-gray-300' %> hover:opacity-70">
+                      <i class="bi <%= m.is_enabled ? 'bi-toggle-on' : 'bi-toggle-off' %> text-2xl leading-none"></i>
+                    </button>
+                  </form>
+                </td>
+
+                <td class="px-4 py-3 text-gray-500"><%= m.sort_order %></td>
+
+                <td class="px-4 py-3">
+                  <div class="font-medium text-gray-900"><%= m.display_name %></div>
+                  <div class="mt-0.5 flex flex-wrap items-center gap-1">
+                    <% if (m.badge_type) { %>
+                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700"><%= m.badge_type %></span>
+                    <% } %>
+                    <% if (m.login_required) { %>
+                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">로그인 필요</span>
+                    <% } %>
+                    <% if (m.new_window) { %>
+                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">새 창</span>
+                    <% } %>
+                    <% if (m.broken) { %>
+                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">연결 끊김</span>
+                    <% } %>
+                  </div>
+                </td>
+
+                <td class="px-4 py-3 text-gray-600"><%= m.typeLabel %></td>
+
+                <td class="px-4 py-3">
+                  <% if (m.path) { %>
+                    <a href="<%= m.path %>" target="_blank" rel="noopener noreferrer" class="text-xs text-indigo-600 hover:underline break-all">
+                      <%= m.path %>
+                    </a>
+                  <% } else if (!m.is_enabled) { %>
+                    <span class="text-xs text-gray-400">— (사용 안 함)</span>
+                  <% } else { %>
+                    <span class="text-xs text-red-600">대상이 유효하지 않습니다</span>
+                  <% } %>
+                </td>
+
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-center gap-2 text-xs text-gray-500">
+                    <span class="<%= m.pc_visible ? 'font-semibold text-gray-700' : 'text-gray-300' %>">PC</span>
+                    <span class="<%= m.mobile_visible ? 'font-semibold text-gray-700' : 'text-gray-300' %>">M</span>
+                  </div>
+                </td>
+
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="/admin/custom-menus/<%= m.id %>/edit"
+                       class="inline-flex items-center h-8 px-2.5 text-xs font-medium rounded border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">
+                      수정
+                    </a>
+                    <form method="POST" action="/admin/custom-menus/<%= m.id %>/delete"
+                          onsubmit="return confirm('「<%= m.display_name %>」 메뉴를 삭제할까요?');">
+                      <button type="submit"
+                              class="inline-flex items-center h-8 px-2.5 text-xs font-medium rounded border border-red-200 text-red-600 hover:bg-red-50">
+                        삭제
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% }); %>
+
+  <% if (_items.length) { %>
+    <p class="text-xs text-gray-400">
+      순서는 <strong>일반 메뉴(기능 메뉴)와 같은 축</strong>입니다. 예를 들어 순서 3 으로 두면 기능 메뉴 3번 자리 근처에 끼어듭니다 —
+      <a href="/admin/menu-preview" class="underline">메뉴 미리보기</a>에서 최종 배치를 확인하세요.
+    </p>
+  <% } %>
+</div>

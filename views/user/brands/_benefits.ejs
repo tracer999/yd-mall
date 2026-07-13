@@ -1,0 +1,108 @@
+<%
+  /*
+   * 브랜드 혜택 블록 — 상세관 홈 탭(compact)과 혜택 탭(full) 공용.
+   * locals: benefits{coupons,exhibitions,deals,groupBuys}, brand, compact
+   */
+  const bn = benefits || { coupons: [], exhibitions: [], deals: [], groupBuys: [], total: 0 };
+  const cap = compact ? 2 : 12;
+  const won = (n) => Number(n || 0).toLocaleString();
+  const dateOf = (d) => d ? new Date(d).toISOString().slice(0, 10) : '';
+%>
+
+<% if (!bn.total) { %>
+  <p class="py-16 text-center text-gray-500">진행 중인 혜택이 없습니다.</p>
+<% } else { %>
+
+  <% if (bn.exhibitions.length) { %>
+    <div class="mb-6">
+      <% if (!compact) { %><h3 class="text-sm font-bold text-gray-500 mb-3">기획전</h3><% } %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <% bn.exhibitions.slice(0, cap).forEach(function (e) { %>
+          <a href="/exhibition/<%= e.slug %>"
+             class="group block rounded-2xl border border-gray-200 overflow-hidden hover:border-[var(--gh-primary)] hover:shadow-md transition">
+            <% if (e.list_thumbnail_url) { %>
+              <div class="aspect-[16/9] bg-gray-50 overflow-hidden">
+                <img src="<%= e.list_thumbnail_url %>" alt="<%= e.title %>"
+                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+              </div>
+            <% } %>
+            <div class="p-4">
+              <span class="inline-block px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[11px] font-semibold">기획전</span>
+              <p class="mt-2 text-sm font-semibold text-gray-900 line-clamp-2"><%= e.title %></p>
+              <% if (e.summary) { %><p class="mt-1 text-xs text-gray-500 line-clamp-1"><%= e.summary %></p><% } %>
+              <% if (e.end_at) { %><p class="mt-2 text-xs text-gray-400"><%= dateOf(e.end_at) %>까지</p><% } %>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (bn.coupons.length && !compact) { %>
+    <div class="mb-6">
+      <h3 class="text-sm font-bold text-gray-500 mb-3">쿠폰</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <% bn.coupons.forEach(function (c) { %>
+          <div class="flex items-center gap-4 p-4 rounded-2xl border border-red-100 bg-red-50/50">
+            <div class="shrink-0 text-center">
+              <p class="text-xl font-bold text-red-500">
+                <% if (c.benefit_type === 'PERCENT') { %><%= Number(c.discount_rate || 0) %>%
+                <% } else if (c.benefit_type === 'SHIPPING_FREE') { %>무료배송
+                <% } else { %><%= won(c.discount_amount) %>원<% } %>
+              </p>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold text-gray-900 truncate"><%= c.name %></p>
+              <p class="text-xs text-gray-500">
+                <% if (c.min_order_amount > 0) { %><%= won(c.min_order_amount) %>원 이상 · <% } %>
+                <%= dateOf(c.valid_to) %>까지
+              </p>
+            </div>
+            <a href="/coupon?brand=<%= brand.id %>"
+               class="shrink-0 px-4 py-2 rounded-full bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition">받기</a>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (bn.deals.length) { %>
+    <div class="mb-6">
+      <% if (!compact) { %><h3 class="text-sm font-bold text-gray-500 mb-3">쇼핑특가</h3><% } %>
+      <div class="space-y-2">
+        <% bn.deals.slice(0, cap).forEach(function (d) { %>
+          <a href="/deals" class="flex items-center gap-3 p-4 rounded-2xl border border-gray-200 hover:border-orange-300 transition">
+            <span class="shrink-0 px-2 py-1 rounded bg-orange-50 text-orange-600 text-[11px] font-semibold">특가</span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-gray-900 truncate"><%= d.title %></span>
+              <span class="block text-xs text-gray-500">
+                이 브랜드 상품 <%= d.item_count %>개 · <%= dateOf(d.ends_at) %>까지
+              </span>
+            </span>
+            <i class="bi bi-chevron-right text-gray-300 shrink-0"></i>
+          </a>
+        <% }) %>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (bn.groupBuys.length) { %>
+    <div class="mb-6">
+      <% if (!compact) { %><h3 class="text-sm font-bold text-gray-500 mb-3">공동구매</h3><% } %>
+      <div class="space-y-2">
+        <% bn.groupBuys.slice(0, cap).forEach(function (g) { %>
+          <a href="/group-buy/<%= g.slug %>" class="flex items-center gap-3 p-4 rounded-2xl border border-gray-200 hover:border-blue-300 transition">
+            <span class="shrink-0 px-2 py-1 rounded bg-blue-50 text-blue-600 text-[11px] font-semibold">공동구매</span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-gray-900 truncate"><%= g.title %></span>
+              <span class="block text-xs text-gray-500">
+                <%= g.participant_count %>명 참여 중 · <%= dateOf(g.end_at) %>까지
+              </span>
+            </span>
+            <i class="bi bi-chevron-right text-gray-300 shrink-0"></i>
+          </a>
+        <% }) %>
+      </div>
+    </div>
+  <% } %>
+<% } %>

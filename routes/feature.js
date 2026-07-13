@@ -257,14 +257,12 @@ router.get('/live', comingSoon('live'));
 router.get('/ranking', (req, res) => res.redirect(301, '/best'));
 
 /*
- * 아울렛 — 준비중 랜딩 유지.
+ * 아울렛 — 모듈로 구현됐다. routes/outlet.js 가 '/outlet' 에 마운트된다(app.js).
+ * 여기에 라우트를 두면 featureRoutes 가 '/' 에 먼저 마운트되므로 그쪽이 영영 안 잡힌다.
  *
- * 아울렛은 '할인율 필터 목록'이 아니라 **몰 안의 몰(shop-in-shop)** 이다.
- * 아울렛 전용 상품 + 자체 카테고리 + 전용 관리자 메뉴가 필요한 신규 모듈이라
- * 상품그룹이나 discount_rate 필터로는 표현할 수 없다.
- * → 설계·결정사항: docs/사이트개선/outlet_design_and_development.md
+ * COMING_SOON.outlet 은 지우지 않는다 — outletController 가 '아울렛 상품 0건' 폴백으로 재사용한다.
+ * → 설계: docs/사이트개선/outlet_design_and_development.md
  */
-router.get('/outlet', comingSoon('outlet'));
 
 /*
  * 멤버십 — 정적 제도 소개(안 A). 등급 산정을 하지 않는다(데이터 부족, gnb §2-9).

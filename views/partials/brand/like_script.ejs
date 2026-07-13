@@ -1,0 +1,32 @@
+<script>
+// 관심 브랜드 토글 — 타일(.brand-like-btn)이 있는 모든 화면 공용
+document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('click', async function (e) {
+        const btn = e.target.closest('.brand-like-btn');
+        if (!btn) return;
+        e.preventDefault();
+        try {
+            const res = await fetch('/likes/brand/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ brandId: Number(btn.dataset.brandId) })
+            });
+            if (res.status === 401 || res.redirected) { location.href = '/auth/login'; return; }
+            const result = await res.json();
+            if (!result.success) { alert(result.message || '처리에 실패했습니다.'); return; }
+
+            const icon = btn.querySelector('i');
+            const liked = !!result.liked;
+            btn.dataset.liked = liked ? '1' : '0';
+            btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+            btn.title = liked ? '찜 해제' : '관심 브랜드 등록';
+            if (icon) icon.className = 'bi ' + (liked ? 'bi-heart-fill' : 'bi-heart') + (btn.dataset.size === 'lg' ? ' text-lg' : ' text-sm');
+            btn.classList.toggle('text-red-500', liked);
+            btn.classList.toggle('text-gray-300', !liked);
+            btn.classList.toggle('hover:text-red-400', !liked);
+        } catch (err) {
+            location.href = '/auth/login';
+        }
+    });
+});
+</script>

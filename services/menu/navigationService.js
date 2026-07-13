@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const exhibitionService = require('../exhibition/exhibitionService');
 
 /*
  * 내비게이션 조립 서비스 (M4)
@@ -44,19 +45,67 @@ const BADGE_TYPES = ['NEW', 'HOT', 'SALE'];
 
 /**
  * 커스텀 메뉴 link_type → href 해석기.
- * 실제 라우트가 있는 유형만 등록한다. 미등록 유형(EXHIBITION/PRODUCT_GROUP)은
- * 모듈이 없으므로 렌더에서 제외한다 — feature_menu.module_ready 와 같은 원칙(죽은 링크 차단).
+ *
+ * 실제 라우트가 있는 유형만 등록한다(PRODUCT_GROUP 은 모듈 미구현 → 의도적으로 미등록).
+ *
+ * ⚠️ 대상 id 를 그대로 URL 에 박으면 안 된다. 미발행·삭제·타몰 대상을 가리키는 메뉴가
+ * GNB 에 404 링크로 나간다. 그래서 리소스 유형은 `ctx`(사전 조회한 유효 대상)를 통해서만
+ * 경로를 만든다 — ctx 에 없으면 null 을 돌려주고 렌더에서 빠진다.
+ * feature_menu.module_ready 와 같은 원칙이다(죽은 링크 구조적 차단).
  */
 const LINK_RESOLVERS = {
     INTERNAL_PAGE: (m) => m.linkUrl || null,
     EXTERNAL_URL: (m) => m.linkUrl || null,
-    CATEGORY: (m) => (m.linkTarget ? `/products/category/${m.linkTarget}` : null),
-    BRAND: (m) => (m.linkTarget ? `/products/brand/${m.linkTarget}` : null),
-    // id URL 로 보내고 상세 라우트가 slug 로 301 한다 — 메뉴를 그릴 때마다 exhibition 을
-    // 조인해 slug 를 끌어오지 않기 위함이다(products 가 이미 쓰는 방식).
-    EXHIBITION: (m) => (m.linkTarget ? `/exhibition/view/${m.linkTarget}` : null),
-    // PRODUCT_GROUP: 모듈 미구현 → 의도적으로 미등록
+    CATEGORY: (m, ctx) => {
+        const c = ctx.categories.get(Number(m.linkTarget));
+        return c && c.type === 'NORMAL' ? `/products/category/${c.id}` : null;
+    },
+    BRAND: (m, ctx) => {
+        const c = ctx.categories.get(Number(m.linkTarget));
+        return c && c.type === 'BRAND' ? `/products/brand/${c.id}` : null;
+    },
+    // 기획전·전문관은 같은 테이블이다. detailPath 가 유형에서 정규 URL 을 파생하므로
+    // 전문관은 /specialty/{slug} 로, 기획전은 /exhibition/{slug} 로 나간다(301 없음).
+    EXHIBITION: (m, ctx) => {
+        const e = ctx.exhibitions.get(Number(m.linkTarget));
+        return e ? e.detailPath : null;
+    },
 };
+
+/** 리소스형 link_type 이 참조하는 대상을 한 번에 조회한다(메뉴 행마다 조인하지 않도록). */
+async function loadLinkContext(mallId, rows) {
+    const targetsOf = (types) => rows
+        .filter(r => types.includes(r.linkType) && r.linkTarget)
+        .map(r => Number(r.linkTarget));
+
+    const exhibitionIds = targetsOf(['EXHIBITION']);
+    const categoryIds = targetsOf(['CATEGORY', 'BRAND']);
+
+    const [exhibitions, categories] = await Promise.all([
+        exhibitionIds.length
+            ? exhibitionService.getLinkTargetsByIds(mallId, exhibitionIds)
+            : Promise.resolve(new Map()),
+        categoryIds.length
+            ? loadCategoryTargets(mallId, categoryIds)
+            : Promise.resolve(new Map()),
+    ]);
+
+    return { exhibitions, categories };
+}
+
+/** 활성 카테고리/브랜드만. 비활성·타몰은 돌려주지 않는다(→ 메뉴 미노출). */
+async function loadCategoryTargets(mallId, ids) {
+    const list = [...new Set(ids.filter(n => Number.isInteger(n) && n > 0))];
+    if (!list.length) return new Map();
+
+    const [rows] = await pool.query(`
+        SELECT id, type FROM categories
+         WHERE mall_id = ? AND is_active = 1
+           AND id IN (${list.map(() => '?').join(',')})
+    `, [mallId, ...list]);
+
+    return new Map(rows.map(r => [Number(r.id), r]));
+}
 
 function normalizeBadge(v) {
     const b = String(v || '').trim().toUpperCase();
@@ -91,14 +140,57 @@ async function getFeatureMenus(mallId) {
           ${periodClause('m')}
         ORDER BY f.position ASC, m.sort_order ASC, f.default_sort_order ASC
     `, [mallId]);
-    return rows.map(r => Object.assign({}, r, { badgeType: normalizeBadge(r.badgeType) }));
+
+    const menus = rows.map(r => Object.assign({}, r, { badgeType: normalizeBadge(r.badgeType) }));
+    return applyContentGates(mallId, menus);
+}
+
+/*
+ * 콘텐츠 게이트 — is_enabled·module_ready 를 통과했더라도, **채울 콘텐츠가 없으면 메뉴를 뺀다.**
+ *
+ * 왜 필요한가: module_ready 는 "모듈이 개발됐는가"만 본다. 모듈이 있어도 관리자가 상품을
+ * 안 넣으면 메뉴를 눌렀을 때 빈 화면이 나온다. 실제로 아울렛이 그 상태였다(설계서 §1-1).
+ * 여기서 막으면 관리자가 메뉴를 켠 채 방치해도 고객은 죽은 링크를 보지 않는다.
+ *
+ * 게이트가 걸린 메뉴만 카운트 쿼리를 돈다. 메뉴에 없으면 조회 자체를 하지 않는다.
+ */
+const CONTENT_GATES = {
+    // 아울렛 — 판매중 상품이 몰 설정의 최소 노출 수(outlet_setting.min_product_count)에 미달하면 숨긴다.
+    OUTLET: async (mallId) => {
+        const outletService = require('../outlet/outletService');
+        const [setting, count] = await Promise.all([
+            outletService.getSetting(mallId),
+            outletService.countLiveProducts(mallId),
+        ]);
+        return count >= (setting.min_product_count || 0);
+    },
+};
+
+async function applyContentGates(mallId, menus) {
+    const gated = menus.filter(m => CONTENT_GATES[m.featureCode]);
+    if (!gated.length) return menus;
+
+    const verdicts = await Promise.all(gated.map(async (m) => {
+        try {
+            return [m.featureCode, await CONTENT_GATES[m.featureCode](mallId)];
+        } catch (err) {
+            // 게이트가 터졌다고 메뉴 전체를 날리지 않는다. 다만 콘텐츠 유무를 모르므로 숨기는 쪽이 안전하다
+            // — 빈 메뉴를 보여주느니 메뉴가 없는 편이 낫다.
+            console.error(`[navigation] 콘텐츠 게이트 실패 (${m.featureCode}):`, err.message);
+            return [m.featureCode, false];
+        }
+    }));
+
+    const blocked = new Set(verdicts.filter(([, ok]) => !ok).map(([code]) => code));
+    return blocked.size ? menus.filter(m => !blocked.has(m.featureCode)) : menus;
 }
 
 /**
  * 몰별 커스텀 메뉴 (위치별 슬롯 제한은 호출부에서 적용)
  *
- * link_type 별로 href 를 파생한다. 라우트가 없는 유형(EXHIBITION/PRODUCT_GROUP)이나
- * 대상이 비어 href 를 만들 수 없는 행은 **렌더에서 제외**한다(죽은 링크 차단).
+ * link_type 별로 href 를 파생한다. 라우트가 없는 유형(PRODUCT_GROUP)이거나 대상이
+ * 비었거나 **대상이 더 이상 유효하지 않은**(미발행·삭제·비활성·타몰) 행은 렌더에서 제외한다.
+ * 관리자가 메뉴를 켜 뒀더라도 링크가 깨졌으면 노출하지 않는다.
  */
 async function getCustomMenus(mallId) {
     const [rows] = await pool.query(`
@@ -114,12 +206,16 @@ async function getCustomMenus(mallId) {
         ORDER BY location ASC, sort_order ASC, id ASC
     `, [mallId]);
 
+    if (!rows.length) return []; // 커스텀 메뉴가 없으면 대상 조회도 하지 않는다
+
+    const ctx = await loadLinkContext(mallId, rows);
+
     const resolved = [];
     for (const r of rows) {
         const resolver = LINK_RESOLVERS[r.linkType];
         if (!resolver) continue; // 모듈 미구현 링크 유형 → 미노출
-        const path = resolver(r);
-        if (!path) continue;     // 대상 누락 → 미노출
+        const path = resolver(r, ctx);
+        if (!path) continue;     // 대상 누락·무효 → 미노출
 
         resolved.push(Object.assign({}, r, {
             path,
@@ -269,14 +365,24 @@ async function getNavigation(mallId = 1, opts = {}) {
     const customsAt = (location, limit) =>
         customs.filter(c => c.location === location && visibleTo(c, isLoggedIn)).slice(0, limit);
 
-    // GNB = [고정 카테고리 버튼] + [기능 메뉴] + [커스텀 슬롯]
+    // GNB = [고정 카테고리 버튼] + [기능 메뉴 ∪ 커스텀 슬롯]
     const gnbAll = byPosition('gnb');
     const categoryButton = gnbAll.find(f => f.featureCode === CATEGORY_CODE) || null;
     const gnbFeatures = gnbAll.filter(f => f.featureCode !== CATEGORY_CODE);
     const gnbCustoms = customsAt('gnb', Number(config.max_custom_items) || 0);
     const maxGnb = Number(config.max_gnb_items) || 8;
 
-    const gnbCandidates = gnbFeatures.concat(gnbCustoms);
+    /*
+     * 기능 메뉴와 커스텀 메뉴는 **동등한 GNB 항목**이다. 하나의 sort_order 축으로 병합 정렬한다.
+     *
+     * 단순 concat 하면 커스텀이 항상 기능 메뉴 뒤로 밀려 원하는 자리에 놓을 수 없고,
+     * 총량(max_gnb_items)을 넘길 때 커스텀만 잘려 나간다. 몰마다 기능 메뉴를 끄고 그 자리에
+     * 개별 기획전·전문관을 올리는 것이 이 빌더의 정상 구성이므로 순서는 통합되어야 한다.
+     *
+     * Array#sort 는 안정 정렬이라 sort_order 가 같으면 기능 메뉴가 앞선다.
+     */
+    const gnbCandidates = gnbFeatures.concat(gnbCustoms)
+        .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
 
     return {
         config,

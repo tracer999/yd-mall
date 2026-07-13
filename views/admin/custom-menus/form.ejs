@@ -1,0 +1,247 @@
+<%
+  /*
+   * 커스텀 메뉴 관리 (B3) — 추가/수정 폼
+   *
+   * 호출부가 넘기는 지역 변수: item, targets, linkTypes, locations, badgeTypes, config, error
+   *
+   * `item` 은 DB 행이거나(수정) 검증 실패로 되돌아온 폼 값(req.body)이다.
+   * 그래서 값 비교는 항상 String() 으로 맞춘다 — DB 는 1/0, 폼은 'on'/'1' 을 준다.
+   */
+  const it = item || {};
+  const isEdit = Boolean(it.id);
+  const action = isEdit ? `/admin/custom-menus/${it.id}` : '/admin/custom-menus';
+  const on = (v) => Boolean(v) && String(v) !== '0';
+
+  // datetime-local 은 'YYYY-MM-DDTHH:mm' 만 받는다. DB 의 Date 객체·문자열 둘 다 처리.
+  const dtLocal = (v) => {
+    if (!v) return '';
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const _types = linkTypes || [];
+  const _t = targets || { specialties: [], exhibitions: [], categories: [], brands: [] };
+  const curType = String(it.link_type || 'EXHIBITION');
+  const curTarget = String(it.link_target || '');
+%>
+
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <a href="/admin/custom-menus" class="text-sm text-gray-500 hover:text-gray-700 no-underline">
+      <i class="bi bi-chevron-left"></i> 커스텀 메뉴 관리
+    </a>
+    <h1 class="mt-1 text-2xl font-bold text-gray-900"><%= isEdit ? '커스텀 메뉴 수정' : '커스텀 메뉴 추가' %></h1>
+  </div>
+
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-center gap-2">
+      <i class="bi bi-exclamation-triangle-fill"></i> <%= error %>
+    </div>
+  <% } %>
+
+  <form method="POST" action="<%= action %>" class="space-y-6">
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
+      <h2 class="text-base font-bold text-gray-800">기본 정보</h2>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">메뉴 이름 <span class="text-red-500">*</span></label>
+        <input type="text" name="display_name" value="<%= it.display_name || '' %>" maxlength="20" required
+               placeholder="예: 건강식품관"
+               class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+        <p class="mt-1 text-xs text-gray-400">GNB 에 그대로 표시됩니다. 20자 이내.</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">노출 위치</label>
+          <select name="location" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <% (locations || []).forEach(function (l) { %>
+              <option value="<%= l.value %>" <%= String(it.location) === l.value ? 'selected' : '' %>><%= l.label %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">순서</label>
+          <input type="number" name="sort_order" value="<%= it.sort_order != null ? it.sort_order : 0 %>" min="0" max="99"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <p class="mt-1 text-xs text-gray-400">일반 메뉴와 <strong>같은 축</strong>입니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
+      <h2 class="text-base font-bold text-gray-800">연결 대상</h2>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">링크 유형</label>
+        <select name="link_type" id="cm-link-type" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <% _types.forEach(function (t) { %>
+            <option value="<%= t.value %>" data-kind="<%= t.kind %>" data-hint="<%= t.hint %>"
+                    <%= curType === t.value ? 'selected' : '' %>><%= t.label %></option>
+          <% }); %>
+        </select>
+        <p id="cm-link-hint" class="mt-1 text-xs text-gray-400"></p>
+      </div>
+
+      <%# 유형별 대상 선택기. 서버가 저장 시 다시 검증하므로 여기서는 표시만 담당한다. %>
+      <div data-target-for="EXHIBITION" class="cm-target">
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">기획전 · 전문관</label>
+        <select name="link_target_EXHIBITION" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <option value="">선택하세요</option>
+          <% if (_t.specialties.length) { %>
+            <optgroup label="전문관 (상시)">
+              <% _t.specialties.forEach(function (e) { %>
+                <option value="<%= e.id %>" <%= curTarget === String(e.id) ? 'selected' : '' %>><%= e.title %></option>
+              <% }); %>
+            </optgroup>
+          <% } %>
+          <% if (_t.exhibitions.length) { %>
+            <optgroup label="기획전">
+              <% _t.exhibitions.forEach(function (e) { %>
+                <option value="<%= e.id %>" <%= curTarget === String(e.id) ? 'selected' : '' %>>
+                  <%= e.title %> (<%= e.phaseLabel %>)
+                </option>
+              <% }); %>
+            </optgroup>
+          <% } %>
+        </select>
+        <p class="mt-1 text-xs text-gray-400">
+          발행된 기획전·전문관만 선택할 수 있습니다. 없다면
+          <a href="/admin/exhibitions" class="underline">기획전 관리</a>에서 먼저 만들고 발행하세요.
+        </p>
+      </div>
+
+      <div data-target-for="CATEGORY" class="cm-target">
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">카테고리</label>
+        <select name="link_target_CATEGORY" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <option value="">선택하세요</option>
+          <% _t.categories.forEach(function (c) { %>
+            <option value="<%= c.id %>" <%= curTarget === String(c.id) ? 'selected' : '' %>><%= c.name %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div data-target-for="BRAND" class="cm-target">
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">브랜드</label>
+        <select name="link_target_BRAND" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <option value="">선택하세요</option>
+          <% _t.brands.forEach(function (c) { %>
+            <option value="<%= c.id %>" <%= curTarget === String(c.id) ? 'selected' : '' %>><%= c.name %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div data-target-for="INTERNAL_PAGE,EXTERNAL_URL" class="cm-target">
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">링크 주소</label>
+        <input type="text" name="link_url" value="<%= it.link_url || '' %>" maxlength="500"
+               placeholder="/notice 또는 https://example.com"
+               class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+      </div>
+
+      <%# 실제 서버로 보내는 단일 필드. 유형별 select 값을 제출 직전에 여기로 복사한다. %>
+      <input type="hidden" name="link_target" id="cm-link-target" value="<%= curTarget %>">
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
+      <h2 class="text-base font-bold text-gray-800">노출 설정</h2>
+
+      <div class="flex flex-wrap items-center gap-5">
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="is_enabled" <%= on(it.is_enabled) ? 'checked' : '' %>
+                 class="w-4 h-4 rounded border-gray-300 text-indigo-600"> 사용
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="pc_visible" <%= on(it.pc_visible) ? 'checked' : '' %>
+                 class="w-4 h-4 rounded border-gray-300"> PC 노출
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="mobile_visible" <%= on(it.mobile_visible) ? 'checked' : '' %>
+                 class="w-4 h-4 rounded border-gray-300"> 모바일 노출
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="login_required" <%= on(it.login_required) ? 'checked' : '' %>
+                 class="w-4 h-4 rounded border-gray-300"> 로그인 필요
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="new_window" id="cm-new-window" <%= on(it.new_window) ? 'checked' : '' %>
+                 class="w-4 h-4 rounded border-gray-300"> 새 창
+        </label>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">배지</label>
+          <select name="badge_type" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <option value="">없음</option>
+            <% (badgeTypes || []).forEach(function (b) { %>
+              <option value="<%= b %>" <%= String(it.badge_type) === b ? 'selected' : '' %>><%= b %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">노출 시작</label>
+          <input type="datetime-local" name="visible_start_at" value="<%= dtLocal(it.visible_start_at) %>"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">노출 종료</label>
+          <input type="datetime-local" name="visible_end_at" value="<%= dtLocal(it.visible_end_at) %>"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+      </div>
+      <p class="text-xs text-gray-400">노출 기간을 비우면 상시 노출입니다. 기간이 지나면 자동으로 숨겨집니다.</p>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="/admin/custom-menus" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">
+        취소
+      </a>
+      <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <i class="bi bi-save mr-1.5"></i> 저장
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  const typeSel = document.getElementById('cm-link-type');
+  const hint = document.getElementById('cm-link-hint');
+  const hiddenTarget = document.getElementById('cm-link-target');
+  const newWindow = document.getElementById('cm-new-window');
+  const blocks = Array.from(document.querySelectorAll('.cm-target'));
+  const form = typeSel.closest('form');
+
+  function currentBlock() {
+    return blocks.find(b => b.dataset.targetFor.split(',').includes(typeSel.value)) || null;
+  }
+
+  function sync() {
+    const opt = typeSel.selectedOptions[0];
+    hint.textContent = opt ? opt.dataset.hint : '';
+
+    const active = currentBlock();
+    blocks.forEach(b => { b.hidden = (b !== active); });
+
+    // 외부 링크는 렌더가 새 창을 강제한다. 체크박스를 켜고 잠가 화면과 동작을 맞춘다.
+    const external = typeSel.value === 'EXTERNAL_URL';
+    if (external) { newWindow.checked = true; }
+    newWindow.disabled = external;
+  }
+
+  // 유형별 select 는 이름이 갈려 있다(전환 시 값이 섞이지 않도록). 제출 직전에 하나로 모은다.
+  form.addEventListener('submit', function () {
+    const active = currentBlock();
+    const sel = active ? active.querySelector('select[name^="link_target_"]') : null;
+    hiddenTarget.value = sel ? sel.value : '';
+    // disabled 인 체크박스는 전송되지 않는다 — 서버가 EXTERNAL_URL 은 어차피 1 로 저장한다.
+  });
+
+  typeSel.addEventListener('change', sync);
+  sync();
+})();
+</script>

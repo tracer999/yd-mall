@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const navigationService = require('../services/menu/navigationService');
 const newArrival = require('../services/catalog/newArrival');
 const dealSvc = require('../services/deal/dealService');
+const outletService = require('../services/outlet/outletService');
 
 /**
  * 폐기된 THEME 카테고리 → 대체 기능 메뉴.
@@ -497,6 +498,11 @@ exports.getDetail = async (req, res) => {
         const visitorIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
             || req.socket.remoteAddress || '';
 
+        // 아울렛 상품이면 할인 사유·상태·하자를 상세에 고지해야 한다(설계서 §4-4).
+        // 리퍼브·전시·포장훼손을 일반 상품처럼 보여주면 교환·반품 분쟁이 난다.
+        // 아울렛이 아니면 null 이고, 뷰는 아무것도 그리지 않는다.
+        const outletInfo = await outletService.getOutletInfoByProductId(req.mallId || 1, product.id);
+
         res.render('user/products/detail', {
             title: product.name,
             product,
@@ -509,7 +515,8 @@ exports.getDetail = async (req, res) => {
             kakaoChannelUrl,
             stockError: req.query.error === 'stock' ? req.query.max : null,
             recommendedProducts,
-            shopifyMapping
+            shopifyMapping,
+            outletInfo
         });
     } catch (err) {
         console.error(err);
