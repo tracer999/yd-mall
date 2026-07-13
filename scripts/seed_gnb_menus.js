@@ -18,7 +18,7 @@ const pool = require('../config/db');
 
 /** [feature_code, sort_order] — CATEGORY(고정 버튼)는 sort_order 1 */
 const GNB_ORDER = [
-    ['TODAY_DEAL', 2],
+    ['SHOPPING_DEAL', 2],
     ['BEST', 3],
     ['EXHIBITION', 4],
     ['EVENT', 5],
