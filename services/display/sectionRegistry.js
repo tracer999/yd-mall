@@ -102,14 +102,20 @@ module.exports = {
       FIELD.moreLink
     ]
   },
+  /*
+   * 랭킹 탭 — best_ranking 과 **같은 스냅샷**을 읽는다(랭킹은 한 곳에서만 정의된다).
+   * 탭은 관리자가 /admin/best-groups 에서 만든 랭킹 그룹이다.
+   * 옛 `sort` 필드는 폐기했다 — sales 가 views 와 같은 SQL 로 매핑된 죽은 옵션이었다.
+   * 순위 기준은 best_score_config(판매 5 · 좋아요 3 · 조회 0)에 단일 정의된다.
+   */
   ranking_tabs: {
     view: 'partials/sections/ranking_tabs',
     label: '랭킹 탭',
-    dataSource: null, // 카테고리 탭 고정 소스
+    dataSource: null, // best_group 고정 소스
     fields: [
       { key: 'maxTabs', label: '탭 개수', type: 'number', min: 2, max: 12, default: 6 },
       { key: 'rankLimit', label: '탭당 상품 수', type: 'number', min: 3, max: 20, default: 8 },
-      { key: 'sort', label: '랭킹 기준', type: 'select', options: ['views', 'sales', 'newest', 'discount'], default: 'views' }
+      { key: 'period', label: '기간', type: 'select', options: ['REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY'], default: 'DAILY' }
     ]
   },
   promotion_banner: {

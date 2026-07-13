@@ -1,15 +1,16 @@
 <%
   /*
    * 랭킹 탭 섹션 (CT-3)
-   * 카테고리 탭 + 랭크 뱃지(1·2·3…) 그리드.
+   * 랭킹 그룹 탭 + 랭크 뱃지(1·2·3…) 그리드. 데이터는 랭킹 엔진 스냅샷(best_ranking).
    * 초기 탭은 SSR(FCP 확보), 탭 전환은 GET /sections/ranking AJAX.
    *
    * locals (config_json):
    *   title        : 섹션 제목
-   *   tabs         : [{ id, name }] 탭 카테고리 (리졸버 주입)
+   *   tabs         : [{ id, name }] 랭킹 그룹 탭 (리졸버 주입. 관리자 /admin/best-groups)
    *   products     : 첫 탭 상품 배열 (리졸버 주입)
    *   rankLimit    : 탭당 노출 수 (기본 8)
-   *   sort         : views | sales | newest | discount (기본 views)
+   *   period       : REALTIME | DAILY | WEEKLY | MONTHLY (기본 DAILY)
+   *                  순위 기준(판매·좋아요 가중치)은 best_score_config 에 단일 정의된다
    *   sectionClass : <section> 클래스
    *
    * 멀티 인스턴스 안전: id 대신 data 속성 + 지역 스코프.
@@ -17,7 +18,7 @@
   const _tabs = tabs || [];
   const _items = products || [];
   const _rankLimit = (typeof rankLimit !== 'undefined' && rankLimit) ? Number(rankLimit) : 8;
-  const _sort = (typeof sort !== 'undefined' && sort) ? sort : 'views';
+  const _period = (typeof period !== 'undefined' && period) ? period : 'DAILY';
   const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-12 bg-white';
 %>
 <% if (_tabs.length > 0) { %>
@@ -44,14 +45,14 @@
   </style>
 
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8"
-       data-yd-ranking data-sort="<%= _sort %>" data-limit="<%= _rankLimit %>">
+       data-yd-ranking data-period="<%= _period %>" data-limit="<%= _rankLimit %>">
     <div class="text-center mb-8">
       <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
     </div>
 
     <div class="flex flex-wrap justify-center gap-2 mb-8" data-yd-rank-tabs>
       <% _tabs.forEach(function (t, i) { %>
-        <button type="button" class="yd-rank__tab <%= i === 0 ? 'is-active' : '' %>" data-category-id="<%= t.id %>">
+        <button type="button" class="yd-rank__tab <%= i === 0 ? 'is-active' : '' %>" data-group-id="<%= t.id %>">
           <%= t.name %>
         </button>
       <% }); %>
@@ -125,8 +126,8 @@
       grid.innerHTML = '<div class="yd-rank__empty">불러오는 중…</div>';
 
       var qs = new URLSearchParams({
-        categoryId: btn.dataset.categoryId,
-        sort: root.dataset.sort || 'views',
+        groupId: btn.dataset.groupId,
+        period: root.dataset.period || 'DAILY',
         limit: root.dataset.limit || '8'
       });
 
