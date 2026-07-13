@@ -299,7 +299,8 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                             </div>
                         </div>
 
-                        <% const _isNewCategory = String(currentCategory) === '6' || _cpBadge === 'NEW'; %>
+                        <%# 신상품 화면에서만 노출하는 카카오 채널 CTA. 옛 테마 카테고리 6 판정은 폐기됐다. %>
+                        <% const _isNewCategory = (typeof currentFilter !== 'undefined' && currentFilter === 'new') || _cpBadge === 'NEW'; %>
                         <% if (_isNewCategory) { %>
                         <a href="<%= (typeof siteSettings !== 'undefined' && siteSettings && siteSettings.kakao_channel_url) ? siteSettings.kakao_channel_url : '#' %>"
                            target="_blank" rel="noopener noreferrer"
@@ -322,7 +323,9 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                                         const _lAllBadges = product.product_badge ? product.product_badge.split(',') : [];
                                         const _lTopMap = { BEST: { text: 'BEST', cls: 'badge-best' }, NEW: { text: 'NEW', cls: 'badge-new' }, RECOMMEND: { text: '추천', cls: 'badge-recommend' } };
                                         const _lPriceMap = { DEADLINE_SALE: { text: '기간임박할인', cls: 'badge-deadline' }, GREENHUB_SPECIAL: { text: '와이디몰특가', cls: 'badge-greenhub' } };
-                                        const _lTopBadges = _lAllBadges.filter(b => _lTopMap[b]);
+                                        /* NEW 는 뱃지 문자열이 아니라 신상품 판정(services/catalog/newArrival)으로 그린다 */
+                                        const _lTopBadges = _lAllBadges.filter(b => _lTopMap[b] && b !== 'NEW');
+                                        if (typeof isNewProduct === 'function' ? isNewProduct(product) : _lAllBadges.includes('NEW')) _lTopBadges.unshift('NEW');
                                         const _lPriceBadges = _lAllBadges.filter(b => _lPriceMap[b]);
                                         %>
                                         <% const detailPath=(product.slug && product.slug.trim()) ?

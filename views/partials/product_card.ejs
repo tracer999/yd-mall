@@ -42,7 +42,12 @@
     'DEADLINE_SALE': { text: '기간임박할인', cls: 'badge-deadline' },
     'GREENHUB_SPECIAL': { text: '와이디몰특가', cls: 'badge-greenhub' }
   };
-  const _topBadges = _opts.showTopBadge ? _allBadges.filter(b => _topBadgeMap[b]) : [];
+  /* NEW 는 뱃지 문자열이 아니라 신상품 판정(판매시작일 100일 + NEW 뱃지 강제)으로 그린다.
+     판정 규칙은 services/catalog/newArrival 한 곳에만 있다. */
+  const _isNew = (typeof isNewProduct === 'function') ? isNewProduct(product) : _allBadges.includes('NEW');
+  const _topBadgeKeys = _allBadges.filter(b => _topBadgeMap[b] && b !== 'NEW');
+  if (_isNew) _topBadgeKeys.unshift('NEW');
+  const _topBadges = _opts.showTopBadge ? _topBadgeKeys : [];
   const _priceBadges = _opts.showPriceBadge ? _allBadges.filter(b => _priceBadgeMap[b]) : [];
   const _showDist = _opts.showDistBadge && _distBadge;
   const _price = product.price;

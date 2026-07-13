@@ -48,7 +48,15 @@ exports.getList = async (req, res) => {
         const sort = svc.values(svc.LIST_SORTS).includes(req.query.sort) ? req.query.sort : 'latest';
         const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
 
-        const result = await svc.getPublicList(mallId, { sort, page, limit: 12 });
+        /*
+         * 전문관(SPECIALTY)은 기획전 목록에서 뺀다. 종료일이 없는 상시 매장이라
+         * 여기 섞이면 "예정/진행중/종료" 배지도, "종료임박순" 정렬도 의미가 없어진다.
+         * 전문관은 /specialty 가 따로 렌더한다.
+         * (설계: docs/사이트개선/recommend_specialty_design_and_development.md §5-2)
+         */
+        const result = await svc.getPublicList(mallId, {
+            sort, page, limit: 12, excludeTypes: [svc.SPECIALTY_TYPE],
+        });
 
         /*
          * 고객에게 보여줄 기획전이 0건이면 빈 목록 대신 준비중 랜딩. (배포 순서 안전장치)
@@ -98,12 +106,22 @@ exports.redirectToSlug = async (req, res, next) => {
     }
 };
 
-/** GET /exhibition/:slug — 상세 */
+/**
+ * GET /exhibition/:slug — 상세
+ * GET /specialty/:slug  — 전문관 상세도 **이 핸들러를 공유한다**(routes/specialty.js).
+ *
+ * 전문관과 기획전은 같은 테이블·같은 렌더를 쓰지만 정규 URL 이 갈린다.
+ * 잘못된 경로로 들어오면 정규 URL 로 301 한다 — 같은 콘텐츠가 두 URL 에 살면 SEO 가 갈린다.
+ */
 exports.getDetail = async (req, res, next) => {
     const mallId = req.mallId || 1;
     try {
         const exhibition = await svc.getPublicBySlug(mallId, req.params.slug);
         if (!exhibition) return next(); // 발행되지 않았거나 없는 기획전 → 404
+
+        // 정규 URL 강제. detailPath 는 exhibition_type 에서 파생된다(svc.decorate).
+        const canonicalBase = exhibition.isSpecialty ? '/specialty' : '/exhibition';
+        if (req.baseUrl !== canonicalBase) return res.redirect(301, exhibition.detailPath);
 
         // 종료 + 접근차단이면 상세를 열지 않는다.
         if (exhibition.phase === 'ENDED' && exhibition.ended_access_policy === 'BLOCK') return next();
@@ -168,7 +186,7 @@ exports.getDetail = async (req, res, next) => {
             seo: Object.assign({}, res.locals.seo, {
                 title: `${exhibition.title} | ${companyName}`,
                 description: exhibition.summary || `${companyName} ${exhibition.title}`,
-                url: `${domain}/exhibition/${encodeURIComponent(exhibition.slug)}`,
+                url: `${domain}${exhibition.detailPath}`,
                 image: ogImage ? (ogImage.startsWith('http') ? ogImage : domain + ogImage) : res.locals.seo.image,
                 type: 'website',
                 // search_visible=0 이면 검색엔진에 색인시키지 않는다.

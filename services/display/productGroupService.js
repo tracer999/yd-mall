@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const newArrival = require('../catalog/newArrival');
 
 /*
  * 상품 그룹 해석 서비스 (P1 렌더 엔진)
@@ -22,6 +23,8 @@ function parseCond(v) {
 const ORDER_MAP = {
   manual: 'p.created_at DESC',
   newest: 'p.created_at DESC',
+  // 판매 시작일 최신순 — 신상품 그룹용. newest(적재순)와 다르다.
+  sale_start: 'p.sale_start_date IS NULL ASC, p.sale_start_date DESC, p.id DESC',
   discount: 'p.discount_rate DESC, p.created_at DESC',
   price_asc: 'p.price ASC',
   price_desc: 'p.price DESC',
@@ -58,6 +61,8 @@ async function resolve(group, { hasUser = false, limit = 8 } = {}) {
   const where = [`p.mall_id = ?`, STATUS, vis];
   const params = [mallId];
   if (cond.badge) { where.push('FIND_IN_SET(?, p.product_badge)'); params.push(String(cond.badge)); }
+  // 신상품(판매 시작일 기준 자동 + NEW 뱃지 강제) — 판정은 services/catalog/newArrival 이 단독으로 정의한다.
+  if (cond.isNew) { const np = newArrival.newProductPredicate('p'); where.push(np.sql); params.push(...np.params); }
   if (cond.category_id) { where.push('p.category_id = ?'); params.push(Number(cond.category_id)); }
   if (cond.min_discount) { where.push('p.discount_rate >= ?'); params.push(Number(cond.min_discount)); }
   if (cond.in_stock) { where.push('p.stock > 0'); }

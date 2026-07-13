@@ -104,16 +104,7 @@ async function resolveSections(rows, shared = {}) {
 async function getHomeSections(shared = {}) {
   const page = await getHomePage(shared.mallId || 1);
   if (!page) return null;
-
-  const revision = await getLatestRevision(page.id);
-  let rows;
-  if (revision) {
-    const snap = parseConfig(revision.snapshot_json);
-    rows = filterSnapshotRows(Array.isArray(snap) ? snap : snap.sections);
-  } else {
-    rows = await getLiveSections(page.id); // 최초 발행 전: 라이브 폴백(P1 호환)
-  }
-  return resolveSections(rows, shared);
+  return getPageSections(page, shared);
 }
 
 /*
@@ -125,10 +116,42 @@ async function getDraftSections(pageId, shared = {}) {
   return resolveSections(rows, shared);
 }
 
+/*
+ * slug 로 발행된 페이지를 찾는다. (홈 외 SDUI 랜딩 — 예: /new)
+ * 없으면 null → 호출측이 레거시 화면으로 폴백한다.
+ */
+async function getPageBySlug(mallId, slug) {
+  const [rows] = await pool.query(
+    "SELECT * FROM page WHERE slug = ? AND mall_id = ? AND status = 'published' ORDER BY id DESC LIMIT 1",
+    [slug, mallId || 1]
+  );
+  return rows[0] || null;
+}
+
+/*
+ * 임의 페이지의 섹션을 스토어프론트 규칙(발행 스냅샷 우선 → 라이브 폴백)으로 해석한다.
+ * getHomeSections 와 같은 규칙이며, 대상 페이지만 다르다.
+ */
+async function getPageSections(page, shared = {}) {
+  if (!page) return null;
+
+  const revision = await getLatestRevision(page.id);
+  let rows;
+  if (revision) {
+    const snap = parseConfig(revision.snapshot_json);
+    rows = filterSnapshotRows(Array.isArray(snap) ? snap : snap.sections);
+  } else {
+    rows = await getLiveSections(page.id); // 최초 발행 전: 라이브 폴백
+  }
+  return resolveSections(rows, shared);
+}
+
 module.exports = {
   getHomeSections,
   getDraftSections,
   resolveSections,
   loadHomeCategories,
-  getHomePage
+  getHomePage,
+  getPageBySlug,
+  getPageSections
 };

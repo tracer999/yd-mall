@@ -91,7 +91,9 @@
         const _detailAllBadges = product.product_badge ? product.product_badge.split(',') : [];
         const _detailTopMap = { 'BEST': { text: 'BEST', cls: 'badge-best' }, 'NEW': { text: 'NEW', cls: 'badge-new' }, 'RECOMMEND': { text: '추천', cls: 'badge-recommend' } };
         const _detailPriceMap = { 'DEADLINE_SALE': { text: '기간임박할인', cls: 'badge-deadline' }, 'GREENHUB_SPECIAL': { text: '와이디몰특가', cls: 'badge-greenhub' } };
-        const _detailTopBadges = _detailAllBadges.filter(b => _detailTopMap[b]);
+        /* NEW 는 뱃지 문자열이 아니라 신상품 판정(services/catalog/newArrival)으로 그린다 */
+        const _detailTopBadges = _detailAllBadges.filter(b => _detailTopMap[b] && b !== 'NEW');
+        if (typeof isNewProduct === 'function' ? isNewProduct(product) : _detailAllBadges.includes('NEW')) _detailTopBadges.unshift('NEW');
         const _detailPriceBadges = _detailAllBadges.filter(b => _detailPriceMap[b]); %>
 
         <% if (typeof stockError !=='undefined' && stockError) { %>

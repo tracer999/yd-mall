@@ -1,0 +1,37 @@
+<%
+  /*
+   * 범용 SDUI 랜딩 — page.slug 로 찾은 페이지의 섹션을 순서대로 조립한다.
+   * 홈(user/index.ejs)과 달리 히어로·팝업 같은 홈 전용 크롬이 없다.
+   * 현재 사용처: /new (신상품). 다른 기능 메뉴도 page 를 시드하면 그대로 쓸 수 있다.
+   *
+   * 각 section = { type, view(=partials/sections/*), locals }
+   */
+  const _sections = sections || [];
+  const _title = pageTitle || (page && page.title) || '';
+%>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+
+<main class="min-h-screen">
+  <% if (_title) { %>
+    <div class="max-w-7xl mx-auto px-4 pt-8 pb-2">
+      <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><%= _title %></h1>
+    </div>
+  <% } %>
+
+  <% _sections.forEach(function (section) { %>
+    <% try { %>
+      <%- include('../' + section.view, section.locals) %>
+    <% } catch (e) { %>
+      <% console.error('[landing] 섹션 렌더 실패 — 스킵:', section.type, e && e.message); %>
+    <% } %>
+  <% }); %>
+
+  <% if (!_sections.length) { %>
+    <div class="max-w-7xl mx-auto px-4 py-24 text-center text-gray-500">
+      준비 중입니다.
+    </div>
+  <% } %>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>

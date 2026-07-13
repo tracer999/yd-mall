@@ -4,6 +4,7 @@ const { SitemapStream, streamToPromise } = require('sitemap');
 const { Readable } = require('stream');
 const crypto = require('crypto');
 const pool = require('../config/db');
+const newArrival = require('../services/catalog/newArrival');
 
 // ── 캐시 (24시간 TTL) ───────────────────────────────
 let cache = { xml: null, etag: null, generatedAt: 0 };
@@ -86,17 +87,8 @@ async function generateSitemap() {
         });
     });
 
-    // 6. 테마 카테고리 (베스트/신규)
-    const [themes] = await pool.query(
-        "SELECT id FROM categories WHERE type = 'THEME' ORDER BY display_order ASC"
-    );
-    themes.forEach(t => {
-        links.push({
-            url: `/products/category/${t.id}`,
-            changefreq: 'weekly',
-            priority: 0.8
-        });
-    });
+    // THEME 카테고리(베스트/신규)는 축째로 폐기됐다. 정본은 기능 메뉴(/best, /new)이고
+    // 옛 /products/category/{5,6} 은 301 로 넘어가므로 사이트맵에 싣지 않는다.
 
     // SitemapStream으로 XML 생성
     const stream = new SitemapStream({ hostname: domain });
@@ -199,21 +191,26 @@ router.get('/rss.xml', async (req, res) => {
         const siteName = (global.systemSettings && global.systemSettings.company_name) || '와이디몰';
         const siteDesc = (global.systemSettings && global.systemSettings.meta_description) || '건강식품 전문 쇼핑몰';
 
+        // 신상품 피드 — 이름대로 신상품 판정(services/catalog/newArrival)을 따른다.
+        // 예전에는 판정과 무관하게 created_at 최신 50건을 뿌려, 같은 '신상품'이 화면과 다른 결과를 냈다.
+        const np = newArrival.newProductPredicate('');
         const [products] = await pool.query(`
-            SELECT id, name, slug, short_description, description, main_image, price, price_retail, created_at
+            SELECT id, name, slug, short_description, description, main_image, price, original_price, created_at, sale_start_date
             FROM products
             WHERE status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
               AND slug IS NOT NULL AND TRIM(slug) != ''
-            ORDER BY created_at DESC
+              AND ${np.sql}
+            ORDER BY ${newArrival.NEW_PRODUCT_ORDER}
             LIMIT 50
-        `);
+        `, [...np.params]);
 
         const items = products.map(p => {
             const link = `${domain}/products/${encodeURIComponent(p.slug)}`;
             const pubDate = p.created_at ? new Date(p.created_at).toUTCString() : new Date().toUTCString();
             const imgUrl = p.main_image ? (p.main_image.startsWith('http') ? p.main_image : `${domain}${p.main_image}`) : '';
             const desc = (p.short_description || (p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 200) : '') || p.name);
-            const price = p.price_retail || p.price || 0;
+            // 판매가를 싣는다. 예전엔 존재하지 않는 price_retail 을 SELECT 해 RSS 가 항상 500 이었다.
+            const price = p.price || 0;
 
             return `
     <item>

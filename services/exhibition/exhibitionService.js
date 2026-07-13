@@ -28,6 +28,14 @@ const STATUSES = [
     { value: 'HIDDEN', label: '숨김' },
 ];
 
+/*
+ * exhibition_type. 'SPECIALTY'(전문관)만 성격이 다르다 —
+ * 나머지는 기간이 있는 행사고, 전문관은 종료일 없이 상시 운영되는 매장이다.
+ * 그래서 목록이 갈린다(/exhibition 은 제외, /specialty 는 이것만).
+ * 설계: docs/사이트개선/recommend_specialty_design_and_development.md §5
+ */
+const SPECIALTY_TYPE = 'SPECIALTY';
+
 const TYPES = [
     { value: 'THEME', label: '테마' },
     { value: 'BRAND', label: '브랜드' },
@@ -35,6 +43,7 @@ const TYPES = [
     { value: 'CATEGORY', label: '카테고리' },
     { value: 'COLLAB', label: '콜라보' },
     { value: 'BROADCAST', label: '방송연계' },
+    { value: SPECIALTY_TYPE, label: '전문관 (상시 · 종료일 비움)' },
 ];
 
 /** 1차는 TAB_SHOP 만 전용 렌더를 갖는다. 나머지는 TAB_SHOP 으로 폴백(2차에서 구현). */
@@ -86,10 +95,19 @@ function derivePhase(row, now = new Date()) {
 function decorate(row, now = new Date()) {
     if (!row) return row;
     const phase = derivePhase(row, now);
+    const isSpecialty = row.exhibition_type === SPECIALTY_TYPE;
     return Object.assign({}, row, {
         phase,
         phaseLabel: PHASE_LABELS[phase],
-        detailPath: `/exhibition/${encodeURIComponent(row.slug)}`,
+        isSpecialty,
+        /*
+         * 정규 URL 은 유형에서 파생한다. 전문관과 기획전이 같은 slug 공간을 쓰지만
+         * 노출 경로는 하나여야 한다(SEO 중복 방지). /exhibition/{전문관-slug} 로 들어오면
+         * exhibitionController 가 301 로 여기로 보낸다.
+         */
+        detailPath: isSpecialty
+            ? `/specialty/${encodeURIComponent(row.slug)}`
+            : `/exhibition/${encodeURIComponent(row.slug)}`,
         // 종료 + 구매차단이면 카드의 구매 동선을 끊는다.
         purchaseBlocked: phase === 'ENDED' && row.ended_purchase_policy === 'BLOCK',
     });
@@ -149,20 +167,37 @@ const LIST_ORDER = {
 /**
  * 고객 목록. 발행 + 목록노출 인 기획전 전부(예정·종료 포함).
  * 단 '종료 + 접근차단' 은 클릭해도 못 들어가므로 목록에서도 감춘다.
+ *
+ * @param {string[]} [opts.types]        이 유형만 (전문관 목록)
+ * @param {string[]} [opts.excludeTypes] 이 유형 제외 (기획전 목록에서 전문관 빼기)
+ *
+ * 유형 필터를 걸지 않으면 전문관이 기획전 목록에 "종료일 없는 이상한 기획전"으로 섞인다.
  */
-async function getPublicList(mallId, { sort = 'latest', page = 1, limit = 12 } = {}) {
+async function getPublicList(mallId, { sort = 'latest', page = 1, limit = 12, types = null, excludeTypes = null } = {}) {
     const order = LIST_ORDER[sort] || LIST_ORDER.latest;
     const size = Math.min(Math.max(Number(limit) || 12, 1), 60);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * size;
+
+    const params = [mallId];
+    let typeClause = '';
+    if (Array.isArray(types) && types.length) {
+        typeClause += ` AND e.exhibition_type IN (${types.map(() => '?').join(',')})`;
+        params.push(...types);
+    }
+    if (Array.isArray(excludeTypes) && excludeTypes.length) {
+        typeClause += ` AND e.exhibition_type NOT IN (${excludeTypes.map(() => '?').join(',')})`;
+        params.push(...excludeTypes);
+    }
 
     const where = `
         e.mall_id = ?
           AND e.status = 'PUBLISHED'
           AND e.list_visible = 1
           AND NOT (e.ended_access_policy = 'BLOCK' AND e.end_at IS NOT NULL AND e.end_at < NOW())
+          ${typeClause}
     `;
 
-    const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total FROM exhibition e WHERE ${where}`, [mallId]);
+    const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total FROM exhibition e WHERE ${where}`, params);
     const [rows] = await pool.query(`
         SELECT e.*,
                (SELECT COUNT(*)
@@ -174,7 +209,7 @@ async function getPublicList(mallId, { sort = 'latest', page = 1, limit = 12 } =
          WHERE ${where}
          ORDER BY ${order}
          LIMIT ? OFFSET ?
-    `, [mallId, size, offset]);
+    `, [...params, size, offset]);
 
     const now = new Date();
     return {
@@ -249,6 +284,7 @@ async function incrementViewCount(mallId, id) {
 module.exports = {
     STATUSES,
     TYPES,
+    SPECIALTY_TYPE,
     TEMPLATES,
     SECTION_TYPES,
     ENDED_ACCESS_POLICIES,

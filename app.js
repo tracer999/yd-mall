@@ -190,11 +190,16 @@ async function startServer() {
     });
 
     // Global Variables Middleware (for User/Admin info in views)
+    const newArrival = require('./services/catalog/newArrival');
     app.use((req, res, next) => {
         res.locals.user = req.user || null;
         res.locals.path = req.path;
         // Admin check helper
         res.locals.isAdmin = req.isAuthenticated() && req.user.role === 'super';
+        // 신상품 판정 헬퍼 — 카드/상세가 NEW 뱃지를 그릴지 판단한다. SQL 술어와 같은 규칙
+        // (services/catalog/newArrival). 뷰마다 product_badge 를 직접 파싱하지 않게 한다.
+        res.locals.isNewProduct = newArrival.isNewProduct;
+        res.locals.isNewBrand = newArrival.isNewBrand;
         next();
     });
 

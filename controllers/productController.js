@@ -1,6 +1,16 @@
 const pool = require('../config/db');
 const navigationService = require('../services/menu/navigationService');
 const bannerService = require('../services/display/bannerService');
+const newArrival = require('../services/catalog/newArrival');
+
+/**
+ * 폐기된 THEME 카테고리 → 대체 기능 메뉴.
+ *
+ * 테마 5(베스트)·6(신규)은 각각 /best, /new 와 별도의 판정 로직을 갖고 있어 같은 이름으로
+ * 다른 결과를 내던 잔재다. 기능 메뉴가 정본이므로 옛 URL 은 그리로 넘긴다.
+ * (설계: docs/사이트개선/new_arrivals_dev_plan.md §9-1)
+ */
+const RETIRED_THEME_REDIRECTS = { 5: '/best', 6: '/new' };
 
 /**
  * 카테고리 목록 정렬 6종.
@@ -16,6 +26,8 @@ const SORT_ORDERS = {
     review: '(SELECT COALESCE(AVG(r.rating),0) FROM reviews r WHERE r.product_id = products.id) DESC, '
         + '(SELECT COUNT(*) FROM reviews r WHERE r.product_id = products.id) DESC, created_at DESC',
     new: 'created_at DESC',
+    // 신상품 페이지 기본 정렬. 'new'(최근등록=적재순)와 다르다 — 이쪽은 판매 시작일 기준.
+    sale_start: newArrival.NEW_PRODUCT_ORDER,
 };
 
 /** 정렬 탭(캡처 순서). value 는 SORT_ORDERS 키와 1:1. */
@@ -61,9 +73,13 @@ exports.getList = async (req, res) => {
     const brandId = req.params.brandId;
     const queryCategoryId = q.categoryId;
     const queryBrandId = q.brandId;
-    const sort = SORT_ORDERS[q.sort] ? q.sort : 'new';
     const distributionBadge = q.distributionBadge || '';
     const productBadge = q.badge || '';
+    // 신상품 필터. 판매 시작일 기준 자동 판정 + NEW 뱃지 강제 노출(services/catalog/newArrival).
+    // 옛 ?badge=NEW 는 '뱃지가 걸린 상품'만 보는 별개 필터로 남겨둔다(관리자·쿠폰이 뱃지 단위를 쓴다).
+    const isNewFilter = String(q.filter || '') === 'new';
+    // 신상품 목록은 판매 시작일순이 기본. 그 외에는 적재순('최근등록').
+    const sort = SORT_ORDERS[q.sort] ? q.sort : (isNewFilter ? 'sale_start' : 'new');
     // 상품그룹 소스(오늘특가·베스트 등) — 관리자가 product_group_item 으로 수동 매핑한 상품만 노출.
     // 사용자 쿼리로는 못 바꾸게 featurePreset 에서만 읽는다.
     const groupId = Number(req.featurePreset && req.featurePreset.groupId) || 0;
@@ -100,26 +116,19 @@ exports.getList = async (req, res) => {
                 pageTitle = selected.name.endsWith('상품') ? selected.name : `${selected.name} 상품`;
 
                 if (selected.type === 'THEME') {
-                    // 테마 카테고리: 직접 연결 + product_themes + 뱃지 자동 매칭
-                    const badgeMap = { 5: 'BEST', 6: 'NEW' };
-                    const badge = badgeMap[Number(selectedCategoryId)];
-                    if (badge) {
-                        query += " AND (theme_category_id = ? OR id IN (SELECT product_id FROM product_themes WHERE category_id = ?) OR FIND_IN_SET(?, product_badge))";
-                        params.push(selectedCategoryId, selectedCategoryId, badge);
-                    } else {
-                        query += ' AND (theme_category_id = ? OR id IN (SELECT product_id FROM product_themes WHERE category_id = ?))';
-                        params.push(selectedCategoryId, selectedCategoryId);
-                    }
-                } else {
-                    // NORMAL: 서브트리 집계. 부모를 눌렀을 때 자식 상품까지 나와야 한다
-                    // (mall 2 는 상품 205건 중 171건이 depth 2·3 에 붙어 있다).
-                    categoryNav = await navigationService.getCategoryContext(mallId, selectedCategoryId);
-                    const ids = (categoryNav && categoryNav.descendantIds.length)
-                        ? categoryNav.descendantIds
-                        : [Number(selectedCategoryId)];
-                    query += ` AND category_id IN (${ids.map(() => '?').join(',')})`;
-                    params.push(...ids);
+                    // THEME 축은 폐기됐다. 옛 URL 은 정본 기능 메뉴로 넘긴다.
+                    const dest = RETIRED_THEME_REDIRECTS[Number(selectedCategoryId)] || '/products';
+                    return res.redirect(301, dest);
                 }
+
+                // NORMAL/BRAND: 서브트리 집계. 부모를 눌렀을 때 자식 상품까지 나와야 한다
+                // (mall 2 는 상품 205건 중 171건이 depth 2·3 에 붙어 있다).
+                categoryNav = await navigationService.getCategoryContext(mallId, selectedCategoryId);
+                const ids = (categoryNav && categoryNav.descendantIds.length)
+                    ? categoryNav.descendantIds
+                    : [Number(selectedCategoryId)];
+                query += ` AND category_id IN (${ids.map(() => '?').join(',')})`;
+                params.push(...ids);
 
                 const [bannerRows] = await pool.query(
                     `SELECT * FROM banners
@@ -192,6 +201,13 @@ exports.getList = async (req, res) => {
         } else if (productBadge === 'GREENHUB_SPECIAL') {
             query += " AND FIND_IN_SET('GREENHUB_SPECIAL', product_badge)";
             if (pageTitle === '전체상품') pageTitle = '와이디몰특가';
+        }
+
+        if (isNewFilter) {
+            const np = newArrival.newProductPredicate('');
+            query += ` AND ${np.sql}`;
+            params.push(...np.params); // sql 조각과 params 는 같은 지점에서 함께 넣는다
+            if (pageTitle === '전체상품') pageTitle = '신상품';
         }
 
         // 상품그룹 소스: 관리자가 수동 매핑한 상품만. (오늘특가·베스트 등 manual 그룹)
@@ -281,6 +297,7 @@ exports.getList = async (req, res) => {
             currentSort: sort,
             currentDistributionBadge: distributionBadge,
             currentProductBadge: productBadge,
+            currentFilter: isNewFilter ? 'new' : '',
             currentUser: req.user,
             likedProductIds,
             categoryBanner,

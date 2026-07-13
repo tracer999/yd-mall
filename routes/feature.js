@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const productController = require('../controllers/productController');
 const bestController = require('../controllers/bestController');
+const displayService = require('../services/display/displayService');
 
 /*
  * 기능 메뉴 표준 URL (M3)
@@ -37,9 +38,41 @@ function preset(featurePreset) {
 router.get('/best', bestController.getIndex);
 router.get('/best/tab', bestController.getTab);
 
-// 신상품 — NEW 뱃지 상품만(최신순). 전체 카탈로그를 최신순 정렬하면 "신상품 = 전체"가 되므로
-// 뱃지로 자른다. productController 에 badge==='NEW' 분기(FIND_IN_SET)가 이미 있다.
-router.get('/new', preset({ badge: 'NEW', sort: 'new', menuKey: 'NEW' }), productController.getList);
+/*
+ * 신상품 — 판매 시작일(sale_start_date) 기준 100일 이내 + NEW 뱃지 강제 노출.
+ *   (설계: docs/사이트개선/new_arrivals_dev_plan.md)
+ *
+ * 예전에는 NEW 뱃지만 봤다. created_at(적재 시각)으로 자르면 "신상품 = 전체 카탈로그"가
+ * 되기 때문인데, 판매 시작일이라는 앵커가 생겨 자동 판정이 가능해졌다. 뱃지는 기간과
+ * 무관하게 밀고 싶은 상품을 위한 수동 수단으로 남는다(services/catalog/newArrival).
+ *
+ * 화면은 SDUI 랜딩(page slug='new')이 있으면 그것을, 없으면 기존 목록으로 폴백한다.
+ */
+router.get('/new', async (req, res, next) => {
+    try {
+        const mallId = req.mallId || 1;
+        const page = await displayService.getPageBySlug(mallId, 'new');
+        if (page) {
+            const sections = await displayService.getPageSections(page, {
+                mallId,
+                hasUser: !!req.user,
+            });
+            if (sections && sections.length) {
+                return res.render('user/landing', {
+                    page,
+                    sections,
+                    pageTitle: page.title || '신상품',
+                });
+            }
+        }
+    } catch (e) {
+        return next(e);
+    }
+
+    // 랜딩 미시드(또는 섹션 0건) → 기존 목록 화면으로 폴백
+    req.featurePreset = { filter: 'new', menuKey: 'NEW' };
+    return productController.getList(req, res);
+});
 
 /*
  * 오늘특가 — 관리자가 상품그룹(manual)에서 직접 고른 상품을 보여준다.
