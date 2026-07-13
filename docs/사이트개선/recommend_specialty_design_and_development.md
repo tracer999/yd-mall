@@ -126,13 +126,19 @@
 ├────────────────────────────────────────────┤
 │ ①' 로그인하고 맞춤 추천 받기  [비로그인 시]│  ①의 자리를 대체하는 CTA 카드
 ├────────────────────────────────────────────┤
-│ ② MD 추천                                  │  product_badge = RECOMMEND
+│ ② 추천 그룹 — 그룹 수만큼 섹션이 반복된다  │  recommend_group (sort_order 순)
+│    「면역력 관리」 "환절기에 챙기면 좋은…"  │  관리자 '상품 추천관리'에서 큐레이션
+│    「선물 추천」   …                       │  담긴 상품 중 노출가능한 것만
+├────────────────────────────────────────────┤
+│ ③ MD 추천                                  │  product_badge = RECOMMEND
 │    "MD가 직접 고른 상품"                   │  관리자 상품 폼에서 체크
 ├────────────────────────────────────────────┤
-│ ③ 지금 많이 보는 상품                      │  view_count DESC
-│    "최근 조회가 많은 상품"                 │  ①·② 에 나온 상품 제외(중복 방지)
+│ ④ 지금 많이 보는 상품                      │  view_count DESC
+│    "최근 조회가 많은 상품"                 │  앞 섹션에 나온 상품 제외(중복 방지)
 └────────────────────────────────────────────┘
 ```
+
+**중복 제거의 방향**: 추천 그룹을 **가장 먼저 계산**하고, 그 상품을 개인화·MD·지금많이보는에서 뺀다(화면 배치는 개인화가 위). 운영자가 손으로 담은 큐레이션이 우선이고, 알고리즘 섹션이 양보한다 — 반대로 하면 개인화가 집어간 상품이 큐레이션 그룹에서 조용히 빠진다. 다만 **그룹끼리는 서로 제외하지 않는다**. 두 그룹에 같은 상품을 담았다면 그건 운영자의 의도다.
 
 **모든 섹션이 비면** `COMING_SOON.recommend` 준비중 랜딩으로 되돌린다(빈 화면 방지 — 기획전·오늘특가와 같은 폴백 규칙).
 
@@ -153,7 +159,24 @@ related = product_recommendations WHERE product_id IN (seeds)
 
 ### 4-5. 관리자
 
-**신규 관리자 화면 없음.** MD 추천은 기존 **상품 관리 → 상품 뱃지 → `RECOMMEND` 체크**로 관리한다. 별도 큐레이션 화면을 파는 것은 2차(규칙형)에서 `recommend_slot` 을 도입할 때 함께 한다.
+두 갈래로 관리한다.
+
+| 무엇 | 어디서 | 화면에 뜨는 곳 |
+|---|---|---|
+| **추천 그룹** (그룹명 + 담긴 상품) | **상품 관리 → 상품 추천관리** (`/admin/recommend-groups`) | 그룹 1개 = 섹션 1개 |
+| MD 추천 (상품 단위 플래그) | 상품 관리 → 상품 수정 → 상품구분 → `추천` 체크 | 'MD 추천' 섹션 하나 |
+
+**추천 그룹**(2차 구현)은 운영자가 이름(예: '면역력 관리', '선물 추천')을 붙이고 상품을 직접 담는 큐레이션이다. 그룹명이 섹션 제목, `description` 이 그 아래 근거 문구가 된다. 상품 조회 팝업(카테고리·브랜드·재고·노출 필터 + 멀티선택)과 순서 변경은 상품 그룹 관리(B6)와 같은 UX 를 쓴다.
+
+`product_group` 을 재사용하지 않은 이유: 그것은 `page_section.data_source_id` 가 참조하는 **페이지 빌더 데이터 소스**다. 추천 그룹을 섞으면 빌더의 그룹 피커가 오염되고, 삭제·비활성 가드가 서로 얽힌다. 추천 그룹에는 조건검색·정렬이 필요 없고(수동 큐레이션 전용), 대신 `product_group` 에 없는 **그룹 단위 노출 순서**가 필요하다.
+
+```
+recommend_group       id · mall_id · name · description · sort_order · is_active
+recommend_group_item  recommend_group_id(FK, CASCADE) · product_id · sort_order
+                      UNIQUE(recommend_group_id, product_id)
+```
+
+> ⚠️ 담긴 `product_id` 를 그대로 믿지 않는다. 담은 뒤 상품이 숨김·판매중지로 바뀔 수 있으므로 **렌더 시점에** `visibility='PUBLIC' AND status<>'OFF'` 로 다시 거른다. 담긴 상품이 전부 숨겨진 그룹은 섹션을 그리지 않는다. 관리자 목록에는 `(노출 N)` 로 그 차이를 표시한다.
 
 ---
 
@@ -239,6 +262,16 @@ end_at          = NULL          -- 무기한 = 상시
 | `views/user/specialty/list.ejs` | |
 | `scripts/migrate_recommend_specialty.sql` | `feature_menu` · `mall_feature_menu` 등록 |
 
+**2차 — 추천 그룹 (상품 추천관리)**
+
+| 파일 | 역할 |
+|---|---|
+| `scripts/migrate_recommend_groups.sql` | `recommend_group` · `recommend_group_item` DDL + `admin_menus` 등록 |
+| `controllers/admin/recommendGroupController.js` | 그룹 CRUD + 상품 담기·순서·검색 |
+| `routes/admin/recommend-groups.js` | |
+| `views/admin/recommend-groups/list.ejs` · `edit.ejs` | |
+| `services/recommend/recommendService.js` | `getGroupSections()` 추가 · `getLanding()` 조립 순서 변경 |
+
 ### 수정
 
 | 파일 | 변경 |
@@ -302,10 +335,12 @@ UPDATE navigation_config SET max_gnb_items = 14 WHERE mall_id IN (1,2);
 
 ---
 
-## 8. 남은 일 (2차 이후)
+## 8. 남은 일 (3차 이후)
 
-1. **추천 규칙형** — `recommend_slot` 테이블(슬롯 = 제목 + 규칙 JSON + 순서). 운영자가 "카테고리 X의 판매량 상위 10" 같은 슬롯을 조립.
-2. **추천 관리자 화면** — 규칙형과 함께.
-3. **전문관 템플릿** — `CATEGORY_SHOP` / `BRAND_SHOP` 전용 렌더(현재는 `TAB_SHOP` 폴백).
-4. **개인화 제대로** — 주문·좋아요 데이터가 유의미하게 쌓인 뒤.
-5. **매거진/콘텐츠** — 선택형 확장 모듈. 기본 메뉴로 넣지 않는다.
+> ✅ **2차 완료** — 추천 그룹(`recommend_group`) + 관리자 '상품 추천관리'(`/admin/recommend-groups`). §4-5 참고.
+> 계획서의 `recommend_slot`(규칙 JSON) 대신 **수동 큐레이션**으로 먼저 냈다. 규칙형은 운영자가 규칙을 조립할 이유가 생겼을 때 슬롯 타입을 추가하면 된다 — 그룹 테이블에 `rule_json` 한 컬럼이면 확장된다.
+
+1. **추천 규칙형** — `recommend_group` 에 규칙 컬럼 추가(슬롯 = 제목 + 규칙 JSON + 순서). "카테고리 X의 판매량 상위 10" 같은 자동 그룹.
+2. **전문관 템플릿** — `CATEGORY_SHOP` / `BRAND_SHOP` 전용 렌더(현재는 `TAB_SHOP` 폴백).
+3. **개인화 제대로** — 주문·좋아요 데이터가 유의미하게 쌓인 뒤.
+4. **매거진/콘텐츠** — 선택형 확장 모듈. 기본 메뉴로 넣지 않는다.

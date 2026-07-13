@@ -44,6 +44,8 @@ router.use('/page-builder', requireMenuAccess('/admin/page-builder'), require('.
 router.use('/product-groups', requireMenuAccess('/admin/product-groups'), require('./admin/product-groups'));
 // 베스트/랭킹 — 판매·좋아요 합산 자동 순위 + MD 픽(핀)
 router.use('/best-groups', requireMenuAccess('/admin/best-groups'), require('./admin/best-groups'));
+// 상품 추천관리 — 그룹 하나가 /recommend 랜딩의 섹션 하나가 된다
+router.use('/recommend-groups', requireMenuAccess('/admin/recommend-groups'), require('./admin/recommend-groups'));
 // 기획전 — 시즌·브랜드·테마별 상품 전시 랜딩
 router.use('/exhibitions', requireMenuAccess('/admin/exhibitions'), require('./admin/exhibitions'));
 // 이벤트&혜택 — 응모·쿠폰팩·출석 등 참여/혜택 중심(기획전과 분리)

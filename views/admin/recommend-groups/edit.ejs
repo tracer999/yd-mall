@@ -1,0 +1,357 @@
+<%
+  /*
+   * 추천 그룹 등록/수정
+   *
+   * 구성 방식은 수동 선택 하나뿐이다(조건 검색 없음). 그래서 폼은 이름·근거문구·순서·사용 4개와
+   * 상품 피커가 전부다. 상품 조회 팝업은 상품 그룹 관리(B6)와 같은 UX 를 쓴다.
+   */
+  const isNew = !group.id;
+  const action = isNew ? '/admin/recommend-groups' : `/admin/recommend-groups/${group.id}`;
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const VIS_LABEL = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+%>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <a href="/admin/recommend-groups" class="text-sm text-gray-500 hover:text-gray-700 no-underline">
+      <i class="bi bi-chevron-left"></i> 상품 추천관리
+    </a>
+    <h1 class="mt-2 text-2xl font-bold text-gray-900"><%= title %></h1>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <form method="POST" action="<%= action %>" class="space-y-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">기본 정보</h2>
+      </div>
+      <div class="p-5 space-y-5">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">그룹명 <span class="text-red-500">*</span></label>
+          <input type="text" name="name" value="<%= group.name %>" maxlength="100" required
+                 placeholder="예: 면역력 관리 / 선물 추천 / 유산균 모음"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <p class="mt-1 text-xs text-gray-400">추천 화면에 이 이름이 섹션 제목으로 그대로 노출됩니다.</p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">근거 문구 <span class="text-gray-400 font-normal">(선택)</span></label>
+          <input type="text" name="description" value="<%= group.description || '' %>" maxlength="200"
+                 placeholder="예: 환절기에 챙기면 좋은 상품을 모았습니다"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <p class="mt-1 text-xs text-gray-400">섹션 제목 아래 작은 글씨로 노출됩니다. 비우면 제목만 뜹니다.</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">노출 순서</label>
+            <input type="number" name="sort_order" value="<%= group.sort_order %>" min="0" max="9999"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <p class="mt-1 text-xs text-gray-400">숫자가 작을수록 위에 노출됩니다.</p>
+          </div>
+
+          <div class="flex items-end pb-2">
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="is_active" value="1" <%= group.is_active ? 'checked' : '' %>
+                     class="w-4 h-4 rounded border-gray-300">
+              사용 <span class="text-xs text-gray-400">(끄면 추천 화면에서 이 섹션이 사라집니다)</span>
+            </label>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="/admin/recommend-groups" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+      <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <i class="bi bi-save mr-1.5"></i> 저장
+      </button>
+    </div>
+  </form>
+
+  <%# ── 상품 피커 (그룹 생성 후에만) ─────────────────────── %>
+  <% if (!isNew) { %>
+    <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">담긴 상품 <span class="text-gray-400 font-normal">(<%= items.length %>개)</span></h2>
+        <p class="mt-0.5 text-xs text-gray-500">위에서 아래 순서로 노출됩니다. 추가·삭제·순서 변경은 즉시 저장됩니다.</p>
+      </div>
+
+      <div class="p-5 border-b border-gray-100">
+        <button type="button" id="rgOpenPicker"
+                class="inline-flex items-center gap-1.5 h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+          <i class="bi bi-plus-lg"></i> 상품 추가
+        </button>
+        <span class="ml-2 text-xs text-gray-400">조회 팝업에서 카테고리·브랜드·재고·노출 필터로 찾아 여러 개를 한 번에 담을 수 있습니다.</span>
+      </div>
+
+      <ul id="rgItems" class="divide-y divide-gray-100">
+        <% if (items.length === 0) { %>
+          <li class="px-5 py-10 text-center text-sm text-gray-500">담긴 상품이 없습니다. 상품을 담아야 추천 화면에 섹션이 그려집니다.</li>
+        <% } %>
+        <% items.forEach(function (it) { %>
+          <li class="px-5 py-3 flex items-center gap-3" data-item-id="<%= it.item_id %>">
+            <span class="w-6 text-center text-xs text-gray-400 rg-index"></span>
+            <img src="<%= it.main_image || '/images/no-image.png' %>" alt="" class="w-10 h-10 rounded object-cover bg-gray-100">
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-gray-900 truncate"><%= it.name %></div>
+              <div class="text-xs text-gray-400">
+                <%= won(it.price) %>원 · 재고 <%= it.stock %>
+                <% if (it.visibility !== 'PUBLIC' || it.status === 'OFF') { %>
+                  <span class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                    <%= it.status === 'OFF' ? '판매중지' : (VIS_LABEL[it.visibility] || it.visibility) %> — 고객 화면에 뜨지 않음
+                  </span>
+                <% } %>
+              </div>
+            </div>
+            <button type="button" class="rg-up text-gray-400 hover:text-gray-700 px-1" title="위로"><i class="bi bi-arrow-up"></i></button>
+            <button type="button" class="rg-down text-gray-400 hover:text-gray-700 px-1" title="아래로"><i class="bi bi-arrow-down"></i></button>
+            <form method="POST" action="/admin/recommend-groups/<%= group.id %>/items/<%= it.item_id %>/delete">
+              <button type="submit" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">제거</button>
+            </form>
+          </li>
+        <% }); %>
+      </ul>
+    </div>
+
+    <%# ── 상품 조회 팝업 (필터 + 멀티선택) ───────────────── %>
+    <div id="rgPicker" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+      <div class="absolute inset-0 bg-black/40" data-rg-close></div>
+      <div class="relative mx-auto my-8 w-[95%] max-w-4xl bg-white rounded-xl shadow-xl flex flex-col max-h-[85vh]">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 class="text-base font-bold text-gray-800">상품 조회</h3>
+          <button type="button" data-rg-close class="text-gray-400 hover:text-gray-700"><i class="bi bi-x-lg"></i></button>
+        </div>
+
+        <div class="px-5 py-4 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-500 mb-1">검색어</label>
+            <input type="text" id="rgfQ" placeholder="상품명·상품코드" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">카테고리</label>
+            <select id="rgfCategory" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <% categories.forEach(function (c) { %><option value="<%= c.id %>"><%= c.name %></option><% }); %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">브랜드</label>
+            <select id="rgfBrand" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <% (brands || []).forEach(function (b) { %><option value="<%= b.id %>"><%= b.name %></option><% }); %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">재고</label>
+            <select id="rgfStock" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <option value="y">재고 있음</option>
+              <option value="n">재고 없음</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">노출</label>
+            <select id="rgfVisibility" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <option value="PUBLIC">노출</option>
+              <option value="HIDDEN">숨김</option>
+              <option value="MEMBER_ONLY">회원전용</option>
+            </select>
+          </div>
+          <div class="col-span-2 sm:col-span-3 lg:col-span-6 flex items-center gap-2">
+            <button type="button" id="rgfSearch" class="h-[34px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900"><i class="bi bi-search mr-1"></i>검색</button>
+            <button type="button" id="rgfReset" class="h-[34px] px-3 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50">초기화</button>
+            <label class="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600">
+              <input type="checkbox" id="rgfAll" class="w-4 h-4"> 결과 전체 선택
+            </label>
+          </div>
+        </div>
+
+        <div id="rgfResults" class="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+          <p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>
+        </div>
+
+        <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+          <span class="text-xs text-gray-500"><span id="rgfCount">0</span>개 선택됨</span>
+          <div class="flex gap-2">
+            <button type="button" data-rg-close class="h-[36px] px-4 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50">닫기</button>
+            <button type="button" id="rgfAdd" class="h-[36px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50" disabled>선택 담기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% } else { %>
+    <div class="mt-6 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-600">
+      그룹을 먼저 저장하면 상품을 담을 수 있습니다.
+    </div>
+  <% } %>
+</div>
+
+<% if (!isNew) { %>
+<script>
+(function () {
+  const groupId = <%- JSON.stringify(group.id) %>;
+
+  /* ── 담긴 상품 순서 변경 ── */
+  const list = document.getElementById('rgItems');
+  function renumber() {
+    list.querySelectorAll('[data-item-id]').forEach((li, i) => {
+      li.querySelector('.rg-index').textContent = i + 1;
+    });
+  }
+  function persistOrder() {
+    const order = [...list.querySelectorAll('[data-item-id]')].map(li => Number(li.dataset.itemId));
+    fetch(`/admin/recommend-groups/${groupId}/items/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    }).catch(() => {});
+  }
+  list.addEventListener('click', (e) => {
+    const li = e.target.closest('[data-item-id]');
+    if (!li) return;
+    if (e.target.closest('.rg-up') && li.previousElementSibling) {
+      li.parentNode.insertBefore(li, li.previousElementSibling);
+    } else if (e.target.closest('.rg-down') && li.nextElementSibling) {
+      li.parentNode.insertBefore(li.nextElementSibling, li);
+    } else { return; }
+    renumber();
+    persistOrder();
+  });
+  renumber();
+
+  /* ── 상품 조회 팝업 (필터 + 멀티선택) ── */
+  const picker = document.getElementById('rgPicker');
+  const openBtn = document.getElementById('rgOpenPicker');
+  const resultsEl = document.getElementById('rgfResults');
+  const countEl = document.getElementById('rgfCount');
+  const addBtn = document.getElementById('rgfAdd');
+  const allChk = document.getElementById('rgfAll');
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const VIS = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+  const selected = new Set();
+
+  function openPicker() { picker.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  function closePicker() { picker.classList.add('hidden'); document.body.style.overflow = ''; }
+  openBtn.addEventListener('click', openPicker);
+  picker.querySelectorAll('[data-rg-close]').forEach(el => el.addEventListener('click', closePicker));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !picker.classList.contains('hidden')) closePicker(); });
+
+  function updateCount() {
+    countEl.textContent = selected.size;
+    addBtn.disabled = selected.size === 0;
+  }
+
+  function render(products, limited) {
+    selected.clear(); updateCount();
+    allChk.checked = false;
+    if (!products.length) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조건에 맞는 상품이 없습니다.</p>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    if (limited) {
+      const note = document.createElement('p');
+      note.className = 'mb-2 text-xs text-amber-600';
+      note.textContent = '결과가 100개에 도달했습니다. 필터를 더 좁혀 주세요.';
+      frag.appendChild(note);
+    }
+    products.forEach(p => {
+      const row = document.createElement('label');
+      row.className = 'flex items-center gap-3 px-2 py-2 rounded border border-gray-100 hover:bg-gray-50 cursor-pointer';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.className = 'w-4 h-4 flex-shrink-0'; chk.value = String(p.id);
+      chk.addEventListener('change', () => {
+        if (chk.checked) selected.add(p.id); else selected.delete(p.id);
+        updateCount();
+      });
+      const img = document.createElement('img');
+      img.src = p.main_image || '/images/no-image.png';
+      img.className = 'w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0';
+      const info = document.createElement('div');
+      info.className = 'flex-1 min-w-0';
+      const nm = document.createElement('div');
+      nm.className = 'text-sm text-gray-900 truncate';
+      nm.textContent = p.name;              // textContent — 상품명이 마크업으로 해석되지 않도록
+      const meta = document.createElement('div');
+      meta.className = 'text-xs text-gray-400';
+      meta.textContent = `${won(p.price)}원 · 재고 ${p.stock} · ${VIS[p.visibility] || p.visibility}`;
+      info.append(nm, meta);
+      row.append(chk, img, info);
+      frag.appendChild(row);
+    });
+    resultsEl.innerHTML = '';
+    resultsEl.appendChild(frag);
+  }
+
+  async function doSearch() {
+    const params = new URLSearchParams();
+    const q = document.getElementById('rgfQ').value.trim();
+    const cat = document.getElementById('rgfCategory').value;
+    const brand = document.getElementById('rgfBrand').value;
+    const stock = document.getElementById('rgfStock').value;
+    const vis = document.getElementById('rgfVisibility').value;
+    if (q) params.set('q', q);
+    if (cat) params.set('category_id', cat);
+    if (brand) params.set('brand_id', brand);
+    if (stock) params.set('in_stock', stock);
+    if (vis) params.set('visibility', vis);
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조회 중…</p>';
+    try {
+      const res = await fetch(`/admin/recommend-groups/${groupId}/product-search?` + params.toString());
+      const data = await res.json();
+      render(data.products || [], data.limited);
+    } catch (e) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-red-500">조회에 실패했습니다.</p>';
+    }
+  }
+  document.getElementById('rgfSearch').addEventListener('click', doSearch);
+  document.getElementById('rgfQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+  document.getElementById('rgfReset').addEventListener('click', () => {
+    ['rgfQ', 'rgfCategory', 'rgfBrand', 'rgfStock', 'rgfVisibility'].forEach(id => { document.getElementById(id).value = ''; });
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>';
+    selected.clear(); updateCount();
+    allChk.checked = false;
+  });
+
+  allChk.addEventListener('change', () => {
+    resultsEl.querySelectorAll('input[type=checkbox]').forEach(chk => {
+      chk.checked = allChk.checked;
+      const pid = Number(chk.value);
+      if (allChk.checked) selected.add(pid); else selected.delete(pid);
+    });
+    updateCount();
+  });
+
+  addBtn.addEventListener('click', async () => {
+    if (!selected.size) return;
+    addBtn.disabled = true;
+    try {
+      const res = await fetch(`/admin/recommend-groups/${groupId}/items/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: [...selected] }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        location.href = `/admin/recommend-groups/${groupId}?saved=1`;
+      } else { addBtn.disabled = false; alert('담기에 실패했습니다.'); }
+    } catch (e) { addBtn.disabled = false; alert('담기에 실패했습니다.'); }
+  });
+})();
+</script>
+<% } %>

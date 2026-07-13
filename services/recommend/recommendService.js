@@ -11,9 +11,10 @@ const dealSvc = require('../deal/dealService');
  * "최근 보신 «홍삼정»과 함께 많이 본 상품" 이라는 문구가 붙어야 베스트와 구별된다.
  * getList 는 필터·정렬·페이지네이션의 계약이지, 섹션별 근거 문구의 계약이 아니다.
  *
- * ── 데이터 소스 (새 테이블 없음) ────────────────────────────────
- *   개인화  recent_views(씨앗) → product_recommendations(연관)
- *   MD 추천 products.product_badge 에 'RECOMMEND'
+ * ── 데이터 소스 ────────────────────────────────────────────────
+ *   개인화    recent_views(씨앗) → product_recommendations(연관)
+ *   추천 그룹 recommend_group / recommend_group_item — 관리자 '상품 추천관리'에서 손으로 담은 큐레이션
+ *   MD 추천   products.product_badge 에 'RECOMMEND'
  *   지금 뜨는 products.view_count
  *
  * ⚠️ product_recommendations 는 상품상세(PDP)용 item-to-item 데이터다.
@@ -48,7 +49,7 @@ const placeholders = (arr) => arr.map(() => '?').join(',');
  *
  * @returns {{products: Array, seedName: string|null}} 비면 products = []
  */
-async function getPersonalized(mallId, userId) {
+async function getPersonalized(mallId, userId, excludeIds = []) {
     if (!userId) return { products: [], seedName: null };
 
     const [seeds] = await pool.query(`
@@ -65,11 +66,15 @@ async function getPersonalized(mallId, userId) {
     const seedIds = seeds.map(s => s.product_id);
     const seedName = seeds[0].name;
 
-    // 본 상품 전체(5건 씨앗이 아니라 전부)를 제외 대상으로 쓴다.
+    /*
+     * 본 상품 전체(5건 씨앗이 아니라 전부) + 호출자가 준 제외 목록(= 추천 그룹에 이미 실린 상품).
+     * 운영자가 손으로 담은 그룹이 우선이다. 같은 카드가 위아래로 두 번 뜨느니 알고리즘 섹션이 양보한다.
+     * 씨앗이 있으면 recent_views 도 반드시 비어 있지 않으므로 viewedIds 는 항상 1건 이상이다.
+     */
     const [viewed] = await pool.query(
         'SELECT product_id FROM recent_views WHERE user_id = ?', [userId]
     );
-    const viewedIds = viewed.map(v => v.product_id);
+    const viewedIds = [...new Set([...viewed.map(v => v.product_id), ...excludeIds])];
 
     /*
      * FIELD(pr.product_id, ...) 로 씨앗의 최신 순서를 살린다.
@@ -114,7 +119,55 @@ async function getPersonalized(mallId, userId) {
 }
 
 /**
- * ② MD 추천 — 관리자가 상품 폼에서 'RECOMMEND' 뱃지를 체크한 상품.
+ * ② 추천 그룹 — 관리자 '상품 추천관리'에서 이름을 붙이고 손으로 담은 큐레이션.
+ *
+ * 그룹 하나가 섹션 하나다. 그룹명이 제목, description 이 근거 문구가 된다.
+ *
+ * ⚠️ 담긴 product_id 를 그대로 믿지 않는다. 담은 뒤에 상품이 숨김·판매중지로 바뀔 수 있으므로
+ *    렌더 시점에 VISIBLE + mall_id 로 다시 거른다. 저장된 목록을 신뢰하면 숨긴 상품이 추천에 뜬다.
+ *
+ * 그룹끼리는 서로 제외하지 않는다 — 두 그룹에 같은 상품을 담았다면 그것은 운영자의 의도다.
+ *
+ * @returns {Array<{key,title,reason,products}>}
+ */
+async function getGroupSections(mallId) {
+    const [groups] = await pool.query(`
+        SELECT id, name, description
+          FROM recommend_group
+         WHERE mall_id = ? AND is_active = 1
+         ORDER BY sort_order ASC, id ASC
+    `, [mallId]);
+
+    if (!groups.length) return [];
+
+    const sections = [];
+    for (const g of groups) {
+        const [rows] = await pool.query(`
+            SELECT ${CARD_COLS}
+              FROM recommend_group_item i
+              JOIN products p ON p.id = i.product_id
+             WHERE i.recommend_group_id = ?
+               AND p.mall_id = ?
+               AND ${VISIBLE}
+             ORDER BY i.sort_order ASC, i.id ASC
+             LIMIT ?
+        `, [g.id, mallId, SECTION_LIMIT]);
+
+        // 담긴 상품이 전부 숨겨졌으면 빈 섹션을 그리지 않는다.
+        if (!rows.length) continue;
+
+        sections.push({
+            key: `group:${g.id}`,
+            title: g.name,
+            reason: g.description || '',
+            products: rows,
+        });
+    }
+    return sections;
+}
+
+/**
+ * ③ MD 추천 — 관리자가 상품 폼에서 'RECOMMEND' 뱃지를 체크한 상품.
  *
  * 별도 큐레이션 테이블을 만들지 않는다. 운영자가 이미 쓰고 있는 뱃지가 곧 큐레이션이다
  * (오늘특가·베스트가 상품그룹으로 간 것과 달리, 추천은 상품 단위 플래그로 충분하다).
@@ -135,7 +188,7 @@ async function getMdPicks(mallId, excludeIds = []) {
 }
 
 /**
- * ③ 지금 많이 보는 상품 — view_count 상위.
+ * ④ 지금 많이 보는 상품 — view_count 상위.
  *
  * 베스트(판매·좋아요 가중 랭킹)와 다르다. 여기는 **조회**만 본다 —
  * "아직 안 팔렸지만 사람들이 보고 있는 것" 이 추천 맥락에서 의미가 있다.
@@ -165,7 +218,15 @@ async function getLanding(mallId, userId) {
     const seen = new Set();
     const take = (products) => products.forEach(p => seen.add(p.id));
 
-    const personal = await getPersonalized(mallId, userId);
+    /*
+     * 큐레이션 먼저 계산한다(화면에는 개인화 아래에 놓지만).
+     * 운영자가 담은 그룹은 온전히 보여주고, 알고리즘 섹션이 그 상품을 피해가게 하려는 것이다.
+     * 반대로 하면 개인화가 집어간 상품이 큐레이션 그룹에서 조용히 빠진다.
+     */
+    const groupSections = await getGroupSections(mallId);
+    groupSections.forEach(s => take(s.products));
+
+    const personal = await getPersonalized(mallId, userId, [...seen]);
     if (personal.products.length) {
         sections.push({
             key: 'personal',
@@ -177,6 +238,9 @@ async function getLanding(mallId, userId) {
         });
         take(personal.products);
     }
+
+    // 큐레이션 섹션은 개인화 바로 아래.
+    sections.push(...groupSections);
 
     const md = await getMdPicks(mallId, [...seen]);
     if (md.length) {
@@ -208,6 +272,7 @@ async function getLanding(mallId, userId) {
 module.exports = {
     SECTION_LIMIT,
     getPersonalized,
+    getGroupSections,
     getMdPicks,
     getTrending,
     getLanding,

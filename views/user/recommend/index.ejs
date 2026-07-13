@@ -49,7 +49,10 @@
     <section class="mb-12">
       <div class="mb-4">
         <h2 class="text-lg sm:text-xl font-bold text-gray-900"><%= s.title %></h2>
-        <p class="mt-0.5 text-sm text-gray-500"><%= s.reason %></p>
+        <%# 추천 그룹은 근거 문구(description)가 선택이다. 비면 제목만 그린다. %>
+        <% if (s.reason) { %>
+          <p class="mt-0.5 text-sm text-gray-500"><%= s.reason %></p>
+        <% } %>
       </div>
 
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">

@@ -1201,3 +1201,32 @@ CREATE TABLE deal_item (
   CONSTRAINT fk_deal_item_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
   KEY idx_deal_item_product (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='특가 대상 상품 + 특가가 + 선착순 수량';
+
+-- ============================================================
+-- 추천 그룹 (상품 추천관리) — /recommend 랜딩의 큐레이션 섹션
+-- 그룹 1개 = 섹션 1개. name 이 섹션 제목, description 이 근거 문구.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS recommend_group (
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  mall_id     BIGINT       NOT NULL DEFAULT 1,
+  name        VARCHAR(100) NOT NULL COMMENT '섹션 제목으로 그대로 노출된다',
+  description VARCHAR(200) NULL     COMMENT '제목 아래 근거 문구(선택)',
+  sort_order  INT          NOT NULL DEFAULT 0 COMMENT '추천 화면에서의 섹션 노출 순서',
+  is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at  DATETIME     NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_rg_mall_active (mall_id, is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='추천 그룹 — 관리자가 이름을 붙여 손으로 담는 큐레이션';
+
+CREATE TABLE IF NOT EXISTS recommend_group_item (
+  id                 BIGINT NOT NULL AUTO_INCREMENT,
+  recommend_group_id BIGINT NOT NULL,
+  product_id         INT    NOT NULL,
+  sort_order         INT    NOT NULL DEFAULT 0,
+  created_at         DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_rgi_group_product (recommend_group_id, product_id),
+  KEY idx_rgi_group_order (recommend_group_id, sort_order),
+  CONSTRAINT fk_rgi_group FOREIGN KEY (recommend_group_id) REFERENCES recommend_group (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='추천 그룹에 담긴 상품 + 순서';
