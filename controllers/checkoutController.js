@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const groupBuySvc = require('../services/groupBuy/groupBuyService');
+const liveSvc = require('../services/live/liveService');
 const dealSvc = require('../services/deal/dealService');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
 const { redeemCouponCode, reserveCouponForOrder } = require('../services/coupon/couponIssueService');
@@ -24,6 +25,13 @@ function groupBuyErrorRedirect(line) {
     return line.slug
         ? `/group-buy/${encodeURIComponent(line.slug)}?error=${line.reason}`
         : '/group-buy';
+}
+
+/** 쇼핑라이브 구매 검증 실패 → 방송 상세로 되돌린다 (설계: live sales.md §5) */
+function liveErrorRedirect(line) {
+    return line.slug
+        ? `/live/${encodeURIComponent(line.slug)}?error=${line.reason}`
+        : '/live';
 }
 
 /*
@@ -265,7 +273,7 @@ exports.getChoose = async (req, res) => {
  * - 로그인: 회원 주문 폼 (주소 프리필)
  */
 exports.getForm = async (req, res) => {
-    const { product_id, quantity, guest, cart, error, success, group_buy_id } = req.query;
+    const { product_id, quantity, guest, cart, error, success, group_buy_id, live_show_id } = req.query;
     const isGuest = guest === '1';
 
     if (!req.user && !isGuest) {
@@ -304,6 +312,23 @@ exports.getForm = async (req, res) => {
             image: p ? (p.main_image || p.thumbnail_image) : null,
             source_type: 'GROUP_BUY',        // 특가 리졸버가 이 라인을 건너뛰게 한다
             source_id: line.groupBuy.id,
+        }];
+    } else if (live_show_id && product_id && quantity) {
+        // 쇼핑라이브 바로구매 — 단가는 live_show_product.live_price 로 서버가 확정한다.
+        const line = await liveSvc.resolveLine(req.mallId || 1, live_show_id, product_id, quantity);
+        if (!line.ok) return res.redirect(liveErrorRedirect(line));
+
+        const [[p]] = await pool.query(
+            `SELECT ${PRODUCT_SCOPE_COLS}, p.main_image, p.thumbnail_image FROM products p WHERE p.id = ?`,
+            [line.product.product_id]
+        );
+        items = [{
+            ...(p ? toScopeItem(p) : { product_id: line.product.product_id, name: line.product.name }),
+            price: line.unitPrice,           // 라이브가가 상품 정가를 이긴다
+            quantity: line.quantity,
+            image: p ? (p.main_image || p.thumbnail_image) : null,
+            source_type: 'LIVE_SHOW',        // 특가 리졸버가 이 라인을 건너뛰게 한다
+            source_id: line.liveShow.id,
         }];
     } else if (product_id && quantity) {
         const pid = parseInt(product_id, 10);
@@ -407,7 +432,7 @@ exports.getForm = async (req, res) => {
  */
 exports.postShippingFee = async (req, res) => {
     try {
-        const { product_id, quantity, cart, group_buy_id, receiver_zipcode } = req.body;
+        const { product_id, quantity, cart, group_buy_id, live_show_id, receiver_zipcode } = req.body;
         let subtotalAmount = 0;
 
         if (cart === '1' && req.user) {
@@ -420,6 +445,9 @@ exports.postShippingFee = async (req, res) => {
             subtotalAmount = Number(row.subtotal) || 0;
         } else if (group_buy_id && product_id && quantity) {
             const line = await groupBuySvc.resolveLine(req.mallId || 1, group_buy_id, product_id, quantity);
+            if (line.ok) subtotalAmount = line.unitPrice * line.quantity;
+        } else if (live_show_id && product_id && quantity) {
+            const line = await liveSvc.resolveLine(req.mallId || 1, live_show_id, product_id, quantity);
             if (line.ok) subtotalAmount = line.unitPrice * line.quantity;
         } else if (product_id && quantity) {
             const qty = Math.max(1, parseInt(quantity, 10) || 1);
@@ -477,7 +505,7 @@ exports.postApplyCouponCode = async (req, res) => {
  */
 exports.postForm = async (req, res) => {
     const {
-        product_id, quantity, cart, group_buy_id,
+        product_id, quantity, cart, group_buy_id, live_show_id,
         buyer_name, buyer_email, buyer_phone,
         receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
         shipping_message,
@@ -517,6 +545,19 @@ exports.postForm = async (req, res) => {
             quantity: line.quantity,
             source_type: 'GROUP_BUY',
             source_id: line.groupBuy.id,
+        }];
+    } else if (live_show_id && product_id && quantity) {
+        // 주문서를 거치지 않고 이 POST 를 직접 두드릴 수 있으므로 여기서도 다시 검증한다.
+        const line = await liveSvc.resolveLine(req.mallId || 1, live_show_id, product_id, quantity);
+        if (!line.ok) return res.redirect(liveErrorRedirect(line));
+
+        const [[p]] = await pool.query(`SELECT ${PRODUCT_SCOPE_COLS} FROM products p WHERE p.id = ?`, [line.product.product_id]);
+        items = [{
+            ...(p ? toScopeItem(p) : { product_id: line.product.product_id, name: line.product.name }),
+            price: line.unitPrice,
+            quantity: line.quantity,
+            source_type: 'LIVE_SHOW',
+            source_id: line.liveShow.id,
         }];
     } else if (product_id && quantity) {
         const pid = parseInt(product_id, 10);

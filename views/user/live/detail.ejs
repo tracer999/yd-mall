@@ -50,6 +50,18 @@
     </div>
   <% } %>
 
+  <%# ── 쿠폰 수령 결과 ── %>
+  <% if (flashMsg) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-green-50 text-green-700 text-sm">
+      <i class="bi bi-check-circle"></i> <%= flashMsg %>
+    </div>
+  <% } %>
+  <% if (flashErr) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-600 text-sm">
+      <i class="bi bi-exclamation-circle"></i> <%= flashErr %>
+    </div>
+  <% } %>
+
   <%# ── 헤더 ── %>
   <div class="flex items-start justify-between gap-4 mb-4">
     <div class="min-w-0">
@@ -220,9 +232,10 @@
                       로그인 후 받기
                     </a>
                   <% } else { %>
-                    <%# 다운로드는 기존 쿠폰 엔진(POST /coupon/:id/claim)을 그대로 쓴다 %>
+                    <%# 다운로드는 기존 쿠폰 엔진(POST /coupon/:id/claim)을 그대로 쓴다.
+                        redirect 는 임의 URL 을 받지 않는다 — 'live:{slug}' 형태만 해석한다(오픈 리다이렉트 차단) %>
                     <form action="/coupon/<%= c.id %>/claim" method="POST" class="shrink-0">
-                      <input type="hidden" name="redirect" value="/live/<%= encodeURIComponent(l.slug) %>">
+                      <input type="hidden" name="redirect" value="live:<%= l.slug %>">
                       <button type="submit"
                               class="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] hover:opacity-90">
                         쿠폰받기

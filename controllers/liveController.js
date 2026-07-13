@@ -139,6 +139,9 @@ exports.getDetail = async (req, res, next) => {
             descriptionHtml: live.description ? sanitize(live.description) : '',
             noticeHtml: live.notice ? sanitize(live.notice) : '',
             lineError: LINE_ERRORS[errorKey] || null,
+            // 쿠폰 수령 결과 — couponController.postClaim 이 'live:{slug}' 로 여기 되돌려보낸다.
+            flashMsg: req.query.msg ? String(req.query.msg) : null,
+            flashErr: req.query.err ? String(req.query.err) : null,
             isLoggedIn: Boolean(userId),
             seo: Object.assign({}, res.locals.seo, {
                 title: `${live.title} | 쇼핑라이브`,

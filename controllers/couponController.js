@@ -197,10 +197,30 @@ exports.getDetail = async (req, res, next) => {
     }
 };
 
+/**
+ * 수령 후 돌아갈 곳.
+ *
+ * **임의 URL 을 받지 않는다** — 오픈 리다이렉트가 된다.
+ * 정해진 형태만 해석하고, 그 외에는 전부 쿠폰존으로 보낸다.
+ *   'detail'      → 쿠폰 상세
+ *   'live:{slug}' → 그 쇼핑라이브 상세 (라이브 혜택 탭에서 받은 경우)
+ *
+ * slug 는 encodeURIComponent 로 감싸므로 '//evil.com' 같은 값이 와도 경로 조각이 될 뿐이다.
+ */
+function claimBackPath(body, couponId) {
+    const r = String((body && body.redirect) || '');
+    if (r === 'detail') return `/coupon/${couponId}`;
+
+    const live = /^live:(.+)$/.exec(r);
+    if (live) return `/live/${encodeURIComponent(live[1])}`;
+
+    return '/coupon';
+}
+
 /** 수령. 선착순 슬롯 확보 + `coupon_download` PK 중복 차단을 한 트랜잭션에서 (§6-3). */
 exports.postClaim = async (req, res, next) => {
     const couponId = parseInt(req.params.id, 10);
-    const back = req.body.redirect === 'detail' ? `/coupon/${couponId}` : '/coupon';
+    const back = claimBackPath(req.body, couponId);
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();

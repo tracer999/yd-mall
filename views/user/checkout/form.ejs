@@ -33,6 +33,8 @@
         <input type="hidden" name="guest" value="<%= isGuest ? '1' : '0' %>">
         <%# 공동구매 바로구매일 때만 값이 있다. postForm 이 이 값으로 공동구매가를 재계산한다. %>
         <input type="hidden" name="group_buy_id" value="<%= query.group_buy_id || '' %>">
+        <%# 쇼핑라이브 바로구매일 때만 값이 있다. postForm 이 이 값으로 라이브가를 재계산한다. %>
+        <input type="hidden" name="live_show_id" value="<%= query.live_show_id || '' %>">
         <%# 주문 쿠폰 1장 + 배송비 쿠폰 1장 (쿠폰 문서 §6-1). 금액은 보내지 않는다 — 서버가 계산한다. %>
         <input type="hidden" name="user_coupon_id" id="userCouponIdInput">
         <input type="hidden" name="shipping_coupon_id" id="shippingCouponIdInput">
@@ -243,7 +245,8 @@
             product_id: '<%= query.product_id || "" %>',
             quantity: '<%= query.quantity || "" %>',
             cart: '<%= query.cart || "" %>',
-            group_buy_id: '<%= query.group_buy_id || "" %>'
+            group_buy_id: '<%= query.group_buy_id || "" %>',
+            live_show_id: '<%= query.live_show_id || "" %>'
         });
         fetch('/checkout/shipping-fee', {
             method: 'POST',
