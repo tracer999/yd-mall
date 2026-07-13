@@ -1,0 +1,99 @@
+<%
+  /*
+   * 전문관 목록
+   *
+   * 설계: docs/사이트개선/recommend_specialty_design_and_development.md §5-4
+   *
+   * 기획전 목록 뷰(user/exhibition/list.ejs)를 재사용하지 않는다.
+   * 거기엔 '예정/진행중/종료' 기간 배지와 '종료임박순' 정렬이 있는데,
+   * 상시 운영되는 전문관에서는 전부 의미가 없다(전부 "진행중"으로 뜬다).
+   *
+   * 발행된 전문관이 0건이면 컨트롤러가 준비중 랜딩으로 되돌리므로, 여기 도달하면 최소 1건은 있다.
+   *
+   * locals: specialties[], pagination, sorts[], sort
+   */
+  const _items = specialties || [];
+  const _p = pagination;
+  const pageUrl = (n) => `/specialty?sort=${encodeURIComponent(sort)}&page=${n}`;
+%>
+
+<div class="bg-white border-b border-gray-100">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">전문관</h1>
+    <p class="mt-2 text-sm sm:text-base text-gray-500">테마별 전문 매장을 상시 운영합니다.</p>
+  </div>
+</div>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+
+  <div class="mb-5 flex items-center justify-between gap-4">
+    <p class="text-sm text-gray-500">전체 <strong class="text-gray-900"><%= _p.total %></strong>개</p>
+    <div class="flex items-center gap-1">
+      <% sorts.forEach(function (s) { %>
+        <a href="/specialty?sort=<%= s.value %>"
+           class="px-3 py-1.5 text-xs rounded-full no-underline <%= sort === s.value
+             ? 'bg-gray-900 text-white font-semibold'
+             : 'text-gray-500 hover:bg-gray-100' %>"><%= s.label %></a>
+      <% }); %>
+    </div>
+  </div>
+
+  <% if (_items.length === 0) { %>
+    <div class="py-24 text-center">
+      <i class="bi bi-shop text-4xl text-gray-200"></i>
+      <p class="mt-4 text-sm text-gray-500">표시할 전문관이 없습니다.</p>
+      <a href="/specialty" class="mt-4 inline-block text-sm text-gray-600 hover:text-gray-900">첫 페이지로</a>
+    </div>
+  <% } else { %>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <% _items.forEach(function (e) { %>
+        <a href="<%= e.detailPath %>"
+           class="group block rounded-2xl overflow-hidden border border-gray-100 bg-white no-underline
+                  transition hover:shadow-lg hover:border-gray-200">
+          <div class="aspect-[16/10] bg-gray-100 overflow-hidden">
+            <% const thumb = e.list_thumbnail_url || e.pc_hero_image_url; %>
+            <% if (thumb) { %>
+              <img src="<%= thumb %>" alt="<%= e.title %>"
+                   class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]">
+            <% } else { %>
+              <div class="w-full h-full flex items-center justify-center">
+                <i class="bi bi-shop text-3xl text-gray-300"></i>
+              </div>
+            <% } %>
+          </div>
+          <div class="p-4">
+            <h2 class="text-base font-bold text-gray-900 leading-snug line-clamp-1"><%= e.title %></h2>
+            <% if (e.summary) { %>
+              <p class="mt-1 text-sm text-gray-500 line-clamp-2"><%= e.summary %></p>
+            <% } %>
+            <p class="mt-3 text-xs text-gray-400">상품 <%= e.product_count %>개</p>
+          </div>
+        </a>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <% if (_p.totalPages > 1) { %>
+    <nav class="mt-10 flex items-center justify-center gap-1">
+      <% if (_p.page > 1) { %>
+        <a href="<%= pageUrl(_p.page - 1) %>"
+           class="px-3 py-2 text-sm rounded-md text-gray-500 hover:bg-gray-100 no-underline">
+          <i class="bi bi-chevron-left"></i>
+        </a>
+      <% } %>
+      <% for (let n = 1; n <= _p.totalPages; n++) { %>
+        <a href="<%= pageUrl(n) %>"
+           class="min-w-[38px] text-center px-3 py-2 text-sm rounded-md no-underline <%= n === _p.page
+             ? 'bg-gray-900 text-white font-semibold'
+             : 'text-gray-600 hover:bg-gray-100' %>"><%= n %></a>
+      <% } %>
+      <% if (_p.page < _p.totalPages) { %>
+        <a href="<%= pageUrl(_p.page + 1) %>"
+           class="px-3 py-2 text-sm rounded-md text-gray-500 hover:bg-gray-100 no-underline">
+          <i class="bi bi-chevron-right"></i>
+        </a>
+      <% } %>
+    </nav>
+  <% } %>
+
+</div>

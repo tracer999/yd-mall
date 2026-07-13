@@ -36,14 +36,22 @@ ON DUPLICATE KEY UPDATE
 --    is_enabled = 1 이지만 module_ready = 0 이라 아직 GNB 에 뜨지 않는다.
 --    sort_order: 추천은 베스트(3) 다음, 전문관은 브랜드(6) 다음에 오도록.
 -- ─────────────────────────────────────────────────────────
+--
+-- ⚠️ 두 가지 함정을 함께 피한 형태다.
+--   1) INSERT ... SELECT 에서는 VALUES(col) 을 쓸 수 없다(MySQL 8) → SELECT 쪽 별칭을 참조한다.
+--   2) `CROSS JOIN (...) v ON DUPLICATE KEY UPDATE` 는 ON 이 **조인 조건**으로 파싱돼 1064 가 난다
+--      → SELECT 전체를 파생 테이블(t)로 한 번 더 감싼다.
 INSERT INTO mall_feature_menu (mall_id, feature_code, sort_order, is_enabled)
-SELECT m.id, v.feature_code, v.sort_order, 1
-  FROM mall m
-  CROSS JOIN (
-        SELECT 'RECOMMEND' AS feature_code, 4 AS sort_order
-  UNION SELECT 'SPECIALTY',                 7
-  ) v
-ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order);
+SELECT t.mall_id, t.feature_code, t.sort_order, t.is_enabled
+  FROM (
+        SELECT m.id AS mall_id, v.feature_code, v.sort_order, 1 AS is_enabled
+          FROM mall m
+          CROSS JOIN (
+                SELECT 'RECOMMEND' AS feature_code, 4 AS sort_order
+          UNION SELECT 'SPECIALTY',                 7
+          ) v
+  ) t
+ON DUPLICATE KEY UPDATE sort_order = t.sort_order;
 
 
 -- ═════════════════════════════════════════════════════════

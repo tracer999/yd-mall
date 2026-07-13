@@ -250,6 +250,8 @@ async function startServer() {
     const shopifyRoutes = require('./routes/shopify');
     const featureRoutes = require('./routes/feature');
     const exhibitionRoutes = require('./routes/exhibition');
+    const specialtyRoutes = require('./routes/specialty');
+    const recommendRoutes = require('./routes/recommend');
     const eventRoutes = require('./routes/event');
     const groupBuyRoutes = require('./routes/group-buy');
     const couponRoutes = require('./routes/coupon');
@@ -263,6 +265,10 @@ async function startServer() {
     app.use('/', featureRoutes);
     // 기획전 표준 URL(/exhibition) — feature_menu.EXHIBITION.default_path 와 1:1
     app.use('/exhibition', exhibitionRoutes);
+    // 전문관 표준 URL(/specialty) — 상시 운영 매장. exhibition 테이블 재사용(exhibition_type='SPECIALTY')
+    app.use('/specialty', specialtyRoutes);
+    // 추천 표준 URL(/recommend) — 개인화 + MD 큐레이션 랜딩
+    app.use('/recommend', recommendRoutes);
     // 이벤트&혜택 표준 URL(/event) — feature_menu.EVENT.default_path 와 1:1
     app.use('/event', eventRoutes);
     // 공동구매 표준 URL(/group-buy) — feature_menu.GROUP_BUY.default_path 와 1:1

@@ -194,6 +194,30 @@ const COMING_SOON = {
         primary: { label: '베스트 상품 보기', href: '/best' },
         secondary: { label: '전체 상품', href: '/products' },
     },
+    /*
+     * 추천 — 모듈이 있다(routes/recommend.js). 이 항목은 **세 섹션이 전부 빌 때만** 쓰이는 폴백이다.
+     * 섹션이 다 비는 경우: RECOMMEND 뱃지 상품 0건 + 조회수 있는 상품 0건 + (비로그인).
+     */
+    recommend: {
+        name: '추천',
+        icon: 'bi-magic',
+        description: '고객님께 맞는 상품을 골라드리는 추천을 준비하고 있습니다.',
+        bullets: ['최근 본 상품 기반 추천', 'MD가 직접 고른 상품', '지금 많이 보는 상품'],
+        primary: { label: '베스트 상품 보기', href: '/best' },
+        secondary: { label: '전체 상품', href: '/products' },
+    },
+    /*
+     * 전문관 — 모듈이 있다(routes/specialty.js). 이 항목은 **발행된 전문관이 0건일 때만** 쓰이는 폴백이다.
+     * 전문관은 exhibition_type='SPECIALTY' 인 기획전이므로, 관리자에서 만들면 바로 채워진다.
+     */
+    specialty: {
+        name: '전문관',
+        icon: 'bi-shop',
+        description: '테마별로 상시 운영되는 전문 매장을 준비하고 있습니다.',
+        bullets: ['선물관 · 프리미엄관 · 이너뷰티관', '상시 운영(기간 제한 없음)', '전문관별 큐레이션 구성'],
+        primary: { label: '기획전 보러가기', href: '/exhibition' },
+        secondary: { label: '전체 상품', href: '/products' },
+    },
     // 이벤트는 모듈이 있다. 이 항목은 **발행된 이벤트가 0건일 때만** 쓰이는 폴백 랜딩이다.
     event: {
         name: '이벤트 & 혜택',
