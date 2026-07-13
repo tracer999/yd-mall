@@ -69,7 +69,7 @@ const SECTIONS = [
         config: {
             maxCount: 8,
             columnsPerView: 4,
-            moreLink: '/deal/today',
+            moreLink: '/deals',
             badgeText: '오늘특가',
             sectionClass: 'py-12 bg-[var(--gh-secondary)]',
         },
@@ -122,7 +122,7 @@ const SECTIONS = [
             // dealProductId 는 시드 시 실제 할인 상품으로 채운다(아래 resolveDealProductId).
             promoBlocks: [
                 { copy: '신규회원 웰컴 쿠폰', color: 'var(--gh-primary)', url: '/mypage/coupons' },
-                { copy: '오늘특가 모아보기', color: '#f59e0b', url: '/deal/today' },
+                { copy: '쇼핑특가 모아보기', color: '#f59e0b', url: '/deals' },
             ],
             sectionClass: 'py-12 bg-[var(--gh-secondary)]',
         },
@@ -136,7 +136,7 @@ const SECTIONS = [
             columns: 4,
             items: [
                 { icon: 'ticket-perforated', label: '쿠폰', url: '/mypage/coupons' },
-                { icon: 'fire', label: '오늘특가', url: '/deal/today', badge: 'HOT' },
+                { icon: 'fire', label: '쇼핑특가', url: '/deals', badge: 'HOT' },
                 { icon: 'stars', label: '베스트', url: '/best' },
                 { icon: 'headset', label: '고객센터', url: '/boards/notice' },
             ],

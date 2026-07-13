@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const dealSvc = require('../deal/dealService');
 
 /*
  * 기획전 서비스 — 관리자·고객 공용 읽기 경로
@@ -269,7 +270,8 @@ async function getProducts(exhibitionId, { hideSoldOut = false } = {}) {
            ${hideSoldOut ? "AND p.status <> 'SOLD_OUT' AND p.stock > 0" : ''}
          ORDER BY ep.is_fixed DESC, ep.sort_order ASC, ep.id ASC
     `, [exhibitionId]);
-    return rows;
+    // 기획전 카드도 활성 특가가로 표시한다.
+    return await dealSvc.applyDeals(rows);
 }
 
 /** 조회수 +1. 실패해도 화면은 떠야 하므로 호출부에서 await 하지 않는다. */

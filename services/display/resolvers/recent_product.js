@@ -1,5 +1,6 @@
 const pool = require('../../../config/db');
 const { P_STATUS, visibilityClause } = require('./_shared');
+const dealSvc = require('../../deal/dealService');
 
 /*
  * recent_product — 최근 본 상품 (CT-8)
@@ -31,6 +32,9 @@ async function resolve({ shared, config, locals }) {
     `, [shared.userId, limit]);
 
     if (!rows || rows.length === 0) return null;
+
+    // 본 뒤에 특가가 시작됐을 수 있다 — 최근 본 상품도 현재가 기준으로 보여준다.
+    await dealSvc.applyDeals(rows);
 
     locals.products = rows;
     locals.clientOnly = false;

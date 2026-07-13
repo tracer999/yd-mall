@@ -1,0 +1,175 @@
+<%
+  /*
+   * 쇼핑특가 — 특가 카테고리별 섹션 (docs/사이트개선/shopping_deal_design.md §6.2)
+   *
+   * 상품 카드는 공용 product_card 를 그대로 쓴다. dealService 가 이미
+   * price/original_price/discount_rate 를 특가로 덮어놨으므로 카드는 아무것도 몰라도 된다.
+   *
+   * Tailwind 는 빌드 시 클래스 문자열을 스캔한다 — `bg-${color}-500` 같은 동적 조립은
+   * 잡히지 않는다. 그래서 색상별 전체 클래스명을 여기에 박아둔다.
+   */
+  const BADGE_CLS = {
+    rose:    'bg-rose-500 text-white',
+    amber:   'bg-amber-500 text-white',
+    emerald: 'bg-emerald-600 text-white',
+    sky:     'bg-sky-500 text-white',
+    violet:  'bg-violet-500 text-white',
+    slate:   'bg-slate-700 text-white',
+  };
+  const badgeCls = (c) => BADGE_CLS[c] || BADGE_CLS.rose;
+%>
+
+<div class="max-w-7xl mx-auto px-4 py-8">
+
+  <header class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">쇼핑특가</h1>
+    <p class="mt-2 text-gray-600">기간·시간 한정으로 열리는 특가입니다. 표시된 가격이 결제 금액입니다.</p>
+  </header>
+
+  <!-- 오늘 열릴 예정인 타임특가 -->
+  <% if (upcoming && upcoming.length) { %>
+    <section class="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <h2 class="mb-3 flex items-center gap-2 font-semibold text-amber-900">
+        <i class="bi bi-alarm"></i> 오늘 열릴 특가
+      </h2>
+      <ul class="flex flex-wrap gap-3">
+        <% upcoming.forEach(function (u) { %>
+          <li class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm shadow-sm">
+            <span class="rounded px-2 py-0.5 text-xs font-semibold <%= badgeCls(u.badge_color) %>">
+              <%= u.category_name %>
+            </span>
+            <span class="font-medium text-gray-900"><%= u.title %></span>
+            <span class="text-amber-700 font-semibold">
+              <%= String(u.daily_start_time).slice(0, 5) %> 오픈
+            </span>
+          </li>
+        <% }); %>
+      </ul>
+    </section>
+  <% } %>
+
+  <!-- 카테고리 탭 -->
+  <% if (tabs && tabs.length > 1) { %>
+    <nav class="mb-8 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
+      <a href="/deals"
+         class="rounded-full px-4 py-2 text-sm font-medium <%= !activeCode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' %>">
+        전체
+      </a>
+      <% tabs.forEach(function (t) { %>
+        <a href="/deals/<%= encodeURIComponent(t.code) %>"
+           class="rounded-full px-4 py-2 text-sm font-medium <%= activeCode === t.code ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' %>">
+          <%= t.name %> <span class="opacity-60">(<%= t.count %>)</span>
+        </a>
+      <% }); %>
+    </nav>
+  <% } %>
+
+  <% if (!categories.length) { %>
+    <div class="rounded-xl border border-gray-200 bg-gray-50 py-16 text-center text-gray-500">
+      지금 진행 중인 특가가 없습니다. 곧 새로운 특가로 찾아뵙겠습니다.
+    </div>
+  <% } %>
+
+  <!-- 카테고리별 섹션 -->
+  <% categories.forEach(function (cat) { %>
+    <section class="mb-12">
+      <div class="mb-4 flex items-end justify-between">
+        <div>
+          <h2 class="flex items-center gap-2 text-2xl font-bold text-gray-900">
+            <span class="rounded px-2 py-1 text-xs font-semibold <%= badgeCls(cat.badgeColor) %>">
+              <%= cat.badgeText %>
+            </span>
+            <%= cat.name %>
+          </h2>
+          <% if (cat.description) { %>
+            <p class="mt-1 text-sm text-gray-500"><%= cat.description %></p>
+          <% } %>
+        </div>
+        <span class="text-sm text-gray-500"><%= cat.products.length %>개 상품</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <% cat.products.forEach(function (product) { %>
+          <div class="relative">
+            <%- include('../../partials/product_card', { product: product }) %>
+
+            <!-- 특가 메타: 카운트다운 + 선착순 잔여 -->
+            <div class="mt-2 space-y-1.5">
+              <% if (product.deal && product.deal.closesAtEpoch) { %>
+                <div class="flex items-center gap-1.5 text-xs font-medium text-rose-600"
+                     data-deal-countdown="<%= product.deal.closesAtEpoch %>">
+                  <i class="bi bi-clock"></i>
+                  <span class="deal-countdown-text">남은 시간 계산 중…</span>
+                </div>
+              <% } %>
+
+              <% if (product.deal && product.deal.qtyLimit) {
+                   const sold = product.deal.soldQty;
+                   const limit = product.deal.qtyLimit;
+                   const pct = Math.min(100, Math.round((sold / limit) * 100));
+              %>
+                <div>
+                  <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div class="h-full rounded-full bg-rose-500" style="width: <%= pct %>%"></div>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-500">
+                    <%= limit %>개 한정 · <span class="font-semibold text-rose-600"><%= product.deal.remainQty %>개</span> 남음
+                  </p>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </section>
+  <% }); %>
+
+</div>
+
+<script>
+/*
+ * 특가 카운트다운. 서버가 내려준 종료 epoch(KST 기준으로 계산됨)를 클라이언트 시계와 비교한다.
+ * 0 이 되면 그 카드의 특가는 이미 끝난 것이므로 새로고침을 유도한다 — 재조회 없이 특가가를
+ * 계속 보여주면 결제 단계에서 정가로 튀어 혼란을 준다.
+ */
+(function () {
+  const nodes = document.querySelectorAll('[data-deal-countdown]');
+  if (!nodes.length) return;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function tick() {
+    const now = Date.now();
+    let expired = false;
+
+    nodes.forEach(function (el) {
+      const end = Number(el.dataset.dealCountdown);
+      const text = el.querySelector('.deal-countdown-text');
+      const diff = end - now;
+
+      if (diff <= 0) {
+        text.textContent = '특가 종료';
+        el.classList.remove('text-rose-600');
+        el.classList.add('text-gray-400');
+        expired = true;
+        return;
+      }
+
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      text.textContent = h > 0
+        ? h + '시간 ' + pad(m) + '분 ' + pad(s) + '초 남음'
+        : pad(m) + '분 ' + pad(s) + '초 남음';
+    });
+
+    if (expired) {
+      clearInterval(timer);
+      setTimeout(function () { location.reload(); }, 3000);
+    }
+  }
+
+  const timer = setInterval(tick, 1000);
+  tick();
+})();
+</script>

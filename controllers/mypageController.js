@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const emailService = require('../services/emailService');
 const { benefitLabel } = require('../services/coupon/discountCalculator');
 const claimService = require('../services/order/claimService');
+const dealSvc = require('../services/deal/dealService');
 
 exports.getDashboard = async (req, res, next) => {
     try {
@@ -406,6 +407,9 @@ exports.getLikes = async (req, res, next) => {
             [userId]
         );
 
+        // 찜한 뒤 특가가 시작됐을 수 있다 — 현재가 기준으로 보여준다.
+        await dealSvc.applyDeals(likedProducts);
+
         res.render('user/mypage/likes', {
             title: '관심 상품',
             likedProducts
@@ -463,6 +467,9 @@ exports.getRecentViews = async (req, res, next) => {
              ORDER BY rv.viewed_at DESC`,
             [userId]
         );
+
+        // 본 뒤에 특가가 시작됐을 수 있다 — 현재가 기준으로 보여준다.
+        await dealSvc.applyDeals(recentProducts);
 
         res.render('user/mypage/recent-views', {
             title: '최근 본 상품',

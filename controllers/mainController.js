@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const displayService = require('../services/display/displayService');
+const dealSvc = require('../services/deal/dealService');
 
 // 카카오채널 URL 정규화 (siteSettings 기반)
 function computeKakaoUrl(siteSettings) {
@@ -46,6 +47,8 @@ async function buildHomeContext(req, res) {
             WHERE hs.is_active = 1 AND hs.mall_id = ?
             ORDER BY hs.slot ASC, hs.sort_order ASC, hs.id ASC
         `, [mallId]);
+        // 히어로에 물린 상품도 특가가로 노출한다 (상품 미연결 슬라이드는 applyDeals 가 건너뛴다).
+        await dealSvc.applyDeals(slides, { idKey: 'product_id' });
         heroMainSlides = slides.filter(s => s.slot === 'MAIN');
         heroFeature = slides.find(s => s.slot === 'FEATURE') || null;
     }

@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const productController = require('../controllers/productController');
 const bestController = require('../controllers/bestController');
+const dealController = require('../controllers/dealController');
 const displayService = require('../services/display/displayService');
 
 /*
@@ -75,34 +76,29 @@ router.get('/new', async (req, res, next) => {
 });
 
 /*
- * 오늘특가 — 관리자가 상품그룹(manual)에서 직접 고른 상품을 보여준다.
- *   - 소스 그룹: mall 별 오늘특가 그룹(seed_key='ct_deal' 또는 이름에 '오늘특가').
- *     홈의 '오늘의 특가' 캐러셀과 같은 그룹을 공유한다 → 관리자가 한 곳만 관리.
- *   - 그룹이 없거나 담긴 상품이 0건이면 준비중 랜딩으로 폴백(빈 목록 방지, dev=prod).
- *   - 뱃지(DEADLINE_SALE) 자동 노출 방식은 폐기했다(관리자 수동 큐레이션으로 전환).
+ * 쇼핑특가 (docs/사이트개선/shopping_deal_design.md)
+ *
+ * 예전 '오늘특가'(/deal/today)는 상품그룹(manual) 하나를 상품목록으로 재사용했다.
+ * 쇼핑특가는 그것을 대체한다 — 관리자가 만든 **특가 카테고리**(오늘의특가·타임특가·시즌특가…)
+ * 별로 섹션이 나뉘고, 특가는 기간·시간창·요일·선착순 수량 조건이 맞을 때만 특가가로 열린다.
+ * 특가가는 노출뿐 아니라 **실제 결제 금액**에 반영된다(dealService).
+ *
+ * 진행 중인 특가도 오늘 열릴 타임특가도 없으면 준비중 랜딩으로 폴백한다(빈 화면 방지, dev=prod).
  */
-router.get('/deal/today', async (req, res, next) => {
+async function renderDeals(req, res, next) {
     try {
-        const mallId = req.mallId || 1;
-        const [[grp]] = await pool.query(
-            `SELECT id FROM product_group
-              WHERE mall_id = ? AND is_active = 1
-                AND (JSON_UNQUOTE(JSON_EXTRACT(filter_condition_json,'$.seed_key')) = 'ct_deal'
-                     OR name LIKE '%오늘특가%')
-              ORDER BY id LIMIT 1`,
-            [mallId]
-        );
-        if (!grp) return comingSoon('deal-today')(req, res);
-        const [[{ c }]] = await pool.query(
-            'SELECT COUNT(*) c FROM product_group_item WHERE product_group_id = ?', [grp.id]
-        );
-        if (!c) return comingSoon('deal-today')(req, res);
-        req.featurePreset = { groupId: grp.id, menuKey: 'DEAL' };
-        return productController.getList(req, res);
+        const rendered = await dealController.getIndex(req, res);
+        if (!rendered) return comingSoon('deals')(req, res);
     } catch (e) {
         return next(e);
     }
-});
+}
+
+router.get('/deals', renderDeals);
+router.get('/deals/:code', renderDeals);
+
+// 구 URL 보존 — 북마크·외부 링크가 죽지 않게 영구 이전으로 넘긴다.
+router.get('/deal/today', (req, res) => res.redirect(301, '/deals'));
 
 // '/event' 는 routes/event.js 가 실제 목록을 렌더한다.
 // 예전에는 '/boards/notice'(공지사항) 로 302 했으나, 공지사항은 고객센터(/cs)의 하위 항목이지
@@ -133,7 +129,7 @@ const COMING_SOON = {
         icon: 'bi-stars',
         description: '시즌·브랜드·테마별 기획전을 준비하고 있습니다.<br>곧 특별한 구성으로 찾아뵙겠습니다.',
         bullets: ['시즌 기획전 (설·추석·여름 클리어런스)', '브랜드 위크', '테마별 큐레이션'],
-        primary: { label: '오늘특가 보러가기', href: '/deal/today' },
+        primary: { label: '쇼핑특가 보러가기', href: '/deals' },
         secondary: { label: '전체 상품', href: '/products' },
     },
     // 공동구매는 모듈이 있다. 이 항목은 **발행된 공동구매가 0건일 때만** 쓰이는 폴백 랜딩이다.
@@ -166,7 +162,7 @@ const COMING_SOON = {
         icon: 'bi-tags',
         description: '재고 소진 특가와 시즌오프 상품을 모은 아울렛을 준비하고 있습니다.',
         bullets: ['재고 소진 특가', '시즌오프 할인', '한정 수량 판매'],
-        primary: { label: '오늘특가 보러가기', href: '/deal/today' },
+        primary: { label: '쇼핑특가 보러가기', href: '/deals' },
         secondary: { label: '전체 상품', href: '/products' },
     },
     coupon: {
@@ -185,12 +181,12 @@ const COMING_SOON = {
         primary: { label: '내 적립금', href: '/mypage/points' },
         secondary: { label: '전체 상품', href: '/products' },
     },
-    // 오늘특가 상품그룹(manual)에 관리자가 상품을 1건도 담지 않았을 때만 쓰이는 폴백 랜딩이다.
-    'deal-today': {
-        name: '오늘특가',
+    // 진행 중인 특가도, 오늘 열릴 타임특가도 없을 때만 쓰이는 폴백 랜딩이다.
+    deals: {
+        name: '쇼핑특가',
         icon: 'bi-alarm',
-        description: '오늘의 특가 상품을 준비하고 있습니다.<br>곧 엄선한 구성으로 찾아뵙겠습니다.',
-        bullets: ['MD 엄선 특가 구성', '기간 한정 판매', '매일 새로운 구성'],
+        description: '지금 진행 중인 특가가 없습니다.<br>곧 엄선한 구성으로 찾아뵙겠습니다.',
+        bullets: ['오늘의 특가 · 타임특가 · 시즌특가', '기간·시간 한정 판매', '선착순 수량 한정'],
         primary: { label: '베스트 상품 보기', href: '/best' },
         secondary: { label: '전체 상품', href: '/products' },
     },
@@ -224,7 +220,7 @@ const COMING_SOON = {
         icon: 'bi-gift',
         description: '진행 중인 이벤트가 없습니다.<br>새로운 이벤트를 준비하고 있습니다.',
         bullets: ['응모·경품 이벤트', '쿠폰팩 지급', '출석체크 혜택'],
-        primary: { label: '오늘특가 보러가기', href: '/deal/today' },
+        primary: { label: '쇼핑특가 보러가기', href: '/deals' },
         secondary: { label: '내 쿠폰함', href: '/mypage/coupons' },
     },
 };

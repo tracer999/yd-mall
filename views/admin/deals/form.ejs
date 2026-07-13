@@ -1,0 +1,559 @@
+<%
+  /*
+   * 특가 등록/수정
+   *
+   * 상품 큐레이션은 저장 후에만 가능하다(deal_item 이 deal_id 를 요구한다).
+   * 카테고리의 schedule_type 이 TIME 이면 JS 가 시간창·요일 패널을 강조하고 시간 입력을 필수화한다.
+   * 서버도 같은 규칙을 다시 검증한다 — JS 는 안내일 뿐 방어선이 아니다.
+   */
+  const isNew = !deal.id;
+  const action = isNew ? '/admin/deals' : `/admin/deals/${deal.id}`;
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const catMeta = {};
+  (categories || []).forEach(c => { catMeta[c.id] = c.schedule_type; });
+  const discountOf = (it) => {
+    const list = Math.max(Number(it.original_price) || 0, Number(it.price) || 0);
+    if (!list) return 0;
+    return Math.round((1 - Number(it.deal_price) / list) * 100);
+  };
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <a href="/admin/deals" class="text-sm text-gray-500 hover:text-gray-700 no-underline">
+      <i class="bi bi-chevron-left"></i> 쇼핑특가 목록
+    </a>
+    <h1 class="mt-2 text-2xl font-bold text-gray-900"><%= title %></h1>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <% if (!(categories || []).length) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+      특가 카테고리가 없습니다. 먼저 <a href="/admin/deal-categories/new" class="underline font-semibold">특가 카테고리를 등록</a>하세요.
+    </div>
+  <% } %>
+
+  <form method="POST" action="<%= action %>" class="space-y-6">
+
+    <%# ── 기본 정보 ───────────────────────────── %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">기본 정보</h2>
+      </div>
+      <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">특가 카테고리</label>
+          <select name="deal_category_id" id="dlCategory" required
+                  class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <option value="">선택하세요</option>
+            <% (categories || []).forEach(function (c) { %>
+              <option value="<%= c.id %>" data-schedule="<%= c.schedule_type %>"
+                      <%= Number(deal.deal_category_id) === c.id ? 'selected' : '' %>>
+                <%= c.name %> (<%= c.schedule_type === 'TIME' ? '타임' : '기간' %>)<%= c.is_active ? '' : ' — 사용 꺼짐' %>
+              </option>
+            <% }); %>
+          </select>
+          <p class="mt-1 text-xs text-gray-400" id="dlCatHint"></p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">특가 제목</label>
+          <input type="text" name="title" value="<%= deal.title || '' %>" maxlength="100" required
+                 placeholder="주말 한정 타임특가"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">부제목 <span class="text-xs text-gray-400">(선택)</span></label>
+          <input type="text" name="subtitle" value="<%= deal.subtitle || '' %>" maxlength="200"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+      </div>
+    </div>
+
+    <%# ── 스케줄 ───────────────────────────── %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">스케줄</h2>
+        <p class="mt-0.5 text-xs text-gray-500">기간 · 시간창 · 요일을 <strong>모두 만족</strong>하는 시각에만 특가가 적용됩니다.</p>
+      </div>
+      <div class="p-5 space-y-5">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">시작일시</label>
+            <input type="datetime-local" name="starts_at" value="<%= form.starts_at %>" required
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">종료일시</label>
+            <input type="datetime-local" name="ends_at" value="<%= form.ends_at %>" required
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+        </div>
+
+        <div id="dlTimeBox" class="rounded-lg border border-gray-200 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-800">시간창 <span class="text-xs font-normal text-gray-400">(타임특가)</span></h3>
+            <span id="dlTimeReq" class="hidden text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">필수</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">매일 시작시각</label>
+              <input type="time" name="daily_start_time" id="dlStartTime" value="<%= form.daily_start_time %>"
+                     class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">매일 종료시각</label>
+              <input type="time" name="daily_end_time" id="dlEndTime" value="<%= form.daily_end_time %>"
+                     class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            </div>
+          </div>
+          <p class="mt-2 text-xs text-gray-400">
+            둘 다 비우면 기간 내 <strong>상시</strong> 특가입니다. 한쪽만 채울 수 없습니다.
+            <strong>자정을 넘는 시간창(예: 22:00~02:00)은 지원하지 않습니다</strong> — 종료시각이 시작시각보다 뒤여야 합니다.
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">적용 요일</label>
+          <div class="flex flex-wrap gap-2">
+            <% weekdayList.forEach(function (w) { %>
+              <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 text-sm text-gray-700 cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" name="weekdays" value="<%= w.value %>" class="w-4 h-4 rounded border-gray-300"
+                       <%= form.weekdays.includes(w.value) ? 'checked' : '' %>>
+                <%= w.label %>
+              </label>
+            <% }); %>
+          </div>
+          <p class="mt-1 text-xs text-gray-400">모두 선택 또는 모두 해제 = <strong>매일</strong> 적용.</p>
+        </div>
+
+      </div>
+    </div>
+
+    <%# ── 노출 ───────────────────────────── %>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">노출</h2>
+      </div>
+      <div class="p-5 grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">우선순위</label>
+          <input type="number" name="priority" value="<%= deal.priority || 0 %>"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <p class="mt-1 text-xs text-gray-400">한 상품에 특가가 겹치면 <strong>큰 값이 이깁니다</strong>.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">정렬 순서</label>
+          <input type="number" name="sort_order" value="<%= deal.sort_order || 0 %>"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <p class="mt-1 text-xs text-gray-400">작을수록 앞</p>
+        </div>
+        <div class="flex items-end">
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700 pb-2">
+            <input type="checkbox" name="is_active" value="1" <%= deal.is_active ? 'checked' : '' %>
+                   class="w-4 h-4 rounded border-gray-300">
+            사용
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="/admin/deals" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+      <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <i class="bi bi-save mr-1.5"></i> 저장
+      </button>
+    </div>
+  </form>
+
+  <%# ── 상품 큐레이션 (저장 후에만) ───────────────── %>
+  <% if (isNew) { %>
+    <div class="mt-6 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-600">
+      특가를 먼저 저장하면 대상 상품을 담을 수 있습니다.
+    </div>
+  <% } else { %>
+    <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-gray-800">특가 상품 <span class="text-gray-400 font-normal">(<%= items.length %>개)</span></h2>
+          <p class="mt-0.5 text-xs text-gray-500">
+            여기의 <strong>특가</strong>가 곧 실제 결제 금액입니다. 담은 직후에는 정가로 들어가므로 반드시 특가를 지정하고 저장하세요.
+          </p>
+        </div>
+        <button type="button" id="dlOpenPicker"
+                class="inline-flex items-center gap-1.5 h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 whitespace-nowrap">
+          <i class="bi bi-plus-lg"></i> 상품 추가
+        </button>
+      </div>
+
+      <form method="POST" action="/admin/deals/<%= deal.id %>/items/save">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs font-semibold text-gray-500 bg-gray-50/60">
+                <th class="px-4 py-2.5 w-10">#</th>
+                <th class="px-4 py-2.5">상품</th>
+                <th class="px-4 py-2.5 w-28 text-right">정가</th>
+                <th class="px-4 py-2.5 w-36">특가 (원)</th>
+                <th class="px-4 py-2.5 w-20 text-center">할인율</th>
+                <th class="px-4 py-2.5 w-32">한정 수량</th>
+                <th class="px-4 py-2.5 w-20 text-center">판매</th>
+                <th class="px-4 py-2.5 w-28 text-center">순서 / 제거</th>
+              </tr>
+            </thead>
+            <tbody id="dlItems" class="divide-y divide-gray-100">
+              <% if (!items.length) { %>
+                <tr><td colspan="8" class="px-6 py-12 text-center text-sm text-gray-500">담긴 상품이 없습니다.</td></tr>
+              <% } %>
+              <% items.forEach(function (it, i) { %>
+                <% const listPrice = Math.max(Number(it.original_price) || 0, Number(it.price) || 0);
+                   const noDiscount = Number(it.deal_price) >= Number(it.price); %>
+                <tr data-item-id="<%= it.item_id %>" class="<%= noDiscount ? 'bg-amber-50/60' : '' %>">
+                  <td class="px-4 py-3 text-xs text-gray-400 dl-index"></td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-2.5">
+                      <img src="<%= it.main_image || '/images/no-image.png' %>" alt="" class="w-10 h-10 rounded object-cover bg-gray-100">
+                      <div class="min-w-0">
+                        <div class="text-sm font-medium text-gray-900 truncate max-w-xs"><%= it.name %></div>
+                        <div class="text-xs text-gray-400">#<%= it.product_id %> · 재고 <%= it.stock %> · <%= it.status %></div>
+                      </div>
+                    </div>
+                    <input type="hidden" name="items[<%= i %>][item_id]" value="<%= it.item_id %>">
+                    <input type="hidden" name="items[<%= i %>][sort_order]" value="<%= i + 1 %>" class="dl-sort">
+                  </td>
+                  <td class="px-4 py-3 text-right text-gray-500 whitespace-nowrap"><%= won(it.price) %>원</td>
+                  <td class="px-4 py-3">
+                    <input type="number" name="items[<%= i %>][deal_price]" value="<%= it.deal_price %>"
+                           min="1" max="<%= Math.max(0, Number(it.price) - 1) %>" step="1" required
+                           data-list-price="<%= it.price %>"
+                           class="dl-price w-full px-2 py-1.5 rounded-md border border-gray-200 text-sm text-right">
+                  </td>
+                  <td class="px-4 py-3 text-center">
+                    <span class="dl-rate text-xs font-bold <%= noDiscount ? 'text-amber-600' : 'text-rose-600' %>"><%= discountOf(it) %>%</span>
+                  </td>
+                  <td class="px-4 py-3">
+                    <input type="number" name="items[<%= i %>][qty_limit]" value="<%= it.qty_limit == null ? '' : it.qty_limit %>"
+                           min="1" step="1" placeholder="무제한"
+                           class="w-full px-2 py-1.5 rounded-md border border-gray-200 text-sm text-right">
+                  </td>
+                  <td class="px-4 py-3 text-center text-xs text-gray-500">
+                    <%= it.sold_qty %>
+                    <% if (it.qty_limit != null) { %>
+                      <div class="text-[10px] <%= it.sold_qty >= it.qty_limit ? 'text-red-500 font-bold' : 'text-gray-300' %>">
+                        / <%= it.qty_limit %><%= it.sold_qty >= it.qty_limit ? ' 소진' : '' %>
+                      </div>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center justify-center gap-0.5">
+                      <button type="button" class="dl-up text-gray-400 hover:text-gray-700 px-1" title="위로"><i class="bi bi-arrow-up"></i></button>
+                      <button type="button" class="dl-down text-gray-400 hover:text-gray-700 px-1" title="아래로"><i class="bi bi-arrow-down"></i></button>
+                      <%# 폼 중첩을 피한다 — 이 저장 폼 안에서 formaction 으로 삭제 엔드포인트를 호출 %>
+                      <button type="submit" formaction="/admin/deals/<%= deal.id %>/items/<%= it.item_id %>/delete" formnovalidate
+                              onclick="return confirm('이 상품을 특가에서 제거합니다.');"
+                              class="ml-1 text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">제거</button>
+                    </div>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+
+        <% if (items.length) { %>
+          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+            <p class="text-xs text-gray-400">
+              특가는 <strong>정가보다 싸야</strong> 하고 <strong>1원 이상</strong>이어야 합니다. 한정 수량을 비우면 무제한입니다.
+            </p>
+            <button type="submit" class="inline-flex items-center h-[36px] px-5 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900">
+              <i class="bi bi-save mr-1.5"></i> 상품 저장
+            </button>
+          </div>
+        <% } %>
+      </form>
+    </div>
+
+    <%# ── 상품 조회 팝업 (product-groups 와 동일 UI) ───────── %>
+    <div id="dlPicker" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+      <div class="absolute inset-0 bg-black/40" data-dl-close></div>
+      <div class="relative mx-auto my-8 w-[95%] max-w-4xl bg-white rounded-xl shadow-xl flex flex-col max-h-[85vh]">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 class="text-base font-bold text-gray-800">상품 조회</h3>
+          <button type="button" data-dl-close class="text-gray-400 hover:text-gray-700"><i class="bi bi-x-lg"></i></button>
+        </div>
+
+        <div class="px-5 py-4 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-500 mb-1">검색어</label>
+            <input type="text" id="dlfQ" placeholder="상품명·상품코드" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">카테고리</label>
+            <select id="dlfCategory" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <% (productCategories || []).forEach(function (c) { %><option value="<%= c.id %>"><%= c.name %></option><% }); %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">브랜드</label>
+            <select id="dlfBrand" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <% (brands || []).forEach(function (b) { %><option value="<%= b.id %>"><%= b.name %></option><% }); %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">재고</label>
+            <select id="dlfStock" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <option value="y">재고 있음</option>
+              <option value="n">재고 없음</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">노출</label>
+            <select id="dlfVisibility" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+              <option value="">전체</option>
+              <option value="PUBLIC">노출</option>
+              <option value="HIDDEN">숨김</option>
+              <option value="MEMBER_ONLY">회원전용</option>
+            </select>
+          </div>
+          <div class="col-span-2 sm:col-span-3 lg:col-span-6 flex items-center gap-2">
+            <button type="button" id="dlfSearch" class="h-[34px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900"><i class="bi bi-search mr-1"></i>검색</button>
+            <button type="button" id="dlfReset" class="h-[34px] px-3 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50">초기화</button>
+            <label class="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600">
+              <input type="checkbox" id="dlfAll" class="w-4 h-4"> 결과 전체 선택
+            </label>
+          </div>
+        </div>
+
+        <div id="dlfResults" class="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+          <p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>
+        </div>
+
+        <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+          <span class="text-xs text-gray-500"><span id="dlfCount">0</span>개 선택됨 · 담긴 상품의 특가는 <strong>정가</strong>로 시작합니다</span>
+          <div class="flex gap-2">
+            <button type="button" data-dl-close class="h-[36px] px-4 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50">닫기</button>
+            <button type="button" id="dlfAdd" class="h-[36px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50" disabled>선택 담기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<script>
+(function () {
+  const dealId = <%- JSON.stringify(deal.id) %>;
+  const CAT_SCHEDULE = <%- JSON.stringify(catMeta) %>;
+
+  /* ── 카테고리 schedule_type 에 따른 시간창 필수화 (서버도 동일 규칙을 재검증한다) ── */
+  const catSel = document.getElementById('dlCategory');
+  const timeBox = document.getElementById('dlTimeBox');
+  const timeReq = document.getElementById('dlTimeReq');
+  const startT = document.getElementById('dlStartTime');
+  const endT = document.getElementById('dlEndTime');
+  const catHint = document.getElementById('dlCatHint');
+
+  function syncSchedule() {
+    const type = CAT_SCHEDULE[catSel.value] || '';
+    const isTime = type === 'TIME';
+    startT.required = isTime;
+    endT.required = isTime;
+    timeReq.classList.toggle('hidden', !isTime);
+    timeBox.classList.toggle('border-amber-300', isTime);
+    timeBox.classList.toggle('bg-amber-50/40', isTime);
+    catHint.textContent = !catSel.value ? ''
+      : isTime ? '타임 특가 카테고리입니다. 시간창(시작·종료 시각)이 필수입니다.'
+               : '기간 특가 카테고리입니다. 시간창을 비우면 기간 내내 상시 적용됩니다.';
+  }
+  catSel && catSel.addEventListener('change', syncSchedule);
+  catSel && syncSchedule();
+
+  if (!dealId) return;
+
+  /* ── 특가 입력 → 할인율 즉시 반영 ── */
+  const list = document.getElementById('dlItems');
+  function renumber() {
+    list.querySelectorAll('[data-item-id]').forEach((tr, i) => {
+      tr.querySelector('.dl-index').textContent = i + 1;
+      const s = tr.querySelector('.dl-sort');
+      if (s) s.value = i + 1;
+    });
+  }
+  function updateRate(input) {
+    const tr = input.closest('[data-item-id]');
+    const listPrice = Number(input.dataset.listPrice) || 0;
+    const price = Number(input.value) || 0;
+    const rate = listPrice > 0 ? Math.round((1 - price / listPrice) * 100) : 0;
+    const el = tr.querySelector('.dl-rate');
+    el.textContent = rate + '%';
+    const bad = !price || price >= listPrice;
+    el.classList.toggle('text-amber-600', bad);
+    el.classList.toggle('text-rose-600', !bad);
+    tr.classList.toggle('bg-amber-50/60', bad);
+  }
+  list && list.addEventListener('input', (e) => {
+    if (e.target.classList.contains('dl-price')) updateRate(e.target);
+  });
+
+  /* ── 순서 변경 (즉시 저장) ── */
+  function persistOrder() {
+    const order = [...list.querySelectorAll('[data-item-id]')].map(tr => Number(tr.dataset.itemId));
+    fetch(`/admin/deals/${dealId}/items/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    }).catch(() => {});
+  }
+  list && list.addEventListener('click', (e) => {
+    const tr = e.target.closest('[data-item-id]');
+    if (!tr) return;
+    if (e.target.closest('.dl-up') && tr.previousElementSibling) {
+      tr.parentNode.insertBefore(tr, tr.previousElementSibling);
+    } else if (e.target.closest('.dl-down') && tr.nextElementSibling) {
+      tr.parentNode.insertBefore(tr.nextElementSibling, tr);
+    } else { return; }
+    renumber();
+    persistOrder();
+  });
+  list && renumber();
+
+  /* ── 상품 조회 팝업 ── */
+  const picker = document.getElementById('dlPicker');
+  if (!picker) return;
+
+  const openBtn = document.getElementById('dlOpenPicker');
+  const resultsEl = document.getElementById('dlfResults');
+  const countEl = document.getElementById('dlfCount');
+  const addBtn = document.getElementById('dlfAdd');
+  const allChk = document.getElementById('dlfAll');
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const VIS = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+  const selected = new Set();
+
+  const openPicker = () => { picker.classList.remove('hidden'); document.body.style.overflow = 'hidden'; };
+  const closePicker = () => { picker.classList.add('hidden'); document.body.style.overflow = ''; };
+  openBtn && openBtn.addEventListener('click', openPicker);
+  picker.querySelectorAll('[data-dl-close]').forEach(el => el.addEventListener('click', closePicker));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !picker.classList.contains('hidden')) closePicker(); });
+
+  function updateCount() {
+    countEl.textContent = selected.size;
+    addBtn.disabled = selected.size === 0;
+  }
+
+  function render(products, limited) {
+    selected.clear(); updateCount();
+    if (allChk) allChk.checked = false;
+    if (!products.length) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조건에 맞는 상품이 없습니다.</p>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    if (limited) {
+      const note = document.createElement('p');
+      note.className = 'mb-2 text-xs text-amber-600';
+      note.textContent = '결과가 100개에 도달했습니다. 필터를 더 좁혀 주세요.';
+      frag.appendChild(note);
+    }
+    products.forEach(p => {
+      const row = document.createElement('label');
+      row.className = 'flex items-center gap-3 px-2 py-2 rounded border border-gray-100 hover:bg-gray-50 cursor-pointer';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.className = 'w-4 h-4 flex-shrink-0'; chk.value = String(p.id);
+      chk.addEventListener('change', () => {
+        if (chk.checked) selected.add(p.id); else selected.delete(p.id);
+        updateCount();
+      });
+      const img = document.createElement('img');
+      img.src = p.main_image || '/images/no-image.png';
+      img.className = 'w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0';
+      const info = document.createElement('div');
+      info.className = 'flex-1 min-w-0';
+      const nm = document.createElement('div');
+      nm.className = 'text-sm text-gray-900 truncate';
+      nm.textContent = p.name;              // textContent — 상품명이 마크업으로 해석되지 않도록
+      const meta = document.createElement('div');
+      meta.className = 'text-xs text-gray-400';
+      meta.textContent = `${won(p.price)}원 · 재고 ${p.stock} · ${VIS[p.visibility] || p.visibility}`;
+      info.append(nm, meta);
+      row.append(chk, img, info);
+      frag.appendChild(row);
+    });
+    resultsEl.innerHTML = '';
+    resultsEl.appendChild(frag);
+  }
+
+  async function doSearch() {
+    const params = new URLSearchParams();
+    const q = document.getElementById('dlfQ').value.trim();
+    const cat = document.getElementById('dlfCategory').value;
+    const brand = document.getElementById('dlfBrand').value;
+    const stock = document.getElementById('dlfStock').value;
+    const vis = document.getElementById('dlfVisibility').value;
+    if (q) params.set('q', q);
+    if (cat) params.set('category_id', cat);
+    if (brand) params.set('brand_id', brand);
+    if (stock) params.set('in_stock', stock);
+    if (vis) params.set('visibility', vis);
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조회 중…</p>';
+    try {
+      const res = await fetch(`/admin/deals/${dealId}/product-search?` + params.toString());
+      const data = await res.json();
+      render(data.products || [], data.limited);
+    } catch (e) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-red-500">조회에 실패했습니다.</p>';
+    }
+  }
+  document.getElementById('dlfSearch').addEventListener('click', doSearch);
+  document.getElementById('dlfQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+  document.getElementById('dlfReset').addEventListener('click', () => {
+    ['dlfQ', 'dlfCategory', 'dlfBrand', 'dlfStock', 'dlfVisibility'].forEach(id => { document.getElementById(id).value = ''; });
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>';
+    selected.clear(); updateCount();
+    if (allChk) allChk.checked = false;
+  });
+
+  allChk && allChk.addEventListener('change', () => {
+    resultsEl.querySelectorAll('input[type=checkbox]').forEach(chk => {
+      chk.checked = allChk.checked;
+      const pid = Number(chk.value);
+      if (allChk.checked) selected.add(pid); else selected.delete(pid);
+    });
+    updateCount();
+  });
+
+  addBtn.addEventListener('click', async () => {
+    if (!selected.size) return;
+    addBtn.disabled = true;
+    try {
+      const res = await fetch(`/admin/deals/${dealId}/items/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: [...selected] }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        location.href = `/admin/deals/${dealId}?saved=1`;
+      } else { addBtn.disabled = false; alert('담기에 실패했습니다.'); }
+    } catch (e) { addBtn.disabled = false; alert('담기에 실패했습니다.'); }
+  });
+})();
+</script>

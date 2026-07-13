@@ -17,6 +17,8 @@
  *    이 작업의 범위 밖이다. 상태만 CANCELLED 로 바뀐다.
  */
 
+const dealSvc = require('../deal/dealService');
+
 const PAYMENT_CONFIRMED = new Set(['PAID', 'PREPARING', 'SHIPPED', 'DELIVERED']);
 
 function isCouponRestoreEnabled() {
@@ -60,6 +62,9 @@ async function restoreOrderResources(conn, order) {
         for (const item of items) {
             await conn.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
         }
+
+        // 특가 선착순 수량도 되돌린다. 소진은 결제 확정(PAID) 때만 일어나므로 wasPaid 안에 둔다.
+        await dealSvc.restoreDealQuota(conn, orderId);
     }
 
     /*

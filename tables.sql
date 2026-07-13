@@ -1142,3 +1142,62 @@ CREATE TABLE IF NOT EXISTS exhibition_product (
   CONSTRAINT fk_exh_product_section    FOREIGN KEY (section_id)    REFERENCES exhibition_section (id) ON DELETE CASCADE,
   CONSTRAINT fk_exh_product_product    FOREIGN KEY (product_id)    REFERENCES products (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='기획전 상품 전시 매핑';
+
+-- ============================================================
+-- 쇼핑특가 (docs/사이트개선/shopping_deal_design.md)
+--
+-- 특가는 어떤 테이블에도 가격을 write 하지 않는다. 읽는 시점에 활성 여부를 계산하고
+-- 가격을 덮어쓰는 read-time 리졸버다(services/deal/dealService.js). 스케줄러가 없다.
+-- ============================================================
+
+CREATE TABLE deal_category (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  mall_id       INT NOT NULL DEFAULT 1,
+  code          VARCHAR(40) NOT NULL COMMENT 'TODAY / TIME / SEASON — 관리자 입력',
+  name          VARCHAR(60) NOT NULL,
+  description   VARCHAR(200) NULL,
+  schedule_type ENUM('PERIOD','TIME') NOT NULL DEFAULT 'PERIOD' COMMENT '관리자 폼 UX 용. 활성 판정은 deal 행의 실제 값만 본다',
+  badge_text    VARCHAR(20) NULL,
+  badge_color   VARCHAR(20) NULL,
+  sort_order    INT NOT NULL DEFAULT 0,
+  is_active     TINYINT(1) NOT NULL DEFAULT 1,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_deal_category_code (mall_id, code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='특가 카테고리 (오늘의특가/타임특가/시즌특가…)';
+
+CREATE TABLE deal (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  mall_id          INT NOT NULL DEFAULT 1,
+  deal_category_id INT NOT NULL,
+  title            VARCHAR(100) NOT NULL,
+  subtitle         VARCHAR(200) NULL,
+  starts_at        DATETIME NOT NULL,
+  ends_at          DATETIME NOT NULL,
+  daily_start_time TIME NULL COMMENT '타임특가: 매일 반복 시작 시각. NULL 이면 기간 내 상시',
+  daily_end_time   TIME NULL COMMENT '타임특가: 매일 반복 종료 시각. 자정 넘김 미지원(> start 강제)',
+  weekdays         VARCHAR(20) NULL COMMENT "'1,5,6' (1=월 … 7=일). NULL = 매일",
+  priority         INT NOT NULL DEFAULT 0 COMMENT '동일 상품 중복 특가 시 큰 값이 이긴다',
+  sort_order       INT NOT NULL DEFAULT 0,
+  is_active        TINYINT(1) NOT NULL DEFAULT 1,
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_deal_category FOREIGN KEY (deal_category_id) REFERENCES deal_category (id) ON DELETE RESTRICT,
+  KEY idx_deal_active (mall_id, is_active, starts_at, ends_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='특가 캠페인';
+
+CREATE TABLE deal_item (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  deal_id    INT NOT NULL,
+  product_id INT NOT NULL,
+  deal_price INT NOT NULL COMMENT '특가 판매가(원). 실제 결제 금액에 반영된다',
+  qty_limit  INT NULL COMMENT '선착순 한정 수량. NULL = 무제한',
+  sold_qty   INT NOT NULL DEFAULT 0 COMMENT '결제 확정 트랜잭션에서 원자적으로 증가',
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_deal_item (deal_id, product_id),
+  CONSTRAINT fk_deal_item_deal    FOREIGN KEY (deal_id)    REFERENCES deal (id) ON DELETE CASCADE,
+  CONSTRAINT fk_deal_item_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
+  KEY idx_deal_item_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='특가 대상 상품 + 특가가 + 선착순 수량';

@@ -1,4 +1,5 @@
 const pool = require('../../../config/db');
+const dealSvc = require('../../deal/dealService');
 
 /*
  * 리졸버 공용 쿼리/헬퍼 (CT-0)
@@ -102,6 +103,7 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
             LIMIT ?
         `, [...ids, productLimit]);
         if (products.length === 0) continue; // 빈 최상위 카테고리는 스킵
+        await dealSvc.applyDeals(products); // 카테고리별 베스트 카드도 특가가로 표시
         result.push({ id: root.id, name: root.name, products });
     }
     return result;

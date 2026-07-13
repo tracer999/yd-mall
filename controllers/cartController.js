@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
+const dealSvc = require('../services/deal/dealService');
 
 // 장바구니 조회
 exports.getCart = async (req, res) => {
@@ -18,6 +19,9 @@ exports.getCart = async (req, res) => {
             WHERE c.user_id = ?
             ORDER BY c.created_at DESC
         `, [userId]);
+
+        // 특가를 반영한 뒤 합계를 낸다 — 장바구니 금액이 주문서 금액과 어긋나면 안 된다.
+        await dealSvc.applyDeals(rows, { idKey: 'product_id' });
 
         let totalQuantity = 0;
         let totalAmount = 0;
@@ -181,6 +185,17 @@ exports.checkoutAll = async (req, res) => {
         if (cartRows.length === 0) {
             connection.release();
             return res.redirect('/cart');
+        }
+
+        /*
+         * 이 경로는 재고를 차감하지 않는다(아래 트랜잭션에 products.stock UPDATE 가 없다).
+         * 특가는 선착순 수량을 원자적으로 소진해야 하므로 여기서 처리하면 오버셀이 난다.
+         * 특가 상품이 담겨 있으면 재고·수량을 제대로 잠그는 정규 결제로 보낸다.
+         */
+        const dealMap = await dealSvc.resolveForProducts(cartRows.map((r) => r.product_id), connection);
+        if (dealMap.size > 0) {
+            connection.release();
+            return res.redirect('/checkout?cart=1');
         }
 
         await connection.beginTransaction();

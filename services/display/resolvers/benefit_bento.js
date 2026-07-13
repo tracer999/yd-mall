@@ -1,6 +1,7 @@
 const pool = require('../../../config/db');
 const productGroupService = require('../productGroupService');
 const { P_STATUS, visibilityClause } = require('./_shared');
+const dealSvc = require('../../deal/dealService');
 
 /*
  * benefit_bento — 대형 딜 + 썸네일 그리드 + 프로모 블록 (CT-4)
@@ -20,6 +21,8 @@ async function loadDeal(dealProductId, hasUser) {
         WHERE p.id = ? AND ${P_STATUS} AND ${visibilityClause(hasUser)}
         LIMIT 1
     `, [Number(dealProductId)]);
+    // 대형 딜 슬롯 — 썸네일 쪽은 productGroupService 가 이미 특가를 반영한다.
+    await dealSvc.applyDeals(rows);
     return rows[0] || null;
 }
 

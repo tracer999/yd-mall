@@ -15,7 +15,7 @@ const upload = require('../../middleware/upload');
 const MENU_BANNER_TARGETS = [
     { key: 'BEST', label: '베스트 (/best)' },
     { key: 'NEW', label: '신상품 (/new)' },
-    { key: 'DEAL', label: '오늘특가 (/deal/today)' },
+    { key: 'DEAL', label: '쇼핑특가 (/deals)' },
 ];
 const MENU_KEYS = MENU_BANNER_TARGETS.map(t => t.key);
 exports.MENU_BANNER_TARGETS = MENU_BANNER_TARGETS;

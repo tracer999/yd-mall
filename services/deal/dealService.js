@@ -35,6 +35,11 @@ const ACTIVE_WHERE = `
 /*
  * 한 상품에 활성 특가가 여럿이면 하나만 이긴다: priority 큰 것 → 싼 것 → 먼저 만든 것.
  * ROW_NUMBER() 로 상품당 1행만 남긴다(MySQL 8.4).
+ *
+ * ⚠️ `di.deal_price < dp.price` 가드가 여기 있는 이유:
+ *    관리자 등록 시점에 "특가가 < 정가"를 검증해도, 그 뒤 상품가를 특가보다 낮게 인하하면
+ *    그 검증은 무의미해진다. 가드가 없으면 리졸버가 가격을 **올려서** 덮어, 8000원짜리를
+ *    9000원 "특가"로 결제시킨다. 판정 자체에서 걸러야 표시·결제·quota 가 모두 일관된다.
  */
 const WINNER_SQL = `
     SELECT di.product_id, di.id AS deal_item_id, di.deal_id, di.deal_price,
@@ -49,7 +54,9 @@ const WINNER_SQL = `
       FROM deal_item di
       JOIN deal d ON d.id = di.deal_id
       JOIN deal_category dc ON dc.id = d.deal_category_id
+      JOIN products dp ON dp.id = di.product_id AND dp.mall_id = d.mall_id
      WHERE ${ACTIVE_WHERE} AND dc.is_active = 1
+       AND di.deal_price < dp.price
 `;
 
 /**
@@ -263,6 +270,7 @@ async function getActiveDealsByCategory(mallId = 1, categoryCode = null) {
           WHERE ${ACTIVE_WHERE}
             AND dc.is_active = 1 AND d.mall_id = ?
             AND p.status = 'ON' AND p.visibility = 'PUBLIC'
+            AND di.deal_price < p.price
             ${codeClause}
           ORDER BY dc.sort_order ASC, dc.id ASC, d.sort_order ASC, di.sort_order ASC, di.id ASC`,
         params

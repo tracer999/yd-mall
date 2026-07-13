@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const dealSvc = require('../deal/dealService');
 
 /*
  * 추천 서비스 — 상품을 "왜 너에게 보여주는가" 로 조립한다.
@@ -197,6 +198,9 @@ async function getLanding(mallId, userId) {
             products: trending,
         });
     }
+
+    // 세 섹션 모두 CARD_COLS(정가)로 뽑았다 — 표시 직전에 특가가로 덮는다.
+    for (const s of sections) await dealSvc.applyDeals(s.products);
 
     return { sections, isEmpty: sections.length === 0 };
 }

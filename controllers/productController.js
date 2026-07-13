@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const navigationService = require('../services/menu/navigationService');
 const bannerService = require('../services/display/bannerService');
 const newArrival = require('../services/catalog/newArrival');
+const dealSvc = require('../services/deal/dealService');
 
 /**
  * 폐기된 THEME 카테고리 → 대체 기능 메뉴.
@@ -250,6 +251,8 @@ exports.getList = async (req, res) => {
         params.push(effPerPage, offset);
 
         const [products] = await pool.query(query, params);
+        // 활성 특가를 read-time 으로 덮어쓴다. SELECT 절을 못 건드려서(카운트 쿼리가 문자열 치환) 후처리다.
+        await dealSvc.applyDeals(products);
         // P5 몰 스코프 — 없으면 사이드바에 다른 몰 카테고리·브랜드가 섞인다.
         // 사이드바는 평면 목록이므로 최상위(depth 1)만 올린다. 하위는 카테고리 패널이 담당.
         const [categories] = await pool.query(
@@ -364,6 +367,9 @@ exports.getDetail = async (req, res) => {
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
         product.images = images;
 
+        // 활성 특가 반영 — SEO/JSON-LD 의 offerPrice 도 특가가를 쓰도록 여기서 먼저 덮는다.
+        await dealSvc.applyDeals([product]);
+
         // Get Likes (Check if current user liked)
         let isLiked = false;
         if (req.user) {
@@ -398,6 +404,8 @@ exports.getDetail = async (req, res) => {
 
         // 수동 등록분만 노출
         const recommendedProducts = manualRecs;
+        // 추천 카드도 특가가로 표시한다.
+        await dealSvc.applyDeals(recommendedProducts);
 
         // Shopify 상품 매핑 조회 (테이블 없으면 null 처리)
         let shopifyMapping = null;
@@ -596,6 +604,8 @@ exports.searchPage = async (req, res) => {
                 LIMIT 50
             `, [mallId, like, like, like, like, like, like]);
 
+            // 검색 결과 카드도 특가가로 표시한다.
+            await dealSvc.applyDeals(rows);
             products = rows;
             total = rows.length;
 

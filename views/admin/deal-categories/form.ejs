@@ -1,0 +1,143 @@
+<%
+  /* 특가 카테고리 등록/수정 */
+  const isNew = !category.id;
+  const action = isNew ? '/admin/deal-categories' : `/admin/deal-categories/${category.id}`;
+  const BADGE_CLASS = {
+    rose: 'bg-rose-100 text-rose-700', amber: 'bg-amber-100 text-amber-700',
+    emerald: 'bg-emerald-100 text-emerald-700', sky: 'bg-sky-100 text-sky-700',
+    indigo: 'bg-indigo-100 text-indigo-700', violet: 'bg-violet-100 text-violet-700',
+    slate: 'bg-slate-100 text-slate-700',
+  };
+%>
+
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <a href="/admin/deal-categories" class="text-sm text-gray-500 hover:text-gray-700 no-underline">
+      <i class="bi bi-chevron-left"></i> 특가 카테고리 목록
+    </a>
+    <h1 class="mt-2 text-2xl font-bold text-gray-900"><%= title %></h1>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <% if (!isNew && dealCount > 0) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 flex items-start gap-2">
+      <i class="bi bi-info-circle-fill mt-0.5"></i>
+      <span>이 카테고리를 <strong>특가 <%= dealCount %>건</strong>이 사용 중입니다. 삭제할 수 없으며, "사용"을 끄면 해당 특가가 전부 즉시 중단됩니다.</span>
+    </div>
+  <% } %>
+
+  <form method="POST" action="<%= action %>" class="space-y-6">
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">기본 정보</h2>
+      </div>
+      <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">코드</label>
+          <input type="text" name="code" value="<%= category.code || '' %>" maxlength="40" required
+                 placeholder="TODAY / TIME / SEASON"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono uppercase">
+          <p class="mt-1 text-xs text-gray-400">영문 대문자·숫자·언더스코어만. 소문자·특수문자는 자동 변환됩니다. 스토어프론트 URL(<code>/deals/{코드}</code>)에 쓰입니다.</p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">카테고리명</label>
+          <input type="text" name="name" value="<%= category.name || '' %>" maxlength="60" required
+                 placeholder="오늘의 특가"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">설명 <span class="text-xs text-gray-400">(선택)</span></label>
+          <input type="text" name="description" value="<%= category.description || '' %>" maxlength="200"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">스케줄 유형</label>
+          <div class="space-y-2">
+            <% scheduleTypes.forEach(function (s) { %>
+              <label class="flex items-start gap-2 text-sm text-gray-700">
+                <input type="radio" name="schedule_type" value="<%= s.value %>" class="mt-0.5 w-4 h-4"
+                       <%= (category.schedule_type || 'PERIOD') === s.value ? 'checked' : '' %>>
+                <span>
+                  <strong><%= s.label %></strong>
+                  <span class="block text-xs text-gray-400"><%= s.hint %></span>
+                </span>
+              </label>
+            <% }); %>
+          </div>
+          <p class="mt-2 text-xs text-gray-400">
+            스케줄 유형은 <strong>등록 폼의 힌트</strong>입니다. 실제 적용 여부는 특가 각 행의 기간·시간창·요일 값으로만 판정합니다.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-base font-bold text-gray-800">노출</h2>
+      </div>
+      <div class="p-5 grid grid-cols-1 sm:grid-cols-3 gap-5">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">뱃지 문구 <span class="text-xs text-gray-400">(선택)</span></label>
+          <input type="text" name="badge_text" value="<%= category.badge_text || '' %>" maxlength="20"
+                 placeholder="비우면 카테고리명"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">뱃지 색상</label>
+          <select name="badge_color" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <% badgeColors.forEach(function (c) { %>
+              <option value="<%= c %>" <%= (category.badge_color || 'rose') === c ? 'selected' : '' %>><%= c %></option>
+            <% }); %>
+          </select>
+          <div class="mt-1.5 flex gap-1">
+            <% badgeColors.forEach(function (c) { %>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded <%= BADGE_CLASS[c] %>"><%= c %></span>
+            <% }); %>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">정렬 순서</label>
+          <input type="number" name="sort_order" value="<%= category.sort_order || 0 %>"
+                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <p class="mt-1 text-xs text-gray-400">작을수록 앞</p>
+        </div>
+
+        <div class="sm:col-span-3">
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="is_active" value="1" <%= category.is_active ? 'checked' : '' %>
+                   class="w-4 h-4 rounded border-gray-300">
+            사용 <span class="text-xs text-gray-400">(끄면 이 카테고리의 특가가 전부 즉시 중단됩니다)</span>
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="/admin/deal-categories" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">취소</a>
+      <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <i class="bi bi-save mr-1.5"></i> 저장
+      </button>
+    </div>
+  </form>
+</div>

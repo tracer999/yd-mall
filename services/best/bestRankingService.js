@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const dealSvc = require('../deal/dealService');
 
 /*
  * 베스트/랭킹 엔진
@@ -361,6 +362,8 @@ async function getRanking({ mallId, groupId, period, limit = 100, hasUser = fals
 
     const calculatedAt = autoRows.length ? autoRows[0].calculated_at : null;
     const products = mergePins(autoRows, pinRows).slice(0, cap);
+    // 랭킹은 스냅샷(정가)을 읽는다 — 표시 직전에 활성 특가로 덮는다.
+    await dealSvc.applyDeals(products);
 
     return { products, calculatedAt, isEmpty: products.length === 0 };
 }

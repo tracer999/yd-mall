@@ -1,0 +1,155 @@
+<%
+  /*
+   * 쇼핑특가 — 목록
+   *
+   * 상태 뱃지는 **기간 기준**이다(진행중/예정/종료/비활성). 타임특가의 시간창·요일은 별도 칼럼으로
+   * 보여준다 — 뱃지가 "지금 이 순간 팔리는가"까지 답하려 하면 타임특가가 하루의 대부분을 "종료"로
+   * 표시하게 된다. 뱃지는 캠페인의 생애주기만 말한다.
+   */
+  const _deals = deals || [];
+  const STATUS = {
+    RUNNING:   { label: '진행중', cls: 'bg-emerald-50 text-emerald-700' },
+    SCHEDULED: { label: '예정',   cls: 'bg-sky-50 text-sky-700' },
+    ENDED:     { label: '종료',   cls: 'bg-gray-200 text-gray-600' },
+    INACTIVE:  { label: '비활성', cls: 'bg-gray-100 text-gray-400' },
+  };
+  const WD = ['', '월', '화', '수', '목', '금', '토', '일'];
+  const fmtDt = (v) => {
+    if (!v) return '-';
+    const d = v instanceof Date ? v : new Date(v);
+    if (Number.isNaN(d.getTime())) return '-';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${String(d.getFullYear()).slice(2)}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const fmtTime = (v) => (v ? String(v).slice(0, 5) : null);
+  const fmtWeekdays = (csv) => {
+    const list = String(csv || '').split(',').map(Number).filter(n => n >= 1 && n <= 7);
+    if (!list.length || list.length === 7) return '매일';
+    return list.map(n => WD[n]).join('·');
+  };
+%>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">쇼핑특가 관리</h1>
+      <p class="mt-1 text-sm text-gray-500">
+        특가는 <strong>실제 결제 금액에 반영</strong>됩니다. 기간·시간창·요일 조건을 모두 만족하는 순간부터 자동으로 적용됩니다.
+      </p>
+    </div>
+    <a href="/admin/deals/new"
+       class="inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline">
+      <i class="bi bi-plus-lg mr-1.5"></i> 특가 등록
+    </a>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <%# ── 카테고리 필터 ───────────────────────────── %>
+  <div class="mb-4 flex flex-wrap items-center gap-1.5">
+    <a href="/admin/deals"
+       class="text-xs px-2.5 py-1.5 rounded-md border no-underline <%= !filterCategoryId ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50' %>">전체</a>
+    <% (categories || []).forEach(function (c) { %>
+      <a href="/admin/deals?category_id=<%= c.id %>"
+         class="text-xs px-2.5 py-1.5 rounded-md border no-underline <%= filterCategoryId === c.id ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50' %>">
+        <%= c.name %><% if (!c.is_active) { %> <span class="opacity-60">(OFF)</span><% } %>
+      </a>
+    <% }); %>
+    <a href="/admin/deal-categories" class="ml-auto text-xs text-gray-400 hover:text-gray-700 no-underline">
+      <i class="bi bi-gear"></i> 카테고리 관리
+    </a>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs font-semibold text-gray-500 bg-gray-50/60">
+            <th class="px-4 py-2.5 w-14">ID</th>
+            <th class="px-4 py-2.5 w-24 text-center">상태</th>
+            <th class="px-4 py-2.5 w-32">카테고리</th>
+            <th class="px-4 py-2.5">제목</th>
+            <th class="px-4 py-2.5 w-44">기간</th>
+            <th class="px-4 py-2.5 w-28">시간창</th>
+            <th class="px-4 py-2.5 w-24">요일</th>
+            <th class="px-4 py-2.5 w-24 text-center">상품 / 판매</th>
+            <th class="px-4 py-2.5 w-20 text-center">우선순위</th>
+            <th class="px-4 py-2.5 w-28 text-center">관리</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% if (_deals.length === 0) { %>
+            <tr><td colspan="10" class="px-6 py-16 text-center text-gray-500">등록된 특가가 없습니다.</td></tr>
+          <% } %>
+          <% _deals.forEach(function (d) { %>
+            <% const st = STATUS[d.status] || STATUS.INACTIVE; %>
+            <tr class="<%= d.status === 'RUNNING' ? '' : 'bg-gray-50/40' %>">
+              <td class="px-4 py-3 text-gray-400"><%= d.id %></td>
+              <td class="px-4 py-3 text-center">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded <%= st.cls %>"><%= st.label %></span>
+                <% if (!d.category_active && d.status === 'RUNNING') { %>
+                  <div class="mt-0.5 text-[10px] text-amber-600" title="카테고리의 사용이 꺼져 있어 실제로는 적용되지 않습니다">카테고리 OFF</div>
+                <% } %>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-gray-700"><%= d.category_name %></span>
+                <% if (d.schedule_type === 'TIME') { %>
+                  <span class="ml-1 text-[10px] font-bold px-1 py-0.5 rounded bg-amber-50 text-amber-700">타임</span>
+                <% } %>
+              </td>
+              <td class="px-4 py-3">
+                <a href="/admin/deals/<%= d.id %>" class="font-medium text-gray-900 hover:text-indigo-600"><%= d.title %></a>
+                <% if (d.subtitle) { %>
+                  <div class="text-xs text-gray-400 truncate max-w-xs"><%= d.subtitle %></div>
+                <% } %>
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                <%= fmtDt(d.starts_at) %><br><span class="text-gray-400">~ <%= fmtDt(d.ends_at) %></span>
+              </td>
+              <td class="px-4 py-3 text-xs">
+                <% if (d.daily_start_time) { %>
+                  <span class="font-medium text-amber-700"><%= fmtTime(d.daily_start_time) %> ~ <%= fmtTime(d.daily_end_time) %></span>
+                <% } else { %>
+                  <span class="text-gray-400">상시</span>
+                <% } %>
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-600"><%= fmtWeekdays(d.weekdays) %></td>
+              <td class="px-4 py-3 text-center text-xs">
+                <span class="text-gray-700"><%= d.item_count %>개</span>
+                <% if (Number(d.sold_total) > 0) { %>
+                  <div class="text-[10px] text-gray-400"><%= d.sold_total %> 판매</div>
+                <% } %>
+              </td>
+              <td class="px-4 py-3 text-center text-gray-500"><%= d.priority %></td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-center gap-1.5">
+                  <a href="/admin/deals/<%= d.id %>"
+                     class="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">수정</a>
+                  <form method="POST" action="/admin/deals/<%= d.id %>/delete"
+                        onsubmit="return confirm('특가 &quot;<%= d.title %>&quot; 을(를) 삭제합니다. 담긴 상품 목록도 함께 지워집니다.');">
+                    <button type="submit" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">삭제</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="mt-4 text-xs text-gray-400">
+    상태는 <strong>기간 기준</strong>입니다. 타임특가는 기간 내여도 시간창·요일을 벗어난 시각에는 적용되지 않습니다.
+    상품별 <strong>한정 수량</strong>이 소진되면 그 상품만 특가에서 빠집니다.
+  </p>
+</div>

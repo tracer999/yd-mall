@@ -1,5 +1,6 @@
 const pool = require('../../../config/db');
 const { P_STATUS, visibilityClause, loadHomeCategories } = require('./_shared');
+const dealSvc = require('../../deal/dealService');
 
 /*
  * ranking_tabs — 카테고리 탭 + 랭킹 상품 (CT-3)
@@ -31,7 +32,8 @@ async function loadRanking({ categoryId, hasUser, sort, limit }) {
         ORDER BY ${order}
         LIMIT ?
     `, [categoryId, limit]);
-    return rows;
+    // SSR 첫 탭 — /sections/ranking AJAX 탭과 같은 특가가를 보여야 한다.
+    return await dealSvc.applyDeals(rows);
 }
 
 async function resolve({ shared, config, locals }) {

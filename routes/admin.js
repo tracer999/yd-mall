@@ -50,6 +50,9 @@ router.use('/exhibitions', requireMenuAccess('/admin/exhibitions'), require('./a
 router.use('/events', requireMenuAccess('/admin/events'), require('./admin/events'));
 // 공동구매 — 기간·목표수량·공동구매가가 있는 조건부 판매 캠페인(기획전·이벤트와 분리)
 router.use('/group-buys', requireMenuAccess('/admin/group-buys'), require('./admin/group-buys'));
+// 쇼핑특가 — 기간·시간창·요일·선착순 조건으로 결제 금액에 직접 반영되는 특가
+router.use('/deals', requireMenuAccess('/admin/deals'), require('./admin/deals'));
+router.use('/deal-categories', requireMenuAccess('/admin/deal-categories'), require('./admin/deal-categories'));
 router.use('/users', requireMenuAccess('/admin/users'), require('./admin/users'));
 router.use('/sales', requireMenuAccess('/admin/sales'), require('./admin/sales'));
 router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/shipping'));

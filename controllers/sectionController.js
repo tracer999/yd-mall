@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const dealSvc = require('../services/deal/dealService');
 
 /*
  * 섹션 AJAX 부분 렌더 컨트롤러 (CT-3)
@@ -50,6 +51,9 @@ exports.getRanking = async (req, res) => {
              LIMIT ?`,
             [...params, limit]
         );
+
+        // 탭 전환으로 갈아끼우는 카드도 SSR 첫 탭과 같은 특가가를 보여야 한다.
+        await dealSvc.applyDeals(products);
 
         res.json({ success: true, products });
     } catch (err) {

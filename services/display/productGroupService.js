@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const newArrival = require('../catalog/newArrival');
+const dealSvc = require('../deal/dealService');
 
 /*
  * 상품 그룹 해석 서비스 (P1 렌더 엔진)
@@ -53,7 +54,8 @@ async function resolve(group, { hasUser = false, limit = 8 } = {}) {
        LIMIT ?`,
       [group.id, mallId, lim]
     );
-    return rows;
+    // 이 그룹을 쓰는 모든 섹션(product_grid·carousel·bento)이 특가가를 보게 한다.
+    return await dealSvc.applyDeals(rows);
   }
 
   // condition (화이트리스트 필터만 허용)
@@ -72,7 +74,8 @@ async function resolve(group, { hasUser = false, limit = 8 } = {}) {
     `SELECT p.* FROM products p WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`,
     [...params, lim]
   );
-  return rows;
+  // manual 분기와 동일 — condition 그룹도 특가가로 표시한다.
+  return await dealSvc.applyDeals(rows);
 }
 
 module.exports = { getById, resolve };

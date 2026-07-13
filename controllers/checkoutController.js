@@ -204,6 +204,21 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
          */
         await groupBuySvc.recordParticipation(conn, orderId);
 
+        /*
+         * 특가 선착순 수량 소진 (쇼핑특가 문서 §5.2).
+         *
+         * order_items 에 박힌 deal_item.id 로만 깎는다 — 특가를 여기서 재조회하면,
+         * 주문 생성과 결제 승인 사이에 타임특가 시간창이 닫혔을 때 고객은 특가로
+         * 결제했는데 소진 카운터는 건너뛰게 된다.
+         *
+         * 한도를 넘으면 재고 부족과 동일하게 롤백한다 → 호출부가 결제를 취소한다.
+         */
+        const quotaOk = await dealSvc.consumeDealQuota(conn, orderId);
+        if (!quotaOk) {
+            await conn.rollback();
+            return { ok: false };
+        }
+
         await conn.commit();
         return { ok: true };
     } catch (err) {
@@ -272,7 +287,6 @@ exports.getForm = async (req, res) => {
         rows.forEach((r) => {
             const qty = r.quantity || 1;
             items.push({ ...toScopeItem(r), quantity: qty, image: r.main_image || r.thumbnail_image });
-            totalAmount += r.price * qty;
         });
     } else if (group_buy_id && product_id && quantity) {
         // 공동구매 바로구매 — 단가는 group_buy_product.group_buy_price 로 서버가 확정한다.
@@ -288,8 +302,9 @@ exports.getForm = async (req, res) => {
             price: line.unitPrice,           // 공동구매가가 상품 정가를 이긴다
             quantity: line.quantity,
             image: p ? (p.main_image || p.thumbnail_image) : null,
+            source_type: 'GROUP_BUY',        // 특가 리졸버가 이 라인을 건너뛰게 한다
+            source_id: line.groupBuy.id,
         }];
-        totalAmount = line.unitPrice * line.quantity;
     } else if (product_id && quantity) {
         const pid = parseInt(product_id, 10);
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
@@ -300,10 +315,16 @@ exports.getForm = async (req, res) => {
         if (rows.length === 0) return res.redirect('/products');
         const p = rows[0];
         items = [{ ...toScopeItem(p), quantity: qty, image: p.main_image || p.thumbnail_image }];
-        totalAmount = p.price * qty;
     }
 
     if (items.length === 0) return res.redirect('/products');
+
+    /*
+     * 특가 적용. 주문서에 보이는 금액이 postForm 이 확정할 금액과 같아야 한다.
+     * 공동구매 라인은 source_type 이 이미 있어 건너뛴다.
+     */
+    items = await dealSvc.applyToScopeItems(items);
+    totalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
     const user = req.user || null;
     let pointsBalance = 0;
@@ -514,6 +535,18 @@ exports.postForm = async (req, res) => {
     }
 
     if (items.length === 0) return res.redirect('/products');
+
+    /*
+     * 특가 적용 — 결제 금액이 확정되는 지점이다(설계 §5.1).
+     *
+     * 여기서 덮은 price 가 subtotalAmount → couponableAmount → totalAmount →
+     * order_items.product_price → orders.total_amount → Toss 결제 amount 로 그대로 흘러간다.
+     * 폼이 보낸 금액은 어디서도 쓰지 않는다.
+     *
+     * 부착한 source_id(deal_item.id) 가 order_items 에 저장되고, 결제 확정 트랜잭션은
+     * 특가를 **재조회하지 않고** 그 id 로만 수량을 소진한다(§5.2).
+     */
+    items = await dealSvc.applyToScopeItems(items);
 
     const subtotalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
