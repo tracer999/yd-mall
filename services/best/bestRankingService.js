@@ -285,10 +285,16 @@ const PRODUCT_FIELDS = `
  *   3. pin_rank 가 없는 핀은 맨 앞에 sort_order 순으로 붙인다.
  *   4. 결과를 1..N 으로 다시 번호 매긴다 — 화면의 순위 번호는 항상 연속이어야 한다.
  *      (스냅샷의 rank_no 는 자동 순위일 뿐, 최종 노출 순위가 아니다)
+ *
+ * ⚠️ 순위 변동(▲▼)은 **auto_rank_no** 로 계산해야 한다. 병합 후 rank_no 로 재면
+ *    핀 하나가 끼어드는 순간 아래 상품이 전부 한 칸씩 밀려 **거짓 '하락'** 으로 표시된다.
+ *    실제로는 자동 순위가 그대로인데도. 그래서 자동 순위를 따로 보존한다.
  */
 function mergePins(autoRows, pinRows) {
     const pinnedIds = new Set(pinRows.map(r => r.id));
-    const auto = autoRows.filter(r => !pinnedIds.has(r.id));
+    const auto = autoRows
+        .filter(r => !pinnedIds.has(r.id))
+        .map(r => Object.assign({}, r, { auto_rank_no: r.rank_no }));
 
     const fixed = pinRows.filter(r => r.pin_rank > 0)
         .sort((a, b) => a.pin_rank - b.pin_rank || a.pin_sort - b.pin_sort);

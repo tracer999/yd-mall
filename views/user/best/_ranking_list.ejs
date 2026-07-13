@@ -9,15 +9,19 @@
    *
    * locals: products[], calculatedAt, isEmpty
    *   product.rank_no      최종 노출 순위 (핀 병합 후 1..N 재번호)
+   *   product.auto_rank_no 자동 랭킹에서의 순위 (핀 병합 전). 핀 상품에는 없다
    *   product.is_pinned    관리자 수동 고정(MD 픽)
    *   product.prev_rank_no 직전 산출 순위 (급상승 표시). 신규 진입은 null
    */
   const _products = products || [];
 
+  /* 변동은 auto_rank_no 로 잰다. 노출 순위(rank_no)로 재면 핀이 하나 끼어드는 순간
+     아래 상품이 전부 한 칸 밀려 거짓 '하락'이 뜬다 — 자동 순위는 그대로인데도. */
   function rankDelta(p) {
     if (p.is_pinned) return null;                    // 핀은 순위 변동 개념이 없다
     if (p.prev_rank_no == null) return { type: 'new' };
-    const d = p.prev_rank_no - p.rank_no;
+    const cur = p.auto_rank_no != null ? p.auto_rank_no : p.rank_no;
+    const d = p.prev_rank_no - cur;
     if (d === 0) return { type: 'same' };
     return { type: d > 0 ? 'up' : 'down', value: Math.abs(d) };
   }
