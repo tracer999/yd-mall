@@ -21,9 +21,16 @@ const SHOWCASES = [
     { menuCode: 'NEW_PRODUCT', title: '주목할 신상품', pool: 'new' },
 ];
 
-/** 풀별 후보 상품 — 관리자 피커(productGroupController.POOL_PREDICATES)와 같은 정의를 쓴다. */
+/*
+ * 풀별 후보 상품 — 관리자 피커(productGroupController.POOL_PREDICATES)와 같은 정의를 쓴다.
+ *
+ * 단 시드는 '[테스트]' 상품을 뺀다. 신상품 풀은 판매 시작일 최신순이라 그냥 두면
+ * 상위 8건이 전부 테스트 상품으로 채워진다(운영 DB 공용). 관리자 피커에는 남겨둔다 —
+ * 거기서는 운영자가 보고 고르므로 걸러낼 이유가 없다.
+ */
 async function pickProducts(poolKey, mallId, limit) {
-    const base = `p.mall_id = ? AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND p.visibility = 'PUBLIC'`;
+    const base = `p.mall_id = ? AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
+                  AND p.visibility = 'PUBLIC' AND p.name NOT LIKE '[테스트]%'`;
 
     if (poolKey === 'deal') {
         const [rows] = await pool.query(`
