@@ -32,7 +32,7 @@ exports.getHome = async (req, res) => {
                 brandSvc.getPopular(mallId, 12),
                 brandSvc.getNewBrands(mallId, 6),
                 activeRoot ? brandSvc.getBrandsByRootCategory(mallId, activeRoot, 12) : [],
-                benefitSvc.getWeeklyBenefits(mallId, 6),
+                benefitSvc.getWeeklyBenefits(mallId, 10), // 슬라이더라 6개보다 넉넉히
                 brandSvc.listBrands(mallId, { initial, sort, page }),
                 brandSvc.getInitialCounts(mallId),
                 brandSvc.getLikedBrandIds(req.user?.id)

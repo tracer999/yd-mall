@@ -29,6 +29,8 @@ router.get('/traffic-sources/drill', dashboardController.getTrafficSourceDrill);
 router.get('/popular-products', dashboardController.getPopularProducts);
 
 router.use('/categories', requireMenuAccess('/admin/categories'), require('./admin/categories'));
+// 브랜드 허브(/brands) 운영 — brand_profile 확장 속성 편집 + 집계 재계산
+router.use('/brands', requireMenuAccess('/admin/brands'), require('./admin/brands'));
 // 스토어프론트 GNB 기능 메뉴 ON·OFF·순서 관리 (B2)
 router.use('/feature-menus', requireMenuAccess('/admin/feature-menus'), require('./admin/feature-menus'));
 // 헤더 유틸·우측 레일 등 고정 시스템 메뉴의 노출·표시명·순서 (B4)
@@ -57,6 +59,8 @@ router.use('/outlet', requireMenuAccess('/admin/outlet'), require('./admin/outle
 router.use('/events', requireMenuAccess('/admin/events'), require('./admin/events'));
 // 공동구매 — 기간·목표수량·공동구매가가 있는 조건부 판매 캠페인(기획전·이벤트와 분리)
 router.use('/group-buys', requireMenuAccess('/admin/group-buys'), require('./admin/group-buys'));
+// 쇼핑라이브 — 외부 영상(YouTube/Vimeo) 임베드 + 라이브가 판매. 스트리밍은 우리가 하지 않는다.
+router.use('/lives', requireMenuAccess('/admin/lives'), require('./admin/lives'));
 // 쇼핑특가 — 기간·시간창·요일·선착순 조건으로 결제 금액에 직접 반영되는 특가
 router.use('/deals', requireMenuAccess('/admin/deals'), require('./admin/deals'));
 router.use('/deal-categories', requireMenuAccess('/admin/deal-categories'), require('./admin/deal-categories'));

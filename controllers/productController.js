@@ -96,6 +96,19 @@ exports.getList = async (req, res) => {
     let query = `SELECT * FROM products WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}`;
     const params = [mallId];
 
+    /*
+     * 아울렛 상품 분리 (outlet_setting.show_in_normal_list = 0).
+     *
+     * 몰이 "아울렛 상품은 아울렛에서만 판다"고 정하면 일반 상품 목록·검색에서 뺀다.
+     * 이월·리퍼브가 신상품 옆에 섞여 브랜드 이미지를 깎는 것을 막는 장치다(설계서 §4-3).
+     * 기본값은 1(병행 노출)이라 대부분의 몰에서 이 조건은 붙지 않는다.
+     */
+    const outletSetting = await outletService.getSetting(mallId);
+    if (!outletSetting.show_in_normal_list) {
+        query += ' AND id NOT IN (SELECT product_id FROM outlet_product WHERE mall_id = ?)';
+        params.push(mallId);
+    }
+
     let pageTitle = '전체상품';
     let categoryBanner = null;
     let categoryNav = null;

@@ -352,8 +352,13 @@ navigationService 렌더 조건에 3번째 게이트를 추가한다:
 | 8 | `controllers/admin/outletController.js` | 상품 CRUD + 카테고리 CRUD + 몰 설정 |
 | 9 | `routes/admin/outlet.js` + `routes/admin.js` | `/admin/outlet` |
 | 10 | `views/admin/outlet/{list,edit,categories}.ejs` | GNB 노출 상태 배너 · 사유별 필수항목 동적 폼 |
-| 11 | `services/menu/navigationService.js` | **콘텐츠 게이트** — `CONTENT_GATES` 맵. 다른 메뉴에도 재사용 가능 |
-| 12 | `tables.sql` | 스키마 동기화 |
+| 11 | `services/menu/navigationService.js` | **콘텐츠 게이트** — `CONTENT_GATES` 맵 + 30초 TTL 캐시. 다른 메뉴에도 재사용 가능 |
+| 12 | `controllers/productController.js` | 일반 목록에서 아울렛 상품 제외(`show_in_normal_list = 0` 일 때) |
+| 13 | `tables.sql` | 스키마 동기화 |
+
+**콘텐츠 게이트 캐시** — `menuData` 미들웨어는 모든 페이지에서 돈다. 캐시가 없으면 홈을 포함한
+전 페이지가 매번 `COUNT + JOIN` 을 친다. 30초 TTL 프로세스 캐시를 두고, 관리자가 아울렛 상품·설정을
+바꾸면 `invalidateContentGate(mallId)` 로 즉시 비운다(등록·수정·삭제·설정 저장 4곳).
 
 ### 7-2. 설계 불변식이 코드 어디에 있는가
 
@@ -385,6 +390,10 @@ mall 2 (종합관, 아울렛 42건)
   B등급 + 하자 설명 없음    → 거부 "B·C 등급은 하자 고지 내용이 필수"     ✅
   임박상품 + 유통기한 없음  → 거부 "유통기한을 입력해야 합니다"           ✅
   정상 등록                → 302 성공, DB 반영 확인                    ✅
+
+일반 목록 분리 (show_in_normal_list)
+  0 (아울렛 전용)  → 일반 카테고리 목록에서 아울렛 5개 전부 제외        ✅
+  1 (병행 노출)    → 5개 전부 복귀                                    ✅
 ```
 
 ### 7-4. 운영 메모

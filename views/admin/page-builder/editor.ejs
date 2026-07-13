@@ -60,6 +60,11 @@
           <i class="bi bi-plus-lg mr-1"></i>추가
         </button>
       </div>
+      <%/* 섹션 이름만으로는 '혜택 벤토'·'랭킹 탭'이 무엇인지 알 수 없다.
+           카탈로그는 각 섹션을 실제 데이터로 렌더해 보여주고 거기서 바로 추가하게 한다. */%>
+      <button id="pb-catalog-btn" class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50">
+        <i class="bi bi-grid-3x3-gap mr-1.5"></i>섹션 둘러보기 — 뭐가 있고 어떻게 보이는지
+      </button>
     </div>
 
     <div id="pb-section-list" class="space-y-2">
@@ -90,6 +95,51 @@
       <p class="text-sm text-gray-400 text-center py-8">
         <i class="bi bi-arrow-left-circle mr-1"></i>왼쪽에서 섹션을 선택하면<br>설정이 여기에 표시됩니다.
       </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── 섹션 카탈로그 모달 ── -->
+<div id="pb-catalog" class="hidden fixed inset-0 z-50 bg-black/50 p-4 sm:p-8 overflow-y-auto">
+  <div class="mx-auto max-w-6xl bg-gray-50 rounded-xl shadow-2xl">
+    <div class="sticky top-0 z-10 flex items-center gap-3 px-5 py-4 bg-white border-b border-gray-200 rounded-t-xl">
+      <div class="mr-auto">
+        <h2 class="text-base font-semibold text-gray-900">섹션 둘러보기</h2>
+        <p class="text-xs text-gray-500 mt-0.5">현재 몰의 실제 데이터로 그린 미리보기입니다. 마음에 드는 섹션을 바로 추가하세요.</p>
+      </div>
+      <button id="pb-catalog-close" class="p-2 text-gray-400 hover:text-gray-700 rounded-md hover:bg-gray-100">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 p-5">
+      <% palette.forEach(p => { %>
+        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
+          <div class="flex items-start gap-3 px-4 py-3 border-b border-gray-100">
+            <div class="mr-auto min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-900"><%= p.label %></span>
+                <% if (p.dataSource === 'product_group') { %>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700">상품 그룹 필요</span>
+                <% } else if (p.dataSource === 'banner_group') { %>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">배너 그룹 필요</span>
+                <% } %>
+              </div>
+              <p class="mt-1 text-xs text-gray-500 leading-relaxed"><%= p.description %></p>
+            </div>
+            <button type="button" data-catalog-add="<%= p.type %>"
+              class="shrink-0 inline-flex items-center px-2.5 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-md hover:bg-emerald-700">
+              <i class="bi bi-plus-lg mr-1"></i>추가
+            </button>
+          </div>
+          <%/* 팔레트 18종을 한꺼번에 렌더하면 요청이 18개 나간다. 카탈로그를 연 뒤
+               data-src → src 로 지연 로드한다. */%>
+          <div class="bg-gray-100 h-64 overflow-hidden">
+            <iframe class="pb-catalog-frame w-full h-full bg-white" style="border:0;"
+              data-src="/admin/page-builder/section-preview?type=<%= p.type %>" loading="lazy"></iframe>
+          </div>
+        </div>
+      <% }); %>
     </div>
   </div>
 </div>

@@ -1,0 +1,136 @@
+<%
+  /*
+   * 이번 주 브랜드 혜택 — 슬라이더
+   *
+   * 브랜드 홈 상단(검색 바로 아래)의 첫 콘텐츠 블록. 브랜드당 대표 혜택 1건씩 담긴다.
+   * 기획전/공동구매/쿠폰은 자기 썸네일을, 특가처럼 이미지가 없는 혜택은 브랜드 대표
+   * 상품 이미지를 쓴다(benefitService 가 image 를 채워 보낸다).
+   *
+   * 의존 라이브러리 없이 scroll-snap + 좌우 버튼 + 자동 넘김으로 구현한다.
+   */
+  const items = weeklyBenefits || [];
+  const tone = {
+    EXHIBITION: 'bg-emerald-500',
+    DEAL: 'bg-orange-500',
+    GROUP_BUY: 'bg-blue-500',
+    COUPON: 'bg-red-500'
+  };
+  const dday = (d) => {
+    if (!d) return null;
+    const ms = new Date(d) - new Date();
+    if (ms < 0) return null;
+    const days = Math.ceil(ms / 86400000);
+    return days <= 0 ? '오늘 마감' : (days === 1 ? '내일 마감' : `D-${days}`);
+  };
+%>
+
+<section class="mb-12" data-benefit-slider>
+  <div class="flex items-end justify-between mb-4">
+    <div>
+      <h2 class="text-xl font-bold text-gray-900">이번 주 브랜드 혜택</h2>
+      <p class="mt-1 text-sm text-gray-500">진행 중인 브랜드 기획전·특가·쿠폰·공동구매</p>
+    </div>
+    <div class="hidden sm:flex gap-1.5">
+      <button type="button" data-slider-prev
+              class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
+        <i class="bi bi-chevron-left text-sm"></i>
+      </button>
+      <button type="button" data-slider-next
+              class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
+        <i class="bi bi-chevron-right text-sm"></i>
+      </button>
+    </div>
+  </div>
+
+  <div data-slider-track
+       class="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2
+              [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <% items.forEach(function (it) { const d = dday(it.endAt); %>
+      <a href="<%= it.url %>"
+         class="group snap-start shrink-0 w-[78%] sm:w-[46%] lg:w-[31.5%] rounded-2xl border border-gray-200 overflow-hidden bg-white hover:border-[var(--gh-primary)] hover:shadow-lg transition">
+
+        <div class="relative aspect-[16/9] bg-gray-100 overflow-hidden">
+          <% if (it.image) { %>
+            <img src="<%= it.image %>" alt="<%= it.title %>" loading="lazy"
+                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+          <% } else { %>
+            <div class="w-full h-full flex items-center justify-center text-gray-300">
+              <i class="bi bi-gift text-3xl"></i>
+            </div>
+          <% } %>
+
+          <span class="absolute top-3 left-3 px-2 py-1 rounded text-[11px] font-bold text-white <%= tone[it.kind] || 'bg-gray-900' %>">
+            <%= it.label %>
+          </span>
+          <% if (d) { %>
+            <span class="absolute top-3 right-3 px-2 py-1 rounded bg-black/60 backdrop-blur-sm text-[11px] font-semibold text-white">
+              <%= d %>
+            </span>
+          <% } %>
+        </div>
+
+        <div class="p-4">
+          <div class="flex items-center gap-2">
+            <span class="shrink-0 w-7 h-7 rounded-full bg-gray-50 border border-gray-100 overflow-hidden flex items-center justify-center">
+              <% if (it.brand.logo_image_path) { %>
+                <img src="<%= it.brand.logo_image_path %>" alt="" class="max-w-full max-h-full object-contain p-0.5">
+              <% } else { %>
+                <span class="text-[9px] font-bold text-gray-400"><%= it.brand.name.slice(0, 2) %></span>
+              <% } %>
+            </span>
+            <span class="text-sm font-bold text-gray-900 truncate"><%= it.brand.name %></span>
+            <% if (it.total > 1) { %>
+              <span class="shrink-0 ml-auto text-xs text-gray-400">혜택 <%= it.total %>개</span>
+            <% } %>
+          </div>
+
+          <p class="mt-2.5 text-sm font-semibold text-gray-900 line-clamp-1 group-hover:text-[var(--gh-primary)]">
+            <%= it.title %>
+          </p>
+          <% if (it.summary) { %>
+            <p class="mt-1 text-xs text-gray-500 line-clamp-1"><%= it.summary %></p>
+          <% } %>
+        </div>
+      </a>
+    <% }) %>
+  </div>
+</section>
+
+<script>
+// 혜택 슬라이더 — scroll-snap 기반. 좌우 버튼 + 5초 자동 넘김(hover 시 정지).
+(function () {
+    document.querySelectorAll('[data-benefit-slider]').forEach(function (root) {
+        const track = root.querySelector('[data-slider-track]');
+        const prev = root.querySelector('[data-slider-prev]');
+        const next = root.querySelector('[data-slider-next]');
+        if (!track) return;
+
+        const step = () => {
+            const card = track.querySelector('a');
+            return card ? card.offsetWidth + 16 : track.clientWidth;
+        };
+        const atEnd = () => track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
+
+        const go = (dir) => {
+            if (dir > 0 && atEnd()) track.scrollTo({ left: 0, behavior: 'smooth' });
+            else track.scrollBy({ left: dir * step(), behavior: 'smooth' });
+        };
+
+        if (prev) prev.addEventListener('click', () => go(-1));
+        if (next) next.addEventListener('click', () => go(1));
+
+        // 자동 넘김 — 슬라이드가 화면에 다 들어오면 의미가 없으므로 넘칠 때만 돈다
+        let timer = null;
+        const start = () => {
+            if (timer || track.scrollWidth <= track.clientWidth + 8) return;
+            timer = setInterval(() => go(1), 5000);
+        };
+        const stop = () => { clearInterval(timer); timer = null; };
+
+        root.addEventListener('mouseenter', stop);
+        root.addEventListener('mouseleave', start);
+        track.addEventListener('touchstart', stop, { passive: true });
+        start();
+    });
+})();
+</script>

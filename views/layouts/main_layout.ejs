@@ -425,11 +425,21 @@
     </style>
 </head>
 
+<%
+    /*
+     * bare 모드 — 섹션 단건 미리보기(페이지 빌더 팔레트) 전용.
+     * 헤더·레일·하단바·푸터를 걷어내고 본문만 남긴다. 테마 토큰(--gh-*)과 Tailwind 는
+     * 그대로 타야 "실제로 어떻게 보이는지"가 맞으므로 별도 레이아웃을 만들지 않고 여기서 분기한다.
+     */
+    const _bare = typeof isBare !== 'undefined' && isBare;
+%>
 <body class="flex flex-col min-h-screen yd-card-<%= _cardStyle %>">
 
 
     <!-- Header (partials/storefront/header.ejs) -->
+    <% if (!_bare) { %>
     <%- include('../partials/storefront/header') %>
+    <% } %>
 
     <%
         /*
@@ -460,14 +470,17 @@
     </main>
 
     <!-- Right Utility Rail (전역, CT-7) — @media(min-width:1600px) 에서만 노출되므로 하단 바와 겹치지 않는다 -->
-    <% if (_hasRightUtility) { %>
+    <% if (_hasRightUtility && !_bare) { %>
         <%- include('../partials/storefront/right_utility') %>
     <% } %>
 
     <!-- 모바일 하단 시스템 바 + 카테고리 전체 레이어 (md:hidden) -->
+    <% if (!_bare) { %>
     <%- include('../partials/storefront/mobile_bottom_nav') %>
+    <% } %>
 
     <!-- Footer -->
+    <% if (!_bare) { %>
     <footer class="bg-white border-t border-gray-200 text-gray-600 mt-auto">
 
         <!-- 상단 링크바 -->
@@ -568,8 +581,9 @@
             </div>
         </div>
     </footer>
+    <% } %>
 
-    <% if (kakaoChannelUrl) { %>
+    <% if (kakaoChannelUrl && !_bare) { %>
         <a href="<%= kakaoChannelUrl %>" target="_blank" rel="noopener noreferrer" class="kakao-floating-btn"
             data-kakao-source="floating_btn" data-kakao-label="플로팅 문의 버튼"
             aria-label="카카오톡 채널 채팅 열기" title="카카오톡 채널 채팅">

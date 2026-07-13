@@ -106,23 +106,28 @@ router.get('/deal/today', (req, res) => res.redirect(301, '/deals'));
 // 이벤트가 아니다. 발행된 이벤트가 0건이면 eventController 가 COMING_SOON.event 랜딩으로 되돌린다.
 
 /*
- * 준비 중 메뉴 (쇼핑라이브 / 랭킹 / 아울렛 / 쿠폰 / 멤버십)
+ * 준비중 랜딩 (COMING_SOON)
  *
- * GNB 에 노출하되 모듈이 아직 없다. '#' 죽은 링크 대신 실제 랜딩 페이지를 둔다.
- * 검색엔진에는 색인시키지 않는다(noindex).
+ * 두 가지 용도가 섞여 있다. 구분해서 읽어야 한다.
  *
- * 모듈이 구현되면 이 핸들러를 실제 목록 렌더로 교체하면 되고,
- * 표준 URL 과 feature_menu 설정은 그대로 유지된다.
+ *   1) **모듈이 아예 없는 메뉴** — 멤버십.
+ *      GNB 에 노출하되 '#' 죽은 링크 대신 실제 랜딩을 둔다. 검색엔진에는 색인 안 한다(noindex).
+ *      - MEMBERSHIP : `users` 에 등급 컬럼이 없다(`points_balance` 뿐).
+ *      ⚠️ 라우트를 배포한 **뒤에** `feature_menu.module_ready` 를 1 로 올린다.
+ *         (로컬·서버가 같은 DB 라, 먼저 올리면 GNB 에 404 링크가 뜬다)
  *
- * ⚠️ 라우트를 배포한 **뒤에** `feature_menu.module_ready` 를 1 로 올린다.
- *    (dev·prod 가 같은 DB 라, 먼저 올리면 운영 GNB 에 404 링크가 뜬다)
+ *   2) **모듈은 있는데 콘텐츠가 0건인 메뉴** — 기획전 / 공동구매 / 전문관 / 추천 / 쇼핑특가 / 아울렛 /
+ *      쿠폰 / **쇼핑라이브**. 각 컨트롤러가 0건일 때 이 랜딩으로 폴백한다.
+ *      빈 목록을 보여주지 않기 위한 안전망이다.
+ *      - COUPON : 쿠폰존(routes/coupon.js). 다운로드 쿠폰이 0건이면 폴백.
+ *      - LIVE   : 쇼핑라이브(routes/live.js, 2026-07-13). 발행된 방송이 0건이면 폴백.
+ *                 스트리밍은 우리가 하지 않는다 — YouTube/Vimeo 임베드다.
  *
- * 왜 RANKING·OUTLET·COUPON·MEMBERSHIP 도 실기능이 아니라 랜딩인가:
- *   - OUTLET     : `discount_rate > 0` 인 상품이 **0개**다. 목록을 만들어도 항상 빈다.
- *   - MEMBERSHIP : `users` 에 등급 컬럼이 없다(`points_balance` 뿐).
- *   - COUPON     : `coupons` 는 있으나 고객이 받아가는 '다운로드 쿠폰' 개념·화면이 없다.
- *   - RANKING    : `getList` 의 `sort=best`(조회수) 로 만들 수는 있다. 다만 카테고리별 순위·기간별
- *                  집계가 빠진 반쪽이라, 지금은 랜딩으로 두고 모듈로 제대로 만든다.
+ * 아울렛은 2번이다. 모듈이 있고(services/outlet, /admin/outlet), 상품이 0건이면 폴백한다.
+ * 게다가 navigationService 의 콘텐츠 게이트가 GNB 에서 아예 빼주므로 이 랜딩까지 오는 경로는
+ * 직접 URL 접근뿐이다. (설계: docs/사이트개선/outlet_design_and_development.md §4-5)
+ *
+ * 랭킹은 목록에서 빠졌다 — 베스트가 랭킹 엔진을 흡수해 /ranking 은 /best 로 301 한다.
  */
 const COMING_SOON = {
     exhibition: {
@@ -244,7 +249,10 @@ function comingSoon(key) {
 // '/coupon' 도 routes/coupon.js 가 렌더한다. 다운로드 쿠폰이 0건이면 couponController 가
 // COMING_SOON.coupon 랜딩으로 되돌린다. 여기에 `router.get('/coupon', ...)` 를 남겨두면
 // featureRoutes 가 '/' 에 먼저 마운트되므로 뒤의 app.use('/coupon', ...) 가 영영 닿지 못한다.
-router.get('/live', comingSoon('live'));
+//
+// '/live' 도 이제 routes/live.js 가 렌더한다(2026-07-13). 같은 이유로 여기에 핸들러를 두지 않는다.
+// 발행된 라이브가 0건이면 liveController 가 COMING_SOON.live 랜딩으로 되돌린다 —
+// 그래서 아래 COMING_SOON 의 `live` **정의는 남겨둔다**(폴백에서 재사용).
 
 /*
  * 랭킹 — 베스트에 흡수됐다(2026-07 사용자 결정). GNB 메뉴도 내렸다.

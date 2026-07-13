@@ -37,14 +37,18 @@ function toViewItem(item) {
     };
 }
 
-module.exports = async (req, res, next) => {
-    res.locals.currentPath = req.path;
-
-    // 해석된 몰(P5). mallContext 미들웨어가 없거나 실패한 경우 1 로 폴백.
-    const mallId = req.mallId || MALL_ID;
+/*
+ * 내비게이션을 조립해 res.locals 에 싣는다.
+ *
+ * 미들웨어와 분리한 이유: 관리자 미리보기는 **미들웨어가 다 돈 뒤에** 편집 몰(adminMallId)로
+ * 스코프를 바꾼다. 그때 이미 실려 있는 res.locals 는 기본 몰 기준이라, 종합관을 편집해도
+ * 헤더 GNB 는 건강식품관 것이 나왔다. 컨트롤러가 몰을 확정한 뒤 이 함수를 다시 부르면 맞춰진다.
+ */
+async function applyNavigation(req, res, mallId) {
+    const targetMallId = mallId || req.mallId || MALL_ID;
 
     try {
-        const nav = await navigationService.getNavigation(mallId, {
+        const nav = await navigationService.getNavigation(targetMallId, {
             isLoggedIn: Boolean(req.user),
         });
 
@@ -57,11 +61,9 @@ module.exports = async (req, res, next) => {
 
         // THEME 카테고리 (레거시 하위호환) — 몰 스코프
         const [themeCategories] = await pool.query(
-            "SELECT * FROM categories WHERE type = 'THEME' AND mall_id = ? ORDER BY display_order ASC", [mallId]
+            "SELECT * FROM categories WHERE type = 'THEME' AND mall_id = ? ORDER BY display_order ASC", [targetMallId]
         );
         res.locals.menuCategories = themeCategories;
-
-        next();
     } catch (err) {
         console.error('Menu Middleware Error:', err);
         res.locals.nav = null;
@@ -71,6 +73,13 @@ module.exports = async (req, res, next) => {
         res.locals.headerUtilMenus = [];
         res.locals.categoryTree = [];
         res.locals.menuCategories = [];
-        next();
     }
+}
+
+module.exports = async (req, res, next) => {
+    res.locals.currentPath = req.path;
+    await applyNavigation(req, res, req.mallId || MALL_ID);
+    next();
 };
+
+module.exports.applyNavigation = applyNavigation;

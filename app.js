@@ -258,6 +258,7 @@ async function startServer() {
     const recommendRoutes = require('./routes/recommend');
     const eventRoutes = require('./routes/event');
     const groupBuyRoutes = require('./routes/group-buy');
+const liveRoutes = require('./routes/live');
     const couponRoutes = require('./routes/coupon');
     const sectionRoutes = require('./routes/sections');
     const csRoutes = require('./routes/cs');
@@ -280,6 +281,9 @@ async function startServer() {
     app.use('/event', eventRoutes);
     // 공동구매 표준 URL(/group-buy) — feature_menu.GROUP_BUY.default_path 와 1:1
     app.use('/group-buy', groupBuyRoutes);
+    // 쇼핑라이브 표준 URL(/live) — feature_menu.LIVE.default_path 와 1:1.
+    // 외부 영상(YouTube/Vimeo) 임베드 + 라이브가 판매. 0건이면 준비중 랜딩으로 폴백한다.
+    app.use('/live', liveRoutes);
     // 쿠폰존(/coupon) — 받는 곳. 보유 쿠폰함은 /mypage/coupons 다.
     app.use('/coupon', couponRoutes);
     // 스토어프론트 섹션 AJAX (CT-3 ranking_tabs 등)

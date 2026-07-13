@@ -27,7 +27,7 @@ async function getBrandBenefits(mallId, brandId) {
 /** scope_json.include.brandIds 에 이 브랜드가 있는 활성 쿠폰 */
 async function getBrandCoupons(mallId, brandId) {
     const [rows] = await pool.query(`
-        SELECT id, name, summary, benefit_type, discount_amount, discount_rate,
+        SELECT id, name, summary, thumbnail_url, benefit_type, discount_amount, discount_rate,
                max_discount_amount, min_order_amount, valid_to, issue_method, scope_json
         FROM coupons
         WHERE (mall_id = ? OR mall_id IS NULL)
@@ -98,12 +98,19 @@ async function getBrandGroupBuys(mallId, brandId) {
 }
 
 /**
- * 브랜드 홈 "이번 주 브랜드 혜택" — 혜택을 가진 브랜드를 가로질러 모은다.
- * brand_stat.benefit_count 로 후보를 좁힌 뒤 상세를 채운다.
+ * 브랜드 홈 "이번 주 브랜드 혜택" 슬라이더.
+ *
+ * brand_stat.benefit_count 로 후보 브랜드를 좁힌 뒤 상세를 채운다.
+ * 브랜드당 대표 혜택 1건만 담는다 — 혜택 많은 브랜드 하나가 슬라이더를 독점하면
+ * "여러 브랜드가 행사 중"이라는 정보가 사라진다.
+ *
+ * 슬라이드는 이미지가 필요하다. 기획전·공동구매는 list_thumbnail_url, 쿠폰은
+ * thumbnail_url 을 쓰고, 특가처럼 이미지가 없는 혜택은 그 브랜드의 대표 상품
+ * 이미지로 채운다(brand_stat.rep_product_ids).
  */
-async function getWeeklyBenefits(mallId, limit = 8) {
+async function getWeeklyBenefits(mallId, limit = 10) {
     const [brands] = await pool.query(`
-        SELECT s.category_id, c.name, c.logo_image_path, s.benefit_count
+        SELECT s.category_id, c.name, c.logo_image_path, s.benefit_count, s.rep_product_ids
         FROM brand_stat s
         JOIN categories c ON c.id = s.category_id AND c.is_active = 1
         WHERE s.mall_id = ? AND s.benefit_count > 0
@@ -112,22 +119,54 @@ async function getWeeklyBenefits(mallId, limit = 8) {
     `, [mallId, limit]);
     if (!brands.length) return [];
 
+    // 대표 상품 이미지 (이미지 없는 혜택의 폴백)
+    const repIds = [];
+    for (const b of brands) {
+        const ids = typeof b.rep_product_ids === 'string' ? JSON.parse(b.rep_product_ids) : (b.rep_product_ids || []);
+        b._repIds = Array.isArray(ids) ? ids : [];
+        repIds.push(...b._repIds);
+    }
+    let imgOf = new Map();
+    if (repIds.length) {
+        const [rows] = await pool.query(
+            'SELECT id, main_image, thumbnail_image FROM products WHERE id IN (?)', [repIds]
+        );
+        imgOf = new Map(rows.map(r => [r.id, r.main_image || r.thumbnail_image]));
+    }
+
     const out = [];
     for (const b of brands) {
         const ben = await getBrandBenefits(mallId, b.category_id);
-        // 브랜드당 대표 혜택 1건만 (홈은 훑는 화면이다)
-        const pick = ben.exhibitions[0]
-            ? { kind: 'EXHIBITION', label: '기획전', title: ben.exhibitions[0].title, url: `/exhibition/${ben.exhibitions[0].slug}` }
-            : ben.deals[0]
-            ? { kind: 'DEAL', label: '특가', title: ben.deals[0].title, url: '/deals' }
-            : ben.groupBuys[0]
-            ? { kind: 'GROUP_BUY', label: '공동구매', title: ben.groupBuys[0].title, url: `/group-buy/${ben.groupBuys[0].slug}` }
-            : ben.coupons[0]
-            ? { kind: 'COUPON', label: '쿠폰', title: ben.coupons[0].name, url: `/coupon?brand=${b.category_id}` }
+        const repImage = b._repIds.map(id => imgOf.get(id)).find(Boolean) || null;
+
+        const ex = ben.exhibitions[0], dl = ben.deals[0], gb = ben.groupBuys[0], cp = ben.coupons[0];
+        const pick = ex
+            ? { kind: 'EXHIBITION', label: '기획전', title: ex.title, summary: ex.summary,
+                url: `/exhibition/${ex.slug}`, image: ex.list_thumbnail_url || repImage, endAt: ex.end_at }
+            : dl
+            ? { kind: 'DEAL', label: '특가', title: dl.title, summary: dl.subtitle || `이 브랜드 상품 ${dl.item_count}개 특가`,
+                url: '/deals', image: repImage, endAt: dl.ends_at }
+            : gb
+            ? { kind: 'GROUP_BUY', label: '공동구매', title: gb.title, summary: gb.summary || `${gb.participant_count}명 참여 중`,
+                url: `/group-buy/${gb.slug}`, image: gb.list_thumbnail_url || repImage, endAt: gb.end_at }
+            : cp
+            ? { kind: 'COUPON', label: '쿠폰', title: cp.name, summary: cp.summary || couponLabel(cp),
+                url: `/coupon?brand=${b.category_id}`, image: cp.thumbnail_url || repImage, endAt: cp.valid_to }
             : null;
-        if (pick) out.push({ brand: b, ...pick, total: ben.total });
+
+        if (pick) {
+            const { rep_product_ids, _repIds, ...brandInfo } = b;
+            out.push({ brand: brandInfo, ...pick, total: ben.total });
+        }
     }
     return out;
+}
+
+/** 쿠폰 혜택을 한 줄로 ("3,000원 할인" / "10% 할인") */
+function couponLabel(c) {
+    if (c.benefit_type === 'PERCENT') return `${Number(c.discount_rate || 0)}% 할인`;
+    if (c.benefit_type === 'SHIPPING_FREE') return '무료배송';
+    return `${Number(c.discount_amount || 0).toLocaleString()}원 할인`;
 }
 
 module.exports = {

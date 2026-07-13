@@ -1,0 +1,44 @@
+<%
+  /*
+   * 섹션 단건 미리보기 — 페이지 빌더 팔레트의 iframe 소스.
+   *
+   * 왜 layouts/main_layout(isBare) 을 타는가:
+   *   "이 섹션이 실제로 어떻게 보이는가"를 답하는 화면이다. 별도 레이아웃을 두면
+   *   테마 토큰(--gh-*)·Tailwind·카드 스타일이 스토어프론트와 어긋나 미리보기가 거짓말을 한다.
+   *   그래서 진짜 레이아웃을 쓰되 헤더·푸터만 걷어낸다.
+   *
+   * 섹션이 스킵된 경우(데이터 0건)는 빈 화면 대신 이유를 적는다 —
+   * 운영자가 "고장났다"와 "아직 데이터가 없다"를 구분할 수 있어야 한다.
+   */
+  const _sections = sections || [];
+%>
+
+<% if (_sections.length === 0) { %>
+  <div class="px-4 py-10 text-center">
+    <div class="mx-auto max-w-md rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6">
+      <p class="text-sm font-semibold text-gray-700">지금은 보여줄 데이터가 없습니다</p>
+      <p class="mt-2 text-xs leading-relaxed text-gray-500">
+        <%= emptyReason %>
+      </p>
+      <p class="mt-3 text-[11px] text-gray-400">
+        섹션 자체는 정상입니다. 데이터를 채우면 이 자리에 나타납니다.
+      </p>
+    </div>
+  </div>
+<% } else { %>
+  <% if (isSample) { %>
+    <div class="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-[11px] text-amber-800">
+      예시 데이터로 그린 미리보기입니다. 추가 후 설정에서 실제 내용을 넣으세요.
+    </div>
+  <% } %>
+  <% _sections.forEach(function (section) { %>
+    <% try { %>
+      <%- include('../../' + section.view, section.locals) %>
+    <% } catch (e) { %>
+      <div class="px-4 py-8 text-center text-xs text-red-600">
+        섹션 렌더 실패: <%= section.type %>
+      </div>
+      <% console.error('[section-preview] 렌더 실패:', section.type, e && e.message); %>
+    <% } %>
+  <% }); %>
+<% } %>

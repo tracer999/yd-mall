@@ -254,12 +254,51 @@
     selectSection(id);
   });
 
-  document.getElementById('pb-add-btn').addEventListener('click', function () {
-    var type = document.getElementById('pb-add-type').value;
-    api('/admin/page-builder/sections', { section_type: type })
+  function addSection(type) {
+    return api('/admin/page-builder/sections', { section_type: type })
       .then(function () { location.reload(); })
       .catch(function (e) { alert(e.message); });
+  }
+
+  document.getElementById('pb-add-btn').addEventListener('click', function () {
+    addSection(document.getElementById('pb-add-type').value);
   });
+
+  // ---------- 섹션 카탈로그 ----------
+  var catalogEl = document.getElementById('pb-catalog');
+  var catalogBtn = document.getElementById('pb-catalog-btn');
+  var catalogLoaded = false;
+
+  function openCatalog() {
+    if (!catalogEl) return;
+    catalogEl.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    // iframe 18개를 문서 로드 시점에 다 띄우면 에디터 진입이 느려진다 — 열 때 한 번만 로드.
+    if (!catalogLoaded) {
+      catalogLoaded = true;
+      catalogEl.querySelectorAll('.pb-catalog-frame').forEach(function (f) {
+        f.src = f.getAttribute('data-src');
+      });
+    }
+  }
+  function closeCatalog() {
+    if (!catalogEl) return;
+    catalogEl.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  if (catalogBtn) catalogBtn.addEventListener('click', openCatalog);
+  if (catalogEl) {
+    document.getElementById('pb-catalog-close').addEventListener('click', closeCatalog);
+    catalogEl.addEventListener('click', function (e) {
+      if (e.target === catalogEl) closeCatalog(); // 배경 클릭
+      var add = e.target.closest('[data-catalog-add]');
+      if (add) addSection(add.getAttribute('data-catalog-add'));
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !catalogEl.classList.contains('hidden')) closeCatalog();
+    });
+  }
 
   document.getElementById('pb-publish-btn').addEventListener('click', function () {
     if (!confirm('현재 작업본을 발행하시겠습니까? 스토어프론트에 즉시 반영됩니다.')) return;

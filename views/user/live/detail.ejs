@@ -1,0 +1,464 @@
+<%
+  /*
+   * 쇼핑라이브 상세 (§6-2 · §6-3)
+   *
+   * 모바일 우선. 라이브는 모바일 소비가 압도적이다.
+   *   [영상] → [중요 공지] → [대표 상품] → [탭: 상품·혜택·공지] → [하단 고정 구매바]
+   * PC 는 좌: 영상/소개, 우: sticky 구매 패널.
+   *
+   * ⚠️ 이 몰에는 상품 옵션/SKU 테이블이 없다. 옵션 Bottom Sheet 는 만들지 않는다 — **수량만** 고른다.
+   * ⚠️ 1차는 **바로구매만**이다. `carts` 가 5컬럼이라 라이브가·출처를 실을 수 없다(장바구니는 2차).
+   * ⚠️ 여기 가격은 표시용이다. 결제 금액은 checkoutController 가 live_price 로 다시 계산한다.
+   *
+   * YouTube 임베드는 로고·플레이어 UI 가 남는다. 그걸 없애려 싸우지 않는다 —
+   * 우리 헤더·상품 카드·가격·쿠폰 UI 로 화면을 강하게 감싸는 것이 전략이다(§8-3).
+   */
+  const l = live;
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const fmtDT = (d) => d ? new Date(d).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+  const normal = main ? main.effectiveNormalPrice : 0;
+  const price  = main ? main.effectiveSalePrice : 0;
+  const rate   = main ? main.effectiveDiscountRate : 0;
+
+  // 구매 버튼을 살릴 조건. 하나라도 어긋나면 사유를 보여준다.
+  const buyable = Boolean(main) && l.purchasable && main.purchase_enabled
+                  && !main.soldOut && main.product_status === 'ON';
+
+  const minQty = main ? (Number(main.min_order_quantity) || 1) : 1;
+  const maxQty = main
+    ? Math.max(minQty, Math.min(Number(main.max_order_quantity) || Number(main.stock) || 1, Number(main.stock) || 1))
+    : 1;
+
+  const heroImg = l.pc_hero_image_url || l.list_thumbnail_url || (main && main.main_image);
+
+  // 구매 불가 사유 — 버튼을 죽일 때 이유를 말해준다.
+  let blockedReason = null;
+  if (!main) blockedReason = '판매 상품이 준비 중입니다.';
+  else if (l.status === 'SCHEDULED') blockedReason = '방송 시작 후 구매할 수 있습니다.';
+  else if (l.status === 'ENDED' && !l.purchasable) blockedReason = '방송이 종료되어 구매할 수 없습니다.';
+  else if (main.soldOut || main.product_status !== 'ON') blockedReason = '품절되었습니다.';
+  else if (!main.purchase_enabled || !l.purchase_enabled) blockedReason = '현재 구매할 수 없습니다.';
+%>
+
+<div class="max-w-screen-lg mx-auto px-4 py-6 pb-28 lg:pb-8">
+
+  <%# ── 오류 (구매 검증 실패로 되돌아온 경우) ── %>
+  <% if (lineError) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-600 text-sm">
+      <i class="bi bi-exclamation-circle"></i> <%= lineError %>
+    </div>
+  <% } %>
+
+  <%# ── 헤더 ── %>
+  <div class="flex items-start justify-between gap-4 mb-4">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 mb-1.5">
+        <% if (l.isLive) { %>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-600 text-white">
+            <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> LIVE
+          </span>
+        <% } else if (l.status === 'SCHEDULED') { %>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-600 text-white">방송 예정</span>
+        <% } else { %>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-500 text-white">
+            <%= l.isReplay ? '다시보기' : '방송 종료' %>
+          </span>
+        <% } %>
+        <span class="text-xs text-gray-400"><%= fmtDT(l.start_at) %></span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-extrabold text-gray-900 leading-snug"><%= l.title %></h1>
+      <% if (l.summary) { %>
+        <p class="mt-1 text-sm text-gray-500"><%= l.summary %></p>
+      <% } %>
+    </div>
+    <% if (l.share_enabled) { %>
+      <button type="button" id="liveShare" class="shrink-0 p-2 text-gray-400 hover:text-gray-700" title="공유">
+        <i class="bi bi-share text-lg"></i>
+      </button>
+    <% } %>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <%# ══ 좌: 영상 · 소개 ══ %>
+    <div class="lg:col-span-2 space-y-5">
+
+      <%# ── 영상 ── %>
+      <div class="relative aspect-video w-full bg-black rounded-xl overflow-hidden">
+        <% if (l.playerUrl) { %>
+          <iframe src="<%= l.playerUrl %>" class="w-full h-full" title="<%= l.title %>" loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen></iframe>
+        <% } else { %>
+          <%# 예정이거나 다시보기가 없는 종료 방송 — 이미지로 대체한다 %>
+          <% if (heroImg) { %>
+            <img src="<%= heroImg %>" alt="<%= l.title %>" class="w-full h-full object-cover opacity-70">
+          <% } %>
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/50">
+            <% if (l.status === 'SCHEDULED') { %>
+              <i class="bi bi-alarm text-4xl mb-3"></i>
+              <p class="font-bold text-lg">방송 예정</p>
+              <p class="mt-1 text-sm text-white/70"><%= fmtDT(l.start_at) %></p>
+              <% if (l.startingSoon) { %>
+                <p class="mt-2 text-sm text-purple-300">곧 시작합니다</p>
+              <% } %>
+            <% } else { %>
+              <i class="bi bi-camera-video-off text-4xl mb-3"></i>
+              <p class="font-bold text-lg">방송이 종료되었습니다</p>
+              <p class="mt-1 text-sm text-white/70">다시보기가 준비되지 않았습니다.</p>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+
+      <%# ── 중요 공지 (영상 아래 고정) ── %>
+      <% if (noticeHtml) { %>
+        <div class="px-4 py-3 rounded-lg bg-amber-50 border border-amber-100 text-sm text-amber-900">
+          <div class="prose prose-sm max-w-none"><%- noticeHtml %></div>
+        </div>
+      <% } %>
+      <% pinnedNotices.forEach(function (n) { %>
+        <div class="px-4 py-3 rounded-lg <%= n.notice_level === 'IMPORTANT' ? 'bg-red-50 border-red-100 text-red-900' : 'bg-gray-50 border-gray-100 text-gray-700' %> border text-sm">
+          <p class="font-semibold mb-0.5"><%= n.title %></p>
+          <div class="prose prose-sm max-w-none"><%- n.content %></div>
+        </div>
+      <% }); %>
+
+      <%# ── 탭 ── %>
+      <div>
+        <div class="flex border-b border-gray-200" role="tablist">
+          <% const TABS = [
+               { key: 'products', label: `상품 ${products.length ? '(' + products.length + ')' : ''}` },
+               { key: 'benefits', label: `혜택 ${coupons.length ? '(' + coupons.length + ')' : ''}` },
+               { key: 'notices',  label: `공지 ${notices.length ? '(' + notices.length + ')' : ''}` },
+             ]; %>
+          <% TABS.forEach(function (t, i) { %>
+            <button type="button" role="tab" data-tab="<%= t.key %>"
+                    class="live-tab px-5 py-3 text-sm font-medium border-b-2 -mb-px transition
+                           <%= i === 0 ? 'border-[var(--gh-primary)] text-[var(--gh-primary)]' : 'border-transparent text-gray-500 hover:text-gray-800' %>">
+              <%= t.label %>
+            </button>
+          <% }); %>
+        </div>
+
+        <%# ── 상품 탭 ── %>
+        <div id="tab-products" class="live-panel py-5">
+          <% if (!products.length) { %>
+            <p class="py-10 text-center text-sm text-gray-400">판매 상품이 준비 중입니다.</p>
+          <% } else { %>
+            <div class="space-y-3">
+              <% products.forEach(function (p) { %>
+                <div class="flex items-center gap-3 p-3 rounded-xl border <%= p.role === 'MAIN' ? 'border-[var(--gh-primary)] bg-orange-50/30' : 'border-gray-100' %>">
+                  <a href="/products/<%= p.product_slug || p.product_id %>" class="shrink-0">
+                    <% if (p.main_image) { %>
+                      <img src="<%= p.main_image %>" alt="<%= p.name %>" class="w-20 h-20 object-cover rounded-lg">
+                    <% } else { %>
+                      <div class="w-20 h-20 bg-gray-100 rounded-lg"></div>
+                    <% } %>
+                  </a>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 mb-1">
+                      <% if (p.role === 'MAIN') { %>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)]">대표</span>
+                      <% } %>
+                      <% if (p.badge_text) { %>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700"><%= p.badge_text %></span>
+                      <% } %>
+                    </div>
+                    <a href="/products/<%= p.product_slug || p.product_id %>"
+                       class="block text-sm text-gray-800 line-clamp-2 hover:text-[var(--gh-primary)]"><%= p.name %></a>
+                    <div class="mt-1 flex items-baseline gap-1.5">
+                      <% if (p.effectiveDiscountRate > 0) { %>
+                        <span class="text-sm font-extrabold text-red-600"><%= p.effectiveDiscountRate %>%</span>
+                      <% } %>
+                      <span class="text-base font-extrabold text-gray-900"><%= won(p.effectiveSalePrice) %>원</span>
+                      <% if (p.effectiveDiscountRate > 0) { %>
+                        <span class="text-xs text-gray-400 line-through"><%= won(p.effectiveNormalPrice) %>원</span>
+                      <% } %>
+                    </div>
+                    <% if (p.soldOut) { %>
+                      <p class="mt-0.5 text-xs text-red-500">품절</p>
+                    <% } %>
+                  </div>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+
+        <%# ── 혜택 탭 ── %>
+        <div id="tab-benefits" class="live-panel py-5 hidden">
+          <% if (!coupons.length) { %>
+            <p class="py-10 text-center text-sm text-gray-400">이 방송의 전용 쿠폰이 없습니다.</p>
+          <% } else { %>
+            <div class="space-y-3">
+              <% coupons.forEach(function (c) { %>
+                <div class="flex items-center justify-between gap-3 p-4 rounded-xl border <%= c.is_primary ? 'border-[var(--gh-primary)]' : 'border-gray-100' %>">
+                  <div class="min-w-0">
+                    <div class="flex items-baseline gap-2">
+                      <span class="text-lg font-extrabold text-[var(--gh-primary)]">
+                        <%= c.benefit_type === 'PERCENT' ? c.discount_rate + '%' : won(c.discount_amount) + '원' %>
+                      </span>
+                      <span class="text-sm text-gray-800 truncate"><%= c.name %></span>
+                    </div>
+                    <p class="mt-0.5 text-xs text-gray-400">
+                      <% if (c.min_order_amount) { %><%= won(c.min_order_amount) %>원 이상 · <% } %>
+                      <% if (c.valid_to) { %><%= new Date(c.valid_to).toLocaleDateString('ko-KR') %>까지<% } %>
+                    </p>
+                  </div>
+
+                  <% if (c.downloaded) { %>
+                    <span class="shrink-0 px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-400">받음</span>
+                  <% } else if (c.exhausted) { %>
+                    <span class="shrink-0 px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-400">소진</span>
+                  <% } else if (!c.claimable) { %>
+                    <span class="shrink-0 px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-400">받기 불가</span>
+                  <% } else if (!isLoggedIn) { %>
+                    <a href="/auth/login?redirect=<%= encodeURIComponent('/live/' + l.slug) %>"
+                       class="shrink-0 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] hover:opacity-90">
+                      로그인 후 받기
+                    </a>
+                  <% } else { %>
+                    <%# 다운로드는 기존 쿠폰 엔진(POST /coupon/:id/claim)을 그대로 쓴다 %>
+                    <form action="/coupon/<%= c.id %>/claim" method="POST" class="shrink-0">
+                      <input type="hidden" name="redirect" value="/live/<%= encodeURIComponent(l.slug) %>">
+                      <button type="submit"
+                              class="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] hover:opacity-90">
+                        쿠폰받기
+                      </button>
+                    </form>
+                  <% } %>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+
+        <%# ── 공지 탭 ── %>
+        <div id="tab-notices" class="live-panel py-5 hidden">
+          <% if (!notices.length) { %>
+            <p class="py-10 text-center text-sm text-gray-400">등록된 공지가 없습니다.</p>
+          <% } else { %>
+            <div class="space-y-3">
+              <% notices.forEach(function (n) { %>
+                <div class="p-4 rounded-xl border <%= n.notice_level === 'IMPORTANT' ? 'border-red-100 bg-red-50/50' : 'border-gray-100' %>">
+                  <p class="font-semibold text-sm text-gray-900 mb-1">
+                    <% if (n.notice_level === 'IMPORTANT') { %>
+                      <span class="text-red-600">[중요]</span>
+                    <% } %>
+                    <%= n.title %>
+                  </p>
+                  <div class="prose prose-sm max-w-none text-gray-600"><%- n.content %></div>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
+      <%# ── 방송 소개 ── %>
+      <% if (descriptionHtml) { %>
+        <div class="pt-5 border-t border-gray-100">
+          <h2 class="font-bold text-gray-900 mb-3">방송 소개</h2>
+          <div class="prose prose-sm max-w-none text-gray-700"><%- descriptionHtml %></div>
+        </div>
+      <% } %>
+    </div>
+
+    <%# ══ 우: 구매 패널 (PC sticky) ══ %>
+    <aside class="hidden lg:block">
+      <div class="sticky top-24 space-y-4">
+        <% if (main) { %>
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div class="flex items-center gap-3 mb-4">
+              <% if (main.main_image) { %>
+                <img src="<%= main.main_image %>" alt="<%= main.name %>" class="w-16 h-16 object-cover rounded-lg">
+              <% } %>
+              <div class="min-w-0">
+                <% if (main.badge_text) { %>
+                  <span class="inline-block mb-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700"><%= main.badge_text %></span>
+                <% } %>
+                <p class="text-sm text-gray-800 line-clamp-2"><%= main.name %></p>
+              </div>
+            </div>
+
+            <div class="flex items-baseline gap-2 mb-4 pb-4 border-b border-gray-100">
+              <% if (rate > 0) { %>
+                <span class="text-2xl font-extrabold text-red-600"><%= rate %>%</span>
+              <% } %>
+              <span class="text-2xl font-extrabold text-gray-900"><%= won(price) %>원</span>
+              <% if (rate > 0) { %>
+                <span class="text-sm text-gray-400 line-through"><%= won(normal) %>원</span>
+              <% } %>
+            </div>
+
+            <% panelNotices.forEach(function (n) { %>
+              <p class="mb-3 text-xs text-gray-500"><i class="bi bi-info-circle"></i> <%= n.title %></p>
+            <% }); %>
+
+            <% if (buyable) { %>
+              <form action="/live/<%= encodeURIComponent(l.slug) %>/buy" method="POST" class="space-y-4" data-buy-form>
+                <input type="hidden" name="product_id" value="<%= main.product_id %>">
+
+                <div class="flex items-center justify-between">
+                  <label class="text-sm font-medium text-gray-700">수량</label>
+                  <div class="flex items-center border border-gray-200 rounded-lg">
+                    <button type="button" class="qty-minus px-3 py-2 text-gray-500 hover:text-gray-900">−</button>
+                    <input type="number" name="quantity" value="<%= minQty %>" min="<%= minQty %>" max="<%= maxQty %>"
+                           data-unit-price="<%= price %>"
+                           class="qty-input w-14 border-0 text-center text-sm focus:ring-0">
+                    <button type="button" class="qty-plus px-3 py-2 text-gray-500 hover:text-gray-900">+</button>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                  <span class="text-sm text-gray-500">결제 예상 금액</span>
+                  <span class="qty-total text-xl font-extrabold text-gray-900"><%= won(price * minQty) %>원</span>
+                </div>
+
+                <button type="submit"
+                        class="w-full py-4 rounded-xl bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] font-bold hover:opacity-90 transition">
+                  바로구매
+                </button>
+              </form>
+              <p class="mt-3 text-xs text-gray-400 text-center">
+                재고 <%= won(main.stock) %>개
+                <% if (main.max_order_quantity) { %> · 최대 <%= main.max_order_quantity %>개<% } %>
+              </p>
+            <% } else { %>
+              <button type="button" disabled
+                      class="w-full py-4 rounded-xl bg-gray-200 text-gray-400 font-bold cursor-not-allowed">
+                구매 불가
+              </button>
+              <p class="mt-3 text-xs text-gray-500 text-center"><%= blockedReason %></p>
+            <% } %>
+          </div>
+        <% } else { %>
+          <div class="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+            <p class="text-sm text-gray-400">판매 상품이 준비 중입니다.</p>
+          </div>
+        <% } %>
+
+        <%# ── 다른 라이브 ── %>
+        <% if (related.length) { %>
+          <div class="bg-white rounded-2xl border border-gray-100 p-5">
+            <h3 class="font-bold text-sm text-gray-900 mb-3">다른 방송</h3>
+            <div class="space-y-3">
+              <% related.forEach(function (r) { %>
+                <a href="<%= r.detailPath %>" class="flex items-center gap-3 group">
+                  <div class="w-16 h-10 rounded bg-gray-100 overflow-hidden shrink-0">
+                    <% if (r.list_thumbnail_url) { %>
+                      <img src="<%= r.list_thumbnail_url %>" alt="" class="w-full h-full object-cover">
+                    <% } %>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-xs text-gray-800 line-clamp-1 group-hover:text-[var(--gh-primary)]"><%= r.title %></p>
+                    <p class="text-[11px] <%= r.isLive ? 'text-red-600 font-bold' : 'text-gray-400' %>">
+                      <%= r.isLive ? 'LIVE' : r.statusLabel %>
+                    </p>
+                  </div>
+                </a>
+              <% }); %>
+            </div>
+          </div>
+        <% } %>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<%# ══ 모바일 하단 고정 구매바 ══ %>
+<% if (main) { %>
+  <div class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 px-4 py-3"
+       style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
+    <% if (buyable) { %>
+      <form action="/live/<%= encodeURIComponent(l.slug) %>/buy" method="POST" class="flex items-center gap-3" data-buy-form>
+        <input type="hidden" name="product_id" value="<%= main.product_id %>">
+
+        <div class="flex items-center border border-gray-200 rounded-lg shrink-0">
+          <button type="button" class="qty-minus px-2.5 py-2 text-gray-500">−</button>
+          <input type="number" name="quantity" value="<%= minQty %>" min="<%= minQty %>" max="<%= maxQty %>"
+                 data-unit-price="<%= price %>"
+                 class="qty-input w-10 border-0 text-center text-sm focus:ring-0 px-0">
+          <button type="button" class="qty-plus px-2.5 py-2 text-gray-500">+</button>
+        </div>
+
+        <button type="submit"
+                class="flex-1 py-3.5 rounded-xl bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] font-bold">
+          <span class="qty-total"><%= won(price * minQty) %>원</span> 바로구매
+        </button>
+      </form>
+    <% } else { %>
+      <button type="button" disabled class="w-full py-3.5 rounded-xl bg-gray-200 text-gray-400 font-bold">
+        <%= blockedReason %>
+      </button>
+    <% } %>
+  </div>
+<% } %>
+
+<script>
+(function () {
+  // ── 탭
+  const tabs = document.querySelectorAll('.live-tab');
+  const panels = document.querySelectorAll('.live-panel');
+  const ON = ['border-[var(--gh-primary)]', 'text-[var(--gh-primary)]'];
+  const OFF = ['border-transparent', 'text-gray-500'];
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.remove.apply(t.classList, ON); t.classList.add.apply(t.classList, OFF); });
+      tab.classList.remove.apply(tab.classList, OFF);
+      tab.classList.add.apply(tab.classList, ON);
+      panels.forEach(function (p) { p.classList.add('hidden'); });
+      const panel = document.getElementById('tab-' + tab.dataset.tab);
+      if (panel) panel.classList.remove('hidden');
+    });
+  });
+
+  /*
+   * ── 수량 · 예상 금액
+   * PC 패널과 모바일 고정바에 같은 폼이 둘 있다. 각각 독립으로 동작시킨다
+   * (둘을 동기화하면 한쪽이 화면 밖에 있을 때 사용자가 못 본 값이 제출된다).
+   */
+  const fmt = function (n) { return Number(n || 0).toLocaleString('ko-KR'); };
+
+  document.querySelectorAll('[data-buy-form]').forEach(function (form) {
+    const input = form.querySelector('.qty-input');
+    const total = form.querySelector('.qty-total');
+    if (!input) return;
+
+    const unit = Number(input.dataset.unitPrice) || 0;
+    const min = Number(input.min) || 1;
+    const max = Number(input.max) || min;
+
+    const sync = function () {
+      let v = Number.parseInt(input.value, 10);
+      if (!Number.isFinite(v)) v = min;
+      v = Math.min(Math.max(v, min), max);
+      input.value = v;
+      if (total) total.textContent = fmt(unit * v) + '원';
+    };
+
+    const plus = form.querySelector('.qty-plus');
+    const minus = form.querySelector('.qty-minus');
+    if (plus) plus.addEventListener('click', function () { input.value = Number(input.value) + 1; sync(); });
+    if (minus) minus.addEventListener('click', function () { input.value = Number(input.value) - 1; sync(); });
+    input.addEventListener('change', sync);
+    sync();
+  });
+
+  // ── 공유
+  const share = document.getElementById('liveShare');
+  if (share) {
+    share.addEventListener('click', function () {
+      const url = window.location.href;
+      if (navigator.share) {
+        navigator.share({ title: document.title, url: url }).catch(function () {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(function () { alert('주소를 복사했습니다.'); });
+      }
+    });
+  }
+})();
+</script>

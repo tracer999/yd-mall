@@ -1,0 +1,701 @@
+<%
+  /*
+   * 쇼핑라이브 등록·수정
+   *
+   * 폼이 여럿으로 갈린다 — 저장 버튼도 그만큼이다. <form> 안에 <form> 을 넣을 수 없다.
+   *   1) 기본 정보  → POST /admin/lives/:id/edit          (multipart, 이미지 포함)
+   *   2) 상품·가격  → POST /admin/lives/:id/products
+   *   3) 상품 담기  → POST /admin/lives/:id/products/add   (모달 → hidden form)
+   *   4) 쿠폰       → POST /admin/lives/:id/coupons(/add)
+   *   5) 공지       → POST /admin/lives/:id/notices(/add)
+   *
+   * 신규 등록(isNew)에는 아직 id 가 없으므로 상품·쿠폰·공지 영역을 감춘다.
+   */
+  const l = live;
+  const isNew = !l.id;
+  const action = isNew ? '/admin/lives/add' : `/admin/lives/${l.id}/edit`;
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+
+  const STATUS_CLASS = {
+    ON_AIR: 'bg-red-100 text-red-700',
+    SCHEDULED: 'bg-purple-100 text-purple-700',
+    DRAFT: 'bg-yellow-100 text-yellow-700',
+    ENDED: 'bg-gray-100 text-gray-500',
+    CANCELLED: 'bg-gray-200 text-gray-600',
+  };
+%>
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800"><%= title %></h1>
+            <% if (subtitle) { %><p class="mt-1 text-sm text-gray-500"><%= subtitle %></p><% } %>
+        </div>
+        <a href="/admin/lives" class="text-sm text-gray-500 hover:text-gray-700">← 목록으로</a>
+    </div>
+
+    <% if (saved) { %>
+        <div class="mb-4 px-4 py-3 rounded bg-green-50 text-green-700 text-sm">저장되었습니다.</div>
+    <% } %>
+    <% if (error) { %>
+        <div class="mb-4 px-4 py-3 rounded bg-red-50 text-red-600 text-sm"><%= error %></div>
+    <% } %>
+
+    <%# ── 1) 기본 정보 ──────────────────────────────────── %>
+    <form action="<%= action %>" method="POST" enctype="multipart/form-data">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white rounded-xl shadow p-6 space-y-4">
+                    <h2 class="font-semibold text-gray-700">기본 정보</h2>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">방송명 <span class="text-red-500">*</span></label>
+                        <input type="text" name="title" required maxlength="200" value="<%= l.title || '' %>"
+                               class="w-full border-gray-300 rounded-md shadow-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">슬러그 (URL)</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-400">/live/</span>
+                            <input type="text" name="slug" maxlength="200" value="<%= l.slug || '' %>"
+                                   placeholder="비워두면 방송명에서 자동 생성"
+                                   class="flex-1 border-gray-300 rounded-md shadow-sm">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">한 줄 요약</label>
+                        <input type="text" name="summary" maxlength="500" value="<%= l.summary || '' %>"
+                               placeholder="목록 카드에 노출됩니다"
+                               class="w-full border-gray-300 rounded-md shadow-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">방송 소개</label>
+                        <textarea name="description" rows="8"
+                                  class="w-full border-gray-300 rounded-md shadow-sm text-sm font-mono"><%= l.description || '' %></textarea>
+                        <p class="mt-1 text-xs text-gray-400">HTML 을 쓸 수 있습니다. 저장할 때 위험한 태그는 제거됩니다.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">대표 공지 <span class="text-xs text-gray-400">(영상 아래 고정)</span></label>
+                        <textarea name="notice" rows="4"
+                                  class="w-full border-gray-300 rounded-md shadow-sm text-sm"><%= l.notice || '' %></textarea>
+                        <p class="mt-1 text-xs text-gray-400">배송 안내, 쿠폰 사용 기한 등 방송 중 꼭 보여야 할 내용. 상세 공지는 아래 '공지' 영역에서 여러 건 관리합니다.</p>
+                    </div>
+                </div>
+
+                <%# ── 영상 ── %>
+                <div class="bg-white rounded-xl shadow p-6 space-y-4">
+                    <h2 class="font-semibold text-gray-700">영상</h2>
+                    <div class="px-4 py-3 rounded bg-blue-50 text-blue-800 text-xs">
+                        <strong>iframe 코드를 붙여넣지 마세요.</strong> 영상 <strong>주소(URL)</strong> 또는 <strong>영상 ID</strong> 만 넣습니다.
+                        embed 주소는 서버가 만듭니다. (YouTube: <code>https://youtu.be/xxxxxxxxxxx</code> · Vimeo: <code>https://vimeo.com/123456789</code>)
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">플랫폼</label>
+                            <select name="provider" class="w-full border-gray-300 rounded-md text-sm">
+                                <% providers.forEach(function (p) { %>
+                                    <option value="<%= p.value %>" <%= (l.provider || 'YOUTUBE') === p.value ? 'selected' : '' %>><%= p.label %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">방송 영상 URL 또는 ID</label>
+                            <input type="text" name="video_input" maxlength="500"
+                                   placeholder="<%= l.video_id ? '비워두면 기존 영상 유지' : 'https://youtu.be/... 또는 영상 ID' %>"
+                                   class="w-full border-gray-300 rounded-md shadow-sm text-sm">
+                            <% if (l.video_id) { %>
+                                <div class="mt-1 flex items-center gap-3 text-xs">
+                                    <span class="text-gray-500">현재: <code><%= l.provider %> / <%= l.video_id %></code></span>
+                                    <label class="flex items-center text-gray-500">
+                                        <input type="checkbox" name="video_clear" value="1" class="rounded border-gray-300 mr-1"> 영상 삭제
+                                    </label>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <% if (!isNew && l.playerUrl) { %>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">미리보기</label>
+                            <div class="aspect-video w-full max-w-lg bg-black rounded overflow-hidden">
+                                <iframe src="<%= l.playerUrl %>" class="w-full h-full" title="미리보기"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    <% } %>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">다시보기 플랫폼</label>
+                            <select name="replay_provider" class="w-full border-gray-300 rounded-md text-sm">
+                                <% providers.forEach(function (p) { %>
+                                    <option value="<%= p.value %>" <%= (l.replay_provider || l.provider || 'YOUTUBE') === p.value ? 'selected' : '' %>><%= p.label %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">다시보기 영상 URL 또는 ID</label>
+                            <input type="text" name="replay_input" maxlength="500"
+                                   placeholder="비워두면 방송 영상을 그대로 다시보기로 씁니다"
+                                   class="w-full border-gray-300 rounded-md shadow-sm text-sm">
+                            <% if (l.replay_video_id) { %>
+                                <div class="mt-1 flex items-center gap-3 text-xs">
+                                    <span class="text-gray-500">현재: <code><%= l.replay_provider || l.provider %> / <%= l.replay_video_id %></code></span>
+                                    <label class="flex items-center text-gray-500">
+                                        <input type="checkbox" name="replay_clear" value="1" class="rounded border-gray-300 mr-1"> 삭제
+                                    </label>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow p-6 space-y-4">
+                    <h2 class="font-semibold text-gray-700">이미지</h2>
+                    <p class="text-xs text-gray-400">방송 예정·종료 상태에서 영상 자리에 보여줄 이미지입니다.</p>
+                    <% [
+                        { field: 'ls_list_thumbnail',    column: 'list_thumbnail_url',    label: '목록 카드 썸네일' },
+                        { field: 'ls_pc_hero_image',     column: 'pc_hero_image_url',     label: '상세 PC 대표 이미지' },
+                        { field: 'ls_mobile_hero_image', column: 'mobile_hero_image_url', label: '상세 모바일 대표 이미지' },
+                    ].forEach(function (img) { %>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1"><%= img.label %></label>
+                            <% if (l[img.column]) { %>
+                                <div class="flex items-center gap-3 mb-2">
+                                    <img src="<%= l[img.column] %>" alt="" class="h-16 rounded border border-gray-200">
+                                    <label class="flex items-center text-xs text-gray-500">
+                                        <input type="checkbox" name="<%= img.field %>_clear" value="1" class="rounded border-gray-300 mr-1">
+                                        삭제
+                                    </label>
+                                </div>
+                            <% } %>
+                            <input type="file" name="<%= img.field %>" accept="image/*" class="w-full text-sm text-gray-600">
+                        </div>
+                    <% }); %>
+                </div>
+            </div>
+
+            <%# ── 우측: 방송 상태·정책 ── %>
+            <div class="space-y-6">
+                <div class="bg-white rounded-xl shadow p-6 space-y-4">
+                    <h2 class="font-semibold text-gray-700">방송</h2>
+
+                    <% if (!isNew) { %>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-xs <%= STATUS_CLASS[l.status] %>"><%= l.statusLabel || l.status %></span>
+                            <a href="/live/<%= encodeURIComponent(l.slug) %>" target="_blank" class="text-xs text-blue-600 hover:underline">고객 화면 열기 ↗</a>
+                        </div>
+                    <% } %>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">방송 상태</label>
+                        <select name="status" class="w-full border-gray-300 rounded-md text-sm">
+                            <% statuses.forEach(function (s) { %>
+                                <option value="<%= s.value %>" <%= (l.status || 'DRAFT') === s.value ? 'selected' : '' %>><%= s.label %></option>
+                            <% }); %>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-400">
+                            상태는 <strong>자동으로 바뀌지 않습니다.</strong> 외부 영상을 임베드하는 방식이라
+                            실제 방송 시작·종료를 시스템이 알 수 없습니다. 목록에서 '방송 시작/종료' 버튼으로 바꾸세요.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">방송 시작 <span class="text-red-500">*</span></label>
+                        <input type="datetime-local" name="start_at" required value="<%= l.start_at_input %>"
+                               class="w-full border-gray-300 rounded-md text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">방송 종료 <span class="text-xs text-gray-400">(예정)</span></label>
+                        <input type="datetime-local" name="end_at" value="<%= l.end_at_input %>"
+                               class="w-full border-gray-300 rounded-md text-sm">
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow p-6 space-y-4">
+                    <h2 class="font-semibold text-gray-700">판매 · 노출</h2>
+
+                    <label class="flex items-center text-sm text-gray-700">
+                        <input type="checkbox" name="purchase_enabled" value="1" <%= l.purchase_enabled ? 'checked' : '' %> class="rounded border-gray-300 mr-2">
+                        구매 허용
+                    </label>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">방송 종료 후 구매</label>
+                        <select name="ended_purchase_policy" class="w-full border-gray-300 rounded-md text-sm">
+                            <% endedPurchasePolicies.forEach(function (p) { %>
+                                <option value="<%= p.value %>" <%= (l.ended_purchase_policy || 'DISALLOW') === p.value ? 'selected' : '' %>><%= p.label %></option>
+                            <% }); %>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-400">라이브 특가는 '방송 중'이 조건입니다. 기본은 차단입니다.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">방송 종료 후 접근</label>
+                        <select name="ended_access_policy" class="w-full border-gray-300 rounded-md text-sm">
+                            <% endedAccessPolicies.forEach(function (p) { %>
+                                <option value="<%= p.value %>" <%= (l.ended_access_policy || 'ALLOW') === p.value ? 'selected' : '' %>><%= p.label %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+
+                    <label class="flex items-center text-sm text-gray-700">
+                        <input type="checkbox" name="replay_enabled" value="1" <%= l.replay_enabled ? 'checked' : '' %> class="rounded border-gray-300 mr-2">
+                        다시보기 노출
+                    </label>
+                    <label class="flex items-center text-sm text-gray-700">
+                        <input type="checkbox" name="list_visible" value="1" <%= l.list_visible ? 'checked' : '' %> class="rounded border-gray-300 mr-2">
+                        목록에 노출
+                    </label>
+                    <label class="flex items-center text-sm text-gray-700">
+                        <input type="checkbox" name="search_visible" value="1" <%= l.search_visible ? 'checked' : '' %> class="rounded border-gray-300 mr-2">
+                        검색에 노출
+                    </label>
+                    <label class="flex items-center text-sm text-gray-700">
+                        <input type="checkbox" name="share_enabled" value="1" <%= l.share_enabled ? 'checked' : '' %> class="rounded border-gray-300 mr-2">
+                        공유 버튼 노출
+                    </label>
+                </div>
+
+                <button type="submit" class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                    <%= isNew ? '등록' : '기본 정보 저장' %>
+                </button>
+                <% if (isNew) { %>
+                    <p class="text-xs text-gray-400 text-center">등록하면 상품·쿠폰·공지를 연결할 수 있습니다.</p>
+                <% } %>
+            </div>
+        </div>
+    </form>
+
+    <% if (!isNew) { %>
+        <%# ── 2) 상품 ──────────────────────────────────── %>
+        <div class="mt-8 bg-white rounded-xl shadow p-6">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h2 class="font-semibold text-gray-700">판매 상품</h2>
+                    <p class="mt-1 text-xs text-gray-400">
+                        결제 금액은 여기 적은 <strong>라이브가</strong>로 서버가 다시 계산합니다. 비워두면 상품 원가로 팝니다.
+                        <strong>대표(MAIN)</strong> 상품이 화면 맨 위 구매 카드가 됩니다.<br>
+                        이 몰에는 상품 옵션이 없습니다 — 고객은 <strong>수량만</strong> 고릅니다.
+                    </p>
+                </div>
+                <button type="button" id="openProductSearch"
+                        class="px-4 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800 shrink-0">
+                    <i class="bi bi-plus-lg"></i> 상품 담기
+                </button>
+            </div>
+
+            <% if (!products.length) { %>
+                <div class="py-10 text-center text-gray-400 text-sm">
+                    담긴 상품이 없습니다. 상품을 담아야 고객 화면에 구매 버튼이 생깁니다.
+                </div>
+            <% } else { %>
+                <form action="/admin/lives/<%= l.id %>/products" method="POST">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">상품</th>
+                                    <th class="px-3 py-2 text-left">역할</th>
+                                    <th class="px-3 py-2 text-left">뱃지</th>
+                                    <th class="px-3 py-2 text-right">정상가</th>
+                                    <th class="px-3 py-2 text-right">라이브가</th>
+                                    <th class="px-3 py-2 text-right">할인율</th>
+                                    <th class="px-3 py-2 text-right">최소</th>
+                                    <th class="px-3 py-2 text-right">최대</th>
+                                    <th class="px-3 py-2 text-center">구매</th>
+                                    <th class="px-3 py-2 text-center">노출</th>
+                                    <th class="px-3 py-2 text-center">삭제</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <% products.forEach(function (p, i) { %>
+                                    <tr>
+                                        <td class="px-3 py-2">
+                                            <input type="hidden" name="products[<%= i %>][mapping_id]" value="<%= p.id %>">
+                                            <input type="hidden" name="products[<%= i %>][sort_order]" value="<%= i + 1 %>">
+                                            <div class="flex items-center gap-2">
+                                                <% if (p.main_image) { %>
+                                                    <img src="<%= p.main_image %>" alt="" class="w-10 h-10 object-cover rounded">
+                                                <% } else { %>
+                                                    <div class="w-10 h-10 bg-gray-100 rounded"></div>
+                                                <% } %>
+                                                <div>
+                                                    <div class="text-gray-800"><%= p.name %></div>
+                                                    <div class="text-xs text-gray-400">
+                                                        #<%= p.product_id %> · 재고 <%= won(p.stock) %>
+                                                        <% if (p.product_status !== 'ON') { %>
+                                                            <span class="text-red-500">· <%= p.product_status %> (고객 화면에서 구매 불가)</span>
+                                                        <% } %>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <select name="products[<%= i %>][role]" class="border-gray-300 rounded text-xs w-24">
+                                                <% productRoles.forEach(function (r) { %>
+                                                    <option value="<%= r.value %>" <%= p.role === r.value ? 'selected' : '' %>><%= r.label %></option>
+                                                <% }); %>
+                                            </select>
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <input type="text" name="products[<%= i %>][badge_text]" maxlength="100" value="<%= p.badge_text || '' %>"
+                                                   placeholder="방송 한정 특가" class="w-32 border-gray-300 rounded text-xs">
+                                        </td>
+                                        <td class="px-3 py-2 text-right">
+                                            <input type="number" name="products[<%= i %>][normal_price]" min="0" value="<%= p.normal_price || '' %>"
+                                                   placeholder="<%= won(p.product_price) %>"
+                                                   class="w-28 border-gray-300 rounded text-sm text-right">
+                                        </td>
+                                        <td class="px-3 py-2 text-right">
+                                            <input type="number" name="products[<%= i %>][live_price]" min="1" value="<%= p.live_price || '' %>"
+                                                   placeholder="원가로 판매"
+                                                   class="w-28 border-gray-300 rounded text-sm text-right font-semibold">
+                                        </td>
+                                        <td class="px-3 py-2 text-right text-gray-600"><%= p.discount_rate || 0 %>%</td>
+                                        <td class="px-3 py-2 text-right">
+                                            <input type="number" name="products[<%= i %>][min_order_quantity]" min="1" value="<%= p.min_order_quantity %>"
+                                                   class="w-16 border-gray-300 rounded text-sm text-right">
+                                        </td>
+                                        <td class="px-3 py-2 text-right">
+                                            <input type="number" name="products[<%= i %>][max_order_quantity]" min="1" value="<%= p.max_order_quantity || '' %>"
+                                                   placeholder="재고까지" class="w-20 border-gray-300 rounded text-sm text-right">
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <input type="checkbox" name="products[<%= i %>][purchase_enabled]" value="1" <%= p.purchase_enabled ? 'checked' : '' %> class="rounded border-gray-300">
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <input type="checkbox" name="products[<%= i %>][visible]" value="1" <%= p.visible ? 'checked' : '' %> class="rounded border-gray-300">
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <button type="button" class="text-red-500 hover:text-red-700 text-xs remove-product"
+                                                    data-mapping-id="<%= p.id %>">삭제</button>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">상품 설정 저장</button>
+                    </div>
+                </form>
+            <% } %>
+        </div>
+
+        <%# 표 안의 <form> 중첩을 피해 밖에 둔다 %>
+        <form id="removeProductForm" method="POST" class="hidden"></form>
+        <form id="removeCouponForm" method="POST" class="hidden"></form>
+        <form id="removeNoticeForm" method="POST" class="hidden"></form>
+
+        <%# ── 4) 쿠폰 ──────────────────────────────────── %>
+        <div class="mt-8 bg-white rounded-xl shadow p-6">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h2 class="font-semibold text-gray-700">연결 쿠폰</h2>
+                    <p class="mt-1 text-xs text-gray-400">
+                        라이브는 쿠폰을 <strong>만들지 않습니다. 연결만 합니다.</strong>
+                        쿠폰은 <a href="/admin/coupons" class="text-blue-600 hover:underline">쿠폰 관리</a>에서 만드세요
+                        (고객이 받아가려면 발급방식이 <strong>다운로드</strong>여야 합니다).
+                    </p>
+                </div>
+            </div>
+
+            <form action="/admin/lives/<%= l.id %>/coupons/add" method="POST" class="flex gap-2 mb-4">
+                <select name="coupon_id" class="flex-1 border-gray-300 rounded-md text-sm">
+                    <option value="">연결할 쿠폰 선택…</option>
+                    <% availableCoupons.forEach(function (c) { %>
+                        <option value="<%= c.id %>">
+                            [<%= c.issue_method %>] <%= c.name %>
+                            <%= c.benefit_type === 'PERCENT' ? `(${c.discount_rate}%)` : (c.discount_amount ? `(${won(c.discount_amount)}원)` : '') %>
+                            <%= c.status !== 'ACTIVE' ? ' · ' + c.status : '' %>
+                        </option>
+                    <% }); %>
+                </select>
+                <button type="submit" class="px-4 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800">연결</button>
+            </form>
+
+            <% if (!coupons.length) { %>
+                <div class="py-8 text-center text-gray-400 text-sm">연결된 쿠폰이 없습니다.</div>
+            <% } else { %>
+                <form action="/admin/lives/<%= l.id %>/coupons" method="POST">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th class="px-3 py-2 text-center">대표</th>
+                                    <th class="px-3 py-2 text-left">쿠폰</th>
+                                    <th class="px-3 py-2 text-left">발급방식</th>
+                                    <th class="px-3 py-2 text-right">발급/한도</th>
+                                    <th class="px-3 py-2 text-left">상태</th>
+                                    <th class="px-3 py-2 text-center">노출</th>
+                                    <th class="px-3 py-2 text-center">해제</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <% coupons.forEach(function (c, i) { %>
+                                    <tr>
+                                        <td class="px-3 py-2 text-center">
+                                            <input type="hidden" name="coupons[<%= i %>][mapping_id]" value="<%= c.mapping_id %>">
+                                            <input type="hidden" name="coupons[<%= i %>][sort_order]" value="<%= i + 1 %>">
+                                            <input type="radio" name="primary_mapping_id" value="<%= c.mapping_id %>" <%= c.is_primary ? 'checked' : '' %> class="border-gray-300">
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <div class="text-gray-800"><%= c.name %></div>
+                                            <div class="text-xs text-gray-400">
+                                                #<%= c.id %>
+                                                <%= c.benefit_type === 'PERCENT' ? `${c.discount_rate}% 할인` : (c.discount_amount ? `${won(c.discount_amount)}원 할인` : c.benefit_type) %>
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <% if (c.issue_method === 'DOWNLOAD') { %>
+                                                <span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">다운로드</span>
+                                            <% } else { %>
+                                                <span class="px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-700" title="고객이 라이브 화면에서 받을 수 없습니다"><%= c.issue_method %></span>
+                                            <% } %>
+                                        </td>
+                                        <td class="px-3 py-2 text-right text-gray-600 text-xs">
+                                            <%= won(c.issued_count) %><%= c.issue_limit ? ' / ' + won(c.issue_limit) : '' %>
+                                        </td>
+                                        <td class="px-3 py-2 text-xs <%= c.status === 'ACTIVE' ? 'text-gray-600' : 'text-red-500' %>"><%= c.status %></td>
+                                        <td class="px-3 py-2 text-center">
+                                            <input type="checkbox" name="coupons[<%= i %>][is_active]" value="1" <%= c.is_active ? 'checked' : '' %> class="rounded border-gray-300">
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <button type="button" class="text-red-500 hover:text-red-700 text-xs remove-coupon"
+                                                    data-mapping-id="<%= c.mapping_id %>">해제</button>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">쿠폰 설정 저장</button>
+                    </div>
+                </form>
+                <p class="mt-2 text-xs text-gray-400">
+                    발급방식이 <strong>다운로드</strong>가 아닌 쿠폰은 화면에 표시되지만 '받기' 버튼이 나오지 않습니다.
+                </p>
+            <% } %>
+        </div>
+
+        <%# ── 5) 공지 ──────────────────────────────────── %>
+        <div class="mt-8 bg-white rounded-xl shadow p-6">
+            <div class="mb-4">
+                <h2 class="font-semibold text-gray-700">공지</h2>
+                <p class="mt-1 text-xs text-gray-400">
+                    실시간 채팅이 없으므로 <strong>공지가 유일한 방송 중 커뮤니케이션 수단</strong>입니다.
+                    배송·쿠폰 사용기한·사은품 조건을 여기에 적으세요.
+                </p>
+            </div>
+
+            <form action="/admin/lives/<%= l.id %>/notices/add" method="POST" class="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">제목 <span class="text-red-500">*</span></label>
+                        <input type="text" name="title" required maxlength="200" placeholder="예: 방송 중 주문 시 무료배송"
+                               class="w-full border-gray-300 rounded-md text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">중요도</label>
+                        <select name="notice_level" class="w-full border-gray-300 rounded-md text-sm">
+                            <% noticeLevels.forEach(function (n) { %>
+                                <option value="<%= n.value %>"><%= n.label %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">노출 위치</label>
+                        <select name="display_location" class="w-full border-gray-300 rounded-md text-sm">
+                            <% noticeLocations.forEach(function (n) { %>
+                                <option value="<%= n.value %>"><%= n.label %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">내용 <span class="text-red-500">*</span></label>
+                    <textarea name="content" rows="3" required class="w-full border-gray-300 rounded-md text-sm"></textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-4 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800">
+                        <i class="bi bi-plus-lg"></i> 공지 추가
+                    </button>
+                </div>
+            </form>
+
+            <% if (!notices.length) { %>
+                <div class="py-8 text-center text-gray-400 text-sm">등록된 공지가 없습니다.</div>
+            <% } else { %>
+                <form action="/admin/lives/<%= l.id %>/notices" method="POST" class="space-y-3">
+                    <% notices.forEach(function (n, i) { %>
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <input type="hidden" name="notices[<%= i %>][notice_id]" value="<%= n.id %>">
+                            <input type="hidden" name="notices[<%= i %>][sort_order]" value="<%= i + 1 %>">
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-3">
+                                <div class="sm:col-span-2">
+                                    <input type="text" name="notices[<%= i %>][title]" maxlength="200" value="<%= n.title %>"
+                                           class="w-full border-gray-300 rounded-md text-sm font-medium">
+                                </div>
+                                <div>
+                                    <select name="notices[<%= i %>][notice_level]" class="w-full border-gray-300 rounded-md text-sm">
+                                        <% noticeLevels.forEach(function (lv) { %>
+                                            <option value="<%= lv.value %>" <%= n.notice_level === lv.value ? 'selected' : '' %>><%= lv.label %></option>
+                                        <% }); %>
+                                    </select>
+                                </div>
+                                <div>
+                                    <select name="notices[<%= i %>][display_location]" class="w-full border-gray-300 rounded-md text-sm">
+                                        <% noticeLocations.forEach(function (lo) { %>
+                                            <option value="<%= lo.value %>" <%= n.display_location === lo.value ? 'selected' : '' %>><%= lo.label %></option>
+                                        <% }); %>
+                                    </select>
+                                </div>
+                            </div>
+                            <textarea name="notices[<%= i %>][content]" rows="2" class="w-full border-gray-300 rounded-md text-sm mb-3"><%= n.content %></textarea>
+                            <div class="flex flex-wrap items-center gap-4 text-xs">
+                                <label class="flex items-center text-gray-600">
+                                    <span class="mr-2">노출 시작</span>
+                                    <input type="datetime-local" name="notices[<%= i %>][visible_start_at]" value="<%= n.visible_start_at_input %>"
+                                           class="border-gray-300 rounded text-xs">
+                                </label>
+                                <label class="flex items-center text-gray-600">
+                                    <span class="mr-2">종료</span>
+                                    <input type="datetime-local" name="notices[<%= i %>][visible_end_at]" value="<%= n.visible_end_at_input %>"
+                                           class="border-gray-300 rounded text-xs">
+                                </label>
+                                <label class="flex items-center text-gray-600">
+                                    <input type="checkbox" name="notices[<%= i %>][is_active]" value="1" <%= n.is_active ? 'checked' : '' %> class="rounded border-gray-300 mr-1">
+                                    사용
+                                </label>
+                                <button type="button" class="ml-auto text-red-500 hover:text-red-700 remove-notice"
+                                        data-notice-id="<%= n.id %>">삭제</button>
+                            </div>
+                        </div>
+                    <% }); %>
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">공지 저장</button>
+                    </div>
+                </form>
+            <% } %>
+        </div>
+
+        <%# ── 상품 검색 모달 ─────────────────────────────── %>
+        <div id="productSearchModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                    <h3 class="font-semibold text-gray-800">상품 담기</h3>
+                    <button type="button" id="closeProductSearch" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+                </div>
+                <div class="px-6 py-4 border-b border-gray-100">
+                    <input type="text" id="productSearchInput" placeholder="상품명으로 검색"
+                           class="w-full border-gray-300 rounded-md shadow-sm text-sm">
+                </div>
+                <div id="productSearchResults" class="flex-1 overflow-y-auto px-6 py-2">
+                    <p class="py-10 text-center text-gray-400 text-sm">상품명을 입력하세요.</p>
+                </div>
+            </div>
+        </div>
+
+        <form id="addProductForm" action="/admin/lives/<%= l.id %>/products/add" method="POST" class="hidden">
+            <input type="hidden" name="product_id" id="addProductId">
+        </form>
+
+        <script>
+        (function () {
+            const LIVE_ID = <%= l.id %>;
+
+            // ── 표 안에 <form> 을 중첩할 수 없어 action 을 갈아끼운다
+            const bindRemove = function (selector, formId, dataKey, path, message) {
+                const form = document.getElementById(formId);
+                document.querySelectorAll(selector).forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        if (!confirm(message)) return;
+                        form.action = '/admin/lives/' + LIVE_ID + '/' + path + '/' + btn.dataset[dataKey] + '/delete';
+                        form.submit();
+                    });
+                });
+            };
+            bindRemove('.remove-product', 'removeProductForm', 'mappingId', 'products', '이 상품을 라이브에서 제외할까요?');
+            bindRemove('.remove-coupon', 'removeCouponForm', 'mappingId', 'coupons', '이 쿠폰 연결을 해제할까요? (쿠폰 자체는 지워지지 않습니다)');
+            bindRemove('.remove-notice', 'removeNoticeForm', 'noticeId', 'notices', '이 공지를 삭제할까요?');
+
+            // ── 상품 검색 모달
+            const modal = document.getElementById('productSearchModal');
+            const input = document.getElementById('productSearchInput');
+            const results = document.getElementById('productSearchResults');
+            const addForm = document.getElementById('addProductForm');
+            const addProductId = document.getElementById('addProductId');
+
+            const openModal = function () {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                input.focus();
+            };
+            const closeModal = function () {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+
+            document.getElementById('openProductSearch').addEventListener('click', openModal);
+            document.getElementById('closeProductSearch').addEventListener('click', closeModal);
+            modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+
+            const escapeHtml = function (s) {
+                const div = document.createElement('div');
+                div.textContent = s == null ? '' : String(s);
+                return div.innerHTML;
+            };
+
+            let timer = null;
+            input.addEventListener('input', function () {
+                clearTimeout(timer);
+                const q = input.value.trim();
+                if (!q) {
+                    results.innerHTML = '<p class="py-10 text-center text-gray-400 text-sm">상품명을 입력하세요.</p>';
+                    return;
+                }
+                timer = setTimeout(function () {
+                    fetch('/admin/lives/product-search?q=' + encodeURIComponent(q))
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            const list = data.products || [];
+                            if (!list.length) {
+                                results.innerHTML = '<p class="py-10 text-center text-gray-400 text-sm">검색 결과가 없습니다.</p>';
+                                return;
+                            }
+                            results.innerHTML = list.map(function (p) {
+                                const img = p.main_image
+                                    ? '<img src="' + escapeHtml(p.main_image) + '" class="w-12 h-12 object-cover rounded">'
+                                    : '<div class="w-12 h-12 bg-gray-100 rounded"></div>';
+                                return '<button type="button" data-id="' + p.id + '" ' +
+                                    'class="pick w-full flex items-center gap-3 px-2 py-2 hover:bg-gray-50 rounded text-left">' +
+                                    img +
+                                    '<div class="flex-1"><div class="text-sm text-gray-800">' + escapeHtml(p.name) + '</div>' +
+                                    '<div class="text-xs text-gray-400">#' + p.id + ' · ' + Number(p.price || 0).toLocaleString() + '원 · ' + escapeHtml(p.status) + '</div></div>' +
+                                    '</button>';
+                            }).join('');
+
+                            results.querySelectorAll('.pick').forEach(function (btn) {
+                                btn.addEventListener('click', function () {
+                                    addProductId.value = btn.dataset.id;
+                                    addForm.submit();
+                                });
+                            });
+                        })
+                        .catch(function () {
+                            results.innerHTML = '<p class="py-10 text-center text-red-400 text-sm">검색 중 오류가 발생했습니다.</p>';
+                        });
+                }, 250);
+            });
+        })();
+        </script>
+    <% } %>
+</div>

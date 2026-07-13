@@ -110,6 +110,10 @@ async function buildHomeContext(req, res) {
     return { shared, renderData: { title: '홈', popupBanner, seo } };
 }
 
+// 페이지 빌더의 섹션 단건 미리보기가 같은 shared 로 리졸버를 돌리기 위해 공개한다.
+// (미리보기가 홈과 다른 shared 를 쓰면 "실제로 어떻게 보이는지"를 못 답한다)
+exports.buildHomeContext = buildHomeContext;
+
 exports.getHome = async (req, res) => {
     try {
         const { shared, renderData } = await buildHomeContext(req, res);
@@ -132,6 +136,10 @@ exports.getHomePreview = async (req, res) => {
         // 미리보기는 "편집 중인 몰"(adminMallId)의 작업본을 렌더해야 한다.
         // req.mallId 를 편집 몰로 맞춰야 히어로·상품 리졸버가 같은 몰로 스코프된다.
         req.mallId = req.adminMallId || req.mallId || 1;
+
+        // 헤더 GNB 는 menuData 미들웨어가 **이 시점보다 먼저** 기본 몰 기준으로 실어 놨다.
+        // 편집 몰로 다시 조립하지 않으면 섹션은 종합관, 헤더는 건강식품관이 되는 어긋남이 난다.
+        await require('../middleware/menuData').applyNavigation(req, res, req.mallId);
 
         // 빌더가 홈 외 페이지(랜딩)도 편집하므로 ?page= 를 받는다.
         // 몰 스코프 검증(getPage)은 필수 — 안 하면 남의 몰 페이지를 미리 볼 수 있다.

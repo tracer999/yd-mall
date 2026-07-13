@@ -2,9 +2,11 @@
  * 섹션 타입 레지스트리 (SDUI 클라이언트 해석 계층 + 관리자 빌더 설정 스키마)
  *  section_type ↔ 렌더러 partial(view) ↔ 관리자 설정폼(fields) 1:1 매핑.
  *  새 컴포넌트를 추가하려면 여기에 등록하고 views/partials/sections/ 에 partial을 만든다.
- *  - view       : views/ 기준 상대경로 렌더러
- *  - label      : 관리자 "섹션 추가" 팔레트 표기
- *  - dataSource : 'product_group' | 'category' | 'banner_group' | null (data_source_id 연결 대상)
+ *  - view        : views/ 기준 상대경로 렌더러
+ *  - label       : 관리자 "섹션 추가" 팔레트 표기
+ *  - description : 팔레트 카드의 한 줄 설명. **무엇을 보여주는 섹션인지 + 데이터가 어디서 오는지**를
+ *                  운영자 언어로 적는다. 팔레트는 이 설명 + 실데이터 라이브 렌더를 함께 보여준다.
+ *  - dataSource  : 'product_group' | 'category' | 'banner_group' | null (data_source_id 연결 대상)
  *  - fields     : config_json 편집 필드 스키마(관리자 설정폼 동적 생성). 섹션 공통 필드
  *                 (title/노출기간/PC·모바일/활성)은 에디터가 일괄 처리하므로 여기엔 config 전용 키만.
  */
@@ -20,18 +22,21 @@ module.exports = {
   hero: {
     view: 'partials/sections/hero',
     label: '히어로',
+    description: '페이지 최상단 대형 배너. 배너 관리의 MAIN 배너를 슬라이드로 돌린다.',
     dataSource: null,
     fields: []
   },
   value_proposition: {
     view: 'partials/sections/value_proposition',
     label: '특장점',
+    description: '무료배송·정품보장 같은 쇼핑몰 강점 아이콘 띠. 고정 문구라 설정이 없다.',
     dataSource: null,
     fields: []
   },
   product_grid: {
     view: 'partials/sections/product_grid_section',
     label: '상품 그리드',
+    description: '선택한 상품 그룹을 바둑판(그리드)으로 나열한다. 스크롤 없이 한눈에 보여줄 때.',
     dataSource: 'product_group',
     fields: [FIELD.maxCount, FIELD.columns, FIELD.moreLink]
   },
@@ -43,6 +48,7 @@ module.exports = {
   best_ranking: {
     view: 'partials/sections/product_grid_section',
     label: '베스트/랭킹',
+    description: '판매·좋아요 합산 순위 상품을 그리드로. GNB 베스트와 같은 순위를 쓴다(탭 없음).',
     dataSource: null,
     fields: [
       { key: 'groupId', label: '랭킹 탭 ID (0 = 전체)', type: 'number', min: 0, max: 999999, default: 0 },
@@ -55,12 +61,14 @@ module.exports = {
   category_showcase: {
     view: 'partials/sections/category_showcase',
     label: '카테고리별 상품',
+    description: '카테고리마다 대표 상품을 묶어 보여준다. 카테고리 관리의 노출 카테고리를 따라간다.',
     dataSource: null,
     fields: []
   },
   kakao_cta: {
     view: 'partials/sections/kakao_cta',
     label: '카카오 상담 CTA',
+    description: '카카오톡 채널 상담 유도 배너. 사이트 설정의 카카오 채널을 연결한다.',
     dataSource: null,
     fields: []
   },
@@ -69,6 +77,7 @@ module.exports = {
   product_carousel: {
     view: 'partials/sections/product_carousel',
     label: '상품 캐러셀',
+    description: '선택한 상품 그룹을 좌우로 넘기는 가로 슬라이드. 많은 상품을 좁은 높이에 담을 때.',
     dataSource: 'product_group',
     fields: [
       Object.assign({}, FIELD.maxCount, { default: 12 }),
@@ -83,6 +92,7 @@ module.exports = {
   deal_carousel: {
     view: 'partials/sections/deal_carousel',
     label: '쇼핑특가 캐러셀',
+    description: '현재 진행 중인 특가만 가로 슬라이드로. 특가 기간이 끝나면 섹션이 저절로 사라진다.',
     dataSource: null,
     fields: [
       { key: 'dealCategoryCode', label: '특가 카테고리 코드 (비우면 전체)', type: 'text', default: '' },
@@ -94,6 +104,7 @@ module.exports = {
   brand_carousel: {
     view: 'partials/sections/brand_carousel',
     label: '브랜드 캐러셀',
+    description: '브랜드 로고를 가로 슬라이드로. 카테고리 관리의 BRAND 카테고리를 자동으로 끌어온다.',
     dataSource: null, // categories(type=BRAND) 고정 소스
     fields: [
       Object.assign({}, FIELD.maxCount, { label: '표시 브랜드 수', default: 20 }),
@@ -111,6 +122,7 @@ module.exports = {
   ranking_tabs: {
     view: 'partials/sections/ranking_tabs',
     label: '랭킹 탭',
+    description: '랭킹을 탭으로 나눠 보여준다(예: 전체·영양제·유산균). 탭은 랭킹 그룹 관리에서 만든다.',
     dataSource: null, // best_group 고정 소스
     fields: [
       { key: 'maxTabs', label: '탭 개수', type: 'number', min: 2, max: 12, default: 6 },
@@ -121,6 +133,7 @@ module.exports = {
   promotion_banner: {
     view: 'partials/sections/promotion_banner',
     label: '프로모션 배너',
+    description: '이벤트·기획전 배너를 여러 장 나란히. 배너 관리에서 같은 그룹 키로 묶어 등록한다.',
     dataSource: 'banner_group',
     fields: [
       { key: 'groupKey', label: '배너 그룹 키', type: 'text', default: '' },
@@ -132,6 +145,7 @@ module.exports = {
   benefit_bento: {
     view: 'partials/sections/benefit_bento',
     label: '혜택 벤토',
+    description: '큰 딜 상품 하나 + 작은 썸네일 + 프로모 블록을 타일처럼 조합한 복합 레이아웃.',
     dataSource: 'product_group',
     fields: [
       { key: 'dealProductId', label: '대형 딜 상품 ID', type: 'number', min: 1, default: null },
@@ -142,6 +156,7 @@ module.exports = {
   quick_menu: {
     view: 'partials/sections/quick_menu',
     label: '퀵 메뉴',
+    description: '아이콘 바로가기 버튼 줄. 항목을 직접 입력해 원하는 곳으로 링크한다.',
     dataSource: null, // config_json 만 사용 (리졸버 없음)
     fields: [
       { key: 'items', label: '항목 [{icon,label,url,badge}]', type: 'json', default: [] },
@@ -151,6 +166,7 @@ module.exports = {
   recent_product: {
     view: 'partials/sections/recent_product',
     label: '최근 본 상품',
+    description: '방문자가 최근 본 상품. 사람마다 다르게 보이고, 본 상품이 없으면 노출되지 않는다.',
     dataSource: null, // 로그인=recent_views / 비로그인=localStorage
     fields: [
       Object.assign({}, FIELD.maxCount, { label: '표시 상품 수', max: 20, default: 8 })
@@ -159,6 +175,7 @@ module.exports = {
   custom_html: {
     view: 'partials/sections/custom_html',
     label: '커스텀 HTML',
+    description: '직접 작성한 HTML을 그대로 넣는다. 위 섹션들로 표현할 수 없을 때의 마지막 수단.',
     dataSource: null,
     fields: [
       { key: 'html', label: '커스텀 HTML (저장·렌더 시 새니타이즈)', type: 'textarea', default: '' }
@@ -171,6 +188,7 @@ module.exports = {
   new_by_category: {
     view: 'partials/sections/new_by_category',
     label: '카테고리별 신상품',
+    description: '신상품을 카테고리 탭으로 나눠 보여준다. 신상품 랜딩(/new)용 섹션.',
     dataSource: null,
     fields: [
       Object.assign({}, FIELD.maxCount, { label: '탭별 상품 수', max: 24, default: 8 }),
@@ -180,6 +198,7 @@ module.exports = {
   new_by_brand: {
     view: 'partials/sections/new_by_brand',
     label: '브랜드별 신상품',
+    description: '브랜드마다 신상품을 몇 개씩 묶어 보여준다. 신상품 랜딩(/new)용 섹션.',
     dataSource: null,
     fields: [
       Object.assign({}, FIELD.maxCount, { label: '브랜드별 상품 수', max: 20, default: 6 }),
@@ -189,6 +208,7 @@ module.exports = {
   new_brand_list: {
     view: 'partials/sections/new_brand_list',
     label: '신규 입점 브랜드',
+    description: '최근 입점한 브랜드를 대표 상품과 함께 나열한다. 신상품 랜딩(/new)용 섹션.',
     dataSource: null,
     fields: [
       Object.assign({}, FIELD.maxCount, { label: '브랜드 수', max: 24, default: 8 }),

@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const svc = require('../../services/outlet/outletService');
+const navigationService = require('../../services/menu/navigationService');
 const { assertDepthAllowed, wouldCreateCycle, recalcSubtreeDepth, getCategoryMaxDepth, DepthLimitError } =
     require('../../services/tree/depthGuard');
 
@@ -154,6 +155,8 @@ exports.postAdd = async (req, res) => {
 
     try {
         await svc.addProduct(mallId, data);
+        // 상품 수가 바뀌면 GNB 노출 판정도 바뀔 수 있다. 캐시를 비워 즉시 반영한다.
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${BASE}?saved=1`);
     } catch (err) {
         if (!(err instanceof svc.OutletValidationError)) throw err;
@@ -193,6 +196,7 @@ exports.postEdit = async (req, res, next) => {
 
     try {
         await svc.updateProduct(mallId, id, data);
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${BASE}?saved=1`);
     } catch (err) {
         if (!(err instanceof svc.OutletValidationError)) throw err;
@@ -214,6 +218,7 @@ exports.postEdit = async (req, res, next) => {
 exports.postDelete = async (req, res) => {
     const mallId = req.adminMallId || 1;
     await svc.removeProduct(mallId, req.params.id);
+    navigationService.invalidateContentGate(mallId);
     res.redirect(`${BASE}?saved=1`);
 };
 
@@ -267,6 +272,8 @@ exports.postSetting = async (req, res) => {
         noticeHtml: String(req.body.notice_html || '').trim() || null,
     });
 
+    // min_product_count 가 바뀌면 노출 판정이 즉시 달라진다.
+    navigationService.invalidateContentGate(mallId);
     res.redirect(`${BASE}?saved=1`);
 };
 

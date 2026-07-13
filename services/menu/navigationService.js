@@ -166,20 +166,51 @@ const CONTENT_GATES = {
     },
 };
 
+/*
+ * 게이트 판정 캐시.
+ *
+ * menuData 미들웨어는 **모든 페이지**에서 돈다. 캐시가 없으면 홈을 포함한 전 페이지가
+ * 매번 COUNT + JOIN 쿼리를 친다 — 메뉴 하나 때문에 사이트 전체에 상시 부하가 걸린다.
+ *
+ * 상품이 임계치를 넘나드는 순간이 30초 늦게 반영되는 건 문제가 안 된다.
+ * 관리자가 상품을 등록·삭제하거나 설정을 바꾸면 invalidateContentGate() 로 즉시 비운다.
+ */
+const GATE_TTL_MS = 30_000;
+const gateCache = new Map();   // `${mallId}:${featureCode}` → { value, expiresAt }
+
+function invalidateContentGate(mallId = null) {
+    if (mallId === null) return gateCache.clear();
+    [...gateCache.keys()]
+        .filter(k => k.startsWith(`${mallId}:`))
+        .forEach(k => gateCache.delete(k));
+}
+
+async function checkGate(mallId, featureCode) {
+    const key = `${mallId}:${featureCode}`;
+    const hit = gateCache.get(key);
+    if (hit && hit.expiresAt > Date.now()) return hit.value;
+
+    let value;
+    try {
+        value = await CONTENT_GATES[featureCode](mallId);
+    } catch (err) {
+        // 게이트가 터졌다고 메뉴 전체를 날리지 않는다. 다만 콘텐츠 유무를 모르므로 숨기는 쪽이 안전하다
+        // — 빈 메뉴를 보여주느니 메뉴가 없는 편이 낫다. 실패는 캐시하지 않는다(다음 요청에 재시도).
+        console.error(`[navigation] 콘텐츠 게이트 실패 (${featureCode}):`, err.message);
+        return false;
+    }
+
+    gateCache.set(key, { value, expiresAt: Date.now() + GATE_TTL_MS });
+    return value;
+}
+
 async function applyContentGates(mallId, menus) {
     const gated = menus.filter(m => CONTENT_GATES[m.featureCode]);
     if (!gated.length) return menus;
 
-    const verdicts = await Promise.all(gated.map(async (m) => {
-        try {
-            return [m.featureCode, await CONTENT_GATES[m.featureCode](mallId)];
-        } catch (err) {
-            // 게이트가 터졌다고 메뉴 전체를 날리지 않는다. 다만 콘텐츠 유무를 모르므로 숨기는 쪽이 안전하다
-            // — 빈 메뉴를 보여주느니 메뉴가 없는 편이 낫다.
-            console.error(`[navigation] 콘텐츠 게이트 실패 (${m.featureCode}):`, err.message);
-            return [m.featureCode, false];
-        }
-    }));
+    const verdicts = await Promise.all(
+        gated.map(async m => [m.featureCode, await checkGate(mallId, m.featureCode)]),
+    );
 
     const blocked = new Set(verdicts.filter(([, ok]) => !ok).map(([code]) => code));
     return blocked.size ? menus.filter(m => !blocked.has(m.featureCode)) : menus;
@@ -406,6 +437,8 @@ module.exports = {
     getCategoryRows,
     getCategoryContext,
     buildTree,
+    // 아울렛 등 콘텐츠 의존 메뉴의 GNB 노출 판정 캐시를 비운다(관리자가 콘텐츠를 바꿨을 때).
+    invalidateContentGate,
     DEFAULT_CONFIG,
     BADGE_TYPES,
     LINK_RESOLVERS,

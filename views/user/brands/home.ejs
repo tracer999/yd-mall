@@ -34,7 +34,12 @@
     </div>
   </section>
 
-  <!-- ② 인기 브랜드 -->
+  <!-- ② 이번 주 브랜드 혜택 (슬라이더) — 검색 바로 아래 첫 콘텐츠 블록 -->
+  <% if (weeklyBenefits && weeklyBenefits.length) { %>
+    <%- include('./_benefit_slider', { weeklyBenefits: weeklyBenefits }) %>
+  <% } %>
+
+  <!-- ③ 인기 브랜드 -->
   <% if (popular && popular.length) { %>
   <section class="mb-12">
     <div class="flex items-end justify-between mb-4">
@@ -49,7 +54,7 @@
   </section>
   <% } %>
 
-  <!-- ③ 신규 입점 브랜드 -->
+  <!-- ④ 신규 입점 브랜드 -->
   <% if (newBrands && newBrands.length) { %>
   <section class="mb-12">
     <div class="flex items-end justify-between mb-4">
@@ -64,7 +69,7 @@
   </section>
   <% } %>
 
-  <!-- ④ 카테고리별 브랜드 -->
+  <!-- ⑤ 카테고리별 브랜드 -->
   <% if (rootCategories && rootCategories.length) { %>
   <section class="mb-12">
     <h2 class="text-xl font-bold text-gray-900 mb-4">카테고리별 브랜드</h2>
@@ -81,32 +86,6 @@
     <div id="cat-brands" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
       <% (catBrands || []).forEach(function (b) { %>
         <%- include('../../partials/brand/tile', { brand: b, isLiked: isLiked(b) }) %>
-      <% }) %>
-    </div>
-  </section>
-  <% } %>
-
-  <!-- ⑤ 진행 중 브랜드 혜택 -->
-  <% if (weeklyBenefits && weeklyBenefits.length) { %>
-  <section class="mb-12">
-    <h2 class="text-xl font-bold text-gray-900 mb-4">이번 주 브랜드 혜택</h2>
-    <div class="bg-white border border-gray-200 rounded-2xl divide-y divide-gray-100">
-      <% weeklyBenefits.forEach(function (item) { %>
-        <a href="<%= item.url %>" class="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition">
-          <span class="shrink-0 px-2 py-1 rounded text-[11px] font-semibold
-            <%= item.kind === 'COUPON' ? 'bg-red-50 text-red-600'
-              : item.kind === 'DEAL' ? 'bg-orange-50 text-orange-600'
-              : item.kind === 'GROUP_BUY' ? 'bg-blue-50 text-blue-600'
-              : 'bg-emerald-50 text-emerald-600' %>">
-            <%= item.label %>
-          </span>
-          <span class="shrink-0 text-sm font-semibold text-gray-900"><%= item.brand.name %></span>
-          <span class="flex-1 text-sm text-gray-600 truncate"><%= item.title %></span>
-          <% if (item.total > 1) { %>
-            <span class="shrink-0 text-xs text-gray-400">외 <%= item.total - 1 %>건</span>
-          <% } %>
-          <i class="bi bi-chevron-right text-gray-300 shrink-0"></i>
-        </a>
       <% }) %>
     </div>
   </section>
