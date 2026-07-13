@@ -16,6 +16,7 @@ function requireNumericId(param) {
 }
 
 router.get('/', c.getList);
+router.get('/search.json', c.searchJson);
 router.post('/recalc', c.postRecalc);
 
 router.get('/:id', requireNumericId('id'), c.getEdit);

@@ -113,6 +113,34 @@
               <% }); %>
             </select>
           </div>
+
+          <%#
+            브랜드 귀속 — 브랜드 허브(/brands)와 브랜드관이 이 값을 본다.
+            지정하면 그 브랜드의 '브랜드 위크'로, 비워두면 편성 상품의 브랜드에
+            '기획전 참여'로만 잡힌다. 브랜드가 1,379개라 드롭다운이 불가능해 자동완성이다.
+          %>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+              브랜드 귀속 <span class="text-xs font-normal text-gray-400">(선택 — 브랜드 위크일 때만)</span>
+            </label>
+            <div class="relative">
+              <input type="hidden" name="brand_category_id" id="brandCategoryId"
+                     value="<%= exhibition.brand_category_id || '' %>">
+              <input type="text" id="brandPicker" autocomplete="off"
+                     placeholder="브랜드명·초성으로 검색"
+                     value="<%= typeof ownedBrandName !== 'undefined' && ownedBrandName ? ownedBrandName : '' %>"
+                     class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <button type="button" id="brandClear"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600 <%= exhibition.brand_category_id ? '' : 'hidden' %>">
+                <i class="bi bi-x-circle-fill text-sm"></i>
+              </button>
+              <div id="brandSuggest"
+                   class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"></div>
+            </div>
+            <p class="mt-1 text-xs text-gray-400">
+              지정하면 <strong>브랜드 위크</strong>로 브랜드관·브랜드 허브 상단에 노출됩니다. 비워두면 '기획전 참여'로만 표시됩니다.
+            </p>
+          </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">상태</label>
             <select name="status" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
@@ -579,6 +607,68 @@
   // 섹션 선택을 바꾸면 이미 그려진 결과의 hidden section_id 도 따라간다.
   targetSection && targetSection.addEventListener('change', () => {
     results.querySelectorAll('input[name="section_id"]').forEach(i => { i.value = targetSection.value; });
+  });
+})();
+</script>
+
+<script>
+// 브랜드 귀속 자동완성 — 브랜드 1,379개라 드롭다운이 불가능하다.
+(function () {
+  const input = document.getElementById('brandPicker');
+  const hidden = document.getElementById('brandCategoryId');
+  const box = document.getElementById('brandSuggest');
+  const clear = document.getElementById('brandClear');
+  if (!input || !hidden || !box) return;
+  let timer = null;
+
+  const close = () => box.classList.add('hidden');
+
+  const pick = (b) => {
+    hidden.value = b.id;
+    input.value = b.name;
+    if (clear) clear.classList.remove('hidden');
+    close();
+  };
+
+  input.addEventListener('input', function () {
+    hidden.value = '';                 // 텍스트를 고치면 선택이 풀린다
+    if (clear) clear.classList.add('hidden');
+    const q = input.value.trim();
+    clearTimeout(timer);
+    if (!q) { close(); return; }
+    timer = setTimeout(async function () {
+      try {
+        const res = await fetch('/admin/brands/search.json?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        const rows = data.brands || [];
+        if (!rows.length) {
+          box.innerHTML = '<div class="px-3 py-3 text-sm text-gray-400">검색 결과가 없습니다.</div>';
+        } else {
+          box.innerHTML = rows.map(function (b) {
+            return '<button type="button" data-id="' + b.id + '" data-name="' + b.name.replace(/"/g, '&quot;') + '" '
+                 + 'class="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2">'
+                 + '<span class="text-sm text-gray-900">' + b.name + '</span>'
+                 + (b.name_en ? '<span class="text-xs text-gray-400">' + b.name_en + '</span>' : '')
+                 + '<span class="ml-auto text-xs text-gray-400">상품 ' + Number(b.product_count || 0).toLocaleString() + '</span>'
+                 + '</button>';
+          }).join('');
+        }
+        box.classList.remove('hidden');
+      } catch (e) { close(); }
+    }, 200);
+  });
+
+  box.addEventListener('click', function (e) {
+    const btn = e.target.closest('button[data-id]');
+    if (btn) pick({ id: btn.dataset.id, name: btn.dataset.name });
+  });
+
+  if (clear) clear.addEventListener('click', function () {
+    hidden.value = ''; input.value = ''; clear.classList.add('hidden'); close();
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!box.contains(e.target) && e.target !== input) close();
   });
 })();
 </script>

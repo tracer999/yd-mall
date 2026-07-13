@@ -27,10 +27,21 @@
               </div>
             <% } %>
             <div class="p-4">
-              <span class="inline-block px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[11px] font-semibold">기획전</span>
+              <%# 브랜드 귀속 기획전과 '상품이 낀' 참여 기획전은 다른 얘기다. 뭉뚱그리면 거짓말이 된다. %>
+              <% if (e.owned && e.upcoming) { %>
+                <span class="inline-block px-2 py-0.5 rounded bg-gray-900 text-white text-[11px] font-semibold">오픈 예정</span>
+              <% } else if (e.owned) { %>
+                <span class="inline-block px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[11px] font-semibold">브랜드 위크</span>
+              <% } else { %>
+                <span class="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-[11px] font-semibold">기획전 참여</span>
+              <% } %>
               <p class="mt-2 text-sm font-semibold text-gray-900 line-clamp-2"><%= e.title %></p>
               <% if (e.summary) { %><p class="mt-1 text-xs text-gray-500 line-clamp-1"><%= e.summary %></p><% } %>
-              <% if (e.end_at) { %><p class="mt-2 text-xs text-gray-400"><%= dateOf(e.end_at) %>까지</p><% } %>
+              <% if (e.owned && e.upcoming) { %>
+                <p class="mt-2 text-xs text-gray-400"><%= dateOf(e.start_at) %> 오픈</p>
+              <% } else if (e.end_at) { %>
+                <p class="mt-2 text-xs text-gray-400"><%= dateOf(e.end_at) %>까지</p>
+              <% } %>
             </div>
           </a>
         <% }) %>

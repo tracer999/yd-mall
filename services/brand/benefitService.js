@@ -44,20 +44,41 @@ async function getBrandCoupons(mallId, brandId) {
     }).map(({ scope_json, ...c }) => c);
 }
 
-/** 브랜드 기획전 — 명시 지정 우선, 없으면 편성 상품의 브랜드로 역추적 */
+/**
+ * 브랜드 기획전.
+ *
+ * 두 종류를 구분해서 담는다 — 섞으면 거짓말이 된다.
+ *   owned  : 이 브랜드를 위한 기획전 (brand_category_id 지정). "브랜드 위크" 같은 것.
+ *   joined : 이 브랜드 상품이 편성돼 있을 뿐인 일반 기획전. "여름 패션 위크" 같은 것.
+ *
+ * SPECIALTY(전문관)는 제외한다. 전문관은 카테고리·고객 목적 축이지 브랜드 행사가 아니다.
+ * 이걸 넣으면 '뷰티관' 하나가 브랜드 9개의 "브랜드 혜택"으로 복제된다.
+ *
+ * owned 는 아직 시작 전(오픈 예정)이어도 담는다 — 브랜드 위크 오픈 예고는 그 자체로 정보다.
+ */
+const UPCOMING_DAYS = 14;
+
 async function getBrandExhibitions(mallId, brandId) {
     const [rows] = await pool.query(`
         SELECT DISTINCT e.id, e.title, e.slug, e.summary, e.list_thumbnail_url,
-               e.exhibition_type, e.start_at, e.end_at
+               e.exhibition_type, e.start_at, e.end_at,
+               (e.brand_category_id = ?) AS owned,
+               (e.start_at > NOW()) AS upcoming
         FROM exhibition e
         LEFT JOIN exhibition_product ep ON ep.exhibition_id = e.id AND ep.visible = 1
         LEFT JOIN products p ON p.id = ep.product_id
         WHERE e.mall_id = ? AND e.status = 'PUBLISHED' AND e.list_visible = 1
-          AND e.start_at <= NOW() AND (e.end_at IS NULL OR e.end_at >= NOW())
-          AND (e.brand_category_id = ? OR p.brand_category_id = ?)
-        ORDER BY (e.brand_category_id = ?) DESC, e.start_at DESC
+          AND e.exhibition_type <> 'SPECIALTY'
+          AND (e.end_at IS NULL OR e.end_at >= NOW())
+          AND (
+                -- 이 브랜드를 위한 기획전: 진행 중이거나 곧 시작
+                (e.brand_category_id = ? AND e.start_at <= DATE_ADD(NOW(), INTERVAL ? DAY))
+                -- 참여 기획전: 이미 시작한 것만
+             OR (p.brand_category_id = ? AND e.start_at <= NOW())
+              )
+        ORDER BY owned DESC, e.start_at DESC
         LIMIT 12
-    `, [mallId, brandId, brandId, brandId]);
+    `, [brandId, mallId, brandId, UPCOMING_DAYS, brandId]);
     return rows;
 }
 
@@ -135,24 +156,53 @@ async function getWeeklyBenefits(mallId, limit = 10) {
     }
 
     const out = [];
+    const usedExhibitions = new Set(); // 같은 기획전이 브랜드만 바꿔 여러 슬라이드로 복제되는 것을 막는다
+
     for (const b of brands) {
         const ben = await getBrandBenefits(mallId, b.category_id);
         const repImage = b._repIds.map(id => imgOf.get(id)).find(Boolean) || null;
 
-        const ex = ben.exhibitions[0], dl = ben.deals[0], gb = ben.groupBuys[0], cp = ben.coupons[0];
-        const pick = ex
-            ? { kind: 'EXHIBITION', label: '기획전', title: ex.title, summary: ex.summary,
-                url: `/exhibition/${ex.slug}`, image: ex.list_thumbnail_url || repImage, endAt: ex.end_at }
-            : dl
-            ? { kind: 'DEAL', label: '특가', title: dl.title, summary: dl.subtitle || `이 브랜드 상품 ${dl.item_count}개 특가`,
-                url: '/deals', image: repImage, endAt: dl.ends_at }
-            : gb
-            ? { kind: 'GROUP_BUY', label: '공동구매', title: gb.title, summary: gb.summary || `${gb.participant_count}명 참여 중`,
-                url: `/group-buy/${gb.slug}`, image: gb.list_thumbnail_url || repImage, endAt: gb.end_at }
-            : cp
-            ? { kind: 'COUPON', label: '쿠폰', title: cp.name, summary: cp.summary || couponLabel(cp),
-                url: `/coupon?brand=${b.category_id}`, image: cp.thumbnail_url || repImage, endAt: cp.valid_to }
-            : null;
+        const owned = ben.exhibitions.find(e => e.owned);
+        const joined = ben.exhibitions.find(e => !e.owned && !usedExhibitions.has(e.id));
+        const dl = ben.deals[0], gb = ben.groupBuys[0], cp = ben.coupons[0];
+
+        // 브랜드에 명시적으로 귀속된 혜택이 먼저다. 참여 기획전은 마지막 —
+        // "이 브랜드를 위한 행사"와 "이 브랜드 상품이 낀 행사"는 다른 얘기다.
+        let pick = null;
+        if (owned) {
+            const up = !!owned.upcoming;
+            pick = {
+                kind: 'EXHIBITION', label: up ? '오픈 예정' : '브랜드 위크',
+                title: owned.title, summary: owned.summary || (up ? '곧 시작합니다' : null),
+                url: `/exhibition/${owned.slug}`, image: owned.list_thumbnail_url || repImage,
+                endAt: up ? null : owned.end_at, startAt: up ? owned.start_at : null
+            };
+        } else if (cp) {
+            pick = {
+                kind: 'COUPON', label: '쿠폰', title: cp.name, summary: cp.summary || couponLabel(cp),
+                url: `/coupon?brand=${b.category_id}`, image: cp.thumbnail_url || repImage, endAt: cp.valid_to
+            };
+        } else if (dl) {
+            pick = {
+                kind: 'DEAL', label: '특가', title: dl.title,
+                summary: dl.subtitle || `이 브랜드 상품 ${dl.item_count}개 특가`,
+                url: '/deals', image: repImage, endAt: dl.ends_at
+            };
+        } else if (gb) {
+            pick = {
+                kind: 'GROUP_BUY', label: '공동구매', title: gb.title,
+                summary: gb.summary || `${gb.participant_count}명 참여 중`,
+                url: `/group-buy/${gb.slug}`, image: gb.list_thumbnail_url || repImage, endAt: gb.end_at
+            };
+        } else if (joined) {
+            usedExhibitions.add(joined.id);
+            pick = {
+                kind: 'EXHIBITION', label: '기획전 참여', title: joined.title,
+                summary: `${b.name} 상품이 포함된 기획전`, // 브랜드 행사인 척하지 않는다
+                url: `/exhibition/${joined.slug}`, image: joined.list_thumbnail_url || repImage,
+                endAt: joined.end_at
+            };
+        }
 
         if (pick) {
             const { rep_product_ids, _repIds, ...brandInfo } = b;

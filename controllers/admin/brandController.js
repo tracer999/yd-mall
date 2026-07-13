@@ -91,6 +91,34 @@ exports.getList = async (req, res) => {
     }
 };
 
+/**
+ * GET /admin/brands/search.json — 브랜드 자동완성 (다른 관리자 화면에서 브랜드를 고를 때)
+ *
+ * 브랜드가 1,379개라 드롭다운으로 못 쓴다. 기획전의 '브랜드 귀속' 선택 등에서 호출한다.
+ */
+exports.searchJson = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const q = String(req.query.q || '').trim();
+        if (!q) return res.json({ brands: [] });
+        const like = `%${q}%`;
+        const [brands] = await pool.query(`
+            SELECT c.id, c.name, c.logo_image_path, bp.name_en, s.product_count
+              FROM categories c
+              LEFT JOIN brand_profile bp ON bp.category_id = c.id
+              LEFT JOIN brand_stat s ON s.category_id = c.id
+             WHERE c.type = 'BRAND' AND c.mall_id = ?
+               AND (c.name LIKE ? OR bp.name_en LIKE ? OR bp.alias LIKE ? OR bp.initial_chosung LIKE ?)
+             ORDER BY COALESCE(s.product_count, 0) DESC
+             LIMIT 15
+        `, [mallId, like, like, like, `%${toChosung(q)}%`]);
+        res.json({ brands });
+    } catch (err) {
+        console.error('[admin/brands] 검색 실패', err);
+        res.status(500).json({ brands: [] });
+    }
+};
+
 /** GET /admin/brands/:id */
 exports.getEdit = async (req, res) => {
     const mallId = req.adminMallId || 1;

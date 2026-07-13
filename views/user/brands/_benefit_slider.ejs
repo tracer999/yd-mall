@@ -9,45 +9,64 @@
    * 의존 라이브러리 없이 scroll-snap + 좌우 버튼 + 자동 넘김으로 구현한다.
    */
   const items = weeklyBenefits || [];
-  const tone = {
-    EXHIBITION: 'bg-emerald-500',
-    DEAL: 'bg-orange-500',
-    GROUP_BUY: 'bg-blue-500',
-    COUPON: 'bg-red-500'
+  // 라벨별 색. '기획전 참여'는 브랜드 전용 행사가 아니므로 톤을 낮춘다.
+  const toneOf = (it) =>
+    it.label === '오픈 예정' ? 'bg-gray-900'
+    : it.label === '기획전 참여' ? 'bg-gray-500'
+    : it.kind === 'EXHIBITION' ? 'bg-emerald-500'
+    : it.kind === 'DEAL' ? 'bg-orange-500'
+    : it.kind === 'GROUP_BUY' ? 'bg-blue-500'
+    : 'bg-red-500';
+
+  const days = (d) => Math.ceil((new Date(d) - new Date()) / 86400000);
+
+  // 시작 전이면 오픈까지, 진행 중이면 마감까지
+  const badge = (it) => {
+    if (it.startAt) {
+      const n = days(it.startAt);
+      if (n < 0) return null;
+      return n <= 0 ? '오늘 오픈' : (n === 1 ? '내일 오픈' : `${n}일 후 오픈`);
+    }
+    if (!it.endAt) return null;
+    const n = days(it.endAt);
+    if (n < 0) return null;
+    return n <= 0 ? '오늘 마감' : (n === 1 ? '내일 마감' : `D-${n}`);
   };
-  const dday = (d) => {
-    if (!d) return null;
-    const ms = new Date(d) - new Date();
-    if (ms < 0) return null;
-    const days = Math.ceil(ms / 86400000);
-    return days <= 0 ? '오늘 마감' : (days === 1 ? '내일 마감' : `D-${days}`);
-  };
+
+  // 카드가 2장 이하면 슬라이더 껍데기(좌우 버튼·스냅)가 허전하다. 그리드로 떨어뜨린다.
+  const isSlider = items.length > 2;
+  const cardCls = isSlider
+    ? 'snap-start shrink-0 w-[78%] sm:w-[46%] lg:w-[31.5%]'
+    : '';
 %>
 
-<section class="mb-12" data-benefit-slider>
+<section class="mb-12" <%= isSlider ? 'data-benefit-slider' : '' %>>
   <div class="flex items-end justify-between mb-4">
     <div>
       <h2 class="text-xl font-bold text-gray-900">이번 주 브랜드 혜택</h2>
       <p class="mt-1 text-sm text-gray-500">진행 중인 브랜드 기획전·특가·쿠폰·공동구매</p>
     </div>
-    <div class="hidden sm:flex gap-1.5">
-      <button type="button" data-slider-prev
-              class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
-        <i class="bi bi-chevron-left text-sm"></i>
-      </button>
-      <button type="button" data-slider-next
-              class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
-        <i class="bi bi-chevron-right text-sm"></i>
-      </button>
-    </div>
+    <% if (isSlider) { %>
+      <div class="hidden sm:flex gap-1.5">
+        <button type="button" data-slider-prev
+                class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
+          <i class="bi bi-chevron-left text-sm"></i>
+        </button>
+        <button type="button" data-slider-next
+                class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
+          <i class="bi bi-chevron-right text-sm"></i>
+        </button>
+      </div>
+    <% } %>
   </div>
 
-  <div data-slider-track
-       class="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2
-              [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-    <% items.forEach(function (it) { const d = dday(it.endAt); %>
+  <div <%= isSlider ? 'data-slider-track' : '' %>
+       class="<%= isSlider
+                  ? 'flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
+                  : 'grid grid-cols-1 sm:grid-cols-2 gap-4' %>">
+    <% items.forEach(function (it) { const d = badge(it); %>
       <a href="<%= it.url %>"
-         class="group snap-start shrink-0 w-[78%] sm:w-[46%] lg:w-[31.5%] rounded-2xl border border-gray-200 overflow-hidden bg-white hover:border-[var(--gh-primary)] hover:shadow-lg transition">
+         class="group <%= cardCls %> rounded-2xl border border-gray-200 overflow-hidden bg-white hover:border-[var(--gh-primary)] hover:shadow-lg transition">
 
         <div class="relative aspect-[16/9] bg-gray-100 overflow-hidden">
           <% if (it.image) { %>
@@ -59,7 +78,7 @@
             </div>
           <% } %>
 
-          <span class="absolute top-3 left-3 px-2 py-1 rounded text-[11px] font-bold text-white <%= tone[it.kind] || 'bg-gray-900' %>">
+          <span class="absolute top-3 left-3 px-2 py-1 rounded text-[11px] font-bold text-white <%= toneOf(it) %>">
             <%= it.label %>
           </span>
           <% if (d) { %>

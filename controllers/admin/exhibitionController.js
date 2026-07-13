@@ -73,6 +73,10 @@ function buildBasicFields(req, current = {}) {
         // 운영자 입력 HTML — 저장 시 새니타이즈(렌더 시 한 번 더 통과시킨다)
         description: sanitize(String(b.description || '')) || null,
         exhibition_type: svc.pick(svc.TYPES, b.exhibition_type, 'THEME'),
+        // 브랜드 귀속 — 지정하면 그 브랜드의 브랜드관/브랜드 허브에 "브랜드 위크"로 노출된다.
+        // 비워두면 편성 상품의 브랜드에 '기획전 참여'로만 잡힌다.
+        brand_category_id: /^\d+$/.test(String(b.brand_category_id || '').trim())
+            ? Number(b.brand_category_id) : null,
         status: svc.pick(svc.STATUSES, b.status, 'DRAFT'),
         start_at: toDateTime(b.start_at),
         end_at: toDateTime(b.end_at),
@@ -152,8 +156,18 @@ async function renderForm(req, res, exhibition, extra = {}) {
 
     const config = svc.parseJson(exhibition.display_config_json);
 
+    // 브랜드 귀속 자동완성의 초기 표시값 (id 만으로는 이름을 못 그린다)
+    let ownedBrandName = null;
+    if (exhibition.brand_category_id) {
+        const [[b]] = await pool.query(
+            "SELECT name FROM categories WHERE id = ? AND type = 'BRAND'", [exhibition.brand_category_id]
+        );
+        ownedBrandName = b?.name || null;
+    }
+
     res.render('admin/exhibitions/edit', Object.assign({
         layout: 'layouts/admin_layout',
+        ownedBrandName,
         title: isNew ? '기획전 등록' : '기획전 수정',
         subtitle: isNew ? null : exhibition.title,
         exhibition: Object.assign({}, exhibition, {
@@ -181,7 +195,7 @@ exports.getAdd = async (req, res) => {
     try {
         await renderForm(req, res, {
             id: null, title: '', slug: '', summary: '', description: '',
-            exhibition_type: 'THEME', status: 'DRAFT',
+            exhibition_type: 'THEME', status: 'DRAFT', brand_category_id: null,
             start_at: new Date(), end_at: null,
             list_visible: 1, search_visible: 1, share_enabled: 1,
             detail_template_type: 'TAB_SHOP',

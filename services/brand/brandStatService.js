@@ -53,14 +53,21 @@ async function loadBenefitCounts(mallId) {
         if (Array.isArray(ids)) ids.forEach(id => bump(Number(id)));
     }
 
-    // 기획전 — 명시 지정(brand_category_id) 또는 편성 상품의 브랜드로 역추적
+    // 기획전 — 브랜드 귀속(brand_category_id) 또는 편성 상품의 브랜드로 역추적.
+    // SPECIALTY(전문관)는 뺀다. 전문관은 브랜드 행사가 아니라 카테고리 축이라,
+    // 넣으면 '뷰티관' 하나가 브랜드 9개의 혜택으로 잡힌다. (benefitService 와 동일 기준)
     const [exs] = await pool.query(`
         SELECT DISTINCT COALESCE(e.brand_category_id, p.brand_category_id) AS bid
         FROM exhibition e
         LEFT JOIN exhibition_product ep ON ep.exhibition_id = e.id AND ep.visible = 1
         LEFT JOIN products p ON p.id = ep.product_id
         WHERE e.mall_id = ? AND e.status = 'PUBLISHED'
-          AND e.start_at <= NOW() AND (e.end_at IS NULL OR e.end_at >= NOW())
+          AND e.exhibition_type <> 'SPECIALTY'
+          AND (e.end_at IS NULL OR e.end_at >= NOW())
+          AND (
+                (e.brand_category_id IS NOT NULL AND e.start_at <= DATE_ADD(NOW(), INTERVAL 14 DAY))
+             OR (p.brand_category_id IS NOT NULL AND e.start_at <= NOW())
+              )
           AND COALESCE(e.brand_category_id, p.brand_category_id) IS NOT NULL
     `, [mallId]);
     exs.forEach(r => bump(r.bid));

@@ -39,19 +39,30 @@
     <%- include('./_benefit_slider', { weeklyBenefits: weeklyBenefits }) %>
   <% } %>
 
-  <!-- ③ 인기 브랜드 -->
-  <% if (popular && popular.length) { %>
+  <!-- ③ 인기 브랜드 — 브랜드 한 줄 = 해시태그 + 특집전 + 상품 캐러셀 -->
+  <% if (showcase && showcase.length) { %>
   <section class="mb-12">
-    <div class="flex items-end justify-between mb-4">
+    <div class="flex items-end justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">인기 브랜드</h2>
       <a href="<%= q({ sort: 'popular' }) %>#all-brands" class="text-sm text-gray-500 hover:text-[var(--gh-primary)]">전체보기 ›</a>
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-      <% popular.forEach(function (b, i) { %>
-        <%- include('../../partials/brand/tile', { brand: b, isLiked: isLiked(b), rank: i + 1 }) %>
-      <% }) %>
-    </div>
+    <% showcase.forEach(function (b) { %>
+      <%- include('../../partials/brand/showcase_row', { brand: b, isLiked: isLiked(b) }) %>
+    <% }) %>
   </section>
+  <% } else if (popular && popular.length) { %>
+    <%# 상품이 모자라 캐러셀을 못 만드는 몰(브랜드당 상품 4개 미만)은 기존 로고 타일로 떨어진다 %>
+    <section class="mb-12">
+      <div class="flex items-end justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-900">인기 브랜드</h2>
+        <a href="<%= q({ sort: 'popular' }) %>#all-brands" class="text-sm text-gray-500 hover:text-[var(--gh-primary)]">전체보기 ›</a>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+        <% popular.forEach(function (b, i) { %>
+          <%- include('../../partials/brand/tile', { brand: b, isLiked: isLiked(b), rank: i + 1 }) %>
+        <% }) %>
+      </div>
+    </section>
   <% } %>
 
   <!-- ④ 신규 입점 브랜드 -->
@@ -178,6 +189,41 @@
 <%- include('../../partials/brand/like_script') %>
 
 <script>
+/*
+ * 브랜드 쇼케이스 캐러셀 — 좌우 화살표.
+ *
+ * 자동 넘김은 하지 않는다. 여러 줄이 동시에 자동으로 움직이면 화면이 산만해지고,
+ * 사용자가 읽는 중에 카드가 밀려나간다(혜택 슬라이더는 한 줄뿐이라 자동 넘김이 성립한다).
+ *
+ * 끝에 닿으면 버튼을 비활성화한다 — 눌러도 안 움직이는 버튼을 남기지 않는다.
+ */
+(function () {
+    document.querySelectorAll('[data-showcase]').forEach(function (root) {
+        const track = root.querySelector('[data-track]');
+        const prev = root.querySelector('[data-scroll="prev"]');
+        const next = root.querySelector('[data-scroll="next"]');
+        if (!track || !prev || !next) return;
+
+        const step = function () {
+            const card = track.firstElementChild;
+            // 카드 2장씩 넘긴다 — 한 장씩이면 답답하고, 한 화면씩이면 맥락이 끊긴다.
+            return card ? (card.offsetWidth + 16) * 2 : track.clientWidth;
+        };
+
+        const sync = function () {
+            const max = track.scrollWidth - track.clientWidth;
+            prev.disabled = track.scrollLeft <= 4;
+            next.disabled = track.scrollLeft >= max - 4;
+        };
+
+        prev.addEventListener('click', function () { track.scrollBy({ left: -step(), behavior: 'smooth' }); });
+        next.addEventListener('click', function () { track.scrollBy({ left: step(), behavior: 'smooth' }); });
+        track.addEventListener('scroll', sync, { passive: true });
+        window.addEventListener('resize', sync);
+        sync();
+    });
+})();
+
 // 브랜드 검색 자동완성 — /brands/search.json
 (function () {
     const input = document.getElementById('brandSearch');
