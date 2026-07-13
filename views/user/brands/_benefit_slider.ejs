@@ -33,10 +33,18 @@
     return n <= 0 ? '오늘 마감' : (n === 1 ? '내일 마감' : `D-${n}`);
   };
 
-  // 카드가 2장 이하면 슬라이더 껍데기(좌우 버튼·스냅)가 허전하다. 그리드로 떨어뜨린다.
+  // 카드가 2장 이하면 슬라이더 껍데기(좌우 버튼·인디케이터)가 허전하다. 그리드로 떨어뜨린다.
   const isSlider = items.length > 2;
+
+  /*
+   * 카드 폭은 한 페이지에 **딱 떨어지게** 잡는다.
+   *
+   * 예전에는 78% / 46% / 31.5% 였다. 그러면 다음 카드가 옆에 반쯤 걸쳐 보여서,
+   * 자동 넘김이 돌고 있어도 눈에는 '슬라이드쇼'가 아니라 '가로 스크롤 영역'으로 읽힌다.
+   * gap(16px)을 뺀 정확한 분할로 바꿔 한 페이지가 화면을 꽉 채우게 한다.
+   */
   const cardCls = isSlider
-    ? 'snap-start shrink-0 w-[78%] sm:w-[46%] lg:w-[31.5%]'
+    ? 'snap-start shrink-0 w-full sm:w-[calc((100%-16px)/2)] lg:w-[calc((100%-32px)/3)]'
     : '';
 %>
 
@@ -47,22 +55,26 @@
       <p class="mt-1 text-sm text-gray-500">진행 중인 브랜드 기획전·특가·쿠폰·공동구매</p>
     </div>
     <% if (isSlider) { %>
-      <div class="hidden sm:flex gap-1.5">
-        <button type="button" data-slider-prev
-                class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
-          <i class="bi bi-chevron-left text-sm"></i>
-        </button>
-        <button type="button" data-slider-next
-                class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
-          <i class="bi bi-chevron-right text-sm"></i>
-        </button>
+      <div class="flex items-center gap-3">
+        <%# 인디케이터 — 지금 몇 번째 장인지 보이지 않으면 슬라이드쇼로 읽히지 않는다 %>
+        <div data-slider-dots class="hidden sm:flex items-center gap-1.5"></div>
+        <div class="flex gap-1.5">
+          <button type="button" data-slider-prev aria-label="이전 혜택"
+                  class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
+            <i class="bi bi-chevron-left text-sm"></i>
+          </button>
+          <button type="button" data-slider-next aria-label="다음 혜택"
+                  class="w-9 h-9 rounded-full border border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center">
+            <i class="bi bi-chevron-right text-sm"></i>
+          </button>
+        </div>
       </div>
     <% } %>
   </div>
 
   <div <%= isSlider ? 'data-slider-track' : '' %>
        class="<%= isSlider
-                  ? 'flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
+                  ? 'flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
                   : 'grid grid-cols-1 sm:grid-cols-2 gap-4' %>">
     <% items.forEach(function (it) { const d = badge(it); %>
       <a href="<%= it.url %>"
@@ -116,39 +128,70 @@
 </section>
 
 <script>
-// 혜택 슬라이더 — scroll-snap 기반. 좌우 버튼 + 5초 자동 넘김(hover 시 정지).
+/*
+ * 혜택 슬라이더 — **페이지 단위** 전환.
+ *
+ * 예전에는 카드 1장씩 밀었다(scrollBy(카드폭)). 카드 폭이 화면에 딱 떨어지지 않아
+ * 다음 카드가 반쯤 걸쳐 보였고, 그래서 자동 넘김이 돌아도 '슬라이드쇼'가 아니라
+ * '가로 스크롤'로 보였다. 이제 한 번에 **한 화면씩** 넘긴다 — 카드가 잘리지 않는다.
+ *
+ * scroll-snap 을 유지하는 이유: 모바일에서 손가락으로 미는 조작이 그대로 살아 있고,
+ * JS 가 죽어도 콘텐츠에 접근할 수 있다.
+ */
 (function () {
     document.querySelectorAll('[data-benefit-slider]').forEach(function (root) {
         const track = root.querySelector('[data-slider-track]');
         const prev = root.querySelector('[data-slider-prev]');
         const next = root.querySelector('[data-slider-next]');
+        const dots = root.querySelector('[data-slider-dots]');
         if (!track) return;
 
-        const step = () => {
-            const card = track.querySelector('a');
-            return card ? card.offsetWidth + 16 : track.clientWidth;
+        // 한 페이지 = 트랙에 보이는 만큼. 카드 폭이 화면을 정확히 나누므로 clientWidth 가 곧 한 페이지다.
+        const pageW = () => track.clientWidth + 16;   // gap 보정
+        const pages = () => Math.max(1, Math.round(track.scrollWidth / pageW()));
+        const current = () => Math.round(track.scrollLeft / pageW());
+
+        const goTo = (i) => {
+            const n = pages();
+            const t = ((i % n) + n) % n;              // 끝에서 처음으로 순환
+            track.scrollTo({ left: t * pageW(), behavior: 'smooth' });
         };
-        const atEnd = () => track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
 
-        const go = (dir) => {
-            if (dir > 0 && atEnd()) track.scrollTo({ left: 0, behavior: 'smooth' });
-            else track.scrollBy({ left: dir * step(), behavior: 'smooth' });
+        const renderDots = () => {
+            if (!dots) return;
+            const n = pages();
+            if (n <= 1) { dots.innerHTML = ''; return; }
+            const cur = current();
+            dots.innerHTML = Array.from({ length: n }, (_, i) =>
+                '<button type="button" data-dot="' + i + '" aria-label="' + (i + 1) + '번째"'
+                + ' class="h-1.5 rounded-full transition-all '
+                + (i === cur ? 'w-5 bg-gray-900' : 'w-1.5 bg-gray-300 hover:bg-gray-400') + '"></button>'
+            ).join('');
         };
 
-        if (prev) prev.addEventListener('click', () => go(-1));
-        if (next) next.addEventListener('click', () => go(1));
+        if (prev) prev.addEventListener('click', () => goTo(current() - 1));
+        if (next) next.addEventListener('click', () => goTo(current() + 1));
+        if (dots) dots.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-dot]');
+            if (b) goTo(Number(b.dataset.dot));
+        });
 
-        // 자동 넘김 — 슬라이드가 화면에 다 들어오면 의미가 없으므로 넘칠 때만 돈다
+        track.addEventListener('scroll', renderDots, { passive: true });
+        window.addEventListener('resize', renderDots);
+
+        // 자동 넘김 — 한 화면에 다 들어오면 넘길 게 없다.
         let timer = null;
         const start = () => {
             if (timer || track.scrollWidth <= track.clientWidth + 8) return;
-            timer = setInterval(() => go(1), 5000);
+            timer = setInterval(() => goTo(current() + 1), 5000);
         };
         const stop = () => { clearInterval(timer); timer = null; };
 
         root.addEventListener('mouseenter', stop);
         root.addEventListener('mouseleave', start);
         track.addEventListener('touchstart', stop, { passive: true });
+
+        renderDots();
         start();
     });
 })();
