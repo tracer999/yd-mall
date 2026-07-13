@@ -132,14 +132,36 @@ exports.getHomePreview = async (req, res) => {
         // 미리보기는 "편집 중인 몰"(adminMallId)의 작업본을 렌더해야 한다.
         // req.mallId 를 편집 몰로 맞춰야 히어로·상품 리졸버가 같은 몰로 스코프된다.
         req.mallId = req.adminMallId || req.mallId || 1;
-        // builder.getHomePage 는 status 무필터 → 아직 발행 안 한 draft 홈도 잡는다.
-        const page = await builder.getHomePage(req.mallId);
+
+        // 빌더가 홈 외 페이지(랜딩)도 편집하므로 ?page= 를 받는다.
+        // 몰 스코프 검증(getPage)은 필수 — 안 하면 남의 몰 페이지를 미리 볼 수 있다.
+        const requested = Number(req.query.page) || 0;
+        const page = requested
+            ? await builder.getPage(requested, req.mallId)
+            : await builder.getHomePage(req.mallId); // status 무필터 → 미발행 draft 도 잡는다
+
+        if (!page) return res.status(404).send('페이지를 찾을 수 없습니다.');
+
+        // 미리보기는 **항상 라이브 page_section(작업본)** 을 본다. 발행 스냅샷이 아니다.
+        // 그게 "발행 전에 확인한다"의 의미다.
         const { shared, renderData } = await buildHomeContext(req, res);
-        const sections = page ? await displayService.getDraftSections(page.id, shared) : [];
+        const sections = await displayService.getDraftSections(page.id, shared);
+
+        // 홈과 랜딩은 템플릿이 다르다. 스토어프론트가 쓰는 것과 같은 템플릿으로 그려야
+        // 미리보기가 실제와 어긋나지 않는다(routes/feature.js 의 /new 와 같은 계약).
+        if (page.page_type !== 'home') {
+            return res.render('user/landing', {
+                page,
+                sections: sections || [],
+                pageTitle: page.title || '랜딩',
+                isPreview: true,
+            });
+        }
+
         res.render('user/index', Object.assign({
             sections: sections || [],
             isPreview: true,
-            layoutType: (page && page.layout_type) || 'main_basic'
+            layoutType: page.layout_type || 'main_basic'
         }, renderData));
     } catch (err) {
         console.error(err);

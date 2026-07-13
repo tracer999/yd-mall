@@ -34,15 +34,36 @@ function decorateSection(s, groupNameById) {
   });
 }
 
+/*
+ * 편집 대상 페이지를 정한다. ?page=<id> 가 있으면 그 페이지, 없으면 홈.
+ *
+ * ⚠️ 반드시 **몰 스코프로 검증**한다(builder.getPage 가 mall_id 를 함께 본다).
+ *    안 하면 관리자가 ?page=<남의 몰 페이지> 로 다른 몰을 편집할 수 있다.
+ *
+ * 예전에는 홈만 편집할 수 있었다. 그래서 랜딩(/new)은 발행할 방법이 없었고,
+ * 발행 스냅샷이 없는 페이지는 스토어프론트가 라이브 page_section 으로 폴백했다
+ * = 빌더에서 고치는 순간 운영에 반영됐다. 이제 모든 SDUI 페이지를 편집·발행한다.
+ */
+async function resolvePage(req) {
+  const mallId = req.adminMallId || 1;
+  // GET 요청에는 req.body 가 아예 없을 수 있다(body parser 가 채우지 않는다) — 옵셔널 체이닝 필수.
+  const requested = Number(req.query.page || (req.body && req.body.page_id)) || 0;
+  if (requested) return await builder.getPage(requested, mallId);
+  return await builder.getHomePage(mallId);
+}
+
 exports.getEditor = async (req, res) => {
   try {
-    const page = await builder.getHomePage(req.adminMallId || 1);
+    const mallId = req.adminMallId || 1;
+    const pages = await builder.listPages(mallId);
+    const page = await resolvePage(req);
+
     if (!page) {
       return res.status(404).render('admin/page-builder/editor', {
         layout: 'layouts/admin_layout',
         title: '페이지 빌더',
-        subtitle: '홈 페이지가 아직 구성되지 않았습니다.',
-        page: null, sections: [], palette: buildPalette(), productGroups: [], revisions: []
+        subtitle: '편집할 페이지가 없습니다.',
+        page: null, pages, sections: [], palette: buildPalette(), productGroups: [], revisions: []
       });
     }
 
@@ -59,8 +80,8 @@ exports.getEditor = async (req, res) => {
     res.render('admin/page-builder/editor', {
       layout: 'layouts/admin_layout',
       title: '페이지 빌더',
-      subtitle: '홈 화면의 섹션을 추가·삭제·재정렬하고 발행합니다.',
-      page, sections, palette: buildPalette(), productGroups, revisions
+      subtitle: '섹션을 추가·삭제·재정렬한 뒤 발행해야 스토어프론트에 반영됩니다.',
+      page, pages, sections, palette: buildPalette(), productGroups, revisions
     });
   } catch (err) {
     console.error('[pageBuilder.getEditor]', err);
@@ -70,8 +91,8 @@ exports.getEditor = async (req, res) => {
 
 exports.postSectionAdd = async (req, res) => {
   try {
-    const page = await builder.getHomePage(req.adminMallId || 1);
-    if (!page) return res.status(404).json({ success: false, message: '홈 페이지 없음' });
+    const page = await resolvePage(req);
+    if (!page) return res.status(404).json({ success: false, message: '페이지 없음' });
     const id = await builder.addSection(page.id, { section_type: req.body.section_type });
     res.json({ success: true, id });
   } catch (err) {
@@ -124,7 +145,7 @@ exports.postSectionDuplicate = async (req, res) => {
 
 exports.postSectionReorder = async (req, res) => {
   try {
-    const page = await builder.getHomePage(req.adminMallId || 1);
+    const page = await resolvePage(req);
     const order = req.body.order;
     if (!page || !Array.isArray(order)) {
       return res.status(400).json({ success: false, message: '잘못된 요청' });
@@ -139,8 +160,8 @@ exports.postSectionReorder = async (req, res) => {
 
 exports.postPublish = async (req, res) => {
   try {
-    const page = await builder.getHomePage(req.adminMallId || 1);
-    if (!page) return res.status(404).json({ success: false, message: '홈 페이지 없음' });
+    const page = await resolvePage(req);
+    if (!page) return res.status(404).json({ success: false, message: '페이지 없음' });
     const by = (req.session.admin && req.session.admin.username) || null;
     const revisionNo = await builder.publish(page.id, by);
     res.json({ success: true, revisionNo });
@@ -152,8 +173,8 @@ exports.postPublish = async (req, res) => {
 
 exports.postRollback = async (req, res) => {
   try {
-    const page = await builder.getHomePage(req.adminMallId || 1);
-    if (!page) return res.status(404).json({ success: false, message: '홈 페이지 없음' });
+    const page = await resolvePage(req);
+    if (!page) return res.status(404).json({ success: false, message: '페이지 없음' });
     await builder.rollback(page.id, Number(req.params.revisionId));
     res.json({ success: true });
   } catch (err) {

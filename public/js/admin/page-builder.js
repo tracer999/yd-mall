@@ -7,6 +7,7 @@
   var dataEl = document.getElementById('pb-data');
   if (!dataEl) return;
   var STATE = JSON.parse(dataEl.textContent);
+  var PAGE_ID = STATE.pageId;          // 편집 대상 페이지. 모든 요청·미리보기가 이걸 따른다
   var sections = STATE.sections || [];
   var productGroups = STATE.productGroups || [];
   var selectedId = null;
@@ -24,7 +25,8 @@
   }
   function markDirty() { if (dirtyEl) dirtyEl.classList.remove('hidden'); }
   function refreshPreview() {
-    if (previewEl) previewEl.src = '/admin/page-builder/preview?t=' + Date.now();
+    // 미리보기도 편집 중인 페이지를 따라간다(홈 고정이 아니다).
+    if (previewEl) previewEl.src = '/admin/page-builder/preview?page=' + PAGE_ID + '&t=' + Date.now();
   }
   function toLocalInput(v) {
     if (!v) return '';
@@ -34,10 +36,13 @@
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   async function api(url, body) {
+    // 편집 대상 페이지를 모든 요청에 실어 보낸다. 빌더가 홈만 다루던 시절에는
+    // 서버가 getHomePage() 로 알아서 찾았지만, 이제 랜딩도 편집하므로 명시해야 한다.
+    var payload = Object.assign({ page_id: PAGE_ID }, body || {});
     var res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
+      body: JSON.stringify(payload)
     });
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok || !data.success) throw new Error(data.message || '요청 실패');
@@ -273,6 +278,14 @@
   });
 
   document.getElementById('pb-preview-refresh').addEventListener('click', refreshPreview);
+
+  // 페이지 전환 — 편집 상태는 페이지마다 다르므로 통째로 다시 로드한다.
+  var pageSel = document.getElementById('pb-page-select');
+  if (pageSel) {
+    pageSel.addEventListener('change', function () {
+      location.href = '/admin/page-builder?page=' + pageSel.value;
+    });
+  }
 
   document.querySelectorAll('.pb-device-btn').forEach(function (b) {
     b.addEventListener('click', function () {

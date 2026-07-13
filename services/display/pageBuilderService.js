@@ -27,6 +27,36 @@ async function getHomePage(mallId = 1) {
   return rows[0] || null;
 }
 
+/**
+ * 몰이 가진 SDUI 페이지 목록 (홈 + 랜딩).
+ * 빌더가 홈만 편집하던 시절에는 필요 없었다. 이제 랜딩(/new 등)도 편집·발행해야 한다 —
+ * 편집할 수 없는 페이지를 발행해 두면 스냅샷에 갇혀 되돌릴 방법이 없다.
+ */
+async function listPages(mallId = 1) {
+  const [rows] = await pool.query(
+    `SELECT p.*,
+            (SELECT COUNT(*) FROM page_section s WHERE s.page_id = p.id) AS section_count,
+            (SELECT MAX(r.revision_no) FROM page_revision r WHERE r.page_id = p.id) AS published_no
+       FROM page p
+      WHERE p.mall_id = ?
+      ORDER BY (p.page_type = 'home') DESC, p.id`,
+    [mallId]
+  );
+  return rows;
+}
+
+/**
+ * 페이지 하나 — **반드시 몰 스코프로 검증한다.**
+ * 안 하면 관리자가 ?page=<남의 몰 페이지 id> 로 다른 몰을 편집할 수 있다.
+ */
+async function getPage(pageId, mallId = 1) {
+  const [rows] = await pool.query(
+    'SELECT * FROM page WHERE id = ? AND mall_id = ?',
+    [Number(pageId) || 0, mallId]
+  );
+  return rows[0] || null;
+}
+
 async function getSections(pageId) {
   const [rows] = await pool.query(
     'SELECT * FROM page_section WHERE page_id = ? ORDER BY sort_order ASC, id ASC',
@@ -246,6 +276,8 @@ async function listProductGroups() {
 
 module.exports = {
   getHomePage,
+  listPages,
+  getPage,
   getSections,
   getSection,
   addSection,
