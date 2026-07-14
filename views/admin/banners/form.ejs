@@ -19,7 +19,7 @@
               <label class="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input type="radio" name="banner_type" value="MAIN"
                   class="text-blue-600 border-gray-300 focus:ring-blue-500" <%=(currentType==='MAIN') ? 'checked' : '' %>>
-                <span>메인 배너</span>
+                <span>메인 슬라이더 (이미지 배너)</span>
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input type="radio" name="banner_type" value="CATEGORY"
@@ -105,6 +105,65 @@
             <label class="block text-sm font-medium text-gray-700 mb-2">연결 링크 (URL)</label>
             <input type="text" name="link_url" placeholder="/products/view/1 또는 외부 URL"
               value="<%= banner ? banner.link_url : '' %>" />
+            <p class="mt-1 text-xs text-gray-400">이미지 배너 슬라이더의 <strong>이동 버튼</strong>도 이 링크로 갑니다.</p>
+          </div>
+
+          <%#
+            ── 배너 내 문구(오버레이) ─ 메인 슬라이더('이미지 배너 슬라이더' 방식) 전용 ──
+            이미지 위에 얹히는 큰 제목 + 추가 문구(최대 2줄) + 이동 버튼. 비워 두면 이미지만 노출된다.
+            MAIN 이 아닌 타입에는 렌더할 자리가 없으므로 폼에서도 숨기고, 서버도 저장하지 않는다.
+          %>
+          <div id="overlayField" class="hidden rounded-lg border border-gray-200 bg-gray-50/60 p-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-gray-800">배너 내 문구 <span class="font-normal text-gray-400">(이미지 배너 슬라이더 전용 · 비우면 이미지만 노출)</span></h3>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">배너 제목 (큰 글자)</label>
+              <input type="text" name="overlay_title" maxlength="120" placeholder="예: 건강식품 B2B 유통 플랫폼"
+                value="<%= banner && banner.overlay_title ? banner.overlay_title : '' %>" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">추가 문구 (최대 2줄)</label>
+              <textarea name="overlay_subtitle" rows="2" maxlength="200"
+                class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="한 줄에 하나씩. 3줄째부터는 저장되지 않습니다."><%= banner && banner.overlay_subtitle ? banner.overlay_subtitle : '' %></textarea>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">이동 버튼 문구</label>
+                <input type="text" name="overlay_button_text" maxlength="40" placeholder="예: 이용가이드 보러가기"
+                  value="<%= banner && banner.overlay_button_text ? banner.overlay_button_text : '' %>" />
+                <p class="mt-1 text-xs text-gray-400">비우면 버튼이 나오지 않습니다.</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">버튼 색상</label>
+                <%# 배너 이미지와 색을 맞출 수 있게 컬러피커 + HEX 직접 입력을 함께 둔다(둘은 서로 동기화). %>
+                <div class="flex items-center gap-2">
+                  <input type="color" id="overlayButtonColorPicker"
+                    value="<%= banner && banner.overlay_button_color ? banner.overlay_button_color : '#1a7f37' %>"
+                    class="h-10 w-12 p-1 border border-gray-300 rounded-md bg-white cursor-pointer">
+                  <input type="text" name="overlay_button_color" id="overlayButtonColorHex" maxlength="7" placeholder="#1a7f37"
+                    value="<%= banner && banner.overlay_button_color ? banner.overlay_button_color : '' %>"
+                    class="flex-1 min-w-0 font-mono text-sm" />
+                </div>
+                <p class="mt-1 text-xs text-gray-400">글자색(흰/검정)은 배경 밝기에 따라 자동 선택됩니다.</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">문구 정렬</label>
+                <select name="overlay_align" class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                  <% ['LEFT','CENTER','RIGHT'].forEach(function (a) { %>
+                    <option value="<%= a %>" <%= banner && banner.overlay_align === a ? 'selected' : (!banner && a === 'LEFT' ? 'selected' : '') %>>
+                      <%= a === 'LEFT' ? '왼쪽' : (a === 'CENTER' ? '가운데' : '오른쪽') %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -173,6 +232,11 @@
       // 메뉴별 배너 선택 필드 토글
       if (menuTargetField) {
         menuTargetField.classList.toggle('hidden', !(selected && selected.value === 'MENU'));
+      }
+      // 배너 내 문구는 메인 슬라이더(MAIN) 에서만 렌더된다 → 다른 타입에선 아예 감춘다.
+      const overlayField = document.getElementById('overlayField');
+      if (overlayField) {
+        overlayField.classList.toggle('hidden', !(selected && selected.value === 'MAIN'));
       }
       if (selected && (selected.value === 'CATEGORY' || selected.value === 'BRAND')) {
         categoryField.classList.remove('hidden');
@@ -261,6 +325,17 @@
         sizeGuide.textContent = '배너 타입을 선택하면 권장 이미지 사이즈가 표시됩니다.';
       }
     }
+
+    // 버튼 색상 — 컬러피커와 HEX 입력을 양방향 동기화한다(HEX 가 저장되는 값이다).
+    (function () {
+      const picker = document.getElementById('overlayButtonColorPicker');
+      const hex = document.getElementById('overlayButtonColorHex');
+      if (!picker || !hex) return;
+      picker.addEventListener('input', function () { hex.value = picker.value; });
+      hex.addEventListener('input', function () {
+        if (/^#[0-9a-fA-F]{6}$/.test(hex.value.trim())) picker.value = hex.value.trim();
+      });
+    })();
 
     typeRadios.forEach(r => r.addEventListener('change', updateCategoryVisibility));
     typeRadios.forEach(r => r.addEventListener('change', updateSizeGuide));

@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS mall (
   id         BIGINT       NOT NULL AUTO_INCREMENT,
   code       VARCHAR(50)  NOT NULL COMMENT '고정 식별자 (health / general)',
   name       VARCHAR(100) NOT NULL,
+  mall_type  VARCHAR(20)  NOT NULL DEFAULT 'large' COMMENT 'large=대형몰 / small=소형몰 (services/mall/presets.js)',
+  preset_key VARCHAR(50)  DEFAULT NULL COMMENT '마지막으로 적용한 프리셋',
   domain     VARCHAR(255) DEFAULT NULL COMMENT '향후 도메인 기반 라우팅용',
   is_active  TINYINT(1)   NOT NULL DEFAULT 1,
   is_default TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '해석기 폴백 대상 (1개만 1)',

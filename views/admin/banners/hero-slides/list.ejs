@@ -1,109 +1,268 @@
-<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-    <p class="text-sm text-gray-500">
-        프론트 메인 히어로(상품 쇼케이스)에 노출되는 슬라이드를 관리합니다.
-        <span class="text-gray-400">슬라이드는 상품과 연결되며, 라벨·헤드라인·이미지·링크를 비워두면 상품 정보로 자동 표시됩니다.</span>
-    </p>
-    <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
+<%
+  /*
+   * 메인 슬라이더 관리 — 히어로 방식(상품 쇼케이스 / 이미지 배너) 선택 + 선택한 방식의 콘텐츠 편집.
+   * locals: activeVariant(적용 중), mode(열람 중), mainSlides, featureSlides, mainBanners
+   *
+   * activeVariant 는 site_settings.hero_variant. 프론트는 이 값 하나로 둘 중 하나만 렌더한다.
+   * mode 는 화면에서 보고 있는 방식 — 적용 중이 아닌 방식도 미리 채워둘 수 있게 분리했다.
+   */
+  const isShowcase = mode === 'product_showcase';
+  const isPreviewingInactive = mode !== activeVariant;
+  const MODES = [
+    {
+      key: 'product_showcase',
+      name: '상품 쇼케이스',
+      desc: '상품과 연결된 슬라이드. 중앙 슬라이더 + 우측 추천 카드로 구성됩니다.',
+    },
+    {
+      key: 'full_banner',
+      name: '이미지 배너 슬라이드',
+      desc: '가로 전체 이미지 배너를 넘기는 방식. PC·모바일 이미지를 따로 등록할 수 있습니다.',
+    },
+  ];
+%>
+
+<div class="mb-6">
+    <p class="text-sm text-gray-500">홈 상단 히어로 영역을 관리합니다. 두 가지 방식 중 <span class="font-medium text-gray-700">하나</span>가 적용됩니다.</p>
+</div>
+
+<%- include('../_tabs', { activeTab: 'HERO' }) %>
+
+<!-- ── 히어로 방식 선택 ── -->
+<form action="/admin/banners/hero-slides/variant" method="POST" class="mb-8">
+    <div class="flex items-center gap-2 mb-3">
+        <h3 class="text-base font-bold text-gray-800">히어로 방식</h3>
+        <span class="text-xs text-gray-400">고른 방식만 홈에 노출됩니다. 다른 방식의 콘텐츠는 지워지지 않고 보존됩니다.</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <% MODES.forEach(function (m) {
+               const isActive = m.key === activeVariant;
+               const isViewing = m.key === mode;
+        %>
+            <label class="relative flex cursor-pointer rounded-lg border-2 bg-white p-4 transition-colors
+                          <%= isViewing ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200 hover:border-gray-300' %>">
+                <input type="radio" name="hero_variant" value="<%= m.key %>"
+                       class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                       <%= isViewing ? 'checked' : '' %>
+                       onchange="location.href='/admin/banners/hero-slides?mode=<%= m.key %>'">
+                <span class="ml-3 flex-1">
+                    <span class="flex items-center gap-2">
+                        <span class="block text-sm font-semibold text-gray-900"><%= m.name %></span>
+                        <% if (isActive) { %>
+                            <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full bg-green-100 text-green-800">적용 중</span>
+                        <% } %>
+                    </span>
+                    <span class="mt-1 block text-xs text-gray-500"><%= m.desc %></span>
+                </span>
+            </label>
+        <% }); %>
+    </div>
+
+    <% if (isPreviewingInactive) { %>
+        <div class="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <span class="text-sm text-amber-900">
+                지금 보고 있는 <span class="font-semibold"><%= isShowcase ? '상품 쇼케이스' : '이미지 배너 슬라이드' %></span> 방식은
+                <span class="font-semibold">홈에 적용돼 있지 않습니다.</span> 여기서 등록한 내용은 적용 전까지 노출되지 않습니다.
+            </span>
+            <button type="submit"
+                class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700">
+                이 방식을 홈에 적용
+            </button>
+        </div>
+    <% } else { %>
+        <p class="text-xs text-gray-400">이 방식이 현재 홈에 적용돼 있습니다.</p>
+    <% } %>
+</form>
+
+<hr class="border-gray-200 mb-8">
+
+<% if (isShowcase) { %>
+    <!-- ══════ 상품 쇼케이스 (hero_slide) ══════ -->
+    <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+        <p class="text-sm text-gray-500">
+            슬라이드는 상품과 연결됩니다.
+            <span class="text-gray-400">라벨·헤드라인·이미지·링크를 비워두면 상품 정보로 자동 표시됩니다.</span>
+        </p>
         <a href="/admin/banners/hero-slides/add?slot=MAIN"
             class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline">슬라이드 등록</a>
     </div>
-</div>
 
-<!-- 배너 관리 탭 -->
-<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">
-    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-        <a href="/admin/banners/hero-slides"
-            class="border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">메인 슬라이더</a>
-        <a href="/admin/banners?type=MAIN"
-            class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">메인 배너(레거시)</a>
-        <a href="/admin/banners?type=CATEGORY"
-            class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">카테고리 배너</a>
-        <a href="/admin/banners?type=POPUP"
-            class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">팝업 배너</a>
-        <a href="/admin/banners?type=BRAND"
-            class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">브랜드 배너</a>
-        <a href="/admin/banners?type=MENU"
-            class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">메뉴별 배너</a>
-    </nav>
-</div>
+    <%
+      function renderSlideCard(slide) {
+        const img = slide.image_url || slide.main_image || '';
+        const title = slide.headline || slide.product_name || '(상품 미연결)';
+    %>
+        <div class="bg-white overflow-hidden shadow-sm rounded-lg flex flex-col h-full border border-gray-100">
+            <div class="w-full h-40 bg-gray-50 flex items-center justify-center overflow-hidden">
+                <% if (img) { %>
+                    <img src="<%= img %>" class="w-full h-40 object-cover" alt="<%= title %>">
+                <% } else { %>
+                    <span class="text-gray-300 text-sm">이미지 없음</span>
+                <% } %>
+            </div>
+            <div class="p-5 flex-1 flex flex-col">
+                <div class="flex items-center justify-between mb-2 gap-2">
+                    <h5 class="text-base font-bold text-gray-900 truncate"><%= title %></h5>
+                    <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full <%= slide.slot === 'FEATURE' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' %>">
+                        <%= slide.slot === 'FEATURE' ? '우측 카드' : '중앙 슬라이더' %>
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 mb-1">
+                    <span class="font-semibold text-gray-700">라벨:</span> <%= slide.label || '없음' %>
+                </p>
+                <p class="text-xs text-gray-500 mb-1">
+                    <span class="font-semibold text-gray-700">연결 상품:</span>
+                    <% if (slide.product_id) { %>
+                        #<%= slide.product_id %> <%= slide.product_name || '(삭제된 상품)' %>
+                    <% } else { %>
+                        미연결
+                    <% } %>
+                </p>
+                <p class="text-xs text-gray-500 mb-3 truncate">
+                    <span class="font-semibold text-gray-700">링크:</span> <%= slide.link_url || '상품 상세(자동)' %>
+                </p>
+                <div class="mt-auto flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= slide.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' %>">
+                            <%= slide.is_active ? '노출중' : '중지' %>
+                        </span>
+                        <span class="text-[11px] text-gray-400">순서 <%= slide.sort_order %></span>
+                    </div>
+                    <form action="/admin/banners/hero-slides/delete" method="POST" onsubmit="return confirm('삭제하시겠습니까?');" class="flex gap-2">
+                        <a href="/admin/banners/hero-slides/edit/<%= slide.id %>"
+                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
+                        <input type="hidden" name="id" value="<%= slide.id %>">
+                        <button type="submit"
+                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    <% } %>
 
-<%
-  function renderSlideCard(slide) {
-    const img = slide.image_url || slide.main_image || '';
-    const title = slide.headline || slide.product_name || '(상품 미연결)';
-%>
-    <div class="bg-white overflow-hidden shadow-sm rounded-lg flex flex-col h-full border border-gray-100">
-        <div class="w-full h-40 bg-gray-50 flex items-center justify-center overflow-hidden">
-            <% if (img) { %>
-                <img src="<%= img %>" class="w-full h-40 object-cover" alt="<%= title %>">
-            <% } else { %>
-                <span class="text-gray-300 text-sm">이미지 없음</span>
+    <!-- 중앙 슬라이더 (slot=MAIN) -->
+    <div class="mb-8">
+        <div class="flex items-center gap-2 mb-3">
+            <h3 class="text-base font-bold text-gray-800">중앙 슬라이더 (MAIN)</h3>
+            <span class="text-xs text-gray-400">메인 히어로 중앙의 큰 상품 슬라이드</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <% mainSlides.forEach(function(slide) { renderSlideCard(slide); }) %>
+            <% if (mainSlides.length === 0) { %>
+                <div class="col-span-full text-center py-10 bg-gray-50 rounded-lg text-gray-500 text-sm">등록된 중앙 슬라이드가 없습니다.</div>
             <% } %>
         </div>
-        <div class="p-5 flex-1 flex flex-col">
-            <div class="flex items-center justify-between mb-2 gap-2">
-                <h5 class="text-base font-bold text-gray-900 truncate"><%= title %></h5>
-                <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full <%= slide.slot === 'FEATURE' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' %>">
-                    <%= slide.slot === 'FEATURE' ? '우측 카드' : '중앙 슬라이더' %>
-                </span>
-            </div>
-            <p class="text-xs text-gray-500 mb-1">
-                <span class="font-semibold text-gray-700">라벨:</span> <%= slide.label || '없음' %>
-            </p>
-            <p class="text-xs text-gray-500 mb-1">
-                <span class="font-semibold text-gray-700">연결 상품:</span>
-                <% if (slide.product_id) { %>
-                    #<%= slide.product_id %> <%= slide.product_name || '(삭제된 상품)' %>
-                <% } else { %>
-                    미연결
-                <% } %>
-            </p>
-            <p class="text-xs text-gray-500 mb-3 truncate">
-                <span class="font-semibold text-gray-700">링크:</span> <%= slide.link_url || '상품 상세(자동)' %>
-            </p>
-            <div class="mt-auto flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= slide.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' %>">
-                        <%= slide.is_active ? '노출중' : '중지' %>
-                    </span>
-                    <span class="text-[11px] text-gray-400">순서 <%= slide.sort_order %></span>
-                </div>
-                <form action="/admin/banners/hero-slides/delete" method="POST" onsubmit="return confirm('삭제하시겠습니까?');" class="flex gap-2">
-                    <a href="/admin/banners/hero-slides/edit/<%= slide.id %>"
-                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
-                    <input type="hidden" name="id" value="<%= slide.id %>">
-                    <button type="submit"
-                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
-                </form>
-            </div>
+    </div>
+
+    <!-- 우측 카드 (slot=FEATURE) -->
+    <div class="mb-4">
+        <div class="flex items-center gap-2 mb-3">
+            <h3 class="text-base font-bold text-gray-800">우측 추천 카드 (FEATURE)</h3>
+            <span class="text-xs text-gray-400">히어로 우측 고정 추천 상품 카드 (PC 전용, 보통 1개)</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <% featureSlides.forEach(function(slide) { renderSlideCard(slide); }) %>
+            <% if (featureSlides.length === 0) { %>
+                <div class="col-span-full text-center py-10 bg-gray-50 rounded-lg text-gray-500 text-sm">등록된 우측 카드가 없습니다.</div>
+            <% } %>
         </div>
     </div>
+
+<% } else { %>
+    <!-- ══════ 이미지 배너 슬라이드 (banners, banner_type='MAIN') ══════ -->
+    <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+        <p class="text-sm text-gray-500">
+            홈 상단에 가로 전체 이미지 배너로 노출됩니다. 배너 위에 <strong>제목·추가 문구·이동 버튼</strong>을 얹을 수 있습니다(수정 화면).
+            <span class="text-gray-400">모바일 이미지를 등록하면 모바일에서 그 이미지를 씁니다. 순서가 빠른 것부터 최대 6개까지 노출됩니다.</span>
+        </p>
+        <a href="/admin/banners/add?type=MAIN"
+            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline">배너 등록</a>
+    </div>
+
+    <%#
+      순서·노출은 목록에서 바로 정한다(카드마다 수정 폼을 드나들면 순서를 맞추기 어렵다).
+      삭제 폼은 이 폼 **바깥**에 둔다 — 중첩 <form> 은 브라우저가 무시해 삭제가 순서 저장으로 나간다.
+    %>
+    <form method="POST" action="/admin/banners/hero-slides/banners">
+        <div class="mb-4 flex items-center justify-end gap-3">
+            <% if (typeof saved !== 'undefined' && saved) { %>
+                <span class="text-xs text-emerald-600">저장되었습니다.</span>
+            <% } %>
+            <button type="submit"
+                class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900">순서·노출 저장</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <% mainBanners.forEach(function (banner, i) { %>
+                <div class="bg-white overflow-hidden shadow-sm rounded-lg flex flex-col h-full border border-gray-100">
+                    <img src="<%= banner.image_url %>" class="w-full h-40 object-cover" alt="<%= banner.title || '' %>">
+                    <div class="p-5 flex-1 flex flex-col">
+                        <input type="hidden" name="id" value="<%= banner.id %>">
+                        <div class="flex items-center justify-between mb-2 gap-2">
+                            <h5 class="text-base font-bold text-gray-900 truncate"><%= banner.title || '(제목 없음)' %></h5>
+                            <% if (i >= 6) { %>
+                                <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full bg-gray-100 text-gray-600 shrink-0">노출 제외</span>
+                            <% } %>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-1">
+                            <span class="font-semibold text-gray-700">모바일 이미지:</span>
+                            <%= banner.mobile_image_url ? '등록됨' : '없음 (PC 이미지 사용)' %>
+                        </p>
+                        <p class="text-xs text-gray-500 mb-1 truncate">
+                            <span class="font-semibold text-gray-700">배너 문구:</span>
+                            <%= banner.overlay_title || banner.overlay_subtitle || banner.overlay_button_text ? (banner.overlay_title || '(제목 없음)') : '없음 (이미지만)' %>
+                            <% if (banner.overlay_button_text) { %>
+                                <span class="ml-1 align-middle inline-flex items-center gap-1 text-[10px] text-gray-400">
+                                    버튼
+                                    <span class="inline-block w-2.5 h-2.5 rounded-sm border border-gray-200" style="background-color: <%= banner.overlay_button_color || '#1a7f37' %>;"></span>
+                                </span>
+                            <% } %>
+                        </p>
+                        <p class="text-xs text-gray-500 mb-1 truncate">
+                            <span class="font-semibold text-gray-700">링크:</span> <%= banner.link_url || '없음' %>
+                        </p>
+                        <p class="text-xs text-gray-500 mb-3">
+                            <span class="font-semibold text-gray-700">게시 기간:</span>
+                            <%= banner.start_date ? new Date(banner.start_date).toLocaleDateString() : '설정 안됨' %> ~
+                            <%= banner.end_date ? new Date(banner.end_date).toLocaleDateString() : '설정 안됨' %>
+                        </p>
+
+                        <div class="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-3">
+                                <%# 키에 'b' 접두어 — 숫자 키는 qs 가 배열 인덱스로 해석해 값이 어긋난다. %>
+                                <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                                    <span class="font-semibold text-gray-700">순서</span>
+                                    <input type="number" name="order[b<%= banner.id %>]" value="<%= banner.display_order || 0 %>"
+                                        class="w-16 h-[33px] text-xs border-gray-300 rounded-md">
+                                </label>
+                                <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                                    <input type="checkbox" name="active[b<%= banner.id %>]" value="1"
+                                        class="h-4 w-4 text-blue-600 border-gray-300 rounded" <%= banner.is_active ? 'checked' : '' %>>
+                                    노출
+                                </label>
+                            </div>
+                            <div class="flex gap-2">
+                                <a href="/admin/banners/edit/<%= banner.id %>"
+                                    class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
+                                <%# 삭제는 폼 밖(하단 별도 form)의 버튼을 이 위치로 연결한다 — form 속성으로 중첩을 피한다. %>
+                                <button type="submit" form="del-banner-<%= banner.id %>" onclick="return confirm('삭제하시겠습니까?');"
+                                    class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <% }); %>
+            <% if (mainBanners.length === 0) { %>
+                <div class="col-span-full text-center py-10 bg-gray-50 rounded-lg text-gray-500 text-sm">등록된 메인 배너가 없습니다.</div>
+            <% } %>
+        </div>
+    </form>
+
+    <% mainBanners.forEach(function (banner) { %>
+        <form id="del-banner-<%= banner.id %>" action="/admin/banners/delete" method="POST" class="hidden">
+            <input type="hidden" name="id" value="<%= banner.id %>">
+            <input type="hidden" name="return_to" value="/admin/banners/hero-slides?mode=full_banner">
+        </form>
+    <% }); %>
 <% } %>
-
-<!-- 중앙 슬라이더 (slot=MAIN) -->
-<div class="mb-8">
-    <div class="flex items-center gap-2 mb-3">
-        <h3 class="text-base font-bold text-gray-800">중앙 슬라이더 (MAIN)</h3>
-        <span class="text-xs text-gray-400">메인 히어로 중앙의 큰 상품 슬라이드</span>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <% mainSlides.forEach(function(slide) { renderSlideCard(slide); }) %>
-        <% if (mainSlides.length === 0) { %>
-            <div class="col-span-full text-center py-10 bg-gray-50 rounded-lg text-gray-500 text-sm">등록된 중앙 슬라이드가 없습니다.</div>
-        <% } %>
-    </div>
-</div>
-
-<!-- 우측 카드 (slot=FEATURE) -->
-<div class="mb-4">
-    <div class="flex items-center gap-2 mb-3">
-        <h3 class="text-base font-bold text-gray-800">우측 추천 카드 (FEATURE)</h3>
-        <span class="text-xs text-gray-400">히어로 우측 고정 추천 상품 카드 (PC 전용, 보통 1개)</span>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <% featureSlides.forEach(function(slide) { renderSlideCard(slide); }) %>
-        <% if (featureSlides.length === 0) { %>
-            <div class="col-span-full text-center py-10 bg-gray-50 rounded-lg text-gray-500 text-sm">등록된 우측 카드가 없습니다.</div>
-        <% } %>
-    </div>
-</div>

@@ -50,7 +50,20 @@
               </option>
             <% }); %>
           </select>
-          <p class="mt-1 text-xs text-gray-400">현재 제공되는 레이아웃은 1종입니다.</p>
+          <%#
+            레이아웃을 고르면 GNB 조립 방식(nav_mode)이 함께 바뀐다 — 컨트롤러가 짝으로 저장한다.
+            운영자에게 두 개의 스위치를 내주면 깨진 조합(드로어 헤더인데 카테고리가 메뉴에 없음)이 나온다.
+          %>
+          <% headerLayoutTypes.forEach(function (t) { %>
+            <% if (t.value === config.header_layout_type) { %>
+              <p class="mt-1.5 text-xs text-gray-500 leading-relaxed"><%= t.hint %></p>
+            <% } %>
+          <% }); %>
+          <p class="mt-1 text-xs text-gray-400">
+            레이아웃을 바꾸면 GNB 조립 방식(<code class="text-gray-600"><%= config.nav_mode %></code>)도 함께 맞춰집니다.
+            메뉴 항목 자체는 <a href="/admin/feature-menus" class="text-indigo-600 hover:underline">메뉴 관리</a>에서, 결과는
+            <a href="/admin/menu-preview" class="text-indigo-600 hover:underline">메뉴 미리보기</a>에서 확인하세요.
+          </p>
         </div>
 
       </div>

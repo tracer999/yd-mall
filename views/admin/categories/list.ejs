@@ -23,7 +23,22 @@ const toJs = (v) => JSON.stringify(v)
 <div class="mb-6 flex justify-between items-center">
     <div>
         <p class="text-sm text-gray-500">상품, 테마, 브랜드 카테고리를 관리합니다. 각 분류 안에서 최대 <%= maxDepth %>단계까지 계층을 만들 수 있습니다.</p>
+        <p class="mt-0.5 text-xs text-gray-400">
+            이름·순서·상위 변경은 행마다 <strong>[수정]</strong>. 노출(활성·PC·모바일)만 여러 건 바꿀 때는 <strong>[노출 일괄 저장]</strong> 을 쓰세요.
+        </p>
     </div>
+    <div class="flex items-center gap-2">
+    <% if (typeof saved !== 'undefined' && saved) { %>
+        <span class="text-xs text-emerald-600 mr-1">노출이 저장되었습니다.</span>
+    <% } %>
+    <%#
+      노출 일괄 저장 — 체크박스는 행별 수정 폼(form 속성)에 묶여 있어 다른 폼으로 함께 보낼 수 없다.
+      그래서 지금 열려 있는 탭의 행들을 훑어 히든 폼을 만들어 보낸다(제출되는 값 = 화면에 보이는 상태).
+    %>
+    <button type="button" onclick="saveVisibility()"
+        class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 whitespace-nowrap">
+        노출 일괄 저장
+    </button>
     <button onclick="openModal()"
         class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 gap-2 whitespace-nowrap">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -33,6 +48,7 @@ const toJs = (v) => JSON.stringify(v)
         </svg>
         카테고리 등록
     </button>
+    </div>
 </div>
 
 <% if (error) { %>
@@ -375,6 +391,8 @@ const toJs = (v) => JSON.stringify(v)
     <input type="hidden" name="active_tab" id="deleteActiveTab">
 </form>
 
+<form id="visibilityForm" action="/admin/categories/visibility" method="POST" style="display:none;"></form>
+
 <style>
     .cat-chevron { transition: transform .15s ease; }
     .cat-toggle[aria-expanded="true"] .cat-chevron { transform: rotate(90deg); }
@@ -389,6 +407,44 @@ const toJs = (v) => JSON.stringify(v)
 
     const tabActiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
     const tabInactiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
+
+    /*
+     * 노출 일괄 저장 — 지금 열려 있는 탭의 모든 행(접혀 있는 하위 뎁스 포함)을 훑어
+     * 활성/PC/모바일 체크 상태만 서버로 보낸다. 이름·순서·상위는 보내지 않는다(행별 [수정] 소관).
+     */
+    function saveVisibility() {
+        const pane = document.getElementById('content-' + currentTab);
+        const form = document.getElementById('visibilityForm');
+        if (!pane || !form) return;
+
+        const rows = pane.querySelectorAll('tr.cat-row');
+        if (!rows.length) return alert('저장할 카테고리가 없습니다.');
+
+        form.innerHTML = '';
+        const add = (name, value) => {
+            const el = document.createElement('input');
+            el.type = 'hidden'; el.name = name; el.value = value;
+            form.appendChild(el);
+        };
+        add('active_tab', currentTab);
+
+        rows.forEach(row => {
+            const id = row.getAttribute('data-cat-id');
+            if (!id) return;
+            add('id[]', id);
+            // 체크된 것만 보낸다. 서버는 없는 키를 0 으로 읽는다(체크 해제 = 노출 끔).
+            // 키의 'c' 접두어는 필수 — 숫자 키는 qs 가 배열 인덱스로 해석해 id 매칭이 깨진다.
+            const flag = (inputName, key) => {
+                const box = row.querySelector('input[type="checkbox"][name="' + inputName + '"]');
+                if (box && box.checked) add(key + '[c' + id + ']', '1');
+            };
+            flag('is_active', 'active');
+            flag('pc_visible', 'pc');
+            flag('mobile_visible', 'mo');
+        });
+
+        form.submit();
+    }
 
     function updateModalDisplayOrder() {
         const displayOrderInput = document.getElementById('modal-display-order');

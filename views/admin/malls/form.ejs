@@ -1,7 +1,12 @@
 <%
-  /* 몰 등록/수정 (P5 Phase 2) */
+  /* 몰 등록/수정 (P5 Phase 2 · 몰 빌더 P4)
+   *
+   * 등록: 몰 유형(프리셋)을 고르면 저장 직후 mallProvisioner 가 내비·메뉴·테마·홈을 채운다.
+   * 수정: 기본정보만 바꾼다. 프리셋 재적용은 아래 별도 폼(POST /:id/provision).
+   */
   const isNew = !mall.id;
   const action = isNew ? '/admin/malls' : `/admin/malls/${mall.id}`;
+  const currentPreset = mall.preset_key || defaultPresetKey;
 %>
 
 <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -11,6 +16,16 @@
     <h1 class="mt-2 text-2xl font-bold text-gray-900"><%= title %></h1>
   </div>
 
+  <% if (saved) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (notice) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-start gap-2">
+      <i class="bi bi-check-circle-fill mt-0.5"></i><span><%= notice %></span>
+    </div>
+  <% } %>
   <% if (error) { %>
     <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
       <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
@@ -62,18 +77,116 @@
       </div>
     </div>
 
+    <%#
+      헤더·GNB 스킨 — 등록할 때 고른다. 저장 직후 프리셋이 내비·메뉴·테마·홈을 채운다.
+      수정 화면에서는 아래 '프리셋 재적용' 폼이 담당한다(파괴 범위가 달라 폼을 분리했다).
+      스킨만 바꾸려면 몰을 다시 만들 필요 없이 Header 설정에서 바꾼다.
+    %>
+    <% if (isNew) { %>
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+          <h2 class="text-sm font-semibold text-gray-800">헤더 · GNB 스킨</h2>
+          <p class="mt-0.5 text-xs text-gray-500">
+            이 몰의 <strong>메뉴 구조</strong>를 정합니다. 저장하면 스킨에 맞춰 <strong>GNB 메뉴 · 헤더 정책 · 테마 · 메인 화면 골격</strong>이 함께 채워집니다.
+            상품 수와는 무관하며, 나중에 <a href="/admin/header-settings" class="text-indigo-600 hover:underline">Header 설정</a>에서 바꿀 수 있습니다.
+          </p>
+        </div>
+        <div class="p-5 space-y-3">
+          <% presetList.forEach(function (p) { %>
+            <label class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50/40">
+              <input type="radio" name="preset_key" value="<%= p.key %>"
+                     <%= currentPreset === p.key ? 'checked' : '' %>
+                     class="mt-1 w-4 h-4 border-gray-300">
+              <span class="flex-1">
+                <span class="block text-sm font-semibold text-gray-900"><%= p.label %></span>
+                <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= p.summary %></span>
+                <span class="mt-1.5 block text-[11px] text-gray-400 font-mono">
+                  nav_mode=<%= p.navigation.nav_mode %> · GNB <%= p.featureMenus.length %>개 · 홈 섹션 <%= p.homeSections.length %>개
+                </span>
+              </span>
+            </label>
+          <% }); %>
+        </div>
+      </div>
+    <% } %>
+
     <div class="flex justify-end gap-2">
       <a href="/admin/malls" class="inline-flex items-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">취소</a>
       <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
-        <i class="bi bi-save mr-1.5"></i> 저장
+        <i class="bi bi-save mr-1.5"></i> <%= isNew ? '저장하고 구성 채우기' : '저장' %>
       </button>
     </div>
   </form>
 
-  <% if (!isNew) { %>
-    <p class="mt-4 text-xs text-gray-400">
-      새 몰을 만든 뒤에는 그 몰의 카테고리·상품·홈을 채워야 스토어가 보입니다. 몰 선택기로 이 몰을 고른 뒤
-      카테고리·상품 관리에서 등록하거나, 시드 스크립트를 씁니다.
-    </p>
+  <%# ─── 프리셋 재적용 (수정 화면 전용) ─────────────────────────────── %>
+  <% if (!isNew && state) { %>
+    <div class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+        <h2 class="text-sm font-semibold text-gray-800">프리셋 재적용</h2>
+        <p class="mt-0.5 text-xs text-gray-500">
+          마지막 적용 스킨:
+          <strong class="text-gray-800"><%= presetLabel || '없음' %></strong>
+          <% if (mall.preset_key) { %><span class="text-gray-400 font-mono">(<%= mall.preset_key %>)</span><% } %>
+        </p>
+      </div>
+
+      <div class="p-5">
+        <div class="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+          <div class="px-2 py-2 rounded-lg border <%= state.hasNavigation ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-400' %>">
+            <div class="text-[11px] font-medium">내비 설정</div>
+            <div class="text-xs font-bold mt-0.5"><%= state.hasNavigation ? '있음' : '없음' %></div>
+          </div>
+          <div class="px-2 py-2 rounded-lg border <%= state.hasTheme ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-400' %>">
+            <div class="text-[11px] font-medium">테마</div>
+            <div class="text-xs font-bold mt-0.5"><%= state.hasTheme ? '있음' : '없음' %></div>
+          </div>
+          <div class="px-2 py-2 rounded-lg border <%= state.hasSettings ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-400' %>">
+            <div class="text-[11px] font-medium">사이트 설정</div>
+            <div class="text-xs font-bold mt-0.5"><%= state.hasSettings ? '있음' : '없음' %></div>
+          </div>
+          <div class="px-2 py-2 rounded-lg border <%= state.sectionCount > 0 ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-400' %>">
+            <div class="text-[11px] font-medium">홈 섹션</div>
+            <div class="text-xs font-bold mt-0.5"><%= state.sectionCount %>개</div>
+          </div>
+        </div>
+
+        <form method="POST" action="/admin/malls/<%= mall.id %>/provision"
+              onsubmit="return confirm('프리셋을 다시 적용합니다.\n\n내비 정책 · GNB 메뉴 ON/OFF · 테마 토큰이 프리셋 값으로 되돌아갑니다.\n\n계속할까요?');">
+          <div class="space-y-2">
+            <% presetList.forEach(function (p) { %>
+              <label class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50/40">
+                <input type="radio" name="preset_key" value="<%= p.key %>"
+                       <%= currentPreset === p.key ? 'checked' : '' %>
+                       class="mt-1 w-4 h-4 border-gray-300">
+                <span class="flex-1">
+                  <span class="block text-sm font-semibold text-gray-900"><%= p.label %></span>
+                  <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= p.summary %></span>
+                </span>
+              </label>
+            <% }); %>
+          </div>
+
+          <label class="mt-4 flex items-start gap-2 p-3 rounded-lg border border-red-200 bg-red-50/50 cursor-pointer">
+            <input type="checkbox" name="include_home" value="1" class="mt-0.5 w-4 h-4 rounded border-red-300">
+            <span class="text-xs text-red-800 leading-relaxed">
+              <strong>메인 화면(홈 섹션)까지 교체</strong> — 현재 홈 섹션 <strong><%= state.sectionCount %>개가 삭제되고</strong>
+              프리셋 골격으로 교체된 뒤 발행됩니다. <span class="font-semibold">되돌릴 수 없습니다.</span>
+              체크하지 않으면 홈은 그대로 두고 내비·메뉴·테마만 되돌립니다.
+            </span>
+          </label>
+
+          <div class="mt-4 flex justify-end">
+            <button type="submit" class="inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+              <i class="bi bi-arrow-repeat mr-1.5"></i> 프리셋 적용
+            </button>
+          </div>
+        </form>
+
+        <p class="mt-4 text-xs text-gray-400 leading-relaxed">
+          사이트 설정(로고·상호·연락처)은 프리셋이 덮지 않습니다 — 운영자 자산이기 때문입니다.
+          카테고리·상품도 건드리지 않습니다.
+        </p>
+      </div>
+    </div>
   <% } %>
 </div>

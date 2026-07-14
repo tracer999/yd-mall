@@ -55,10 +55,20 @@ async function hasMobileImageColumn() {
     return hasMobileImageColumnCache;
 }
 
+/*
+ * 메인 히어로 배너(banner_type='MAIN')는 이제 '메인 슬라이더' 화면이 관장한다.
+ * 그 화면에서 상품 쇼케이스 방식과 함께 하나의 탭으로 다루므로, 옛 진입점은 그리로 넘긴다.
+ */
+const HERO_LIST_URL = '/admin/banners/hero-slides?mode=full_banner';
+
 exports.getList = async (req, res) => {
     try {
         const mallId = req.mallId || 1;
-        const type = req.query.type || 'MAIN';
+        // type 없이 들어온 경우(사이드바 '배너 관리')는 mode 를 지정하지 않는다 —
+        // 그래야 메인 슬라이더 화면이 '적용 중'인 방식으로 열린다. 옛 ?type=MAIN 링크만 배너 방식으로 보낸다.
+        if (!req.query.type) return res.redirect('/admin/banners/hero-slides');
+        const type = req.query.type;
+        if (type === 'MAIN') return res.redirect(HERO_LIST_URL);
         const menuTargets = await getBannerMenuTargets(mallId);
 
         let banners;
@@ -140,6 +150,38 @@ exports.getAdd = async (req, res) => {
     }
 };
 
+/*
+ * 배너 내 문구(오버레이) — 메인 슬라이더의 '이미지 배너 슬라이더' 방식에서만 뜻이 있다.
+ * 이미지 위에 큰 제목 + 추가 문구(최대 2줄) + 이동 버튼을 얹는다(views/partials/sections/hero_banner.ejs).
+ *
+ * MAIN 이 아닌 타입에서는 저장하지 않는다 — 카테고리/팝업 배너에는 렌더할 자리가 없어서
+ * 값만 남으면 나중에 "왜 안 나오지" 가 된다. 타입을 MAIN 에서 바꾸면 문구도 비워진다.
+ */
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const ALIGNS = ['LEFT', 'CENTER', 'RIGHT'];
+
+function readOverlay(body, storedType) {
+    if (storedType !== 'MAIN') {
+        return { title: null, subtitle: null, buttonText: null, buttonColor: null, align: 'LEFT' };
+    }
+    const trim = (v, max) => {
+        const s = String(v == null ? '' : v).trim();
+        return s ? s.slice(0, max) : null;
+    };
+    // 추가 문구는 최대 2줄. 3줄째부터는 버려서 저장 시점에 규칙을 지킨다(뷰에서만 자르면 데이터가 거짓말한다).
+    const subtitleRaw = String(body.overlay_subtitle || '').replace(/\r\n/g, '\n');
+    const subtitle = subtitleRaw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 2).join('\n') || null;
+
+    const color = String(body.overlay_button_color || '').trim();
+    return {
+        title: trim(body.overlay_title, 120),
+        subtitle: subtitle ? subtitle.slice(0, 200) : null,
+        buttonText: trim(body.overlay_button_text, 40),
+        buttonColor: HEX_COLOR.test(color) ? color.toLowerCase() : null,
+        align: ALIGNS.includes(body.overlay_align) ? body.overlay_align : 'LEFT',
+    };
+}
+
 exports.postAdd = async (req, res) => {
     const { title, link_url, display_order, is_active, banner_type, category_id, start_date, end_date } = req.body;
     const bannerImage = req.files?.banner_image?.[0];
@@ -152,23 +194,28 @@ exports.postAdd = async (req, res) => {
         const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
         const { storedType, categoryId, groupKey, redirectType, menuKey } =
             resolveBannerTarget(banner_type, category_id, req.body.menu_target, null, menuKeys);
+        const ov = readOverlay(req.body, banner_type);
 
         if (await hasMobileImageColumn()) {
             await pool.query(
-                `INSERT INTO banners (banner_type, category_id, group_key, title, image_url, mobile_image_url, link_url, display_order, is_active, start_date, end_date)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO banners (banner_type, category_id, group_key, title, image_url, mobile_image_url, link_url, display_order, is_active, start_date, end_date,
+                                      overlay_title, overlay_subtitle, overlay_button_text, overlay_button_color, overlay_align)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     storedType, categoryId, groupKey, title, image_url, mobile_image_url, link_url,
-                    display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null
+                    display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
+                    ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align
                 ]
             );
         } else {
             await pool.query(
-                `INSERT INTO banners (banner_type, category_id, group_key, title, image_url, link_url, display_order, is_active, start_date, end_date)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO banners (banner_type, category_id, group_key, title, image_url, link_url, display_order, is_active, start_date, end_date,
+                                      overlay_title, overlay_subtitle, overlay_button_text, overlay_button_color, overlay_align)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     storedType, categoryId, groupKey, title, image_url, link_url,
-                    display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null
+                    display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
+                    ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align
                 ]
             );
         }
@@ -207,11 +254,13 @@ function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGrou
     return { storedType: type, categoryId, groupKey, redirectType: type, menuKey: '' };
 }
 
-/** 저장 후 돌아갈 목록 URL — 메뉴별 배너는 방금 편집한 메뉴 서브탭으로 되돌린다. */
+/** 저장 후 돌아갈 목록 URL — 메뉴별 배너는 방금 편집한 메뉴 서브탭으로, MAIN 은 메인 슬라이더 화면으로. */
 function listUrl(redirectType, menuKey) {
-    return redirectType === 'MENU' && menuKey
-        ? `/admin/banners?type=MENU&menu=${encodeURIComponent(menuKey)}`
-        : `/admin/banners?type=${redirectType}`;
+    if (redirectType === 'MENU' && menuKey) {
+        return `/admin/banners?type=MENU&menu=${encodeURIComponent(menuKey)}`;
+    }
+    if (redirectType === 'MAIN') return HERO_LIST_URL;
+    return `/admin/banners?type=${redirectType}`;
 }
 
 exports.getEdit = async (req, res) => {
@@ -268,22 +317,27 @@ exports.postEdit = async (req, res) => {
         const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
         const { storedType, categoryId, groupKey, redirectType, menuKey } =
             resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key, menuKeys);
+        const ov = readOverlay(req.body, banner_type);
 
         if (await hasMobileImageColumn()) {
             await pool.query(`
                 UPDATE banners SET
-                banner_type=?, category_id=?, group_key=?, title=?, image_url=?, mobile_image_url=?, link_url=?, display_order=?, is_active=?, start_date=?, end_date=?
+                banner_type=?, category_id=?, group_key=?, title=?, image_url=?, mobile_image_url=?, link_url=?, display_order=?, is_active=?, start_date=?, end_date=?,
+                overlay_title=?, overlay_subtitle=?, overlay_button_text=?, overlay_button_color=?, overlay_align=?
                 WHERE id=?
             `, [
-                storedType, categoryId, groupKey, title, image_url, mobile_image_url, link_url, display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null, id
+                storedType, categoryId, groupKey, title, image_url, mobile_image_url, link_url, display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
+                ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align, id
             ]);
         } else {
             await pool.query(`
                 UPDATE banners SET
-                banner_type=?, category_id=?, group_key=?, title=?, image_url=?, link_url=?, display_order=?, is_active=?, start_date=?, end_date=?
+                banner_type=?, category_id=?, group_key=?, title=?, image_url=?, link_url=?, display_order=?, is_active=?, start_date=?, end_date=?,
+                overlay_title=?, overlay_subtitle=?, overlay_button_text=?, overlay_button_color=?, overlay_align=?
                 WHERE id=?
             `, [
-                storedType, categoryId, groupKey, title, image_url, link_url, display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null, id
+                storedType, categoryId, groupKey, title, image_url, link_url, display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
+                ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align, id
             ]);
         }
         res.redirect(listUrl(redirectType, menuKey));

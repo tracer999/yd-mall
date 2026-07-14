@@ -1,235 +1,25 @@
 <%
   /*
-   * 스토어프론트 헤더 (P1.5 §4.5.2 헤더 partial 분해)
-   *   상단바(유틸) + Row1(로고/검색/유저액션) + Row2(GNB: 카테고리 드롭다운 + 몰별 가변 메뉴) + 모바일 메뉴
-   * main_layout.ejs 에서 include 한다. 로컬(siteSettings/user/isAdmin/cartCount/gnbMenus/categoryTree/currentPath)은
-   * EJS include 가 상위 locals 를 그대로 상속한다.
+   * 스토어프론트 헤더 디스패처 (몰 빌더 P3)
+   *
+   * 헤더·GNB 스킨은 **몰마다 고른다**. navigation_config.header_layout_type 이 스킨을,
+   * nav_mode 가 그 스킨이 요구하는 GNB 조립 방식을 정한다(둘은 항상 짝으로 저장된다).
+   *
+   *   main_right_utility_v1  기본형   — 유틸바 + 로고/검색 + GNB 3단, 카테고리는 별도 버튼/패널 (nav_mode='split')
+   *   compact_drawer_v1      드로어형 — [☰]·로고·장바구니만 두고 메뉴 전체를 좌측 드로어에      (nav_mode='unified')
+   *
+   * 규모(대형몰/소형몰)와는 무관하다 — 어떤 몰이든 두 스킨 중 하나를 쓴다.
+   *
+   * 화이트리스트로만 분기한다. DB 값을 그대로 include 경로에 넣으면 임의 파일이 렌더된다.
+   * 모르는 값이면 기본형으로 폴백한다 — navigation_config 행이 없는 몰도 여기로 온다.
+   *
+   * 스킨 파일은 상위 locals(siteSettings/user/gnbMenus/categoryTree/…)를 그대로 상속한다.
    */
-
-  /* headerUtil 항목(feature_menu position='header_util')을 코드로 찾는다.
-     로그인/마이쇼핑/장바구니/검색은 is_required 라 항상 켜져 있고, 고객센터는 ON/OFF 가능하다. */
-  const _headerUtil = (code) => {
-    const list = (typeof headerUtilMenus !== 'undefined' && Array.isArray(headerUtilMenus)) ? headerUtilMenus : [];
-    return list.find((m) => m.featureCode === code) || null;
+  const HEADER_SKINS = {
+    main_right_utility_v1: './header/_main_right_utility',
+    compact_drawer_v1:     './header/_compact_drawer',
   };
+  const _layout = (typeof nav !== 'undefined' && nav && nav.config && nav.config.header_layout_type) || 'main_right_utility_v1';
+  const _skin = HEADER_SKINS[_layout] || HEADER_SKINS.main_right_utility_v1;
 %>
-    <!-- Header -->
-    <header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
-        <!-- Top Bar — 모바일에서는 숨긴다(모바일은 로고줄 + GNB 슬라이더 + 하단바 구조).
-             여기 있던 몰 선택은 모바일에서 카테고리 레이어 상단으로 옮겨간다. -->
-        <div class="hidden md:flex bg-[var(--gh-secondary)] text-sm h-12 items-center px-4 border-b border-green-50">
-            <div class="max-w-7xl mx-auto flex justify-between items-center w-full">
-                <span class="hidden sm:inline text-gray-700 font-normal">
-                    <%= siteSettings.header_slogan || '건강한 하루의 시작 | 와이디몰' %>
-                </span>
-                <div class="flex items-center gap-4">
-                    <%#
-                      몰 선택 (P5 멀티몰). mallContext 가 res.locals.malls 를 채운다.
-                      전환은 `?mall=<code>` 쿼리 → 세션 고정(middleware/mallContext.js).
-
-                      action="/" 로 홈에 보낸다. 현재 경로를 유지하면 상품 상세 등에서
-                      다른 몰에 없는 리소스로 남아 404 가 된다(상품·카테고리는 몰 스코프).
-
-                      JS 가 없으면 onchange 가 안 먹으므로 제출 버튼을 noscript 로 남긴다.
-                    %>
-                    <% if (typeof malls !== 'undefined' && malls && malls.length > 1) { %>
-                        <form method="get" action="/" class="flex items-center gap-1">
-                            <label for="mall-switch" class="sr-only">몰 선택</label>
-                            <select id="mall-switch" name="mall" onchange="this.form.submit()"
-                                class="h-8 rounded-md border border-gray-300 bg-white text-sm text-gray-700 pl-2 pr-7 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/30 cursor-pointer">
-                                <% malls.forEach(function (m) { %>
-                                    <option value="<%= m.code %>" <%= Number(m.id) === Number(mallId) ? 'selected' : '' %>>
-                                        <%= m.name %>
-                                    </option>
-                                <% }); %>
-                            </select>
-                            <noscript>
-                                <button type="submit" class="h-8 px-2 rounded-md border border-gray-300 bg-white text-xs text-gray-700">이동</button>
-                            </noscript>
-                        </form>
-                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                    <% } %>
-
-                    <%# Shopify 미사용 시 마켓(국가) 선택기 숨김 — res.locals.shopifyEnabled (A3) %>
-                    <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
-                        <%- include('../shopify-market-selector') %>
-                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                    <% } %>
-
-                    <%#
-                      로그인·회원가입 링크는 이 줄에서 제거했다.
-                      같은 동작이 아래 로고 줄의 유틸 아이콘(feature_menu.position='header_util')에 있다.
-                    %>
-                    <% if (user) { %>
-                        <div class="flex items-center gap-2">
-                            <% if (user.picture) { %>
-                                <img src="<%= user.picture %>" alt="<%= user.name %>"
-                                    class="w-8 h-8 rounded-full border border-gray-200 object-cover">
-                            <% } %>
-                            <span class="text-gray-700">
-                                환영합니다,
-                                <strong class="text-gray-900"><%= user.name %></strong>님
-                            </span>
-                        </div>
-                    <% } %>
-
-                    <% if (isAdmin) { %>
-                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                        <a href="/admin"
-                            class="text-[var(--gh-accent)] font-bold hover:text-red-500 transition-colors">관리자모드</a>
-                    <% } %>
-                </div>
-            </div>
-        </div>
-
-        <!-- Header Row 1: 로고 + 검색바 + 유저 액션 (신세계TV쇼핑형) -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center gap-4 sm:gap-6 h-20">
-                <!-- Logo -->
-                <div class="flex-shrink-0 flex items-center">
-                    <a href="/" class="flex items-center gap-2">
-                        <% if (siteSettings.logo_url) { %>
-                            <img class="h-10 w-auto" src="<%= siteSettings.logo_url %>"
-                                alt="<%= siteSettings.company_name || '와이디몰' %>">
-                            <% } else { %>
-                                <div
-                                    class="h-10 w-10 bg-[var(--gh-primary)] text-white rounded-full flex items-center justify-center font-bold text-xl">
-                                    G</div>
-                                <span class="gh-serif text-2xl font-bold text-[var(--gh-primary-dark)] tracking-tight">
-                                    <%= siteSettings.company_name || '와이디몰' %>
-                                </span>
-                                <% } %>
-                    </a>
-                </div>
-
-                <!-- Search (center) — 모바일에서도 노출한다(로고 + 검색 + 장바구니 구조) -->
-                <form action="/search" method="get" class="flex flex-1 max-w-2xl mx-auto" role="search">
-                    <div class="relative w-full">
-                        <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
-                            class="w-full h-10 md:h-12 rounded-full border-2 border-[var(--gh-primary)] pl-4 md:pl-5 pr-11 md:pr-14 text-sm md:text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20 bg-white">
-                        <button type="submit" aria-label="검색"
-                            class="absolute right-1 md:right-1.5 top-1 md:top-1.5 h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--gh-primary)]">
-                            <i class="bi bi-search text-lg md:text-xl"></i>
-                        </button>
-                    </div>
-                </form>
-
-                <!-- User Actions -->
-                <div class="flex items-center gap-4 sm:gap-5 flex-shrink-0">
-                    <% if (user) { %>
-                        <a href="/auth/logout" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                            <i class="bi bi-box-arrow-right text-xl"></i><span class="text-xs">로그아웃</span>
-                        </a>
-                    <% } else { %>
-                        <a href="/auth/login" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                            <i class="bi bi-power text-xl"></i><span class="text-xs">로그인</span>
-                        </a>
-                    <% } %>
-                    <a href="/mypage" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                        <i class="bi bi-person text-xl"></i><span class="text-xs">마이쇼핑</span>
-                    </a>
-                    <a href="/cart" class="flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors relative">
-                        <i class="bi bi-bag text-xl"></i><span class="hidden sm:inline text-xs">장바구니</span>
-                        <% if (typeof cartCount !=='undefined' && cartCount> 0) { %>
-                            <span class="absolute -top-1.5 right-1 sm:right-3 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                                <%= cartCount %>
-                            </span>
-                        <% } %>
-                    </a>
-                    <%# 고객센터는 시스템 메뉴이지만 ON/OFF 가능 (feature_menu.HEADER_CS).
-                        표준 URL(default_path)도 데이터에서 온다 — 하드코딩 금지. %>
-                    <% var _cs = _headerUtil('HEADER_CS'); %>
-                    <% if (_cs) { %>
-                        <a href="<%= _cs.href %>" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                            <i class="bi bi-headset text-xl"></i><span class="text-xs"><%= _cs.name %></span>
-                        </a>
-                    <% } %>
-
-                    <%#
-                      모바일 햄버거 버튼은 제거했다. 모바일 내비게이션은
-                      GNB 슬라이더(아래) + 하단 시스템 바 + 카테고리 전체 레이어가 담당한다
-                      (partials/storefront/mobile_bottom_nav.ejs). 두 벌의 모바일 메뉴를 두지 않는다.
-                    %>
-                </div>
-            </div>
-        </div>
-
-        <!-- Mobile GNB 슬라이더 — 가로 스크롤. 카테고리는 여기 없다(하단 바가 담당). -->
-        <nav class="md:hidden border-t border-gray-100" aria-label="주 메뉴">
-            <div class="yd-mgnb flex items-center gap-1 overflow-x-auto px-2">
-                <%# 관리자가 모바일 노출을 끈 메뉴는 제외한다(mall_feature_menu.mobile_visible) %>
-                <% (typeof gnbMenus !== 'undefined' ? gnbMenus : [])
-                     .filter(function (m) { return m.mobileVisible !== 0; })
-                     .forEach(function (m) { %>
-                    <% const _active = (typeof currentPath !== 'undefined') && m.href && currentPath === m.href; %>
-                    <a href="<%= m.href %>" <%= m.newWindow ? 'target="_blank" rel="noopener"' : '' %>
-                       class="relative shrink-0 px-3 py-2.5 text-sm whitespace-nowrap transition-colors
-                              <%= _active ? 'font-bold text-[var(--gh-primary)]' : 'text-gray-700' %>">
-                        <%= m.name %>
-                        <% if (m.badgeType) { %>
-                            <span class="absolute top-1 -right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--gh-accent)]"></span>
-                        <% } %>
-                        <% if (_active) { %>
-                            <span class="absolute left-2 right-2 bottom-0 h-0.5 bg-[var(--gh-primary)] rounded-full"></span>
-                        <% } %>
-                    </a>
-                <% }); %>
-            </div>
-        </nav>
-        <style>
-          /* 가로 스크롤바 숨김 — 슬라이딩 느낌을 살린다 */
-          .yd-mgnb { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-          .yd-mgnb::-webkit-scrollbar { display: none; }
-        </style>
-
-        <!-- Header Row 2: GNB (카테고리 드롭다운 + 몰별 가변 메뉴) -->
-        <div class="hidden md:block border-t border-gray-100">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <% const _catBtn = (typeof categoryButton !== 'undefined') ? categoryButton : { name: '카테고리' }; %>
-                <nav class="flex items-stretch gap-1" aria-label="주 메뉴">
-                    <!-- 카테고리 (고정 버튼, 클릭 토글 드롭다운 패널) — feature_menu.CATEGORY 로 ON/OFF -->
-                    <% if (_catBtn) { %>
-                    <div class="relative" id="gnb-cat-wrap">
-                        <button type="button" id="gnb-cat-btn" aria-expanded="false"
-                            class="flex items-center gap-2 px-3 py-3 text-base font-bold text-gray-900 hover:text-[var(--gh-primary)]">
-                            <i class="bi bi-list text-xl"></i><span><%= _catBtn.name %></span>
-                        </button>
-                        <%# 패널 폭은 내용에 맞춘다. 2뎁스가 없으면 세로 리스트 하나라 좁고,
-                            2뎁스가 생기면 hover 서브패널이 우측으로 펼쳐진다(§12). %>
-                        <div id="gnb-cat-panel"
-                            class="hidden absolute left-0 top-full z-50 max-w-[92vw] bg-white border border-gray-200 shadow-xl rounded-b-lg overflow-visible">
-                            <%- include('./category_panel') %>
-                        </div>
-                    </div>
-
-                    <div class="w-px bg-gray-200 my-2"></div>
-                    <% } %>
-
-                    <!-- 몰별 가변 메뉴 (feature_menu[gnb] + custom_menu 슬롯). PC 노출 항목만. -->
-                    <% (typeof gnbMenus !== 'undefined' ? gnbMenus : []).filter(function(m){ return m.pcVisible !== 0; }).forEach(function (m) {
-                         var active = m.href && m.href !== '#' && currentPath === m.href; %>
-                        <%# 속성 문자열은 반드시 이스케이프 없이 출력한다.
-                            이스케이프 출력 태그를 쓰면 따옴표가 &#34; 로 변환되어
-                            target="_blank" 와 rel="noopener" 가 통째로 무효가 된다. %>
-                        <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
-                            class="relative px-4 py-3 text-base font-medium border-b-2 transition-colors <%= active ? 'text-[var(--gh-primary)] border-[var(--gh-primary)]' : 'text-gray-700 border-transparent hover:text-[var(--gh-primary)]' %>">
-                            <%= m.name %>
-                            <%# 강조 배지(NEW/HOT/SALE) — navigationService 가 화이트리스트로 정규화한 값만 온다 %>
-                            <% if (m.badgeType) { %>
-                                <span class="absolute top-1 right-0 text-[9px] font-extrabold leading-none px-1 py-0.5 rounded
-                                    <%= m.badgeType === 'HOT' ? 'bg-red-500 text-white'
-                                      : (m.badgeType === 'SALE' ? 'bg-amber-500 text-white'
-                                      : 'bg-[var(--gh-primary)] text-white') %>"><%= m.badgeType %></span>
-                            <% } %>
-                        </a>
-                    <% }); %>
-                </nav>
-            </div>
-        </div>
-
-    </header>
-
-    <%# 카테고리 드롭다운 백드롭 — 패널 뒤 콘텐츠(히어로 LNB 등)와의 겹침을 없앤다.
-        반드시 <header> **바깥**에 둔다. 헤더는 z-50 으로 stacking context 를 만들기 때문에
-        그 안에 두면 fixed 백드롭이 헤더까지 덮어버린다. %>
-    <div id="gnb-cat-backdrop" class="hidden fixed inset-0 z-40 bg-black/20" aria-hidden="true"></div>
+<%- include(_skin) %>

@@ -475,8 +475,18 @@
         <%- include('../partials/storefront/right_utility') %>
     <% } %>
 
-    <!-- 모바일 하단 시스템 바 + 카테고리 전체 레이어 (md:hidden) -->
-    <% if (!_bare) { %>
+    <%
+        /*
+         * 모바일 하단 시스템 바 + 카테고리 전체 레이어 (md:hidden)
+         *
+         * 드로어형 스킨(compact_drawer_v1)에서는 **내지 않는다.** 하단바의 내용(홈·카테고리·
+         * 장바구니·마이)이 이미 헤더(장바구니)와 햄버거 드로어(홈·카테고리·마이·고객센터)에
+         * 들어가 있어서, 함께 띄우면 같은 링크가 화면에 두 벌 뜨고 카테고리 진입점도 둘이 된다.
+         */
+        const _drawerSkin = (typeof nav !== 'undefined' && nav && nav.config
+            && nav.config.header_layout_type === 'compact_drawer_v1');
+    %>
+    <% if (!_bare && !_drawerSkin) { %>
     <%- include('../partials/storefront/mobile_bottom_nav') %>
     <% } %>
 

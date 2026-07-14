@@ -28,7 +28,6 @@
    * locals: categoryTree, malls, mallId, cartCount, user, currentPath
    */
   const _tree = (typeof categoryTree !== 'undefined' && categoryTree) ? categoryTree : [];
-  const _malls = (typeof malls !== 'undefined' && malls) ? malls : [];
   const _cart = (typeof cartCount !== 'undefined' && cartCount) ? Number(cartCount) : 0;
   const _path = (typeof currentPath !== 'undefined') ? currentPath : '';
   const _user = (typeof user !== 'undefined') ? user : null;
@@ -51,21 +50,11 @@
             </button>
         </header>
 
-        <%# 몰 선택 — Top Bar 가 모바일에서 숨겨지므로 여기로 옮겨왔다. 1뎁스 화면에서만 보인다. %>
-        <% if (_malls.length > 1) { %>
-            <form method="get" action="/" id="yd-mall-form" class="px-4 py-3 border-b border-gray-100 shrink-0">
-                <label for="yd-mall-switch-m" class="block text-xs font-semibold text-gray-400 mb-1">몰 선택</label>
-                <select id="yd-mall-switch-m" name="mall" onchange="this.form.submit()"
-                        class="w-full h-10 rounded-lg border border-gray-300 bg-white text-sm text-gray-800 px-3">
-                    <% _malls.forEach(function (m) { %>
-                        <option value="<%= m.code %>" <%= Number(m.id) === Number(mallId) ? 'selected' : '' %>>
-                            <%= m.name %>
-                        </option>
-                    <% }); %>
-                </select>
-                <noscript><button type="submit" class="mt-2 w-full h-9 rounded-lg border border-gray-300 text-sm">이동</button></noscript>
-            </form>
-        <% } %>
+        <%#
+          몰 선택 셀렉트는 스토어프론트에서 제거했다(헤더 Top Bar 에서도 뺐다).
+          고객에게 몰을 고르게 하지 않는다. 전환은 `?mall=<code>` 쿼리 → 세션 고정으로 계속 가능하고,
+          관리자 화면의 몰 셀렉트는 그대로다(middleware/mallContext.js).
+        %>
 
         <div class="flex-1 overflow-y-auto overscroll-contain">
             <% if (!_tree.length) { %>
@@ -204,7 +193,6 @@
     var backBtn  = document.getElementById('yd-cat-back');
     var dim      = document.getElementById('yd-cat-dim');
     var title    = document.getElementById('yd-cat-title');
-    var mallForm = document.getElementById('yd-mall-form');
 
     var promo     = document.getElementById('yd-cat-promo');
     var promoImg  = document.getElementById('yd-cat-promo-img');
@@ -225,7 +213,6 @@
 
         var atRoot = (id === 'd1');
         backBtn.classList.toggle('hidden', atRoot);
-        if (mallForm) mallForm.classList.toggle('hidden', !atRoot);   // 몰 선택은 1뎁스에서만
         if (atRoot) { title.textContent = '카테고리'; promo.classList.add('hidden'); }
     }
 

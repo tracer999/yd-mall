@@ -21,8 +21,29 @@ const pool = require('../../config/db');
  * 운영자에게 내주면 설정과 화면이 어긋난다.
  */
 const HEADER_LAYOUT_TYPES = [
-    { value: 'main_right_utility_v1', label: '기본형 (로고 좌측 · 유틸 우측)', supported: true },
+    {
+        value: 'main_right_utility_v1', supported: true,
+        label: '기본형 — 카테고리 버튼 + 평면 GNB (3단 헤더)',
+        hint: '상단 유틸바 + 로고/검색 + GNB 3단. 카테고리는 [☰ 카테고리] 버튼의 드롭다운 패널(3단 캐스케이드)로 열리고, 일반 메뉴는 그 옆에 한 줄로 놓입니다.',
+        navMode: 'split',
+    },
+    {
+        value: 'compact_drawer_v1', supported: true,
+        label: '드로어형 — 햄버거 전체메뉴 + 아코디언 카테고리',
+        hint: '헤더에는 [☰]·로고·장바구니만 두고 메뉴 전체를 좌측 슬라이드 드로어에 담습니다. 카테고리 1뎁스가 일반 메뉴와 같은 목록에 놓이고, 하위 뎁스는 [+] 로 펼칩니다. 검색창도 드로어 안에 있습니다.',
+        navMode: 'unified',
+    },
 ];
+
+/**
+ * 레이아웃 ↔ nav_mode 는 짝이다. 레이아웃만 바꾸고 nav_mode 를 그대로 두면
+ * "드로어 헤더인데 카테고리가 메뉴 목록에 없는" 깨진 조합이 나온다(반대도 마찬가지).
+ * → 레이아웃을 저장할 때 nav_mode 를 함께 맞춘다. 운영자가 깨진 조합을 만들 수 없다.
+ */
+function navModeOf(layoutValue) {
+    const hit = HEADER_LAYOUT_TYPES.find(o => o.value === layoutValue);
+    return (hit && hit.navMode) || 'split';
+}
 
 /** 정수 필드의 허용 범위 */
 const LIMITS = {
@@ -104,12 +125,13 @@ exports.postUpdate = async (req, res) => {
 
         await pool.query(`
             UPDATE navigation_config
-               SET header_layout_type = ?,
+               SET header_layout_type = ?, nav_mode = ?,
                    max_gnb_items = ?, max_custom_items = ?, category_max_depth = ?,
                    use_mega_menu = ?, use_search_bar = ?
              WHERE mall_id = ?
         `, [
             headerLayout,
+            navModeOf(headerLayout),   // 레이아웃과 GNB 조립 방식을 항상 짝으로 저장한다
             maxGnb, maxCustom, maxDepth,
             // 메가 메뉴는 렌더 미지원이므로 항상 0 으로 고정한다.
             0,

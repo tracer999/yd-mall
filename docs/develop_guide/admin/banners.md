@@ -11,10 +11,25 @@
 
 이 화면은 **두 종류의 데이터**를 관리합니다.
 
-1. **메인 슬라이더 (`hero_slide`)** — 홈 히어로의 상품 쇼케이스 슬라이드. `/admin/banners/hero-slides` 하위.
-2. **배너 (`banners`)** — 메인(레거시)·카테고리·팝업·브랜드·메뉴별 배너. `/admin/banners` 본체.
+1. **메인 슬라이더 (`hero_slide` + `banners` 의 `banner_type='MAIN'`)** — 홈 히어로. `/admin/banners/hero-slides` 하위.
+2. **배너 (`banners`)** — 카테고리·팝업·브랜드·메뉴별 배너. `/admin/banners` 본체.
 
-목록 상단 탭이 `메인 슬라이더 | 메인 배너(레거시) | 카테고리 배너 | 팝업 배너 | 브랜드 배너 | 메뉴별 배너` 6개로 구성됩니다(`views/admin/banners/list.ejs`).
+목록 상단 탭은 `메인 슬라이더 | 카테고리 배너 | 팝업 배너 | 브랜드 배너 | 메뉴별 배너` 5개이며, 공용 partial `views/admin/banners/_tabs.ejs` 가 렌더합니다(`activeTab` = `HERO|CATEGORY|POPUP|BRAND|MENU`).
+
+### 메인 슬라이더 — 한 화면, 두 방식
+
+홈 히어로 영역은 **하나**이고, 프론트는 `site_settings.hero_variant` 값에 따라 **둘 중 하나만** 렌더합니다(`views/partials/sections/hero.ejs`).
+
+| 방식 (`hero_variant`) | 소스 | 프론트 뷰 |
+|---|---|---|
+| `product_showcase` | `hero_slide` (상품 연결 슬라이드, `slot=MAIN`·`slot=FEATURE`) | `hero_showcase.ejs` |
+| `full_banner` | `banners` (`banner_type='MAIN'`, 이미지 배너) | `hero_banner.ejs` — `mobile_image_url` 을 쓰는 유일한 경로 |
+
+예전에는 이 둘이 별도 탭(`메인 슬라이더` / `메인 배너(레거시)`)이었고 **`hero_variant` 를 바꿀 UI 가 아예 없어서**, `full_banner` 쪽 배너를 등록해도 프론트에 노출시킬 방법이 없었습니다. 지금은 `메인 슬라이더` 탭 한 곳에서 방식을 고르고(=`POST /admin/banners/hero-slides/variant` → `site_settings.hero_variant` 갱신) 그 방식의 콘텐츠를 편집합니다.
+
+- 화면의 `?mode=` 쿼리는 **열람 중인 방식**으로, 적용 중인 방식(`hero_variant`)과 별개입니다. 적용 전에 미리 콘텐츠를 채워둘 수 있고, 이때 "홈에 적용돼 있지 않습니다" 경고와 적용 버튼이 뜹니다.
+- 방식을 바꿔도 다른 방식의 콘텐츠는 **지워지지 않고 보존**됩니다.
+- 옛 링크 `?type=MAIN` 은 `/admin/banners/hero-slides?mode=full_banner` 로 리다이렉트됩니다.
 
 **메뉴별 배너 탭은 켜져 있는 GNB 메뉴를 전부 서브탭(pill)으로 펼칩니다.** 메뉴 하나를 고르면 그 메뉴의 배너만 보입니다(`?type=MENU&menu={feature_code}`). 서브탭 목록은 `feature_menu` 에서 동적으로 오므로, 메뉴를 켜고 끄면 탭도 따라 바뀝니다.
 
@@ -26,7 +41,8 @@
 
 | 메서드 | URL | 핸들러 | 설명 |
 |--------|-----|--------|------|
-| GET | `/admin/banners/hero-slides` | heroSlide.getList | 메인 슬라이더 목록 (MAIN/FEATURE 슬롯별) |
+| GET | `/admin/banners/hero-slides` | heroSlide.getList | 메인 슬라이더 (`?mode=product_showcase\|full_banner`, 생략 시 적용 중인 방식) |
+| POST | `/admin/banners/hero-slides/variant` | heroSlide.postVariant | 히어로 방식 전환 (`site_settings.hero_variant`). 모르는 값은 400 |
 | GET | `/admin/banners/hero-slides/add` | heroSlide.getAdd | 슬라이드 등록 폼 (`?slot=MAIN\|FEATURE`) |
 | POST | `/admin/banners/hero-slides/add` | heroSlide.postAdd | 슬라이드 등록 (multipart, `slide_image`) |
 | GET | `/admin/banners/hero-slides/edit/:id` | heroSlide.getEdit | 슬라이드 수정 폼 |

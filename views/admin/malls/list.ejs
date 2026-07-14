@@ -1,6 +1,13 @@
 <%
-  /* 몰 관리 (P5 Phase 2) — 목록 */
+  /* 몰 관리 (P5 Phase 2 · 몰 빌더 P4) — 목록
+   *
+   * '선택' 버튼은 `?adminMall=<id>` 로 이 화면에 되돌아온다.
+   * 전환 자체는 middleware/adminMallContext 가 처리한다(세션 adminMallId 저장) —
+   * 상단 몰 선택기와 **완전히 같은 경로**다. 여기서 따로 세션을 건드리지 않는다.
+   */
   const _malls = malls || [];
+  const _editingId = (typeof adminMallId !== 'undefined' && adminMallId) ? Number(adminMallId) : null;
+  const _editingMall = _malls.find(function (m) { return Number(m.id) === _editingId; }) || null;
 %>
 
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -9,7 +16,8 @@
     <div>
       <h1 class="text-2xl font-bold text-gray-900">몰 관리</h1>
       <p class="mt-1 text-sm text-gray-500">
-        운영 중인 몰을 정의합니다. 편집 대상 몰은 우측 상단 <strong>몰 선택기</strong>로 전환합니다.
+        운영 중인 몰을 정의합니다. <strong>선택</strong>을 누르면 그 몰이 편집 대상이 됩니다
+        (우측 상단 <strong>몰 선택기</strong>와 같은 동작).
         스토어프론트는 <code>?mall=&lt;코드/id&gt;</code>로 접속합니다.
       </p>
     </div>
@@ -22,6 +30,26 @@
   <% if (saved) { %>
     <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
       <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (selected && _editingMall) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-indigo-50 border border-indigo-200 text-sm text-indigo-900 flex items-start gap-2">
+      <i class="bi bi-shop mt-0.5"></i>
+      <span>
+        이제 <strong><%= _editingMall.name %></strong> 을(를) 편집합니다.
+        카테고리·상품·메뉴·테마·페이지 빌더가 모두 이 몰 기준으로 동작합니다.
+        (상단 몰 선택기도 이 몰로 바뀝니다)
+      </span>
+    </div>
+  <% } %>
+
+  <% if (provisioned) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-start gap-2">
+      <i class="bi bi-check-circle-fill mt-0.5"></i>
+      <span>
+        <strong><%= provisioned %></strong> 몰을 만들고 초기 구성을 채웠습니다 — GNB 메뉴 · 헤더 정책 · 테마 · 메인 화면 골격.
+        이제 <strong>카테고리·상품</strong>을 등록하면 스토어가 보입니다.
+      </span>
     </div>
   <% } %>
   <% if (error) { %>
@@ -41,17 +69,34 @@
             <th class="px-4 py-2.5">데이터</th>
             <th class="px-4 py-2.5 w-24 text-center">기본/활성</th>
             <th class="px-4 py-2.5 w-40">스토어 링크</th>
-            <th class="px-4 py-2.5 w-28 text-center">관리</th>
+            <th class="px-4 py-2.5 w-44 text-center">관리</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           <% _malls.forEach(function (m) {
-               const deletable = !m.is_default && m.counts.categories === 0 && m.counts.products === 0; %>
-            <tr class="<%= m.is_active ? '' : 'bg-gray-50/60' %>">
+               const deletable = !m.is_default && m.counts.categories === 0 && m.counts.products === 0;
+               const editing = Number(m.id) === _editingId;
+               /* 몰 해석기(getMalls)는 활성 몰만 캐시한다 → 비활성 몰은 ?adminMall 로 선택해도 무시된다.
+                  버튼을 내주면 눌러도 아무 일이 안 일어나므로 아예 잠근다. */
+               const selectable = Boolean(m.is_active) && !editing; %>
+            <tr class="<%= m.is_active ? '' : 'bg-gray-50/60' %> <%= editing ? 'bg-indigo-50/40' : '' %>">
               <td class="px-4 py-3 text-gray-400"><%= m.id %></td>
               <td class="px-4 py-3"><code class="text-xs text-gray-600"><%= m.code %></code></td>
               <td class="px-4 py-3">
-                <a href="/admin/malls/<%= m.id %>" class="font-medium text-gray-900 hover:text-indigo-600"><%= m.name %></a>
+                <div class="flex items-center gap-1.5">
+                  <a href="/admin/malls/<%= m.id %>" class="font-medium text-gray-900 hover:text-indigo-600"><%= m.name %></a>
+                  <%# 헤더·GNB 스킨 (navigation_config 기준 = 실제 렌더 기준) %>
+                  <% if (m.isDrawer) { %>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700" title="햄버거 드로어 + 아코디언 카테고리">
+                      <i class="bi bi-list mr-0.5"></i>드로어형
+                    </span>
+                  <% } else { %>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700" title="카테고리 버튼 + 평면 GNB (3단 헤더)">기본형</span>
+                  <% } %>
+                  <% if (editing) { %>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><i class="bi bi-pencil-fill mr-0.5"></i>편집중</span>
+                  <% } %>
+                </div>
                 <% if (m.domain) { %><div class="text-[11px] text-gray-400"><%= m.domain %></div><% } %>
               </td>
               <td class="px-4 py-3 text-gray-500 text-xs">카테고리 <%= m.counts.categories %> · 상품 <%= m.counts.products %></td>
@@ -67,6 +112,16 @@
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center justify-center gap-1.5">
+                  <%# 편집 몰 전환 — 상단 몰 선택기와 같은 경로(?adminMall=<id> → 세션 고정) %>
+                  <% if (editing) { %>
+                    <span class="text-xs px-2 py-1 rounded bg-indigo-600 text-white font-semibold">편집중</span>
+                  <% } else if (selectable) { %>
+                    <a href="/admin/malls?adminMall=<%= m.id %>&selected=1"
+                       class="text-xs px-2 py-1 rounded border border-indigo-200 text-indigo-700 hover:bg-indigo-50 no-underline font-semibold">선택</a>
+                  <% } else { %>
+                    <span class="text-xs px-2 py-1 rounded border border-gray-100 text-gray-300 cursor-not-allowed"
+                          title="비활성 몰은 편집 대상으로 선택할 수 없습니다. 먼저 활성화하세요.">선택</span>
+                  <% } %>
                   <a href="/admin/malls/<%= m.id %>" class="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">수정</a>
                   <% if (deletable) { %>
                     <form method="POST" action="/admin/malls/<%= m.id %>/delete" onsubmit="return confirm('몰 &quot;<%= m.name %>&quot; 을(를) 삭제합니다. 몰별 설정(내비·메뉴·테마)도 함께 지워집니다.');">

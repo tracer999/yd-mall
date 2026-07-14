@@ -22,6 +22,9 @@ const exhibitionService = require('../exhibition/exhibitionService');
 const DEFAULT_CONFIG = Object.freeze({
     mall_id: 1,
     header_layout_type: 'main_right_utility_v1',
+    // GNB 조립 알고리즘. 'split' = 현행(카테고리 버튼 + 평면 메뉴), 'unified' = 카테고리가 GNB 로 승격.
+    // navigation_config 행이 없는 몰도 현행 동작으로 폴백해야 하므로 기본값은 'split' 이다.
+    nav_mode: 'split',
     category_display_type: 'dropdown',
     max_gnb_items: 8,
     max_custom_items: 3,
@@ -371,13 +374,155 @@ function visibleTo(item, isLoggedIn) {
 }
 
 /**
+ * 카테고리 트리 노드 → GNB 노드 (unified 전용, 재귀).
+ *
+ * 기능/커스텀 메뉴와 같은 필드(name·path·sortOrder·pcVisible…)를 갖춰야 뷰가 하나의 코드로
+ * 셋을 다 그린다. 링크는 PC 패널과 같은 `/products/category/:id` 로 통일한다
+ * (모바일 하단바의 `/products?categoryId=` 와 갈라져 있던 것을 여기서 맞춘다).
+ */
+function categoryToNode(cat) {
+    return {
+        kind: 'category',
+        categoryId: Number(cat.id),
+        name: cat.name,
+        path: `/products/category/${cat.id}`,
+        featureCode: null,
+        isCustom: false,
+        newWindow: 0,
+        badgeType: null,
+        loginRequired: 0,
+        pcVisible: cat.pc_visible === undefined ? 1 : Number(cat.pc_visible),
+        mobileVisible: cat.mobile_visible === undefined ? 1 : Number(cat.mobile_visible),
+        sortOrder: Number(cat.display_order) || 0,
+        children: (cat.children || []).map(categoryToNode),
+    };
+}
+
+/** 기능/커스텀 메뉴 → GNB 노드. 기능·커스텀 메뉴 자체는 평면이다(children 없음). */
+function menuToNode(item) {
+    return Object.assign({}, item, {
+        kind: item.isCustom ? 'custom' : 'feature',
+        children: [],
+    });
+}
+
+/** 카테고리 트리를 id → 노드 로 평탄화 (커스텀 메뉴가 가리키는 카테고리를 O(1) 로 찾기 위해) */
+function indexTree(nodes, map = new Map()) {
+    (nodes || []).forEach((n) => {
+        map.set(Number(n.id), n);
+        indexTree(n.children, map);
+    });
+    return map;
+}
+
+/**
+ * split — 기본형 스킨. 카테고리는 GNB 최좌측 고정 버튼 하나에 매달린 별도 패널이다.
+ * 기존 getNavigation 본문을 그대로 옮긴 것이라 동작이 바뀌지 않는다.
+ */
+function buildSplit(config, gnbAll, gnbCustoms) {
+    const categoryButton = gnbAll.find(f => f.featureCode === CATEGORY_CODE) || null;
+    const gnbFeatures = gnbAll.filter(f => f.featureCode !== CATEGORY_CODE);
+    const maxGnb = Number(config.max_gnb_items) || 8;
+
+    /*
+     * 기능 메뉴와 커스텀 메뉴는 **동등한 GNB 항목**이다. 하나의 sort_order 축으로 병합 정렬한다.
+     *
+     * 단순 concat 하면 커스텀이 항상 기능 메뉴 뒤로 밀려 원하는 자리에 놓을 수 없고,
+     * 총량(max_gnb_items)을 넘길 때 커스텀만 잘려 나간다. 몰마다 기능 메뉴를 끄고 그 자리에
+     * 개별 기획전·전문관을 올리는 것이 이 빌더의 정상 구성이므로 순서는 통합되어야 한다.
+     *
+     * Array#sort 는 안정 정렬이라 sort_order 가 같으면 기능 메뉴가 앞선다.
+     */
+    const gnbCandidates = gnbFeatures.concat(gnbCustoms)
+        .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
+        .map(menuToNode);
+
+    return {
+        categoryButton, // null 이면 카테고리 버튼 미노출
+        gnb: gnbCandidates.slice(0, maxGnb),
+        // 자르기 전 후보 수. 관리자 메뉴 미리보기(B7)가 "몇 개가 잘렸는지" 보여주는 데 쓴다.
+        // 스토어프론트는 이 값을 읽지 않는다.
+        gnbCandidateCount: gnbCandidates.length,
+        gnbCategoryCount: 0,
+    };
+}
+
+/**
+ * unified — 드로어형/통합 스킨. 카테고리 1뎁스와 일반 메뉴가 **하나의 순서 축**에 놓인다.
+ *
+ * 순서 축은 하나다. 카테고리는 `categories.display_order`, 기능/커스텀 메뉴는 `sort_order` —
+ * 세 소스의 값을 같은 수직선 위에서 병합 정렬한다. 그래서 운영자는 "카테고리 블록을 통째로
+ * 어디에 끼울지"가 아니라 **항목 단위로 순서를 섞을 수 있다**(메뉴 미리보기 화면에서 편집).
+ *
+ * 카테고리가 메뉴에 들어오는 경로는 두 가지이고, 둘은 함께 쓸 수 있다.
+ *
+ *  1) **카테고리 1뎁스 전체** — mall_feature_menu 의 CATEGORY 행이 켜져 있으면 1뎁스가
+ *     각각 하나의 GNB 항목이 된다(하위 뎁스는 children). 끄면 카테고리가 통째로 빠진다
+ *     — 일반 메뉴만 있는 몰. CATEGORY 행의 sort_order 는 더 이상 쓰이지 않는다(항목별 순서가 있다).
+ *
+ *  2) **개별 카테고리/브랜드 메뉴** — 커스텀 메뉴(link_type='CATEGORY')로 원하는 카테고리만
+ *     골라 GNB 에 꽂는다. 이때 **하위 카테고리가 자동으로 하위 메뉴로 붙는다**(뎁스 상속).
+ *
+ * 기능·커스텀 메뉴 자체는 평면이다. 계층을 갖는 것은 카테고리뿐이다.
+ */
+function buildUnified(config, gnbAll, gnbCustoms, categoryTree) {
+    const categoryEntry = gnbAll.find(f => f.featureCode === CATEGORY_CODE) || null;
+    const catById = indexTree(categoryTree);
+
+    const menus = gnbAll.filter(f => f.featureCode !== CATEGORY_CODE)
+        .concat(gnbCustoms)
+        .sort(bySortOrder)
+        .map((item) => {
+            const node = menuToNode(item);
+
+            // 카테고리를 가리키는 커스텀 메뉴는 그 카테고리의 하위 트리를 상속한다.
+            // (트리는 이미 category_max_depth 로 잘려 있으므로 뎁스 상한이 저절로 지켜진다)
+            if (item.isCustom && item.linkType === 'CATEGORY') {
+                const cat = catById.get(Number(item.linkTarget));
+                if (cat) node.children = (cat.children || []).map(categoryToNode);
+            }
+            return node;
+        });
+
+    const categoryNodes = categoryEntry ? categoryTree.map(categoryToNode) : [];
+
+    /*
+     * 절단 규칙이 split 과 다르다. max_gnb_items 로 통째로 자르면 카테고리가 잘려나가
+     * **스토어가 반토막 난다**(unified 에선 카테고리가 메뉴의 본체다).
+     * → 상한은 **일반 메뉴에만** 적용한다(navigation_config.max_gnb_items 의 주석 그대로:
+     *   "카테고리 버튼 제외"). 카테고리 수가 상한과 같아도 일반 메뉴가 통째로 사라지지 않는다.
+     */
+    const maxGnb = Number(config.max_gnb_items) || 8;
+    const keptMenus = menus.slice(0, maxGnb);
+
+    // 통합 정렬 — 카테고리와 일반 메뉴가 같은 sortOrder 축에서 섞인다.
+    const gnb = keptMenus.concat(categoryNodes).sort(bySortOrder);
+
+    return {
+        categoryButton: null, // unified 엔 별도 카테고리 버튼이 없다
+        gnb,
+        gnbCandidateCount: menus.length + categoryNodes.length,
+        gnbCategoryCount: categoryNodes.length,
+    };
+}
+
+/** 하나의 순서 축. 동순위는 안정 정렬에 맡긴다(입력 순서 유지). */
+function bySortOrder(a, b) {
+    return (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0);
+}
+
+/**
  * 위치별로 조립된 내비게이션을 돌려준다.
+ *
+ * GNB 조립 방식은 navigation_config.nav_mode 가 정한다(split=기본형 스킨 / unified=드로어형 스킨).
+ * 두 방식 모두 gnb[] 항목이 같은 노드 형태(kind·children 포함)라 뷰가 한 코드로 그린다.
  *
  * @param {number} mallId
  * @param {{ isLoggedIn?: boolean }} opts
  * @returns {Promise<{
  *   config, categoryTree, categoryButton,
- *   gnb, rightRail, headerUtil, footer, mobileQuick
+ *   gnb, gnbCandidateCount, gnbCategoryCount,
+ *   rightRail, headerUtil, footer, mobileQuick
  * }>}
  */
 async function getNavigation(mallId = 1, opts = {}) {
@@ -396,38 +541,21 @@ async function getNavigation(mallId = 1, opts = {}) {
     const customsAt = (location, limit) =>
         customs.filter(c => c.location === location && visibleTo(c, isLoggedIn)).slice(0, limit);
 
-    // GNB = [고정 카테고리 버튼] + [기능 메뉴 ∪ 커스텀 슬롯]
     const gnbAll = byPosition('gnb');
-    const categoryButton = gnbAll.find(f => f.featureCode === CATEGORY_CODE) || null;
-    const gnbFeatures = gnbAll.filter(f => f.featureCode !== CATEGORY_CODE);
     const gnbCustoms = customsAt('gnb', Number(config.max_custom_items) || 0);
-    const maxGnb = Number(config.max_gnb_items) || 8;
 
-    /*
-     * 기능 메뉴와 커스텀 메뉴는 **동등한 GNB 항목**이다. 하나의 sort_order 축으로 병합 정렬한다.
-     *
-     * 단순 concat 하면 커스텀이 항상 기능 메뉴 뒤로 밀려 원하는 자리에 놓을 수 없고,
-     * 총량(max_gnb_items)을 넘길 때 커스텀만 잘려 나간다. 몰마다 기능 메뉴를 끄고 그 자리에
-     * 개별 기획전·전문관을 올리는 것이 이 빌더의 정상 구성이므로 순서는 통합되어야 한다.
-     *
-     * Array#sort 는 안정 정렬이라 sort_order 가 같으면 기능 메뉴가 앞선다.
-     */
-    const gnbCandidates = gnbFeatures.concat(gnbCustoms)
-        .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
+    const built = config.nav_mode === 'unified'
+        ? buildUnified(config, gnbAll, gnbCustoms, categoryTree)
+        : buildSplit(config, gnbAll, gnbCustoms);
 
-    return {
+    return Object.assign({
         config,
         categoryTree,
-        categoryButton, // null 이면 카테고리 버튼 미노출
-        gnb: gnbCandidates.slice(0, maxGnb),
-        // 자르기 전 후보 수. 관리자 메뉴 미리보기(B7)가 "몇 개가 잘렸는지" 보여주는 데 쓴다.
-        // 스토어프론트는 이 값을 읽지 않는다.
-        gnbCandidateCount: gnbCandidates.length,
         rightRail: byPosition('right_rail'),
         headerUtil: byPosition('header_util'),
         footer: byPosition('footer').concat(customsAt('footer', 20)),
         mobileQuick: byPosition('mobile_quick').concat(customsAt('mobile_quick', 5)),
-    };
+    }, built);
 }
 
 module.exports = {

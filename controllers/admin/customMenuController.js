@@ -39,7 +39,9 @@ const LOCATIONS = [
  */
 const LINK_TYPES = [
     { value: 'EXHIBITION', label: '기획전 · 전문관', kind: 'resource', hint: '발행된 기획전/전문관 하나를 골라 상세로 바로 보냅니다.' },
-    { value: 'CATEGORY', label: '카테고리', kind: 'resource', hint: '카테고리 상품 목록으로 보냅니다.' },
+    // 드로어형 스킨(nav_mode='unified')에서는 카테고리 메뉴가 **하위 카테고리를 자동으로 상속**한다
+    // — 운영자가 하위 메뉴를 따로 만들지 않아도 [+] 로 펼쳐진다(navigationService.buildUnified).
+    { value: 'CATEGORY', label: '카테고리', kind: 'resource', hint: '카테고리 상품 목록으로 보냅니다. 드로어형 스킨에서는 하위 카테고리가 자동으로 하위 메뉴로 붙습니다.' },
     { value: 'BRAND', label: '브랜드', kind: 'resource', hint: '브랜드 상품 목록으로 보냅니다.' },
     { value: 'INTERNAL_PAGE', label: '내부 페이지 (직접 입력)', kind: 'url', hint: '/ 로 시작하는 이 쇼핑몰 내부 경로.' },
     { value: 'EXTERNAL_URL', label: '외부 링크', kind: 'url', hint: 'http(s):// 주소. 항상 새 창으로 열립니다.' },

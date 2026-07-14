@@ -24,6 +24,8 @@ router.get('/new', c.getNew);
 router.post('/', c.postAdd);
 router.get('/:id', requireNumericId, c.getEdit);
 router.post('/:id', requireNumericId, c.postEdit);
+// 프리셋 재적용 — 내비·메뉴·테마를 프리셋으로 되돌린다(홈 교체는 include_home=1 일 때만).
+router.post('/:id/provision', requireNumericId, c.postProvision);
 router.post('/:id/delete', requireNumericId, c.postDelete);
 
 module.exports = router;

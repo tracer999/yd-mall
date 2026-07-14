@@ -1,0 +1,27 @@
+<%
+  /*
+   * 배너 관리 공용 탭 네비게이션.
+   * locals: activeTab — 'HERO' | 'CATEGORY' | 'POPUP' | 'BRAND' | 'MENU'
+   *
+   * 'HERO' 탭 하나가 메인 히어로 두 방식(상품 쇼케이스 / 이미지 배너 슬라이드)을 모두 관장한다.
+   * 예전에는 '메인 슬라이더'와 '메인 배너(레거시)'가 별도 탭이었으나, 프론트가 site_settings.hero_variant
+   * 로 둘 중 하나만 렌더하므로 한 화면에서 방식을 고르도록 합쳤다.
+   */
+  const TABS = [
+    { key: 'HERO',     label: '메인 슬라이더', href: '/admin/banners/hero-slides' },
+    { key: 'CATEGORY', label: '카테고리 배너', href: '/admin/banners?type=CATEGORY' },
+    { key: 'POPUP',    label: '팝업 배너',     href: '/admin/banners?type=POPUP' },
+    { key: 'BRAND',    label: '브랜드 배너',   href: '/admin/banners?type=BRAND' },
+    { key: 'MENU',     label: '메뉴별 배너',   href: '/admin/banners?type=MENU' },
+  ];
+%>
+<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">
+    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <% TABS.forEach(function (t) { %>
+            <a href="<%= t.href %>"
+               class="<%= t.key === activeTab ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %> whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm no-underline">
+                <%= t.label %>
+            </a>
+        <% }); %>
+    </nav>
+</div>

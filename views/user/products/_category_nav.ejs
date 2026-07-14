@@ -15,24 +15,35 @@ const _parent = _nav.ancestors.length ? _nav.ancestors[_nav.ancestors.length - 1
 const _trail = [..._nav.ancestors, _nav.current];
 %>
 
-<!-- 브레드크럼 -->
-<nav class="flex text-sm text-gray-500 mb-4" aria-label="Breadcrumb">
-    <ol class="inline-flex items-center flex-wrap gap-y-1">
-        <li class="inline-flex items-center">
+<%#
+  브레드크럼 — 3뎁스(홈 > 1 > 2 > 3)에서 줄바꿈으로 두 줄이 되며 레이아웃이 무너지던 것을 막는다.
+  줄바꿈(flex-wrap) 대신 **한 줄 유지 + 넘치면 가로 스크롤**이다. 카테고리 이름이 길어도
+  경로 자체가 깨지지 않아야 "지금 어디인가"가 읽힌다. 스크롤바는 숨기고(모바일 칩과 같은 방식)
+  마지막(현재) 항목은 절대 줄이지 않는다 — 중간 조상 이름만 필요할 때 잘린다.
+%>
+<nav class="yd-bc flex text-sm text-gray-500 mb-4 overflow-x-auto" aria-label="Breadcrumb">
+    <ol class="flex items-center flex-nowrap whitespace-nowrap min-w-0">
+        <li class="flex items-center shrink-0">
             <a href="/" class="hover:text-gray-900">홈</a>
         </li>
-        <% _trail.forEach((node, i) => { %>
-            <li class="inline-flex items-center">
-                <i class="bi bi-chevron-right text-gray-300 text-xs mx-2"></i>
-                <% if (i === _trail.length - 1) { %>
+        <% _trail.forEach((node, i) => {
+             const _last = i === _trail.length - 1; %>
+            <li class="flex items-center min-w-0 <%= _last ? 'shrink-0' : '' %>">
+                <i class="bi bi-chevron-right text-gray-300 text-xs mx-2 shrink-0"></i>
+                <% if (_last) { %>
                     <span class="text-gray-900 font-medium"><%= node.name %></span>
                 <% } else { %>
-                    <a href="<%= _catUrl(node.id) %>" class="hover:text-gray-900"><%= node.name %></a>
+                    <a href="<%= _catUrl(node.id) %>" class="truncate hover:text-gray-900" title="<%= node.name %>"><%= node.name %></a>
                 <% } %>
             </li>
         <% }) %>
     </ol>
 </nav>
+<style>
+  /* 가로 스크롤바 숨김 — 경로가 길 때만 드래그/스와이프로 밀린다 */
+  .yd-bc { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .yd-bc::-webkit-scrollbar { display: none; }
+</style>
 
 <!-- 카테고리 패널 -->
 <div class="hidden md:flex border border-gray-200 bg-white mb-6">
@@ -44,18 +55,21 @@ const _trail = [..._nav.ancestors, _nav.current];
     <!-- 우측 -->
     <div class="flex-1 min-w-0">
         <!-- 헤더: 현재 위치. 하위가 있으면 이름만, 하위로 내려왔으면 ← 로 부모 복귀 -->
-        <div class="flex items-center gap-2 px-6 py-4 <%= _nav.panelItems.length ? 'border-b border-gray-200' : '' %>">
+        <%# 경로는 한 줄 유지. 두 줄이 되면 좌측 '카테고리' 라벨 박스와 높이가 어긋나 패널이 깨진다.
+            min-w-0 이 없으면 flex 자식이 줄어들지 않아 truncate 가 먹지 않는다. %>
+        <div class="flex items-center gap-2 px-6 py-4 min-w-0 <%= _nav.panelItems.length ? 'border-b border-gray-200' : '' %>">
             <% if (_parent) { %>
                 <a href="<%= _catUrl(_parent.id) %>"
                    class="text-gray-500 hover:text-gray-900 shrink-0" aria-label="<%= _parent.name %> 로 이동">
                     <i class="bi bi-arrow-left"></i>
                 </a>
             <% } %>
-            <span class="text-sm text-gray-800">
-                <% _trail.forEach((node, i) => { %><%
-                    %><% if (i > 0) { %><span class="text-gray-300 mx-1.5">&gt;</span><% } %><%
-                    %><span class="<%= i === _trail.length - 1 ? 'font-bold' : '' %>"><%= node.name %></span><%
-                %><% }) %>
+            <span class="flex items-center min-w-0 text-sm text-gray-800 whitespace-nowrap">
+                <% _trail.forEach((node, i) => {
+                     const _last = i === _trail.length - 1; %>
+                    <% if (i > 0) { %><span class="text-gray-300 mx-1.5 shrink-0">&gt;</span><% } %>
+                    <span class="<%= _last ? 'font-bold shrink-0' : 'truncate' %>" title="<%= node.name %>"><%= node.name %></span>
+                <% }) %>
             </span>
         </div>
 

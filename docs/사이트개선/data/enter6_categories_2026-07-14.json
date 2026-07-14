@@ -1,0 +1,1654 @@
+{
+  "source": "https://www.enter6.co.kr/",
+  "collected_at": "2026-07-14",
+  "scope": "공개 사이트 전체 카테고리 GNB",
+  "max_depth": 2,
+  "category_count": {
+    "depth_1": 8,
+    "depth_2": 53,
+    "total": 61
+  },
+  "categories": [
+    {
+      "id": "001000000000000",
+      "code": "001000000000000",
+      "name": "여성패션",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "여성패션"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/001000000000000",
+      "children": [
+        {
+          "id": "001003000000000",
+          "code": "001003000000000",
+          "name": "티셔츠",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "티셔츠"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/001003000000000",
+          "children": []
+        },
+        {
+          "id": "001004000000000",
+          "code": "001004000000000",
+          "name": "블라우스/셔츠",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "블라우스/셔츠"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/001004000000000",
+          "children": []
+        },
+        {
+          "id": "001008000000000",
+          "code": "001008000000000",
+          "name": "팬츠",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "팬츠"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/001008000000000",
+          "children": []
+        },
+        {
+          "id": "001009000000000",
+          "code": "001009000000000",
+          "name": "스커트",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "스커트"
+          ],
+          "sort_order": 4,
+          "url": "https://www.enter6.co.kr/product/category/001009000000000",
+          "children": []
+        },
+        {
+          "id": "001001000000000",
+          "code": "001001000000000",
+          "name": "원피스",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "원피스"
+          ],
+          "sort_order": 5,
+          "url": "https://www.enter6.co.kr/product/category/001001000000000",
+          "children": []
+        },
+        {
+          "id": "001002000000000",
+          "code": "001002000000000",
+          "name": "니트/가디건",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "니트/가디건"
+          ],
+          "sort_order": 6,
+          "url": "https://www.enter6.co.kr/product/category/001002000000000",
+          "children": []
+        },
+        {
+          "id": "001005000000000",
+          "code": "001005000000000",
+          "name": "재킷",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "재킷"
+          ],
+          "sort_order": 7,
+          "url": "https://www.enter6.co.kr/product/category/001005000000000",
+          "children": []
+        },
+        {
+          "id": "001006000000000",
+          "code": "001006000000000",
+          "name": "점퍼",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "점퍼"
+          ],
+          "sort_order": 8,
+          "url": "https://www.enter6.co.kr/product/category/001006000000000",
+          "children": []
+        },
+        {
+          "id": "001007000000000",
+          "code": "001007000000000",
+          "name": "코트",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "코트"
+          ],
+          "sort_order": 9,
+          "url": "https://www.enter6.co.kr/product/category/001007000000000",
+          "children": []
+        },
+        {
+          "id": "001010000000000",
+          "code": "001010000000000",
+          "name": "베스트/조끼",
+          "depth": 2,
+          "parent_id": "001000000000000",
+          "path": [
+            "여성패션",
+            "베스트/조끼"
+          ],
+          "sort_order": 10,
+          "url": "https://www.enter6.co.kr/product/category/001010000000000",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "002000000000000",
+      "code": "002000000000000",
+      "name": "남성패션",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "남성패션"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/002000000000000",
+      "children": [
+        {
+          "id": "002001000000000",
+          "code": "002001000000000",
+          "name": "티셔츠",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "티셔츠"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/002001000000000",
+          "children": []
+        },
+        {
+          "id": "002002000000000",
+          "code": "002002000000000",
+          "name": "셔츠/남방",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "셔츠/남방"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/002002000000000",
+          "children": []
+        },
+        {
+          "id": "002004000000000",
+          "code": "002004000000000",
+          "name": "팬츠",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "팬츠"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/002004000000000",
+          "children": []
+        },
+        {
+          "id": "002005000000000",
+          "code": "002005000000000",
+          "name": "정장",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "정장"
+          ],
+          "sort_order": 4,
+          "url": "https://www.enter6.co.kr/product/category/002005000000000",
+          "children": []
+        },
+        {
+          "id": "002003000000000",
+          "code": "002003000000000",
+          "name": "니트/가디건/베스트",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "니트/가디건/베스트"
+          ],
+          "sort_order": 5,
+          "url": "https://www.enter6.co.kr/product/category/002003000000000",
+          "children": []
+        },
+        {
+          "id": "002006000000000",
+          "code": "002006000000000",
+          "name": "재킷",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "재킷"
+          ],
+          "sort_order": 6,
+          "url": "https://www.enter6.co.kr/product/category/002006000000000",
+          "children": []
+        },
+        {
+          "id": "002007000000000",
+          "code": "002007000000000",
+          "name": "점퍼",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "점퍼"
+          ],
+          "sort_order": 7,
+          "url": "https://www.enter6.co.kr/product/category/002007000000000",
+          "children": []
+        },
+        {
+          "id": "002008000000000",
+          "code": "002008000000000",
+          "name": "코트",
+          "depth": 2,
+          "parent_id": "002000000000000",
+          "path": [
+            "남성패션",
+            "코트"
+          ],
+          "sort_order": 8,
+          "url": "https://www.enter6.co.kr/product/category/002008000000000",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "003000000000000",
+      "code": "003000000000000",
+      "name": "유니섹스/진 캐주얼",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "유니섹스/진 캐주얼"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/003000000000000",
+      "children": [
+        {
+          "id": "003001000000000",
+          "code": "003001000000000",
+          "name": "티셔츠",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "티셔츠"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/003001000000000",
+          "children": []
+        },
+        {
+          "id": "003002000000000",
+          "code": "003002000000000",
+          "name": "셔츠",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "셔츠"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/003002000000000",
+          "children": []
+        },
+        {
+          "id": "003010000000000",
+          "code": "003010000000000",
+          "name": "원피스/스커트",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "원피스/스커트"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/003010000000000",
+          "children": []
+        },
+        {
+          "id": "003003000000000",
+          "code": "003003000000000",
+          "name": "팬츠",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "팬츠"
+          ],
+          "sort_order": 4,
+          "url": "https://www.enter6.co.kr/product/category/003003000000000",
+          "children": []
+        },
+        {
+          "id": "003004000000000",
+          "code": "003004000000000",
+          "name": "데님팬츠",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "데님팬츠"
+          ],
+          "sort_order": 5,
+          "url": "https://www.enter6.co.kr/product/category/003004000000000",
+          "children": []
+        },
+        {
+          "id": "003005000000000",
+          "code": "003005000000000",
+          "name": "니트/가디건",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "니트/가디건"
+          ],
+          "sort_order": 6,
+          "url": "https://www.enter6.co.kr/product/category/003005000000000",
+          "children": []
+        },
+        {
+          "id": "003006000000000",
+          "code": "003006000000000",
+          "name": "베스트/조끼",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "베스트/조끼"
+          ],
+          "sort_order": 7,
+          "url": "https://www.enter6.co.kr/product/category/003006000000000",
+          "children": []
+        },
+        {
+          "id": "003007000000000",
+          "code": "003007000000000",
+          "name": "재킷",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "재킷"
+          ],
+          "sort_order": 8,
+          "url": "https://www.enter6.co.kr/product/category/003007000000000",
+          "children": []
+        },
+        {
+          "id": "003008000000000",
+          "code": "003008000000000",
+          "name": "점퍼",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "점퍼"
+          ],
+          "sort_order": 9,
+          "url": "https://www.enter6.co.kr/product/category/003008000000000",
+          "children": []
+        },
+        {
+          "id": "003009000000000",
+          "code": "003009000000000",
+          "name": "코트",
+          "depth": 2,
+          "parent_id": "003000000000000",
+          "path": [
+            "유니섹스/진 캐주얼",
+            "코트"
+          ],
+          "sort_order": 10,
+          "url": "https://www.enter6.co.kr/product/category/003009000000000",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "004000000000000",
+      "code": "004000000000000",
+      "name": "스포츠/레저",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "스포츠/레저"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/004000000000000",
+      "children": [
+        {
+          "id": "004001000000000",
+          "code": "004001000000000",
+          "name": "스포츠의류",
+          "depth": 2,
+          "parent_id": "004000000000000",
+          "path": [
+            "스포츠/레저",
+            "스포츠의류"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/004001000000000",
+          "children": []
+        },
+        {
+          "id": "004002000000000",
+          "code": "004002000000000",
+          "name": "스포츠슈즈",
+          "depth": 2,
+          "parent_id": "004000000000000",
+          "path": [
+            "스포츠/레저",
+            "스포츠슈즈"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/004002000000000",
+          "children": []
+        },
+        {
+          "id": "004003000000000",
+          "code": "004003000000000",
+          "name": "스포츠가방/잡화",
+          "depth": 2,
+          "parent_id": "004000000000000",
+          "path": [
+            "스포츠/레저",
+            "스포츠가방/잡화"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/004003000000000",
+          "children": []
+        },
+        {
+          "id": "004004000000000",
+          "code": "004004000000000",
+          "name": "아웃도어",
+          "depth": 2,
+          "parent_id": "004000000000000",
+          "path": [
+            "스포츠/레저",
+            "아웃도어"
+          ],
+          "sort_order": 4,
+          "url": "https://www.enter6.co.kr/product/category/004004000000000",
+          "children": []
+        },
+        {
+          "id": "004005000000000",
+          "code": "004005000000000",
+          "name": "캠핑",
+          "depth": 2,
+          "parent_id": "004000000000000",
+          "path": [
+            "스포츠/레저",
+            "캠핑"
+          ],
+          "sort_order": 5,
+          "url": "https://www.enter6.co.kr/product/category/004005000000000",
+          "children": []
+        },
+        {
+          "id": "004006000000000",
+          "code": "004006000000000",
+          "name": "골프의류/용품",
+          "depth": 2,
+          "parent_id": "004000000000000",
+          "path": [
+            "스포츠/레저",
+            "골프의류/용품"
+          ],
+          "sort_order": 6,
+          "url": "https://www.enter6.co.kr/product/category/004006000000000",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "005000000000000",
+      "code": "005000000000000",
+      "name": "언더웨어",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "언더웨어"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/005000000000000",
+      "children": [
+        {
+          "id": "005001000000000",
+          "code": "005001000000000",
+          "name": "여성언더웨어",
+          "depth": 2,
+          "parent_id": "005000000000000",
+          "path": [
+            "언더웨어",
+            "여성언더웨어"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/005001000000000",
+          "children": []
+        },
+        {
+          "id": "005002000000000",
+          "code": "005002000000000",
+          "name": "남성언더웨어",
+          "depth": 2,
+          "parent_id": "005000000000000",
+          "path": [
+            "언더웨어",
+            "남성언더웨어"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/005002000000000",
+          "children": []
+        },
+        {
+          "id": "005003000000000",
+          "code": "005003000000000",
+          "name": "커플언더웨어",
+          "depth": 2,
+          "parent_id": "005000000000000",
+          "path": [
+            "언더웨어",
+            "커플언더웨어"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/005003000000000",
+          "children": []
+        },
+        {
+          "id": "005004000000000",
+          "code": "005004000000000",
+          "name": "내의",
+          "depth": 2,
+          "parent_id": "005000000000000",
+          "path": [
+            "언더웨어",
+            "내의"
+          ],
+          "sort_order": 4,
+          "url": "https://www.enter6.co.kr/product/category/005004000000000",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "006000000000000",
+      "code": "006000000000000",
+      "name": "키즈",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "키즈"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/006000000000000",
+      "children": [
+        {
+          "id": "006001000000000",
+          "code": "006001000000000",
+          "name": "신생아의류",
+          "depth": 2,
+          "parent_id": "006000000000000",
+          "path": [
+            "키즈",
+            "신생아의류"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/006001000000000",
+          "children": []
+        },
+        {
+          "id": "006002000000000",
+          "code": "006002000000000",
+          "name": "유아의류",
+          "depth": 2,
+          "parent_id": "006000000000000",
+          "path": [
+            "키즈",
+            "유아의류"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/006002000000000",
+          "children": []
+        },
+        {
+          "id": "006003000000000",
+          "code": "006003000000000",
+          "name": "아동의류",
+          "depth": 2,
+          "parent_id": "006000000000000",
+          "path": [
+            "키즈",
+            "아동의류"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/006003000000000",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "007000000000000",
+      "code": "007000000000000",
+      "name": "잡화/명품/뷰티",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "잡화/명품/뷰티"
+      ],
+      "sort_order": 7,
+      "url": "https://www.enter6.co.kr/product/category/007000000000000",
+      "children": [
+        {
+          "id": "007001000000000",
+          "code": "007001000000000",
+          "name": "패션슈즈",
+          "depth": 2,
+          "parent_id": "007000000000000",
+          "path": [
+            "잡화/명품/뷰티",
+            "패션슈즈"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/007001000000000",
+          "children": []
+        },
+        {
+          "id": "007002000000000",
+          "code": "007002000000000",
+          "name": "핸드백/잡화",
+          "depth": 2,
+          "parent_id": "007000000000000",
+          "path": [
+            "잡화/명품/뷰티",
+            "핸드백/잡화"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/007002000000000",
+          "children": []
+        },
+        {
+          "id": "007003000000000",
+          "code": "007003000000000",
+          "name": "기타액세서리",
+          "depth": 2,
+          "parent_id": "007000000000000",
+          "path": [
+            "잡화/명품/뷰티",
+            "기타액세서리"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/007003000000000",
+          "children": []
+        },
+        {
+          "id": "007004000000000",
+          "code": "007004000000000",
+          "name": "뷰티",
+          "depth": 2,
+          "parent_id": "007000000000000",
+          "path": [
+            "잡화/명품/뷰티",
+            "뷰티"
+          ],
+          "sort_order": 4,
+          "url": "https://www.enter6.co.kr/product/category/007004000000000",
+          "children": []
+        },
+        {
+          "id": "007005000000000",
+          "code": "007005000000000",
+          "name": "해외명품",
+          "depth": 2,
+          "parent_id": "007000000000000",
+          "path": [
+            "잡화/명품/뷰티",
+            "해외명품"
+          ],
+          "sort_order": 5,
+          "url": "https://www.enter6.co.kr/product/category/007005000000000",
+          "children": []
+        },
+        {
+          "id": "007006000000000",
+          "code": "007006000000000",
+          "name": "귀금속",
+          "depth": 2,
+          "parent_id": "007000000000000",
+          "path": [
+            "잡화/명품/뷰티",
+            "귀금속"
+          ],
+          "sort_order": 6,
+          "url": "https://www.enter6.co.kr/product/category/007006000000000",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "008000000000000",
+      "code": "008000000000000",
+      "name": "라이프스타일",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "라이프스타일"
+      ],
+      "sort_order": 8,
+      "url": "https://www.enter6.co.kr/product/category/008000000000000",
+      "children": [
+        {
+          "id": "008001000000000",
+          "code": "008001000000000",
+          "name": "홈데코",
+          "depth": 2,
+          "parent_id": "008000000000000",
+          "path": [
+            "라이프스타일",
+            "홈데코"
+          ],
+          "sort_order": 1,
+          "url": "https://www.enter6.co.kr/product/category/008001000000000",
+          "children": []
+        },
+        {
+          "id": "008002000000000",
+          "code": "008002000000000",
+          "name": "주방/욕실",
+          "depth": 2,
+          "parent_id": "008000000000000",
+          "path": [
+            "라이프스타일",
+            "주방/욕실"
+          ],
+          "sort_order": 2,
+          "url": "https://www.enter6.co.kr/product/category/008002000000000",
+          "children": []
+        },
+        {
+          "id": "008003000000000",
+          "code": "008003000000000",
+          "name": "가전/가구",
+          "depth": 2,
+          "parent_id": "008000000000000",
+          "path": [
+            "라이프스타일",
+            "가전/가구"
+          ],
+          "sort_order": 3,
+          "url": "https://www.enter6.co.kr/product/category/008003000000000",
+          "children": []
+        },
+        {
+          "id": "008004000000000",
+          "code": "008004000000000",
+          "name": "문구/생활잡화",
+          "depth": 2,
+          "parent_id": "008000000000000",
+          "path": [
+            "라이프스타일",
+            "문구/생활잡화"
+          ],
+          "sort_order": 4,
+          "url": "https://www.enter6.co.kr/product/category/008004000000000",
+          "children": []
+        },
+        {
+          "id": "008005000000000",
+          "code": "008005000000000",
+          "name": "취미",
+          "depth": 2,
+          "parent_id": "008000000000000",
+          "path": [
+            "라이프스타일",
+            "취미"
+          ],
+          "sort_order": 5,
+          "url": "https://www.enter6.co.kr/product/category/008005000000000",
+          "children": []
+        },
+        {
+          "id": "008006000000000",
+          "code": "008006000000000",
+          "name": "푸드",
+          "depth": 2,
+          "parent_id": "008000000000000",
+          "path": [
+            "라이프스타일",
+            "푸드"
+          ],
+          "sort_order": 6,
+          "url": "https://www.enter6.co.kr/product/category/008006000000000",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "flat_categories": [
+    {
+      "id": "001000000000000",
+      "code": "001000000000000",
+      "name": "여성패션",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "여성패션"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/001000000000000"
+    },
+    {
+      "id": "001003000000000",
+      "code": "001003000000000",
+      "name": "티셔츠",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "티셔츠"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/001003000000000"
+    },
+    {
+      "id": "001004000000000",
+      "code": "001004000000000",
+      "name": "블라우스/셔츠",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "블라우스/셔츠"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/001004000000000"
+    },
+    {
+      "id": "001008000000000",
+      "code": "001008000000000",
+      "name": "팬츠",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "팬츠"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/001008000000000"
+    },
+    {
+      "id": "001009000000000",
+      "code": "001009000000000",
+      "name": "스커트",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "스커트"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/001009000000000"
+    },
+    {
+      "id": "001001000000000",
+      "code": "001001000000000",
+      "name": "원피스",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "원피스"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/001001000000000"
+    },
+    {
+      "id": "001002000000000",
+      "code": "001002000000000",
+      "name": "니트/가디건",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "니트/가디건"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/001002000000000"
+    },
+    {
+      "id": "001005000000000",
+      "code": "001005000000000",
+      "name": "재킷",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "재킷"
+      ],
+      "sort_order": 7,
+      "url": "https://www.enter6.co.kr/product/category/001005000000000"
+    },
+    {
+      "id": "001006000000000",
+      "code": "001006000000000",
+      "name": "점퍼",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "점퍼"
+      ],
+      "sort_order": 8,
+      "url": "https://www.enter6.co.kr/product/category/001006000000000"
+    },
+    {
+      "id": "001007000000000",
+      "code": "001007000000000",
+      "name": "코트",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "코트"
+      ],
+      "sort_order": 9,
+      "url": "https://www.enter6.co.kr/product/category/001007000000000"
+    },
+    {
+      "id": "001010000000000",
+      "code": "001010000000000",
+      "name": "베스트/조끼",
+      "depth": 2,
+      "parent_id": "001000000000000",
+      "path": [
+        "여성패션",
+        "베스트/조끼"
+      ],
+      "sort_order": 10,
+      "url": "https://www.enter6.co.kr/product/category/001010000000000"
+    },
+    {
+      "id": "002000000000000",
+      "code": "002000000000000",
+      "name": "남성패션",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "남성패션"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/002000000000000"
+    },
+    {
+      "id": "002001000000000",
+      "code": "002001000000000",
+      "name": "티셔츠",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "티셔츠"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/002001000000000"
+    },
+    {
+      "id": "002002000000000",
+      "code": "002002000000000",
+      "name": "셔츠/남방",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "셔츠/남방"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/002002000000000"
+    },
+    {
+      "id": "002004000000000",
+      "code": "002004000000000",
+      "name": "팬츠",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "팬츠"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/002004000000000"
+    },
+    {
+      "id": "002005000000000",
+      "code": "002005000000000",
+      "name": "정장",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "정장"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/002005000000000"
+    },
+    {
+      "id": "002003000000000",
+      "code": "002003000000000",
+      "name": "니트/가디건/베스트",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "니트/가디건/베스트"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/002003000000000"
+    },
+    {
+      "id": "002006000000000",
+      "code": "002006000000000",
+      "name": "재킷",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "재킷"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/002006000000000"
+    },
+    {
+      "id": "002007000000000",
+      "code": "002007000000000",
+      "name": "점퍼",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "점퍼"
+      ],
+      "sort_order": 7,
+      "url": "https://www.enter6.co.kr/product/category/002007000000000"
+    },
+    {
+      "id": "002008000000000",
+      "code": "002008000000000",
+      "name": "코트",
+      "depth": 2,
+      "parent_id": "002000000000000",
+      "path": [
+        "남성패션",
+        "코트"
+      ],
+      "sort_order": 8,
+      "url": "https://www.enter6.co.kr/product/category/002008000000000"
+    },
+    {
+      "id": "003000000000000",
+      "code": "003000000000000",
+      "name": "유니섹스/진 캐주얼",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "유니섹스/진 캐주얼"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/003000000000000"
+    },
+    {
+      "id": "003001000000000",
+      "code": "003001000000000",
+      "name": "티셔츠",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "티셔츠"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/003001000000000"
+    },
+    {
+      "id": "003002000000000",
+      "code": "003002000000000",
+      "name": "셔츠",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "셔츠"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/003002000000000"
+    },
+    {
+      "id": "003010000000000",
+      "code": "003010000000000",
+      "name": "원피스/스커트",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "원피스/스커트"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/003010000000000"
+    },
+    {
+      "id": "003003000000000",
+      "code": "003003000000000",
+      "name": "팬츠",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "팬츠"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/003003000000000"
+    },
+    {
+      "id": "003004000000000",
+      "code": "003004000000000",
+      "name": "데님팬츠",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "데님팬츠"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/003004000000000"
+    },
+    {
+      "id": "003005000000000",
+      "code": "003005000000000",
+      "name": "니트/가디건",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "니트/가디건"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/003005000000000"
+    },
+    {
+      "id": "003006000000000",
+      "code": "003006000000000",
+      "name": "베스트/조끼",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "베스트/조끼"
+      ],
+      "sort_order": 7,
+      "url": "https://www.enter6.co.kr/product/category/003006000000000"
+    },
+    {
+      "id": "003007000000000",
+      "code": "003007000000000",
+      "name": "재킷",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "재킷"
+      ],
+      "sort_order": 8,
+      "url": "https://www.enter6.co.kr/product/category/003007000000000"
+    },
+    {
+      "id": "003008000000000",
+      "code": "003008000000000",
+      "name": "점퍼",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "점퍼"
+      ],
+      "sort_order": 9,
+      "url": "https://www.enter6.co.kr/product/category/003008000000000"
+    },
+    {
+      "id": "003009000000000",
+      "code": "003009000000000",
+      "name": "코트",
+      "depth": 2,
+      "parent_id": "003000000000000",
+      "path": [
+        "유니섹스/진 캐주얼",
+        "코트"
+      ],
+      "sort_order": 10,
+      "url": "https://www.enter6.co.kr/product/category/003009000000000"
+    },
+    {
+      "id": "004000000000000",
+      "code": "004000000000000",
+      "name": "스포츠/레저",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "스포츠/레저"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/004000000000000"
+    },
+    {
+      "id": "004001000000000",
+      "code": "004001000000000",
+      "name": "스포츠의류",
+      "depth": 2,
+      "parent_id": "004000000000000",
+      "path": [
+        "스포츠/레저",
+        "스포츠의류"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/004001000000000"
+    },
+    {
+      "id": "004002000000000",
+      "code": "004002000000000",
+      "name": "스포츠슈즈",
+      "depth": 2,
+      "parent_id": "004000000000000",
+      "path": [
+        "스포츠/레저",
+        "스포츠슈즈"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/004002000000000"
+    },
+    {
+      "id": "004003000000000",
+      "code": "004003000000000",
+      "name": "스포츠가방/잡화",
+      "depth": 2,
+      "parent_id": "004000000000000",
+      "path": [
+        "스포츠/레저",
+        "스포츠가방/잡화"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/004003000000000"
+    },
+    {
+      "id": "004004000000000",
+      "code": "004004000000000",
+      "name": "아웃도어",
+      "depth": 2,
+      "parent_id": "004000000000000",
+      "path": [
+        "스포츠/레저",
+        "아웃도어"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/004004000000000"
+    },
+    {
+      "id": "004005000000000",
+      "code": "004005000000000",
+      "name": "캠핑",
+      "depth": 2,
+      "parent_id": "004000000000000",
+      "path": [
+        "스포츠/레저",
+        "캠핑"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/004005000000000"
+    },
+    {
+      "id": "004006000000000",
+      "code": "004006000000000",
+      "name": "골프의류/용품",
+      "depth": 2,
+      "parent_id": "004000000000000",
+      "path": [
+        "스포츠/레저",
+        "골프의류/용품"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/004006000000000"
+    },
+    {
+      "id": "005000000000000",
+      "code": "005000000000000",
+      "name": "언더웨어",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "언더웨어"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/005000000000000"
+    },
+    {
+      "id": "005001000000000",
+      "code": "005001000000000",
+      "name": "여성언더웨어",
+      "depth": 2,
+      "parent_id": "005000000000000",
+      "path": [
+        "언더웨어",
+        "여성언더웨어"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/005001000000000"
+    },
+    {
+      "id": "005002000000000",
+      "code": "005002000000000",
+      "name": "남성언더웨어",
+      "depth": 2,
+      "parent_id": "005000000000000",
+      "path": [
+        "언더웨어",
+        "남성언더웨어"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/005002000000000"
+    },
+    {
+      "id": "005003000000000",
+      "code": "005003000000000",
+      "name": "커플언더웨어",
+      "depth": 2,
+      "parent_id": "005000000000000",
+      "path": [
+        "언더웨어",
+        "커플언더웨어"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/005003000000000"
+    },
+    {
+      "id": "005004000000000",
+      "code": "005004000000000",
+      "name": "내의",
+      "depth": 2,
+      "parent_id": "005000000000000",
+      "path": [
+        "언더웨어",
+        "내의"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/005004000000000"
+    },
+    {
+      "id": "006000000000000",
+      "code": "006000000000000",
+      "name": "키즈",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "키즈"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/006000000000000"
+    },
+    {
+      "id": "006001000000000",
+      "code": "006001000000000",
+      "name": "신생아의류",
+      "depth": 2,
+      "parent_id": "006000000000000",
+      "path": [
+        "키즈",
+        "신생아의류"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/006001000000000"
+    },
+    {
+      "id": "006002000000000",
+      "code": "006002000000000",
+      "name": "유아의류",
+      "depth": 2,
+      "parent_id": "006000000000000",
+      "path": [
+        "키즈",
+        "유아의류"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/006002000000000"
+    },
+    {
+      "id": "006003000000000",
+      "code": "006003000000000",
+      "name": "아동의류",
+      "depth": 2,
+      "parent_id": "006000000000000",
+      "path": [
+        "키즈",
+        "아동의류"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/006003000000000"
+    },
+    {
+      "id": "007000000000000",
+      "code": "007000000000000",
+      "name": "잡화/명품/뷰티",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "잡화/명품/뷰티"
+      ],
+      "sort_order": 7,
+      "url": "https://www.enter6.co.kr/product/category/007000000000000"
+    },
+    {
+      "id": "007001000000000",
+      "code": "007001000000000",
+      "name": "패션슈즈",
+      "depth": 2,
+      "parent_id": "007000000000000",
+      "path": [
+        "잡화/명품/뷰티",
+        "패션슈즈"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/007001000000000"
+    },
+    {
+      "id": "007002000000000",
+      "code": "007002000000000",
+      "name": "핸드백/잡화",
+      "depth": 2,
+      "parent_id": "007000000000000",
+      "path": [
+        "잡화/명품/뷰티",
+        "핸드백/잡화"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/007002000000000"
+    },
+    {
+      "id": "007003000000000",
+      "code": "007003000000000",
+      "name": "기타액세서리",
+      "depth": 2,
+      "parent_id": "007000000000000",
+      "path": [
+        "잡화/명품/뷰티",
+        "기타액세서리"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/007003000000000"
+    },
+    {
+      "id": "007004000000000",
+      "code": "007004000000000",
+      "name": "뷰티",
+      "depth": 2,
+      "parent_id": "007000000000000",
+      "path": [
+        "잡화/명품/뷰티",
+        "뷰티"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/007004000000000"
+    },
+    {
+      "id": "007005000000000",
+      "code": "007005000000000",
+      "name": "해외명품",
+      "depth": 2,
+      "parent_id": "007000000000000",
+      "path": [
+        "잡화/명품/뷰티",
+        "해외명품"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/007005000000000"
+    },
+    {
+      "id": "007006000000000",
+      "code": "007006000000000",
+      "name": "귀금속",
+      "depth": 2,
+      "parent_id": "007000000000000",
+      "path": [
+        "잡화/명품/뷰티",
+        "귀금속"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/007006000000000"
+    },
+    {
+      "id": "008000000000000",
+      "code": "008000000000000",
+      "name": "라이프스타일",
+      "depth": 1,
+      "parent_id": null,
+      "path": [
+        "라이프스타일"
+      ],
+      "sort_order": 8,
+      "url": "https://www.enter6.co.kr/product/category/008000000000000"
+    },
+    {
+      "id": "008001000000000",
+      "code": "008001000000000",
+      "name": "홈데코",
+      "depth": 2,
+      "parent_id": "008000000000000",
+      "path": [
+        "라이프스타일",
+        "홈데코"
+      ],
+      "sort_order": 1,
+      "url": "https://www.enter6.co.kr/product/category/008001000000000"
+    },
+    {
+      "id": "008002000000000",
+      "code": "008002000000000",
+      "name": "주방/욕실",
+      "depth": 2,
+      "parent_id": "008000000000000",
+      "path": [
+        "라이프스타일",
+        "주방/욕실"
+      ],
+      "sort_order": 2,
+      "url": "https://www.enter6.co.kr/product/category/008002000000000"
+    },
+    {
+      "id": "008003000000000",
+      "code": "008003000000000",
+      "name": "가전/가구",
+      "depth": 2,
+      "parent_id": "008000000000000",
+      "path": [
+        "라이프스타일",
+        "가전/가구"
+      ],
+      "sort_order": 3,
+      "url": "https://www.enter6.co.kr/product/category/008003000000000"
+    },
+    {
+      "id": "008004000000000",
+      "code": "008004000000000",
+      "name": "문구/생활잡화",
+      "depth": 2,
+      "parent_id": "008000000000000",
+      "path": [
+        "라이프스타일",
+        "문구/생활잡화"
+      ],
+      "sort_order": 4,
+      "url": "https://www.enter6.co.kr/product/category/008004000000000"
+    },
+    {
+      "id": "008005000000000",
+      "code": "008005000000000",
+      "name": "취미",
+      "depth": 2,
+      "parent_id": "008000000000000",
+      "path": [
+        "라이프스타일",
+        "취미"
+      ],
+      "sort_order": 5,
+      "url": "https://www.enter6.co.kr/product/category/008005000000000"
+    },
+    {
+      "id": "008006000000000",
+      "code": "008006000000000",
+      "name": "푸드",
+      "depth": 2,
+      "parent_id": "008000000000000",
+      "path": [
+        "라이프스타일",
+        "푸드"
+      ],
+      "sort_order": 6,
+      "url": "https://www.enter6.co.kr/product/category/008006000000000"
+    }
+  ]
+}

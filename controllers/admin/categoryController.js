@@ -154,6 +154,7 @@ exports.getList = async (req, res) => {
             maxDepth,
             newBrandDays: newArrival.newBrandDays(),
             error: req.query.error || '',
+            saved: req.query.saved === '1',
         });
     } catch (err) {
         console.error('[category] getList:', err.message);
@@ -287,6 +288,45 @@ exports.postEdit = async (req, res) => {
             return redirectWithError(res, activeTab, err.message);
         }
         console.error('[category] postEdit:', err.message);
+        res.status(500).send('Server Error');
+    } finally {
+        conn.release();
+    }
+};
+
+/**
+ * POST /admin/categories/visibility — 노출(활성·PC·모바일) 일괄 저장.
+ *
+ * 행마다 [수정] 을 누르면 한 번에 한 건이라, 노출만 여러 건 바꾸는 흔한 작업이 너무 느리다.
+ * 이 엔드포인트는 **노출 3개 컬럼만** 건드린다 — 이름·상위·순서는 건드리지 않으므로
+ * 계층(뎁스·순환) 검증이 필요 없고, 행 단위 수정 폼과 충돌하지도 않는다.
+ *
+ * body: id[]=3&id[]=5 …, active[c<id>]=1 / pc[c<id>]=1 / mo[c<id>]=1  (체크된 것만 전송)
+ *
+ * ⚠️ 키에 `c` 접두어를 붙인다. `active[3]` 처럼 숫자 키를 쓰면 qs 가 배열 인덱스로 보고
+ *    값을 압축해 버려 id 로 다시 찾을 수 없다.
+ */
+exports.postVisibility = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const activeTab = normalizeTab(req.body.active_tab);
+    const ids = [].concat(req.body.id || []).map(Number).filter(n => Number.isInteger(n) && n > 0);
+    const on = (bag, id) => (bag && String(bag['c' + id]) === '1' ? 1 : 0);
+
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        for (const id of ids) {
+            await conn.query(
+                `UPDATE categories SET is_active = ?, pc_visible = ?, mobile_visible = ?
+                  WHERE id = ? AND mall_id = ?`,
+                [on(req.body.active, id), on(req.body.pc, id), on(req.body.mo, id), id, mallId],
+            );
+        }
+        await conn.commit();
+        res.redirect(`/admin/categories?tab=${activeTab}&saved=1`);
+    } catch (err) {
+        await conn.rollback();
+        console.error('[categories] postVisibility:', err.message);
         res.status(500).send('Server Error');
     } finally {
         conn.release();

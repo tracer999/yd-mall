@@ -20,18 +20,27 @@ const navigationService = require('../services/menu/navigationService');
 
 const MALL_ID = 1;
 
-/** navigationService 결과 항목 → 뷰가 쓰는 공통 형태 */
+/**
+ * navigationService 결과 항목 → 뷰가 쓰는 공통 형태
+ *
+ * children 은 unified(소형몰) GNB 에서만 채워진다 — 카테고리 1뎁스가 GNB 항목이 되고
+ * 2·3뎁스가 드롭다운으로 달린다. split(대형몰)에선 항상 빈 배열이라 기존 뷰가 그대로 돈다.
+ * 예전엔 여기서 children 을 통째로 버려서 하위 뎁스를 표현할 수단이 없었다.
+ */
 function toViewItem(item) {
     return {
         name: item.name,
         href: item.path || '#',
+        kind: item.kind || 'feature',   // 'feature' | 'custom' | 'category'
         featureCode: item.featureCode || null,
+        categoryId: item.categoryId || null,
         isCustom: Boolean(item.isCustom),
         newWindow: Boolean(item.newWindow),
         // NEW / HOT / SALE (navigationService 가 화이트리스트로 정규화함). 없으면 null
         badgeType: item.badgeType || null,
         pcVisible: item.pcVisible === undefined ? 1 : Number(item.pcVisible),
         mobileVisible: item.mobileVisible === undefined ? 1 : Number(item.mobileVisible),
+        children: (item.children || []).map(toViewItem),
         // 레거시 뷰 호환: 고정 항목 필터에 사용되던 필드
         is_fixed: 0,
     };

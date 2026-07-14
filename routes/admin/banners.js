@@ -38,8 +38,12 @@ function makeUploadHandler(uploadFn) {
 const handleBannerUpload = makeUploadHandler(bannerUpload);
 const handleHeroSlideUpload = makeUploadHandler(heroSlideUpload);
 
-// 메인 슬라이더(hero_slide) 관리 — /add, /edit 라우트보다 먼저 마운트해 경로 충돌을 피한다.
+// 메인 슬라이더 관리 — /add, /edit 라우트보다 먼저 마운트해 경로 충돌을 피한다.
+// 한 화면에서 히어로 방식(상품 쇼케이스 / 이미지 배너)을 고르고 그 방식의 콘텐츠를 편집한다.
 router.get('/hero-slides', heroSlideController.getList);
+router.post('/hero-slides/variant', heroSlideController.postVariant);
+// 이미지 배너 슬라이드(banner_type='MAIN')의 순서·노출 일괄 저장
+router.post('/hero-slides/banners', heroSlideController.postBannerOrder);
 router.get('/hero-slides/add', heroSlideController.getAdd);
 router.post('/hero-slides/add', handleHeroSlideUpload, heroSlideController.postAdd);
 router.get('/hero-slides/edit/:id', heroSlideController.getEdit);
