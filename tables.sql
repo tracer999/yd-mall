@@ -428,6 +428,9 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '사용자 ID (PK)',
   `google_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '구글 OAuth 고유 ID',
   `kakao_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '카카오 OAuth 고유 ID',
+  `naver_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '네이버 OAuth 고유 ID',
+  `password_hash` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '자체 가입 비밀번호 해시 (bcrypt). 소셜 전용 계정은 NULL',
+  `signup_provider` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '최초 가입 경로 (LOCAL/GOOGLE/KAKAO/NAVER)',
   `email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '이메일 주소 (고유값)',
   `name` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사용자 이름',
   `picture` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '프로필 이미지 URL',
@@ -444,16 +447,22 @@ CREATE TABLE IF NOT EXISTS `users` (
   `address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '기본 주소',
   `detailed_address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '상세 주소',
   `zipcode` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '우편번호',
+  `receiver_name` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '기본 배송지 수령인명',
+  `phone_sub` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '보조 연락처',
+  `delivery_request` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '기본 배송 요청사항',
   `points_balance` int NOT NULL DEFAULT '0' COMMENT '보유 포인트',
+  `gender` varchar(10) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'UNKNOWN' COMMENT 'M/F/UNKNOWN',
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   UNIQUE KEY `google_id` (`google_id`),
   UNIQUE KEY `kakao_id` (`kakao_id`),
+  UNIQUE KEY `naver_id` (`naver_id`),
+  UNIQUE KEY `phone` (`phone`),
   KEY `fk_users_agreed_terms` (`agreed_terms_id`),
   KEY `fk_users_agreed_privacy` (`agreed_privacy_id`),
   CONSTRAINT `fk_users_agreed_privacy` FOREIGN KEY (`agreed_privacy_id`) REFERENCES `policy_versions` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_users_agreed_terms` FOREIGN KEY (`agreed_terms_id`) REFERENCES `policy_versions` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='회원 사용자 정보 (Google/Kakao 로그인 기반)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='회원 사용자 정보 (자체 가입 + Google/Kakao/Naver 소셜 로그인)';
 
 
 -- =============================================================================
@@ -616,6 +625,9 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '사용자 ID (PK)',
   `google_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '구글 OAuth 고유 ID',
   `kakao_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '카카오 OAuth 고유 ID',
+  `naver_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '네이버 OAuth 고유 ID',
+  `password_hash` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '자체 가입 비밀번호 해시 (bcrypt). 소셜 전용 계정은 NULL',
+  `signup_provider` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '최초 가입 경로 (LOCAL/GOOGLE/KAKAO/NAVER)',
   `email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '이메일 주소 (고유값)',
   `name` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사용자 이름',
   `picture` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '프로필 이미지 URL',
@@ -632,16 +644,22 @@ CREATE TABLE IF NOT EXISTS `users` (
   `address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '기본 주소',
   `detailed_address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '상세 주소',
   `zipcode` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '우편번호',
+  `receiver_name` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '기본 배송지 수령인명',
+  `phone_sub` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '보조 연락처',
+  `delivery_request` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '기본 배송 요청사항',
   `points_balance` int NOT NULL DEFAULT '0' COMMENT '보유 포인트',
+  `gender` varchar(10) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'UNKNOWN' COMMENT 'M/F/UNKNOWN',
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   UNIQUE KEY `google_id` (`google_id`),
   UNIQUE KEY `kakao_id` (`kakao_id`),
+  UNIQUE KEY `naver_id` (`naver_id`),
+  UNIQUE KEY `phone` (`phone`),
   KEY `fk_users_agreed_terms` (`agreed_terms_id`),
   KEY `fk_users_agreed_privacy` (`agreed_privacy_id`),
   CONSTRAINT `fk_users_agreed_privacy` FOREIGN KEY (`agreed_privacy_id`) REFERENCES `policy_versions` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_users_agreed_terms` FOREIGN KEY (`agreed_terms_id`) REFERENCES `policy_versions` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='회원 사용자 정보 (Google/Kakao 로그인 기반)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='회원 사용자 정보 (자체 가입 + Google/Kakao/Naver 소셜 로그인)';
 
 
 -- =============================================================================

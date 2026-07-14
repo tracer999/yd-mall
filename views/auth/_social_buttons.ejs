@@ -1,0 +1,50 @@
+<%
+/*
+ * 소셜 로그인 버튼 (로그인 · 회원가입 화면 공용)
+ * locals: providers  { google, kakao, naver } — 키가 채워진 프로바이더만 true (services/auth/authProviders.js)
+ *         ctaPrefix  '로그인' | '회원가입'
+ */
+const enabled = locals.providers || {};
+const prefix = locals.ctaPrefix || '로그인';
+const anyEnabled = enabled.google || enabled.kakao || enabled.naver;
+%>
+<% if (anyEnabled) { %>
+<div class="space-y-2.5">
+  <% if (enabled.kakao) { %>
+  <a href="/auth/kakao"
+     class="flex items-center justify-center gap-2 w-full h-12 rounded-lg bg-[#FEE500] text-[#191600] text-sm font-semibold hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FEE500] transition">
+    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 3C6.99 3 3 6.2 3 10.14c0 2.52 1.66 4.73 4.16 6L6.1 20.2c-.1.36.3.65.62.45l4.86-3.2c.14.01.28.02.42.02 5.01 0 9-3.2 9-7.14C21 6.2 17.01 3 12 3z"/>
+    </svg>
+    카카오로 <%= prefix %>
+  </a>
+  <% } %>
+
+  <% if (enabled.naver) { %>
+  <a href="/auth/naver"
+     class="flex items-center justify-center gap-2 w-full h-12 rounded-lg bg-[#03C75A] text-white text-sm font-semibold hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#03C75A] transition">
+    <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path d="M13.06 10.72L6.6 1.5H1.5v17h5.44V9.28l6.46 9.22h5.1v-17h-5.44v9.22z"/>
+    </svg>
+    네이버로 <%= prefix %>
+  </a>
+  <% } %>
+
+  <% if (enabled.google) { %>
+  <a href="/auth/google"
+     class="flex items-center justify-center gap-2 w-full h-12 rounded-lg bg-white border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition">
+    <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M23.06 12.25c0-.85-.08-1.67-.22-2.45H12v4.64h6.2a5.3 5.3 0 01-2.3 3.48v2.9h3.72c2.18-2 3.44-4.96 3.44-8.57z"/>
+      <path fill="#34A853" d="M12 23.5c3.11 0 5.72-1.03 7.62-2.79l-3.72-2.89c-1.03.69-2.35 1.1-3.9 1.1-3 0-5.54-2.03-6.45-4.75H1.7v2.98A11.5 11.5 0 0012 23.5z"/>
+      <path fill="#FBBC05" d="M5.55 14.17a6.9 6.9 0 010-4.41V6.78H1.7a11.5 11.5 0 000 10.37l3.85-2.98z"/>
+      <path fill="#EA4335" d="M12 4.86c1.69 0 3.21.58 4.4 1.72l3.3-3.3C17.71 1.42 15.11.5 12 .5 7.52.5 3.64 3.07 1.7 6.78l3.85 2.98C6.46 7.04 9 4.86 12 4.86z"/>
+    </svg>
+    구글로 <%= prefix %>
+  </a>
+  <% } %>
+</div>
+<% } else { %>
+<div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+  현재 사용 가능한 소셜 <%= prefix %>이 없습니다. 관리자 &gt; 시스템 설정에서 소셜 로그인 키를 등록해주세요.
+</div>
+<% } %>

@@ -3,136 +3,72 @@
 > 이 파일은 **세션 종료 시마다 최신 작업 내용으로 전면 교체**된다.
 > 다음 세션은 이 파일을 먼저 읽고 이어간다. 오래된 내역은 보존하지 않음.
 
-**최종 업데이트**: 2026-07-13
+**최종 업데이트**: 2026-07-15
 
 ---
 
 ## 최근 세션 요약
 
-- **한 일**: 메인 화면 캐러셀(상품·특가·브랜드)이 모바일에서 자유 스크롤로 동작하던 것을 **한 스와이프 = 한 페이지 슬라이드 + 도트 인디케이터**로 교체. 공용 `views/partials/sections/_carousel_base.ejs` 단일 파일 수정.
-- **현재 운영 상태**: 작업 트리 clean, `origin/main` 과 동기. 마지막 푸시 `c489fb7` → GitHub Actions 로 개발 서버(192.168.1.4:3006) 자동 반영됨.
-- **다음 할 일**: 실기기(iOS Safari / Android Chrome)에서 스와이프 감도·세로 스크롤 간섭 육안 확인. 필요 시 임계값 조정.
+- **한 일**: 회원가입 전면 개편. ①소셜 로그인 3종(구글·카카오·**네이버 신규**) ②**자체 가입폼**(이메일+비밀번호) 신설 ③주문·배송용 상세정보를 두 가입 경로가 **같은 폼·같은 서비스**로 공유하도록 구조화 ④관리자 시스템 설정에 네이버 항목 추가.
+- **현재 운영 상태**: 로컬 PM2(`yd-mall`) 기동 확인, 전 라우트 200/302 정상. DB 마이그레이션은 공용 DB(`yd_mall`)에 **이미 적용 완료**.
+- **다음 할 일**: (1) 네이버 개발자센터에서 앱 키 발급 → 관리자 &gt; 시스템 설정 &gt; *Naver 로그인 설정* 에 입력하면 **재기동 없이** 버튼이 뜬다. (2) 구글 콘솔의 승인된 리디렉션 URI 에 `https://dev-mall.ydata.co.kr/auth/google/callback` 등록 필요(아래 참고). (3) 비밀번호 찾기/재설정 플로우는 아직 없음.
 
 ---
 
-## 이번 세션 커밋
+## 이 세션의 변경 (커밋 `feat: 회원가입 개편`)
 
-| 커밋 | 내용 |
-|------|------|
-| `dd9abca` | 모바일 캐러셀 슬라이드 — 스와이프 1회에 2페이지 밀리던 것 수정 + `touchcancel` 빈 `changedTouches` 가드 |
-| `c489fb7` | 배너 관리 — 저장·삭제 후 보던 탭으로 복귀 + 상품 캐러셀 공존 안내 (**병렬 세션 작업분**, 사용자 지시로 함께 푸시) |
+### 새로 만든 공통 계층 — **여기가 핵심**
 
-> 슬라이드 **본체**(터치 드래그 핸들러 + 도트 인디케이터 CSS/DOM)는 직전 커밋 `f974fc3` 에 이미 포함돼 있었다. `dd9abca` 는 그 위의 버그 수정이다.
+두 가입 경로(간편 가입 / 자체 가입)가 **같은 필드 세트**를 쓴다. 한쪽만 고치면 어긋난다.
 
----
+| 레이어 | 파일 | 역할 |
+|--------|------|------|
+| 서버 | `services/auth/profileService.js` | 상세정보 정규화·검증·중복확인·저장(`PROFILE_COLUMNS`), 비밀번호 정책, 가입쿠폰 발급 |
+| 서버 | `services/auth/policyService.js` | 약관 버전 조회·본문·동의 이력·재동의 판정 |
+| 서버 | `services/auth/authProviders.js` | 소셜 프로바이더 **활성 판정 단일화** (전략 등록 조건 = 버튼 노출 조건) |
+| 화면 | `views/auth/_profile_fields.ejs` | 상세정보 입력 필드 (가입폼·추가정보 공용) |
+| 화면 | `views/auth/_terms_agreement.ejs` | 약관 박스 + 필수/마케팅 체크 |
+| 화면 | `views/auth/_social_buttons.ejs` | 카카오·네이버·구글 버튼 (활성된 것만) |
 
-## 현재 상태 상세
+> 필드를 추가하려면 **partial 의 `name` 속성 + profileService 의 `PROFILE_COLUMNS`** 를 함께 고칠 것.
 
-### 캐러셀 구조 (`views/partials/sections/_carousel_base.ejs`)
+### 가입 흐름
 
-| 구간 | 동작 |
-|------|------|
-| **PC (≥1024px)** | **변경 없음**. `overflow-x: auto` 자유 스크롤 + `scroll-snap` + 좌우 화살표(`--yd-per-view` 단위 이동). 도트 숨김 |
-| **모바일 (≤1023px)** | `overflow-x: hidden` + `scroll-snap: none` + `touch-action: pan-y`. 터치 드래그를 JS 가 받아 `scrollLeft` 직접 제어. 손 떼면 **1페이지(2열, 390px 뷰포트 기준 378px)** 단위 스냅. 하단 도트 표시(클릭 이동 가능) |
+- **간편 가입**: `/auth/{google|kakao|naver}` → 콜백에서 `is_active=0` INSERT → `/auth/signup-finish`(상세정보+약관) → `is_active=1` → `/auth/signup-success`
+- **자체 가입**: `/auth/signup` 한 화면(비밀번호 + 상세정보 + 약관) → `is_active=1` INSERT → 자동 로그인 → `/auth/signup-success`
+- **로그인**: `POST /auth/login`(passport-local) 신설. 소셜 전용 계정에 비번 로그인 시도 시 동일 메시지로 처리(계정 존재 노출 방지).
 
-- 페이지 전환 임계: 플릭 속도 `> 0.4 px/ms` **또는** 이동량 `> track.clientWidth * 0.2`. 미달이면 원위치.
-- 세로 스와이프: 첫 6px 이동 방향으로 판별 → 세로 우세면 브라우저에 양보(페이지 세로 스크롤 정상).
-- 모바일에서는 `scroll` 이벤트로 index 를 **역산하지 않는다**. 드래그 중 `scrollLeft` 변화가 index 를 +1 하고 `touchend` 가 또 +1 해서 **2페이지가 밀리던 버그**의 원인이었다. PC 에서만 역산.
-- 도트는 JS 가 트랙 뒤에 삽입(`track.insertAdjacentElement('afterend', dots)`). 페이지 수 = `ceil(items / perView)`.
-- 초기화 가드: `window.__ydCarouselInit` — 여러 섹션이 include 해도 1회만 바인딩.
-- **외부 라이브러리 없음.** Swiper 는 `views/user/index.ejs` 에서만 CDN 로드되므로, 공용 `_carousel_base` 를 Swiper 로 바꾸면 다른 페이지가 깨진다. 그래서 순수 JS 로 구현했다.
+### DB 마이그레이션 (`scripts/migrate_signup_v2.sql`) — **적용 완료**
 
-**이 파일을 include 하는 뷰 (3개)**
-- `views/partials/sections/product_carousel.ejs`
-- `views/partials/sections/deal_carousel.ejs`
-- `views/partials/sections/brand_carousel.ejs`
+`users` 에 `naver_id`(UNIQUE), `password_hash`, `signup_provider`, `receiver_name`, `phone_sub`, `delivery_request` 추가.
+**`phone` 에 UNIQUE 제약 추가** — 기존엔 애플리케이션 체크만 있어 동시 요청 레이스가 있었다.
+`system_settings` 에 `naver_client_id/secret/callback_url_dev/prod` 4행 추가(값은 비어 있음).
 
-> `views/partials/storefront/menu_showcase.ejs` 는 주석에서만 언급할 뿐 **include 하지 않는다**(자체 슬라이드 스크립트 보유, 마크업 계약 다름). `grep -rl _carousel_base views/` 결과에 잡히지만 소비자가 아니다.
+### 함께 고친 것
 
-### 홈 상단 히어로는 이미 슬라이드다 (혼동 주의)
-
-`page_section` 의 `hero(8)` 은 `config_json = NULL` → variant 기본값 `full_banner` → `hero_banner.ejs` → **Swiper 11 슬라이드**. 원래부터 정상이었고 이번 수정 대상이 아니다. "메인 캐러셀이 스크롤된다"는 신고의 실체는 상품·특가·브랜드 캐러셀 3개였다.
-
-### 홈 페이지 섹션 순서 (`page_section`, page=home)
-
-```
-hero(8) → value_proposition(9) → best_ranking(10) → product_carousel(15) → product_grid(11)
-→ deal_carousel(16) → quick_menu(21) → benefit_bento(20) → promotion_banner(19)
-→ ranking_tabs(18) → brand_carousel(17) → category_showcase(12) → recent_product(22)
-→ custom_html(23) → kakao_cta(13)
-```
+- `POST /auth/signup-finish` 에 **약관 동의 서버 검증이 없던 문제** — 폼을 우회하면 미동의로 `is_active=1` 이 됐다. 이제 두 경로 모두 서버에서 막는다.
+- 로그인 화면에 **구글 버튼이 없던 문제**(라우트는 살아있는데 진입점 부재) — 활성 프로바이더는 자동 노출.
+- `system_settings.google_callback_url_prod` 가 **다른 프로젝트 도메인**(`www.greenhubb2b.com`)을 가리키고 있어 `https://dev-mall.ydata.co.kr/auth/google/callback` 로 교정했다. → **구글 클라우드 콘솔의 승인된 리디렉션 URI 에도 이 값을 등록해야 prod 구글 로그인이 동작한다.**
 
 ---
 
-## 다음 세션 시작 시 체크리스트
+## 검증 방법 (재현용)
 
 ```bash
-# 1) 상태 확인 — c489fb7 이 top, 트리 clean 이어야 함
-git -C /home/ikcho/dev/yd-mall log --oneline -3
-git status --short
-
-# 2) 서버 기동 (포트 3006 고정)
-(set -a; . /etc/environment; set +a; exec env NODE_ENV=development \
-  /home/ikcho/.nvm/versions/node/v22.23.1/bin/node app.js)
-
-# 3) 모바일 캐러셀 확인 — 개발자도구 390x844 + 터치 에뮬레이션 ON
-#    http://localhost:3006/  → 'MD 추천 상품' / '특가' / '브랜드관' 섹션
-#    기대: 스와이프 1회 = 2열 1페이지, 도트 활성 위치 1칸 이동, 카드가 딱 정렬
+# 자체 가입 → 로그인 왕복, 소셜 추가정보 플로우 모두 curl 로 검증했다.
+# 서버는 WSL 로컬 PM2 로 뜬다. 포트 3006 을 node app.js 로 직접 잡으면 PM2 와 충돌한다(주의).
+pm2 restart yd-mall --update-env
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3006/auth/signup
 ```
 
-### 검증 결과 (Playwright, 390×844 터치 에뮬레이션)
-
-| 캐러셀 | 아이템 | 페이지 폭 | 도트 | 스와이프 1회 이동 | JS 에러 |
-|--------|--------|-----------|------|-------------------|---------|
-| product_carousel | 12 | 378px | 6 | 378px = 1페이지 | 0 |
-| deal_carousel | 12 | 378px | 6 | 378px = 1페이지 | 0 |
-| brand_carousel | 17 | 378px | 9 | 378px = 1페이지 | 0 |
-
-- 짧은 드래그(30px)는 원위치 복귀 확인. 카드 경계 정렬 확인.
-- PC 1440px: `overflow-x: auto` 유지, 도트 `display:none`, 다음 버튼 1108px(4열) 이동 — **기존 동작 보존** 확인.
+> ⚠️ 로컬 PM2 는 `NODE_ENV=production` 으로 뜬다. 그래서 소셜 콜백 URL 은 `*_CALLBACK_URL_PROD` 를 쓴다 —
+> 로컬에서 localhost 콜백으로 테스트하려면 `NODE_ENV=development` 로 띄워야 한다(`npm run dev`).
 
 ---
 
-## 이 환경의 함정 (다음 세션 시간 절약용)
+## 남은 이슈 / 주의
 
-| 함정 | 실제 동작 |
-|------|-----------|
-| **포트** | `PORT=3007` 로 줘도 `.env.development` 가 덮어써서 **항상 3006** 으로 뜬다 |
-| **EJS 캐시** | `.ejs` 수정 후 **서버 재시작 필수**. 재시작 안 하면 옛 뷰가 계속 나간다 (이것 때문에 "수정이 안 먹는다"고 두 번 헛짚었다) |
-| **`/etc/environment` source** | PATH 가 덮여 `node: command not found` → **절대경로** 사용: `/home/ikcho/.nvm/versions/node/v22.23.1/bin/node` |
-| **`pkill -f "app.js"`** | 패턴이 자기 bash 명령줄에도 매칭돼 **자신을 죽인다**(exit 143/144). `pkill -f "app\.js"` 로 이스케이프 |
-| **Playwright** | 프로젝트에 미설치. 브라우저 바이너리(`~/.cache/ms-playwright`)만 있음 → `npm i playwright-core` 후 `chromium.launch({ channel: 'chromium' })` |
-| **Playwright MCP** | 다른 프로세스가 프로필 점유 시 `Browser is already in use` 로 실패 → node 스크립트로 우회 |
-| **foreground `sleep`** | 차단됨. 서버 기동 대기는 `curl --retry N --retry-delay 2 --retry-connrefused` 로 |
-| **병렬 세션** | 같은 디렉토리·같은 `main` 에서 다른 세션이 동시에 작업한다. 커밋 전 `git log --format="%h %an %s" origin/main..main` 으로 남의 커밋이 섞였는지 확인. **`git commit --amend` 금지**(HEAD 가 내 커밋이라는 보장 없음) |
-
----
-
-## 미해결 / 검토 대상
-
-- [ ] 🔴 **결제 우회 결함(C3) — 미수정.** 이전 세션에서 발견된 이래 아직 고치지 않았다. 신규 기능보다 먼저 처리할 것. (이번 세션에서 건드리지 않음)
-- [ ] **캐러셀 실기기 미검증.** 검증은 Playwright 합성 터치 이벤트로만 했다. iOS Safari 의 고무줄/관성 스크롤, Android Chrome 의 `touch-action` 해석은 실기기에서 다를 수 있다.
-- [ ] 스와이프 임계값(`0.4 px/ms`, `20%`)이 실사용 감도에 맞는지 확인 필요.
-- [ ] PC 는 여전히 자유 스크롤이다. PC 도 페이지 단위로 통일할지는 미결정(현재는 의도된 UX 로 보고 건드리지 않음).
-- [ ] 홈 외 SDUI 페이지에서 `product_carousel` / `deal_carousel` / `brand_carousel` 섹션이 렌더되는 경우도 같은 변경 영향을 받는다 — 해당 페이지 육안 확인 안 함.
-
----
-
-## 다음 세션에 전달할 컨텍스트
-
-**사용자가 다음 세션에서 가장 먼저 말할 가능성이 높은 내용**
-
-1. **"실기기에서 보니 스와이프가 뻑뻑하다 / 너무 민감하다"**
-   → `_carousel_base.ejs` 의 `endDrag()` 임계값 조정.
-   `var flick = Math.abs(dx) / dt > 0.4;` (속도), `var far = Math.abs(dx) > track.clientWidth * 0.2;` (거리).
-   뻑뻑하면 낮추고(예: 0.3 / 0.15), 민감하면 올린다.
-
-2. **"모바일에서 1개씩만 / 3개씩 보이게 해달라"**
-   → CSS `grid-auto-columns: calc((100% - 1.25rem) / 2)` 가 모바일 2열 고정. **이 값만 바꾸면 된다.**
-   `perView()` 는 `round(clientWidth / step)` 로 자동 계산되므로 JS 수정 불필요.
-
-3. **"자동 재생(autoplay) 넣어달라"**
-   → 현재 없음. `goTo(index + 1)` 을 `setInterval` 로 돌리고 `touchstart` 에서 clear. 루프가 필요하면 `pageCount()` 로 wrap.
-
-4. **"PC 도 도트 보이게 / PC 도 페이지 단위로"**
-   → CSS `.yd-carousel__dots` 의 `@media (max-width: 1023px)` 제약 해제 + `syncFromScroll()` 의 `isMobile()` 분기 재검토.
+- **비밀번호 찾기·재설정 없음.** 자체 가입을 열었으므로 다음 작업 후보 1순위.
+- **이메일 인증(가입 시) 없음.** 현재는 입력한 이메일을 그대로 신뢰한다.
+- `tables.sql` 은 여전히 실제 DB 와 드리프트가 있다(users 블록이 파일 내 2번 중복 정의됨 — 이번 변경은 양쪽 모두에 반영).
+- 로그인 시도 **레이트 리밋 없음** — 비밀번호 로그인이 생겼으므로 무차별 대입 방어를 검토할 것.

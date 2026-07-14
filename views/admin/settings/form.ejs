@@ -661,6 +661,41 @@
 
             <div class="bg-white overflow-hidden shadow-sm rounded-lg">
                 <div class="px-6 py-4 bg-white border-b border-gray-200">
+                    <h5 class="text-lg font-bold text-gray-800">Naver 로그인 설정</h5>
+                    <p class="text-xs text-gray-500 mt-1">Client ID 와 Callback URL 이 모두 채워져야 네이버 로그인 버튼이 노출됩니다. (네이버 개발자센터 &gt; 애플리케이션 등록)</p>
+                </div>
+                <div class="p-6 bg-white space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Naver Client ID</label>
+                        <input type="text" name="naver_client_id"
+                            value="<%= (systemSettings && systemSettings.naver_client_id) || '' %>"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Naver Client Secret</label>
+                        <input type="text" name="naver_client_secret"
+                            value="<%= (systemSettings && systemSettings.naver_client_secret) || '' %>"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Dev Callback URL</label>
+                            <input type="text" name="naver_callback_url_dev"
+                                value="<%= (systemSettings && systemSettings.naver_callback_url_dev) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Prod Callback URL</label>
+                            <input type="text" name="naver_callback_url_prod"
+                                value="<%= (systemSettings && systemSettings.naver_callback_url_prod) || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg">
+                <div class="px-6 py-4 bg-white border-b border-gray-200">
                     <h5 class="text-lg font-bold text-gray-800">Kakao 공유 설정</h5>
                 </div>
                 <div class="p-6 bg-white space-y-3">

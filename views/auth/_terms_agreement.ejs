@@ -1,0 +1,43 @@
+<%
+/*
+ * 약관·개인정보 동의 블록 — 자체 가입폼 / 소셜 가입 후 추가정보 화면 공용.
+ * locals: termsContent, privacyContent (HTML), values, errors
+ */
+const v = locals.values || {};
+const err = locals.errors || {};
+%>
+<div class="space-y-4 pt-6 mt-6 border-t border-gray-100">
+  <h3 class="text-sm font-bold text-gray-900 border-l-4 border-green-600 pl-2">약관 동의</h3>
+
+  <div>
+    <label class="block text-sm font-medium text-gray-700 mb-2">이용약관</label>
+    <div class="h-32 overflow-y-auto p-3 bg-gray-50 border border-gray-300 rounded-md text-xs text-gray-600 leading-relaxed">
+      <%- termsContent %>
+    </div>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-gray-700 mb-2">개인정보 처리방침</label>
+    <div class="h-32 overflow-y-auto p-3 bg-gray-50 border border-gray-300 rounded-md text-xs text-gray-600 leading-relaxed">
+      <%- privacyContent %>
+    </div>
+  </div>
+
+  <div class="rounded-md border <%= err.terms ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-gray-50' %> p-3 space-y-2.5">
+    <div class="flex items-start">
+      <input id="terms" name="terms" type="checkbox" required value="1"
+             class="mt-0.5 focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300 rounded" />
+      <label for="terms" class="ml-3 text-sm text-gray-700">
+        <strong>[필수]</strong> 위 <strong>이용약관</strong> 및 <strong>개인정보 처리방침</strong>을 확인하였으며 이에 동의합니다.
+      </label>
+    </div>
+    <div class="flex items-start">
+      <input id="marketing_agreed" name="marketing_agreed" type="checkbox" value="1" <%= v.marketing_agreed ? 'checked' : '' %>
+             class="mt-0.5 focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300 rounded" />
+      <label for="marketing_agreed" class="ml-3 text-sm text-gray-700">
+        <span class="text-gray-500">[선택]</span> 할인·이벤트 등 마케팅 정보 수신에 동의합니다.
+      </label>
+    </div>
+    <% if (err.terms) { %><p class="text-xs text-red-500"><%= err.terms %></p><% } %>
+  </div>
+</div>

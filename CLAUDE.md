@@ -41,7 +41,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database**: MySQL 8.4 (mysql2, ORM 없이 raw SQL + connection pool)
 - **Template**: EJS + express-ejs-layouts
 - **Styling**: Tailwind CSS 4.x (`@tailwindcss/cli`)
-- **Auth**: 고객은 Passport.js OAuth 전용(Google, Kakao) / 관리자는 자체 세션 + bcrypt + 선택적 이메일 2FA
+- **Auth**: 고객은 Passport.js — 자체 가입(이메일+비밀번호, bcrypt) + 소셜 OAuth(Google, Kakao, Naver) / 관리자는 자체 세션 + bcrypt + 선택적 이메일 2FA
 - **Session**: Redis (`REDIS_HOST` 설정 시) / MemoryStore 폴백
 - **Payment**: Toss Payments (SDK 없이 `fetch` 로 REST 직접 호출)
 - **Email**: nodemailer (Gmail 앱 비밀번호 / SMTP)
@@ -130,7 +130,7 @@ app.js                    # Express 진입점 (미들웨어 파이프라인 + /s
 config/
   db.js                   # MySQL 커넥션 풀
   env.js                  # .env → .env.{env} 순차 로딩 + ENC: 복호화 (키 없으면 즉시 종료)
-  passport.js             # OAuth 전략 (Google, Kakao) — env 없으면 전략 미등록
+  passport.js             # Local + OAuth 전략 (Google, Kakao, Naver) — 키 없으면 소셜 전략 미등록
   systemSettings.js       # system_settings 테이블 → global.systemSettings + process.env
 shared/
   crypto.js               # AES-256-GCM 암복호 (ENC: 접두어 처리)
@@ -147,6 +147,7 @@ controllers/admin/        # 관리자 21개
 routes/                   # 고객 라우트 + routes/admin/ 하위 22개 관리자 서브라우트
 middleware/               # 14개 — 아래 미들웨어 체인 참고
 services/
+  auth/                   # 가입 공통 계층 — authProviders(소셜 활성 판정) · profileService(상세정보) · policyService(약관)
   emailService.js         # SMTP 발송
   faviconService.js       # png → ico
   display/                # SDUI 렌더 엔진 (섹션 조립, 페이지 빌더, 배너, 상품그룹, HTML 새니타이즈)

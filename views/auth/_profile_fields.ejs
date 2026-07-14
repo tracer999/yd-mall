@@ -1,0 +1,183 @@
+<%
+/*
+ * 회원 상세정보 입력 필드 (주문·배송용) — 자체 가입폼 / 소셜 가입 후 추가정보 화면 공용.
+ *
+ * locals: values     이전 입력값 (재렌더 시 복원)
+ *         errors     { 필드명: 메시지 } — services/auth/profileService.validateProfile 결과
+ *         needsEmail 이메일 입력란 노출 여부 (소셜 계정이 실제 이메일을 이미 가진 경우 false)
+ *
+ * 서버측 짝은 services/auth/profileService.js 다. name 속성을 바꾸면 그쪽 PROFILE_COLUMNS 도 함께 바꿔야 한다.
+ */
+const v = locals.values || {};
+const err = locals.errors || {};
+const needsEmail = typeof locals.needsEmail === 'undefined' ? true : locals.needsEmail;
+const baseInput = 'appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm';
+const inputClass = (field) => `${baseInput} ${err[field] ? 'border-red-400 bg-red-50' : 'border-gray-300'}`;
+%>
+
+<!-- 기본 정보 -->
+<div class="space-y-4">
+  <h3 class="text-sm font-bold text-gray-900 border-l-4 border-green-600 pl-2">기본 정보</h3>
+
+  <div>
+    <label for="name" class="block text-sm font-medium text-gray-700">성함 <span class="text-red-500">*</span></label>
+    <input id="name" name="name" type="text" placeholder="홍길동" required value="<%= v.name || '' %>"
+           class="mt-1 <%= inputClass('name') %>" />
+    <% if (err.name) { %><p class="mt-1 text-xs text-red-500"><%= err.name %></p><% } %>
+  </div>
+
+  <% if (needsEmail) { %>
+  <div>
+    <label for="email" class="block text-sm font-medium text-gray-700">이메일 <span class="text-red-500">*</span></label>
+    <input id="email" name="email" type="email" placeholder="example@email.com" required value="<%= v.email || '' %>"
+           class="mt-1 <%= inputClass('email') %>" />
+    <p id="email-msg" class="mt-1 text-xs hidden"></p>
+    <% if (err.email) { %><p class="mt-1 text-xs text-red-500"><%= err.email %></p><% } %>
+    <p class="mt-1 text-xs text-gray-500">주문 확인·배송 알림을 받을 이메일 주소입니다.</p>
+  </div>
+  <% } %>
+
+  <div class="grid grid-cols-2 gap-3">
+    <div>
+      <label for="birthdate" class="block text-sm font-medium text-gray-700">생년월일 <span class="text-red-500">*</span></label>
+      <input id="birthdate" name="birthdate" type="text" placeholder="19800101" maxlength="8" inputmode="numeric" required
+             value="<%= v.birthdate ? String(v.birthdate).replace(/-/g, '') : '' %>"
+             class="mt-1 <%= inputClass('birthdate') %>" />
+      <% if (err.birthdate) { %><p class="mt-1 text-xs text-red-500"><%= err.birthdate %></p><% } %>
+    </div>
+    <div>
+      <label for="gender" class="block text-sm font-medium text-gray-700">성별</label>
+      <select id="gender" name="gender" class="mt-1 <%= inputClass('gender') %>">
+        <option value="UNKNOWN" <%= (!v.gender || v.gender === 'UNKNOWN') ? 'selected' : '' %>>선택 안 함</option>
+        <option value="F" <%= v.gender === 'F' ? 'selected' : '' %>>여성</option>
+        <option value="M" <%= v.gender === 'M' ? 'selected' : '' %>>남성</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- 연락처 -->
+<div class="space-y-4 pt-6 mt-6 border-t border-gray-100">
+  <h3 class="text-sm font-bold text-gray-900 border-l-4 border-green-600 pl-2">연락처</h3>
+
+  <div>
+    <label for="phone" class="block text-sm font-medium text-gray-700">휴대폰 번호 <span class="text-red-500">*</span></label>
+    <input id="phone" name="phone" type="tel" placeholder="01012345678" maxlength="13" inputmode="numeric" required
+           value="<%= v.phone || '' %>" class="mt-1 <%= inputClass('phone') %>" />
+    <p id="phone-msg" class="mt-1 text-xs hidden"></p>
+    <% if (err.phone) { %><p class="mt-1 text-xs text-red-500"><%= err.phone %></p><% } %>
+    <p class="mt-1 text-xs text-gray-500">배송·주문 안내에 사용됩니다.</p>
+  </div>
+
+  <div>
+    <label for="phone_sub" class="block text-sm font-medium text-gray-700">보조 연락처 <span class="text-gray-400 font-normal">(선택)</span></label>
+    <input id="phone_sub" name="phone_sub" type="tel" placeholder="0212345678" maxlength="13" inputmode="numeric"
+           value="<%= v.phone_sub || '' %>" class="mt-1 <%= inputClass('phone_sub') %>" />
+    <% if (err.phone_sub) { %><p class="mt-1 text-xs text-red-500"><%= err.phone_sub %></p><% } %>
+  </div>
+</div>
+
+<!-- 기본 배송지 -->
+<div class="space-y-4 pt-6 mt-6 border-t border-gray-100">
+  <h3 class="text-sm font-bold text-gray-900 border-l-4 border-green-600 pl-2">기본 배송지</h3>
+
+  <div>
+    <label for="receiver_name" class="block text-sm font-medium text-gray-700">수령인명 <span class="text-red-500">*</span></label>
+    <div class="mt-1 flex gap-2">
+      <input id="receiver_name" name="receiver_name" type="text" placeholder="홍길동" required value="<%= v.receiver_name || '' %>"
+             class="<%= inputClass('receiver_name') %>" />
+      <button type="button" id="same-as-member"
+              class="whitespace-nowrap px-3 py-2 border border-gray-300 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-50">
+        회원과 동일
+      </button>
+    </div>
+    <% if (err.receiver_name) { %><p class="mt-1 text-xs text-red-500"><%= err.receiver_name %></p><% } %>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-gray-700">주소 <span class="text-red-500">*</span></label>
+    <div class="mt-1 flex gap-2">
+      <input type="text" id="postcode" name="zipcode" placeholder="우편번호" readonly required value="<%= v.zipcode || '' %>"
+             class="w-1/3 <%= baseInput %> <%= err.address ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-gray-50' %> text-gray-600" />
+      <button type="button" onclick="execDaumPostcode()"
+              class="w-2/3 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+        우편번호 찾기
+      </button>
+    </div>
+    <input type="text" id="address" name="address" placeholder="기본 주소" readonly required value="<%= v.address || '' %>"
+           class="mt-2 <%= baseInput %> <%= err.address ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-gray-50' %> text-gray-600" />
+    <input type="text" id="detailAddress" name="detailed_address" placeholder="상세 주소" required value="<%= v.detailed_address || '' %>"
+           class="mt-2 <%= inputClass('detailed_address') %>" />
+    <% if (err.address) { %><p class="mt-1 text-xs text-red-500"><%= err.address %></p><% } %>
+    <% if (err.detailed_address) { %><p class="mt-1 text-xs text-red-500"><%= err.detailed_address %></p><% } %>
+  </div>
+
+  <div>
+    <label for="delivery_request" class="block text-sm font-medium text-gray-700">배송 요청사항 <span class="text-gray-400 font-normal">(선택)</span></label>
+    <input id="delivery_request" name="delivery_request" type="text" maxlength="100" placeholder="예: 부재 시 경비실에 맡겨주세요"
+           value="<%= v.delivery_request || '' %>" class="mt-1 <%= inputClass('delivery_request') %>" />
+    <p class="mt-1 text-xs text-gray-500">주문 시 기본값으로 채워집니다. 주문할 때 변경할 수 있습니다.</p>
+  </div>
+</div>
+
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+<script>
+  (function () {
+    const nameEl = document.getElementById('name');
+    const receiverEl = document.getElementById('receiver_name');
+    const phoneEl = document.getElementById('phone');
+    const phoneMsgEl = document.getElementById('phone-msg');
+    const emailEl = document.getElementById('email');
+    const emailMsgEl = document.getElementById('email-msg');
+
+    document.getElementById('same-as-member').addEventListener('click', () => {
+      receiverEl.value = nameEl.value;
+    });
+
+    const showMessage = (el, ok, text) => {
+      el.classList.remove('hidden', 'text-green-600', 'text-red-500');
+      el.classList.add(ok ? 'text-green-600' : 'text-red-500');
+      el.textContent = text;
+    };
+
+    // 중복 확인 — 제출 전에 알려주기 위한 편의 기능이다. 최종 판정은 서버(+ users UNIQUE 제약)가 한다.
+    const checkDuplicate = async (url, payload, msgEl) => {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        showMessage(msgEl, data.success, data.message);
+      } catch (e) {
+        msgEl.classList.add('hidden');
+      }
+    };
+
+    phoneEl.addEventListener('blur', () => {
+      const phone = phoneEl.value.replace(/[^0-9]/g, '');
+      if (!phone) return phoneMsgEl.classList.add('hidden');
+      checkDuplicate('/auth/phone/check', { phone }, phoneMsgEl);
+    });
+
+    if (emailEl && emailMsgEl) {
+      emailEl.addEventListener('blur', () => {
+        const email = emailEl.value.trim();
+        if (!email) return emailMsgEl.classList.add('hidden');
+        checkDuplicate('/auth/email/check', { email }, emailMsgEl);
+      });
+    }
+  })();
+
+  function execDaumPostcode() {
+    new daum.Postcode({
+      oncomplete: function (data) {
+        const addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress;
+        document.getElementById('postcode').value = data.zonecode;
+        document.getElementById('address').value = addr;
+        document.getElementById('detailAddress').focus();
+      }
+    }).open();
+  }
+</script>

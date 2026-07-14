@@ -3,119 +3,136 @@ const router = express.Router();
 const passport = require('passport');
 const pool = require('../config/db');
 const { loadSystemSettingsAndApplyEnv } = require('../config/systemSettings');
-const { issueCoupon } = require('../services/coupon/couponIssueService');
+const { PROVIDERS, LABELS, getCallbackUrl, getEnabledProviders } = require('../services/auth/authProviders');
+const policyService = require('../services/auth/policyService');
+const profileService = require('../services/auth/profileService');
 
-function getOAuthCallbackUrl(provider) {
-    const env = process.env.NODE_ENV === 'production' ? 'prod' : 'dev';
-    if (provider === 'google') {
-        return env === 'prod' ? process.env.GOOGLE_CALLBACK_URL_PROD : process.env.GOOGLE_CALLBACK_URL_DEV;
-    }
-    if (provider === 'kakao') {
-        return env === 'prod' ? process.env.KAKAO_CALLBACK_URL_PROD : process.env.KAKAO_CALLBACK_URL_DEV;
-    }
-    return null;
-}
+const LAYOUT = 'layouts/main_layout';
 
-async function refreshSystemSettings(req, res, next) {
+/**
+ * OAuth 진입 직전에 system_settings 를 다시 읽고 전략을 재등록한다.
+ * 관리자가 방금 키를 바꿨어도(예: 네이버 키 최초 입력) 앱 재기동 없이 반영된다 —
+ * passport.use 는 같은 이름의 전략을 덮어쓴다.
+ */
+async function refreshAuthConfig(req, res, next) {
     try {
         await loadSystemSettingsAndApplyEnv();
+        require('../config/passport')(passport);
         return next();
     } catch (err) {
         return next(err);
     }
 }
 
-// Login Select Page
-router.get('/login', (req, res) => {
-    if (req.user) {
-        return checkAndRedirect(req, res);
-    }
-    if (req.query.redirect && typeof req.query.redirect === 'string' && req.query.redirect.startsWith('/') && !req.query.redirect.startsWith('//')) {
+function isSafeInternalPath(value) {
+    return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+}
+
+function rememberReturnTo(req) {
+    if (isSafeInternalPath(req.query.redirect)) {
         req.session.returnTo = req.query.redirect;
-    } else if (!req.session.returnTo) {
-        // Referer 헤더에서 이전 페이지 경로 자동 저장
-        const referer = req.get('Referer');
-        if (referer) {
-            try {
-                const refUrl = new URL(referer);
-                const refPath = refUrl.pathname + refUrl.search;
-                // 로그인/회원가입 관련 페이지가 아닌 경우에만 저장
-                if (refPath.startsWith('/') && !refPath.startsWith('//') && !refPath.startsWith('/auth')) {
-                    req.session.returnTo = refPath;
-                }
-            } catch (e) { /* invalid URL, ignore */ }
+        return;
+    }
+    if (req.session.returnTo) return;
+
+    const referer = req.get('Referer');
+    if (!referer) return;
+    try {
+        const refUrl = new URL(referer);
+        const refPath = refUrl.pathname + refUrl.search;
+        if (isSafeInternalPath(refPath) && !refPath.startsWith('/auth')) {
+            req.session.returnTo = refPath;
         }
-    }
-    res.render('auth/login', {
-        layout: 'layouts/main_layout',
-        title: '로그인'
-    });
-});
+    } catch (e) { /* 잘못된 Referer 는 무시 */ }
+}
 
-// Signup Page (Redirect to Login as entry point is the same for social)
-router.get('/signup', (req, res) => {
-    if (req.user) {
-        return checkAndRedirect(req, res);
-    }
-    res.render('auth/login', {
-        layout: 'layouts/main_layout',
-        title: '회원가입'
-    });
-});
-
-// Auth with Google
-router.get('/google', refreshSystemSettings, (req, res, next) => {
-    const callbackURL = getOAuthCallbackUrl('google');
-    const options = { scope: ['profile', 'email'] };
-    if (callbackURL) options.callbackURL = callbackURL;
-    return passport.authenticate('google', options)(req, res, next);
-});
-
-// Google Callback
-router.get('/google/callback', refreshSystemSettings, (req, res, next) => {
-    const callbackURL = getOAuthCallbackUrl('google');
-    const options = { failureRedirect: '/auth/login' };
-    if (callbackURL) options.callbackURL = callbackURL;
-    return passport.authenticate('google', options)(req, res, next);
-},
-    (req, res) => {
-        checkAndRedirect(req, res);
-    }
-);
-
-// Auth with Kakao
-router.get('/kakao', refreshSystemSettings, (req, res, next) => {
-    const callbackURL = getOAuthCallbackUrl('kakao');
-    const options = { prompt: 'select_account' };
-    if (callbackURL) options.callbackURL = callbackURL;
-    return passport.authenticate('kakao', options)(req, res, next);
-});
-
-// Kakao 본인확인 재인증 (로그인 상태에서만)
-router.get('/kakao/reauth', refreshSystemSettings, (req, res, next) => {
+/**
+ * 로그인 성공 후 분기.
+ * 상세정보(휴대폰) 미입력 → 추가정보 화면, 약관 미동의/구버전 → 재동의 화면, 그 외 → 원래 가던 곳.
+ */
+async function checkAndRedirect(req, res) {
     if (!req.user) return res.redirect('/auth/login');
-    const returnTo = req.query.return_to || '/mypage/profile';
-    req.session.pending_reauth = {
-        user_id: req.user.id,
-        return_to: returnTo
-    };
-    req.session.save(() => {
-        const callbackURL = getOAuthCallbackUrl('kakao');
-        const options = { prompt: 'select_account' };
-        if (callbackURL) options.callbackURL = callbackURL;
-        return passport.authenticate('kakao', options)(req, res, next);
+    if (!req.user.phone) return res.redirect('/auth/signup-finish');
+
+    try {
+        const policyIds = await policyService.getActivePolicyIds();
+        const isInactive = typeof req.user.is_active !== 'undefined' && req.user.is_active === 0;
+
+        if (policyService.needsAgreement(req.user, policyIds) || isInactive) {
+            return res.redirect('/auth/terms-update');
+        }
+
+        const returnTo = req.session.returnTo;
+        if (isSafeInternalPath(returnTo)) {
+            delete req.session.returnTo;
+            return res.redirect(returnTo);
+        }
+        return res.redirect('/');
+    } catch (err) {
+        console.error('[auth] checkAndRedirect 실패:', err);
+        return res.redirect('/');
+    }
+}
+
+// ---------------------------------------------------------------- 로그인
+
+router.get('/login', (req, res) => {
+    if (req.user) return checkAndRedirect(req, res);
+    rememberReturnTo(req);
+
+    res.render('auth/login', {
+        layout: LAYOUT,
+        title: '로그인',
+        providers: getEnabledProviders(),
+        providerLabels: LABELS,
+        errorMessage: req.query.error === 'oauth' ? '소셜 로그인에 실패했습니다. 다시 시도해주세요.' : null,
+        values: {}
     });
 });
 
-// Kakao Callback
-router.get('/kakao/callback', refreshSystemSettings, (req, res, next) => {
-    const callbackURL = getOAuthCallbackUrl('kakao');
-    const options = { failureRedirect: '/auth/login', keepSessionInfo: true };
-    if (callbackURL) options.callbackURL = callbackURL;
-    return passport.authenticate('kakao', options)(req, res, next);
-},
-    (req, res) => {
-        // 재인증 플로우 처리
+router.post('/login', (req, res, next) => {
+    passport.authenticate('local', (err, user, info) => {
+        if (err) return next(err);
+        if (!user) {
+            return res.status(401).render('auth/login', {
+                layout: LAYOUT,
+                title: '로그인',
+                providers: getEnabledProviders(),
+                providerLabels: LABELS,
+                errorMessage: (info && info.message) || '로그인에 실패했습니다.',
+                values: { email: req.body.email || '' }
+            });
+        }
+        req.login(user, (loginErr) => {
+            if (loginErr) return next(loginErr);
+            return checkAndRedirect(req, res);
+        });
+    })(req, res, next);
+});
+
+// ---------------------------------------------------------------- 소셜 로그인 (Google / Kakao / Naver)
+
+const AUTH_OPTIONS = {
+    google: { scope: ['profile', 'email'] },
+    kakao: { prompt: 'select_account' },
+    naver: { authType: 'reprompt' }
+};
+
+for (const provider of PROVIDERS) {
+    router.get(`/${provider}`, refreshAuthConfig, (req, res, next) => {
+        const callbackURL = getCallbackUrl(provider);
+        const options = { ...AUTH_OPTIONS[provider] };
+        if (callbackURL) options.callbackURL = callbackURL;
+        return passport.authenticate(provider, options)(req, res, next);
+    });
+
+    router.get(`/${provider}/callback`, refreshAuthConfig, (req, res, next) => {
+        const callbackURL = getCallbackUrl(provider);
+        const options = { failureRedirect: '/auth/login?error=oauth', keepSessionInfo: true };
+        if (callbackURL) options.callbackURL = callbackURL;
+        return passport.authenticate(provider, options)(req, res, next);
+    }, (req, res) => {
+        // 카카오 본인확인 재인증으로 들어온 경우 (아래 /kakao/reauth 참고)
         const reauth = req.session.pending_reauth;
         if (reauth) {
             delete req.session.pending_reauth;
@@ -126,348 +143,270 @@ router.get('/kakao/callback', refreshSystemSettings, (req, res, next) => {
             req.session.identity_verified_at = Date.now();
             return res.redirect(reauth.return_to + '?verified=1');
         }
-        checkAndRedirect(req, res);
-    }
-);
-
-// Check if user has completed signup and policy agreements
-async function checkAndRedirect(req, res) {
-    if (!req.user) return res.redirect('/auth/login');
-
-    // 추가 정보(전화번호) 미입력 시 먼저 추가 정보/최초 동의 화면으로
-    if (!req.user.phone) {
-        return res.redirect('/auth/signup-finish');
-    }
-
-    try {
-        // 현재 시행중인 약관/개인정보 버전 조회
-        const [[termsVersion]] = await pool.query(
-            `SELECT id FROM policy_versions WHERE type = 'TERMS' AND is_active = 1 ORDER BY effective_date DESC LIMIT 1`
-        );
-        const [[privacyVersion]] = await pool.query(
-            `SELECT id FROM policy_versions WHERE type = 'PRIVACY' AND is_active = 1 ORDER BY effective_date DESC LIMIT 1`
-        );
-
-        const activeTermsId = termsVersion ? termsVersion.id : null;
-        const activePrivacyId = privacyVersion ? privacyVersion.id : null;
-
-        const needsInitialAgree = !req.user.agreed_terms_id || !req.user.agreed_privacy_id;
-        const needsUpgradeAgree = (
-            (activeTermsId && req.user.agreed_terms_id && req.user.agreed_terms_id !== activeTermsId) ||
-            (activePrivacyId && req.user.agreed_privacy_id && req.user.agreed_privacy_id !== activePrivacyId)
-        );
-
-        const isInactive = typeof req.user.is_active !== 'undefined' && req.user.is_active === 0;
-
-        if (needsInitialAgree || needsUpgradeAgree || isInactive) {
-            return res.redirect('/auth/terms-update');
-        }
-
-        const returnTo = req.session.returnTo;
-        if (returnTo && typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
-            delete req.session.returnTo;
-            return res.redirect(returnTo);
-        }
-        return res.redirect('/');
-    } catch (err) {
-        console.error('Error in checkAndRedirect:', err);
-        return res.redirect('/');
-    }
+        return checkAndRedirect(req, res);
+    });
 }
 
-// Signup Finish Page
-router.get('/signup-finish', async (req, res) => {
+// 카카오 본인확인 재인증 (로그인 상태에서만)
+router.get('/kakao/reauth', refreshAuthConfig, (req, res, next) => {
     if (!req.user) return res.redirect('/auth/login');
-    // If already has phone, redirect home
-    if (req.user.phone) return res.redirect('/');
 
-    // 기본 메시지
-    let termsContent = '이용약관 내용이 등록되지 않았습니다.';
-    let privacyContent = '개인정보 처리방침 내용이 등록되지 않았습니다.';
-
-    try {
-        // 1순위: policy_versions에서 현재 시행중(is_active=1) 약관/개인정보 버전 사용
-        const [policyRows] = await pool.query(
-            `SELECT type, content FROM policy_versions WHERE is_active = 1`
-        );
-
-        const activeTerms = policyRows.find((row) => row.type === 'TERMS');
-        const activePrivacy = policyRows.find((row) => row.type === 'PRIVACY');
-
-        if (activeTerms && activeTerms.content) {
-            termsContent = activeTerms.content.replace(/\n/g, '<br>');
-        }
-        if (activePrivacy && activePrivacy.content) {
-            privacyContent = activePrivacy.content.replace(/\n/g, '<br>');
-        }
-
-        // 2순위: 정책 버전이 없다면 site_settings의 단일 필드 사용 (기존 동작 유지용)
-        if (!activeTerms || !activeTerms.content || !activePrivacy || !activePrivacy.content) {
-            const [rows] = await pool.query('SELECT terms_of_service, privacy_policy FROM site_settings WHERE id = 1');
-            if (rows.length > 0) {
-                if (rows[0].terms_of_service) termsContent = rows[0].terms_of_service.replace(/\n/g, '<br>');
-                if (rows[0].privacy_policy) privacyContent = rows[0].privacy_policy.replace(/\n/g, '<br>');
-            }
-        }
-    } catch (err) {
-        console.error('Error fetching policy contents:', err);
-    }
-
-    res.render('auth/signup_finish', {
-        layout: 'layouts/main_layout',
-        title: '추가 정보 입력',
-        termsContent,
-        privacyContent
+    req.session.pending_reauth = {
+        user_id: req.user.id,
+        return_to: isSafeInternalPath(req.query.return_to) ? req.query.return_to : '/mypage/profile'
+    };
+    req.session.save(() => {
+        const callbackURL = getCallbackUrl('kakao');
+        const options = { prompt: 'select_account' };
+        if (callbackURL) options.callbackURL = callbackURL;
+        return passport.authenticate('kakao', options)(req, res, next);
     });
 });
 
-// --- 휴대폰 번호 중복 확인 API ---
-router.post('/phone/check', async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ success: false, message: '휴대폰 번호를 입력해주세요.' });
+// ---------------------------------------------------------------- 자체 가입폼
 
+function renderSignupForm(res, { values, errors, termsContent, privacyContent, status = 200 }) {
+    return res.status(status).render('auth/signup_form', {
+        layout: LAYOUT,
+        title: '회원가입',
+        providers: getEnabledProviders(),
+        providerLabels: LABELS,
+        values,
+        errors,
+        termsContent,
+        privacyContent
+    });
+}
+
+router.get('/signup', async (req, res, next) => {
+    if (req.user) return checkAndRedirect(req, res);
     try {
-        const userId = req.user ? req.user.id : null;
-        const query = userId
-            ? 'SELECT id FROM users WHERE phone = ? AND id != ?'
-            : 'SELECT id FROM users WHERE phone = ?';
-        const params = userId ? [phone, userId] : [phone];
-        const [rows] = await pool.query(query, params);
-
-        if (rows.length > 0) {
-            return res.json({ success: false, message: '이미 가입된 휴대폰 번호입니다.' });
-        }
-        res.json({ success: true, message: '사용 가능한 번호입니다.' });
+        const { termsContent, privacyContent } = await policyService.getPolicyContents();
+        return renderSignupForm(res, { values: {}, errors: {}, termsContent, privacyContent });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+        return next(err);
     }
 });
 
-// Process Signup Finish
-router.post('/signup-finish', async (req, res) => {
+router.post('/signup', async (req, res, next) => {
+    if (req.user) return checkAndRedirect(req, res);
+
+    const profile = profileService.normalizeProfileInput(req.body);
+
+    try {
+        const errors = {
+            ...profileService.validateProfile(profile, { requireEmail: true }),
+            ...profileService.validatePassword(req.body.password, req.body.password_confirm)
+        };
+        if (!req.body.terms) {
+            errors.terms = '이용약관 및 개인정보 처리방침에 동의해야 가입할 수 있습니다.';
+        }
+
+        Object.assign(errors, await profileService.checkDuplicates(profile, { checkEmail: !errors.email }));
+
+        if (Object.keys(errors).length > 0) {
+            const { termsContent, privacyContent } = await policyService.getPolicyContents();
+            return renderSignupForm(res, { values: profile, errors, termsContent, privacyContent, status: 400 });
+        }
+
+        const policyIds = await policyService.getActivePolicyIds();
+        const conn = await pool.getConnection();
+        let userId;
+        try {
+            await conn.beginTransaction();
+            userId = await profileService.createLocalUser(conn, profile, req.body.password, policyIds);
+            await policyService.recordAgreements(conn, userId, policyIds);
+            await conn.commit();
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        } finally {
+            conn.release();
+        }
+
+        await profileService.issueSignupCoupons(userId);
+
+        const [[user]] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
+        req.login(user, (loginErr) => {
+            if (loginErr) return next(loginErr);
+            return res.redirect('/auth/signup-success');
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+// ---------------------------------------------------------------- 소셜 가입 후 추가정보 (주문·배송용)
+
+function renderSignupFinish(res, { user, values, errors, termsContent, privacyContent, status = 200 }) {
+    return res.status(status).render('auth/signup_finish', {
+        layout: LAYOUT,
+        title: '추가 정보 입력',
+        values,
+        errors,
+        needsEmail: profileService.isPlaceholderEmail(user.email),
+        termsContent,
+        privacyContent
+    });
+}
+
+router.get('/signup-finish', async (req, res, next) => {
+    if (!req.user) return res.redirect('/auth/login');
+    if (req.user.phone) return res.redirect('/');
+
+    try {
+        const { termsContent, privacyContent } = await policyService.getPolicyContents();
+        const needsEmail = profileService.isPlaceholderEmail(req.user.email);
+        return renderSignupFinish(res, {
+            user: req.user,
+            values: {
+                name: req.user.name || '',
+                receiver_name: req.user.name || '',
+                email: needsEmail ? '' : req.user.email
+            },
+            errors: {},
+            termsContent,
+            privacyContent
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.post('/signup-finish', async (req, res, next) => {
     if (!req.user) return res.redirect('/auth/login');
 
-    let { name, birthdate, phone, address, detailed_address, zipcode, email } = req.body;
+    const needsEmail = profileService.isPlaceholderEmail(req.user.email);
+    const profile = profileService.normalizeProfileInput(req.body);
 
-    // Convert 8-digit birthdate (YYYYMMDD) to YYYY-MM-DD
-    if (birthdate && birthdate.length === 8 && !birthdate.includes('-')) {
-        const y = birthdate.substring(0, 4);
-        const m = birthdate.substring(4, 6);
-        const d = birthdate.substring(6, 8);
-        birthdate = `${y}-${m}-${d}`;
-    }
-    // Check for Duplicate Phone (excluding current user)
-    // NOTE: In a real world scenario, you might want to handle this more robustly (e.g. UNIQUE constraint + catch error)
-    // But manual check gives better UX here for now.
-    const [existingPhone] = await pool.query('SELECT id FROM users WHERE phone = ? AND id != ?', [phone, req.user.id]);
-
-    if (existingPhone.length > 0) {
-        // Fetch policy contents again for re-render (같은 로직 재사용)
-        let termsContent = '이용약관 내용이 등록되지 않았습니다.';
-        let privacyContent = '개인정보 처리방침 내용이 등록되지 않았습니다.';
-        try {
-            const [policyRows] = await pool.query('SELECT type, content FROM policy_versions WHERE is_active = 1');
-            const activeTerms = policyRows.find((row) => row.type === 'TERMS');
-            const activePrivacy = policyRows.find((row) => row.type === 'PRIVACY');
-
-            if (activeTerms && activeTerms.content) {
-                termsContent = activeTerms.content.replace(/\n/g, '<br>');
-            }
-            if (activePrivacy && activePrivacy.content) {
-                privacyContent = activePrivacy.content.replace(/\n/g, '<br>');
-            }
-
-            if (!activeTerms || !activeTerms.content || !activePrivacy || !activePrivacy.content) {
-                const [rows] = await pool.query('SELECT terms_of_service, privacy_policy FROM site_settings WHERE id = 1');
-                if (rows.length > 0) {
-                    if (rows[0].terms_of_service) termsContent = rows[0].terms_of_service.replace(/\n/g, '<br>');
-                    if (rows[0].privacy_policy) privacyContent = rows[0].privacy_policy.replace(/\n/g, '<br>');
-                }
-            }
-        } catch (err) {
-            console.error(err);
-        }
-
-        return res.render('auth/signup_finish', {
-            layout: 'layouts/main_layout',
-            title: '추가 정보 입력',
-            termsContent,
-            privacyContent,
-            errorMessage: '이미 존재하는 휴대폰 번호입니다.' // Pass error message
-        });
-    }
     try {
-        // 현재 시행중인 약관/개인정보 버전 ID 조회
-        const [[termsVersion]] = await pool.query(
-            `SELECT id FROM policy_versions WHERE type = 'TERMS' AND is_active = 1 ORDER BY effective_date DESC LIMIT 1`
-        );
-        const [[privacyVersion]] = await pool.query(
-            `SELECT id FROM policy_versions WHERE type = 'PRIVACY' AND is_active = 1 ORDER BY effective_date DESC LIMIT 1`
-        );
-
-        const agreedTermsId = termsVersion ? termsVersion.id : null;
-        const agreedPrivacyId = privacyVersion ? privacyVersion.id : null;
-
-        // 이메일 업데이트 (카카오 placeholder인 경우 실제 이메일로 교체)
-        const shouldUpdateEmail = email && email.trim() && req.user.email && req.user.email.includes('@no-email.com');
-        const emailValue = shouldUpdateEmail ? email.trim() : undefined;
-
-        // 사용자 기본 정보 + 현재 동의 버전 ID 저장 + 계정 활성화
-        const updateFields = 'name = COALESCE(?, name), birthdate = ?, phone = ?, address = ?, detailed_address = ?, zipcode = ?, agreed_terms_id = ?, agreed_privacy_id = ?, is_active = 1' + (emailValue ? ', email = ?' : '');
-        const updateParams = [name, birthdate, phone, address, detailed_address, zipcode, agreedTermsId, agreedPrivacyId];
-        if (emailValue) updateParams.push(emailValue);
-        updateParams.push(req.user.id);
-
-        await pool.query(`UPDATE users SET ${updateFields} WHERE id = ?`, updateParams);
-
-        // 동의 이력 저장 (약관/개인정보 각각 1행씩)
-        if (agreedTermsId) {
-            await pool.query(
-                `INSERT INTO user_policy_agreements (user_id, policy_version_id)
-                 VALUES (?, ?)
-                 ON DUPLICATE KEY UPDATE agreed_at = CURRENT_TIMESTAMP`,
-                [req.user.id, agreedTermsId]
-            );
-        }
-        if (agreedPrivacyId) {
-            await pool.query(
-                `INSERT INTO user_policy_agreements (user_id, policy_version_id)
-                 VALUES (?, ?)
-                 ON DUPLICATE KEY UPDATE agreed_at = CURRENT_TIMESTAMP`,
-                [req.user.id, agreedPrivacyId]
-            );
+        const errors = profileService.validateProfile(profile, { requireEmail: needsEmail });
+        if (!req.body.terms) {
+            errors.terms = '이용약관 및 개인정보 처리방침에 동의해야 서비스를 이용할 수 있습니다.';
         }
 
-        /*
-         * 가입 자동 지급.
-         *
-         * 트리거는 `coupon_type='NEW_SIGNUP'` 이 아니라 `issue_method='AUTO_SIGNUP'` 이다.
-         * coupon_type 은 목적 라벨로 강등됐다 — "이벤트 목적의 자동지급 쿠폰"이 표현 가능해야 한다.
-         * 선착순·유효기간은 couponIssueService 가 관장한다(발급 경로 다섯 곳이 같은 규칙을 쓴다).
-         */
+        Object.assign(errors, await profileService.checkDuplicates(profile, {
+            excludeUserId: req.user.id,
+            checkEmail: needsEmail && !errors.email
+        }));
+
+        if (Object.keys(errors).length > 0) {
+            const { termsContent, privacyContent } = await policyService.getPolicyContents();
+            return renderSignupFinish(res, {
+                user: req.user,
+                values: profile,
+                errors,
+                termsContent,
+                privacyContent,
+                status: 400
+            });
+        }
+
+        const policyIds = await policyService.getActivePolicyIds();
+        const conn = await pool.getConnection();
         try {
-            const [coupons] = await pool.query(
-                `SELECT * FROM coupons
-                  WHERE issue_method = 'AUTO_SIGNUP' AND status = 'ACTIVE'
-                    AND (valid_from IS NULL OR valid_from <= NOW())
-                    AND (valid_to IS NULL OR valid_to >= NOW())`
-            );
-            for (const coupon of coupons) {
-                const conn = await pool.getConnection();
-                try {
-                    await conn.beginTransaction();
-                    await issueCoupon(conn, { userId: req.user.id, coupon, issuedBy: 'AUTO' });
-                    await conn.commit();
-                } catch (e) {
-                    await conn.rollback();
-                    throw e;
-                } finally {
-                    conn.release();
-                }
-            }
-        } catch (couponErr) {
-            console.error('[Auth] AUTO_SIGNUP coupon issue error:', couponErr);
+            await conn.beginTransaction();
+            await profileService.completeProfile(conn, req.user.id, profile, { ...policyIds, updateEmail: needsEmail });
+            await policyService.recordAgreements(conn, req.user.id, policyIds);
+            await conn.commit();
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        } finally {
+            conn.release();
         }
 
-        res.redirect('/auth/signup-success');
+        await profileService.issueSignupCoupons(req.user.id);
+        return res.redirect('/auth/signup-success');
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Server Error');
+        return next(err);
     }
 });
 
-// Success Page
 router.get('/signup-success', (req, res) => {
     if (!req.user) return res.redirect('/auth/login');
     res.render('auth/signup_success', {
-        layout: 'layouts/main_layout',
+        layout: LAYOUT,
         title: '가입 완료'
     });
 });
 
-// Terms/Privacy re-agreement page
-router.get('/terms-update', async (req, res) => {
-    if (!req.user) return res.redirect('/auth/login');
+// ---------------------------------------------------------------- 중복 확인 API (가입폼·추가정보 공용)
 
-    let termsContent = '이용약관 내용이 등록되지 않았습니다.';
-    let privacyContent = '개인정보 처리방침 내용이 등록되지 않았습니다.';
+router.post('/phone/check', async (req, res) => {
+    const phone = String(req.body.phone || '').replace(/[^0-9]/g, '');
+    if (!phone) return res.status(400).json({ success: false, message: '휴대폰 번호를 입력해주세요.' });
 
     try {
-        const [policyRows] = await pool.query('SELECT type, content FROM policy_versions WHERE is_active = 1');
-        const activeTerms = policyRows.find((row) => row.type === 'TERMS');
-        const activePrivacy = policyRows.find((row) => row.type === 'PRIVACY');
-
-        if (activeTerms && activeTerms.content) {
-            termsContent = activeTerms.content.replace(/\n/g, '<br>');
-        }
-        if (activePrivacy && activePrivacy.content) {
-            privacyContent = activePrivacy.content.replace(/\n/g, '<br>');
-        }
+        const taken = await profileService.isPhoneTaken(phone, req.user ? req.user.id : null);
+        return res.json({
+            success: !taken,
+            message: taken ? '이미 가입된 휴대폰 번호입니다.' : '사용 가능한 번호입니다.'
+        });
     } catch (err) {
-        console.error('Error fetching policy contents for terms-update:', err);
+        console.error('[auth] 휴대폰 중복 확인 실패:', err);
+        return res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
     }
-
-    res.render('auth/terms_update', {
-        layout: 'layouts/main_layout',
-        title: '약관 재동의',
-        termsContent,
-        privacyContent
-    });
 });
 
-router.post('/terms-update', async (req, res) => {
+router.post('/email/check', async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ success: false, message: '이메일을 입력해주세요.' });
+
+    try {
+        const taken = await profileService.isEmailTaken(email, req.user ? req.user.id : null);
+        return res.json({
+            success: !taken,
+            message: taken ? '이미 가입된 이메일입니다.' : '사용 가능한 이메일입니다.'
+        });
+    } catch (err) {
+        console.error('[auth] 이메일 중복 확인 실패:', err);
+        return res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    }
+});
+
+// ---------------------------------------------------------------- 약관 재동의
+
+router.get('/terms-update', async (req, res, next) => {
     if (!req.user) return res.redirect('/auth/login');
 
-    // 필수 체크박스 검증 (프론트에서도 required로 막지만 서버에서도 한 번 더 확인)
+    try {
+        const { termsContent, privacyContent } = await policyService.getPolicyContents();
+        res.render('auth/terms_update', {
+            layout: LAYOUT,
+            title: '약관 재동의',
+            termsContent,
+            privacyContent
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.post('/terms-update', async (req, res, next) => {
+    if (!req.user) return res.redirect('/auth/login');
     if (!req.body.terms) {
         return res.status(400).send('약관 및 개인정보 처리방침에 동의해야 서비스를 이용할 수 있습니다.');
     }
 
     try {
-        const [[termsVersion]] = await pool.query(
-            `SELECT id FROM policy_versions WHERE type = 'TERMS' AND is_active = 1 ORDER BY effective_date DESC LIMIT 1`
-        );
-        const [[privacyVersion]] = await pool.query(
-            `SELECT id FROM policy_versions WHERE type = 'PRIVACY' AND is_active = 1 ORDER BY effective_date DESC LIMIT 1`
-        );
-
-        const agreedTermsId = termsVersion ? termsVersion.id : null;
-        const agreedPrivacyId = privacyVersion ? privacyVersion.id : null;
-
+        const policyIds = await policyService.getActivePolicyIds();
         await pool.query(
             'UPDATE users SET agreed_terms_id = ?, agreed_privacy_id = ?, is_active = 1 WHERE id = ?',
-            [agreedTermsId, agreedPrivacyId, req.user.id]
+            [policyIds.termsId, policyIds.privacyId, req.user.id]
         );
-
-        if (agreedTermsId) {
-            await pool.query(
-                `INSERT INTO user_policy_agreements (user_id, policy_version_id)
-                 VALUES (?, ?)
-                 ON DUPLICATE KEY UPDATE agreed_at = CURRENT_TIMESTAMP`,
-                [req.user.id, agreedTermsId]
-            );
-        }
-        if (agreedPrivacyId) {
-            await pool.query(
-                `INSERT INTO user_policy_agreements (user_id, policy_version_id)
-                 VALUES (?, ?)
-                 ON DUPLICATE KEY UPDATE agreed_at = CURRENT_TIMESTAMP`,
-                [req.user.id, agreedPrivacyId]
-            );
-        }
-
-        res.redirect('/');
+        await policyService.recordAgreements(pool, req.user.id, policyIds);
+        return res.redirect('/');
     } catch (err) {
-        console.error('Error updating policy agreements in terms-update:', err);
-        res.status(500).send('Server Error');
+        return next(err);
     }
 });
 
-// Logout
+// ---------------------------------------------------------------- 로그아웃
+
 router.get('/logout', (req, res, next) => {
     req.logout((err) => {
-        if (err) { return next(err); }
+        if (err) return next(err);
         res.redirect('/');
     });
 });

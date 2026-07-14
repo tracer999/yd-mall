@@ -33,7 +33,7 @@
 | Styling | Tailwind CSS (CLI) | ^4.1.18 |
 | DB | MySQL 8.4 (mysql2, raw SQL + pool) | mysql2 ^3.16.3 |
 | Session | express-session + connect-redis / redis | ^1.19.0 / ^9.0.0 / redis ^5.10.0 |
-| Auth | Passport (Google/Kakao OAuth) | passport ^0.7.0, passport-google-oauth20 ^2.0.0, passport-kakao ^1.0.1 |
+| Auth | Passport (자체 가입 + Google/Kakao/Naver OAuth) | passport ^0.7.0, passport-local ^1.0.0, passport-google-oauth20 ^2.0.0, passport-kakao ^1.0.1, passport-naver-v2 ^2.0.8 |
 | 비밀번호 | bcrypt (관리자 계정) | ^6.0.0 |
 | Email | nodemailer | ^8.0.0 |
 | 이미지 처리 | sharp (리사이즈·재압축) | ^0.34.5 |
@@ -142,7 +142,7 @@ app.js                 # Express 진입점. 미들웨어 파이프라인 + /shop
 config/
   db.js                # MySQL 커넥션 풀
   env.js               # .env → .env.{env} 순차 로딩 + ENC: 복호화
-  passport.js          # Google/Kakao OAuth (env 없으면 전략 미등록)
+  passport.js          # Local + Google/Kakao/Naver OAuth (키 없으면 소셜 전략 미등록)
   systemSettings.js    # system_settings → global.systemSettings + process.env
 shared/crypto.js       # AES-256-GCM 암복호 (ENC: 접두어)
 controllers/           # 고객 13개 + admin/ 관리자 21개
@@ -183,7 +183,7 @@ dev-mall.sh            # 배포/기동 스크립트
 | `/sections/ranking` | `routes/sections.js` | 스토어프론트 섹션 AJAX (ranking_tabs 탭 데이터) |
 | `/cart` | `routes/cart.js` | 장바구니 조회·추가·삭제·수량변경·일괄주문 |
 | `/checkout` | `routes/checkout.js` | 주문 폼·생성, 결제창, Toss 성공/실패 콜백, 주문완료 |
-| `/auth` | `routes/auth.js` | 로그인 페이지, Google/Kakao OAuth 시작·콜백, Kakao 재인증 |
+| `/auth` | `routes/auth.js` | 로그인(이메일·비밀번호), 자체 가입폼, Google/Kakao/Naver OAuth 시작·콜백, 가입 후 상세정보, 약관 재동의, Kakao 재인증 |
 | `/mypage` | `routes/mypage.js` | 찜/최근본/쿠폰/포인트/주문/프로필/회원탈퇴 (전체 `ensureAuthenticated`) |
 | `/likes` | `routes/likes.js` | 상품·브랜드 찜 토글 |
 | `/boards` | `routes/boards.js` | 게시판 목록/상세 |
@@ -242,7 +242,14 @@ dev-mall.sh            # 배포/기동 스크립트
 
 ### 5.4 인증
 
-**고객 — OAuth 전용.** Google(`passport-google-oauth20`) / Kakao(`passport-kakao`) 만 지원하며 이메일·비밀번호 로컬 전략은 없습니다. 환경변수가 없으면 해당 전략은 등록되지 않습니다. 신규 소셜 유저는 `is_active=0` 으로 생성되고 약관 동의 후 활성화되며, 동일 email 계정이 있으면 `google_id`/`kakao_id` 를 병합합니다.
+**고객 — 자체 가입 + 소셜 OAuth.** 가입 경로는 두 가지입니다.
+
+- **자체 가입** (`passport-local`): `/auth/signup` 한 화면에서 이메일·비밀번호(bcrypt) + 주문·배송용 상세정보 + 약관 동의를 받고 `is_active=1` 로 생성 후 자동 로그인.
+- **간편 가입** (`passport-google-oauth20` / `passport-kakao` / `passport-naver-v2`): 콜백에서 `is_active=0` 으로 생성 → `/auth/signup-finish` 에서 **자체 가입폼과 동일한 상세정보 폼**을 채워야 활성화. 동일 email 계정이 있으면 `google_id`/`kakao_id`/`naver_id` 를 병합합니다.
+
+소셜 전략은 `system_settings` 의 Client ID + 콜백 URL 이 있을 때만 등록되고(`services/auth/authProviders.js`), 같은 판정으로 로그인 화면의 버튼 노출도 결정됩니다. 키를 관리자에서 바꾸면 **재기동 없이** 반영됩니다(라우트 진입 시 전략 재등록).
+
+두 경로의 공통 로직은 `services/auth/`(`profileService` · `policyService`), 공통 화면은 `views/auth/_profile_fields.ejs` · `_terms_agreement.ejs` · `_social_buttons.ejs` 에 모여 있습니다. 상세는 [`docs/develop_guide/user/auth.md`](docs/develop_guide/user/auth.md).
 
 **관리자 — 자체 세션 + 선택적 이메일 2FA.** passport 를 쓰지 않고 `admins` 테이블 + bcrypt 검증 후 `req.session.admin` 에 저장합니다. `admins.use_2fa` 가 켜져 있으면 6자리 코드를 `admin_verification_codes` 에 저장(5분 유효)하고 이메일로 발송합니다. 2FA 가 켜졌는데 이메일이 없으면 로그인이 차단됩니다.
 
