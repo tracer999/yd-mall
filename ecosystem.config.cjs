@@ -10,7 +10,7 @@ const path = require('path');
 module.exports = {
   apps: [
     {
-      name: 'dev-mall',
+      name: 'yd-mall',
       script: 'app.js',
       instances: 1,
       exec_mode: 'fork',
