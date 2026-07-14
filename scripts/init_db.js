@@ -18,7 +18,7 @@ const mysql = require('mysql2/promise');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 
-const DB_NAME = process.env.DB_NAME || 'dev_mall';
+const DB_NAME = process.env.DB_NAME || 'yd_mall';
 const DB_HOST = process.env.DB_HOST;
 const DB_USER = process.env.DB_USER;
 const DB_PASS = process.env.DB_PASS;
