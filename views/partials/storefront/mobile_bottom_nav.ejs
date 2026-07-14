@@ -35,18 +35,25 @@
   const hasKids = (n) => Array.isArray(n.children) && n.children.length > 0;
 %>
 
-<!-- 카테고리 전체 레이어 (탭으로 열림) -->
+<!-- 카테고리 전체 레이어 (탭으로 열림) — 화면을 통째로 덮는다(바텀시트 아님) -->
 <div id="yd-cat-layer" class="md:hidden fixed inset-0 z-[60] hidden" role="dialog" aria-modal="true" aria-label="카테고리">
+    <%# 시트가 화면을 다 덮으므로 딤은 등장하는 찰나에만 비친다. 바깥 클릭 닫기 대상이 없어졌지만
+        JS 가 dim 을 참조하므로 엘리먼트는 남긴다(닫기는 헤더 X · ESC · 뒤로가기). %>
     <div id="yd-cat-dim" class="absolute inset-0 bg-black/40"></div>
 
-    <div class="absolute inset-x-0 bottom-0 top-14 bg-white rounded-t-2xl flex flex-col overflow-hidden">
-        <header class="flex items-center gap-2 px-2 h-14 border-b border-gray-100 shrink-0">
-            <button type="button" id="yd-cat-back" aria-label="뒤로" class="hidden p-2 text-gray-600">
+    <div class="yd-cat-sheet absolute inset-0 flex flex-col overflow-hidden bg-white"
+         style="padding-top: env(safe-area-inset-top);">
+        <header class="flex h-16 shrink-0 items-center gap-1 border-b border-gray-100 px-2">
+            <button type="button" id="yd-cat-back" aria-label="뒤로" class="hidden p-2.5 text-gray-600 active:text-[var(--gh-primary)]">
                 <i class="bi bi-chevron-left text-xl"></i>
             </button>
-            <h2 id="yd-cat-title" class="flex-1 px-2 text-lg font-bold text-gray-900">카테고리</h2>
-            <button type="button" id="yd-cat-close" aria-label="닫기" class="p-2 text-gray-500">
-                <i class="bi bi-x-lg text-xl"></i>
+            <div class="min-w-0 flex-1 px-2">
+                <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--gh-primary)]">All Categories</p>
+                <h2 id="yd-cat-title" class="truncate text-[19px] font-extrabold tracking-tight text-gray-900">카테고리</h2>
+            </div>
+            <button type="button" id="yd-cat-close" aria-label="닫기"
+                    class="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gray-200 text-gray-500 active:bg-gray-900 active:text-white">
+                <i class="bi bi-x-lg text-base"></i>
             </button>
         </header>
 
@@ -63,16 +70,23 @@
 
             <!-- 1뎁스 -->
             <ul id="yd-cat-d1" class="yd-cat-panel divide-y divide-gray-100">
-                <% _tree.forEach(function (n1) { %>
-                    <li>
+                <% _tree.forEach(function (n1, i) { %>
+                    <li class="yd-cat-row">
+                        <%# 화면을 다 쓰므로 행을 키우고 번호를 붙여 스캔하기 쉽게 한다. %>
                         <% if (hasKids(n1)) { %>
-                            <button type="button" class="yd-cat-drill w-full flex items-center justify-between px-4 py-3.5 text-left"
+                            <button type="button" class="yd-cat-drill flex w-full items-center gap-3 px-4 py-4 text-left active:bg-gray-50"
                                     data-target="d2-<%= n1.id %>" data-title="<%= n1.name %>" data-root="<%= n1.id %>">
-                                <span class="font-semibold text-gray-900"><%= n1.name %></span>
-                                <i class="bi bi-chevron-right text-gray-400"></i>
+                                <span class="w-6 shrink-0 text-[11px] font-bold tabular-nums text-gray-300"><%= String(i + 1).padStart(2, '0') %></span>
+                                <span class="min-w-0 flex-1 truncate text-[16px] font-bold text-gray-900"><%= n1.name %></span>
+                                <i class="bi bi-chevron-right shrink-0 text-gray-300"></i>
                             </button>
                         <% } else { %>
-                            <a href="/products?categoryId=<%= n1.id %>" class="block px-4 py-3.5 font-semibold text-gray-900"><%= n1.name %></a>
+                            <a href="/products?categoryId=<%= n1.id %>"
+                               class="flex items-center gap-3 px-4 py-4 active:bg-gray-50">
+                                <span class="w-6 shrink-0 text-[11px] font-bold tabular-nums text-gray-300"><%= String(i + 1).padStart(2, '0') %></span>
+                                <span class="min-w-0 flex-1 truncate text-[16px] font-bold text-gray-900"><%= n1.name %></span>
+                                <i class="bi bi-arrow-right shrink-0 text-xs text-gray-300"></i>
+                            </a>
                         <% } %>
                     </li>
                 <% }); %>
@@ -122,7 +136,8 @@
 
         <%# 하단 프로모션 — 현재 선택한 1뎁스의 이미지 + 설명 (PC 패널의 프로모션 칸과 같은 역할).
             1뎁스 화면에서는 보여줄 대상이 없으므로 숨긴다. %>
-        <div id="yd-cat-promo" class="hidden shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-3">
+        <div id="yd-cat-promo" class="hidden shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-3"
+             style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
             <div class="flex items-center gap-3">
                 <img id="yd-cat-promo-img" src="" alt="" class="w-16 h-16 rounded-lg object-cover bg-white border border-gray-200 hidden">
                 <div class="min-w-0">
@@ -133,6 +148,27 @@
         </div>
     </div>
 </div>
+
+<style>
+  /* 전체 화면 레이어의 등장 — JS 는 .hidden 만 토글하므로, 그 해제 자체를 트리거로 삼는다. */
+  #yd-cat-layer:not(.hidden) .yd-cat-sheet { animation: ydCatSheetIn .28s cubic-bezier(.16,1,.3,1) both; }
+  #yd-cat-layer:not(.hidden) #yd-cat-dim   { animation: ydCatDimIn .28s ease both; }
+  @keyframes ydCatSheetIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes ydCatDimIn   { from { opacity: 0; } to { opacity: 1; } }
+
+  /* 행이 순차로 밀려 올라온다. 1뎁스 목록에서만(드릴다운한 패널은 즉시 보여야 답답하지 않다). */
+  #yd-cat-layer:not(.hidden) .yd-cat-row { animation: ydCatSheetIn .3s cubic-bezier(.16,1,.3,1) both; }
+  #yd-cat-layer:not(.hidden) .yd-cat-row:nth-child(1) { animation-delay: .04s; }
+  #yd-cat-layer:not(.hidden) .yd-cat-row:nth-child(2) { animation-delay: .07s; }
+  #yd-cat-layer:not(.hidden) .yd-cat-row:nth-child(3) { animation-delay: .10s; }
+  #yd-cat-layer:not(.hidden) .yd-cat-row:nth-child(4) { animation-delay: .13s; }
+  #yd-cat-layer:not(.hidden) .yd-cat-row:nth-child(5) { animation-delay: .16s; }
+  #yd-cat-layer:not(.hidden) .yd-cat-row:nth-child(n+6) { animation-delay: .19s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #yd-cat-layer:not(.hidden) :is(.yd-cat-sheet, #yd-cat-dim, .yd-cat-row) { animation: none; }
+  }
+</style>
 
 <%# 1뎁스 이미지·설명을 JS 에 넘긴다(카테고리 수가 많아도 이 표는 1뎁스뿐이라 작다) %>
 <script type="application/json" id="yd-cat-promo-data">
