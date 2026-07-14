@@ -35,6 +35,22 @@ function normalizeVisibility(value) {
     return allowed.includes(v) ? v : 'PUBLIC';
 }
 
+/*
+ * 숫자 필드 정규화.
+ *
+ * 폼의 가격 입력은 화면에서 천단위 콤마로 포맷된다("12,000"). 그 문자열을 그대로
+ * DECIMAL 컬럼에 넣으면 MySQL 이 콤마 앞까지만 읽어 **12** 로 잘라 저장한다
+ * (판매가가 1/1000 이 되는 증상). 그래서 서버가 콤마·공백을 걷어내고 수로 만든다.
+ * 클라이언트 스크립트에만 맡기지 않는다 — JS 가 죽어도 값은 지켜져야 한다.
+ */
+function toNumber(value, fallback = null) {
+    if (value === undefined || value === null) return fallback;
+    const cleaned = String(value).replace(/[,\s]/g, '');
+    if (cleaned === '') return fallback;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : fallback;
+}
+
 function normalizeDistributionBadge(value) {
     if (!value) return null;
     const normalized = String(value).trim().toUpperCase();
@@ -586,7 +602,7 @@ exports.postAdd = async (req, res) => {
         const resolvedBrandName = await resolveBrandName(normalizedBrandCategoryId);
         const finalProvider = resolvedBrandName || provider || null;
 
-        const finalPrice = price || 0;
+        const finalPrice = toNumber(price, 0);
         const insertEntries = [
             ['mall_id', req.adminMallId || 1], // P5: 새 상품은 편집 중인 몰에 속한다
             ['category_id', category_id || null],
@@ -600,11 +616,11 @@ exports.postAdd = async (req, res) => {
             ['thumbnail_image', thumbnail_image],
             ['video_type', video_type],
             ['video_url', final_video_url],
-            ['purchase_price', purchase_price],
-            ['original_price', original_price],
+            ['purchase_price', toNumber(purchase_price, 0)],
+            ['original_price', toNumber(original_price, null)],
             ['price', finalPrice],
-            ['discount_rate', discount_rate],
-            ['stock', stock],
+            ['discount_rate', toNumber(discount_rate, 0)],
+            ['stock', toNumber(stock, 0)],
             ['status', status],
             // 신상품 판정 앵커. 비워두면 신상품에서 빠지므로 폼이 오늘 날짜를 프리필한다.
             ['sale_start_date', sale_start_date || null],
@@ -707,7 +723,7 @@ exports.postEdit = async (req, res) => {
         const resolvedBrandName = await resolveBrandName(normalizedBrandCategoryId);
         const finalProvider = resolvedBrandName || provider || null;
 
-        const finalPrice = price || 0;
+        const finalPrice = toNumber(price, 0);
         const updateEntries = [
             ['category_id', category_id || null],
             ['brand_category_id', normalizedBrandCategoryId],
@@ -720,11 +736,11 @@ exports.postEdit = async (req, res) => {
             ['thumbnail_image', thumbnail_image],
             ['video_type', video_type],
             ['video_url', final_video_url],
-            ['purchase_price', purchase_price],
-            ['original_price', original_price],
+            ['purchase_price', toNumber(purchase_price, 0)],
+            ['original_price', toNumber(original_price, null)],
             ['price', finalPrice],
-            ['discount_rate', discount_rate],
-            ['stock', stock],
+            ['discount_rate', toNumber(discount_rate, 0)],
+            ['stock', toNumber(stock, 0)],
             ['status', status],
             // 신상품 판정 앵커. 비워두면 신상품에서 빠지므로 폼이 오늘 날짜를 프리필한다.
             ['sale_start_date', sale_start_date || null],

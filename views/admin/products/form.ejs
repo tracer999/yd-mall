@@ -863,11 +863,16 @@
 
 
     // Ensure values are unformatted before submit
-    document.querySelector('form').addEventListener('submit', (e) => {
-        priceInputs.forEach(input => {
-            input.value = unformatNumber(input.value);
+    // 페이지의 첫 번째 form 이 상품 폼이라는 보장이 없다(레이아웃이 앞에 다른 form 을 깐다).
+    // 가격 입력이 실제로 속한 form 에 건다 — 아니면 "12,000" 이 그대로 전송돼 DECIMAL 캐스팅에서 12 로 잘린다.
+    const productForm = priceInput && priceInput.form;
+    if (productForm) {
+        productForm.addEventListener('submit', () => {
+            priceInputs.forEach(input => {
+                input.value = unformatNumber(input.value);
+            });
         });
-    });
+    }
 </script>
 
 <script>
