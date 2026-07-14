@@ -1,0 +1,111 @@
+<%
+  /*
+   * 헤더 상단 공통부 (GNB 위쪽) — 모든 헤더 스킨이 PC 에서 이걸 그대로 쓴다.
+   *   톱바(배너·알림, 없으면 미노출) + Row1(로고 · 검색바 · 유저 액션)
+   *
+   * 옛 유틸바(슬로건 바)는 없앴다 — 톱바와 두 겹으로 쌓여 상단이 두 줄이 됐다.
+   * 그 안에만 있던 마켓 선택기·관리자모드 링크는 Row1 의 유저 액션으로 옮겼다(기능이 사라지면 안 된다).
+   * 슬로건(site_settings.header_slogan)은 더 이상 헤더에 노출하지 않는다 — 같은 자리를 톱바 알림이 쓴다.
+   *
+   * 스킨이 달라도 GNB 위쪽은 같아야 한다는 요구를 마크업 한 벌로 보장한다.
+   * GNB 자체(카테고리 분리형 vs 인라인 통합형)와 모바일 바는 각 스킨이 계속 따로 갖는다.
+   *
+   * locals:
+   *   pcOnly   (bool, 기본 false) — true 면 Row1 을 md 이상에서만 낸다.
+   *                                 드로어형은 모바일에 자체 바(햄버거·로고·장바구니)가 따로 있다.
+   *   useSearch(bool, 기본 true)  — navigation_config.use_search_bar 가 꺼진 몰은 검색바를 빼야 한다.
+   */
+  const _pcOnly = (typeof pcOnly !== 'undefined') ? !!pcOnly : false;
+  const _showSearch = (typeof useSearch !== 'undefined') ? !!useSearch : true;
+
+  /* headerUtil 항목(feature_menu position='header_util')을 코드로 찾는다.
+     로그인/마이쇼핑/장바구니/검색은 is_required 라 항상 켜져 있고, 고객센터는 ON/OFF 가능하다. */
+  const _headerUtil = (code) => {
+    const list = (typeof headerUtilMenus !== 'undefined' && Array.isArray(headerUtilMenus)) ? headerUtilMenus : [];
+    return list.find((m) => m.featureCode === code) || null;
+  };
+%>
+        <%# 톱바(배너·알림) — 등록된 게 없으면 아무것도 렌더되지 않는다. PC·모바일 공용. %>
+        <%- include('./_topbar') %>
+
+        <!-- Header Row 1: 로고 + 검색바 + 유저 액션 -->
+        <div class="<%= _pcOnly ? 'hidden md:block ' : '' %>max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-4 sm:gap-6 h-20">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center">
+                    <a href="/" class="flex items-center gap-2">
+                        <% if (siteSettings.logo_url) { %>
+                            <img class="h-10 w-auto" src="<%= siteSettings.logo_url %>"
+                                alt="<%= siteSettings.company_name || '와이디몰' %>">
+                            <% } else { %>
+                                <div
+                                    class="h-10 w-10 bg-[var(--gh-primary)] text-white rounded-full flex items-center justify-center font-bold text-xl">
+                                    G</div>
+                                <span class="gh-serif text-2xl font-bold text-[var(--gh-primary-dark)] tracking-tight">
+                                    <%= siteSettings.company_name || '와이디몰' %>
+                                </span>
+                                <% } %>
+                    </a>
+                </div>
+
+                <!-- Search (center) -->
+                <% if (_showSearch) { %>
+                    <form action="/search" method="get" class="flex flex-1 max-w-2xl mx-auto" role="search">
+                        <div class="relative w-full">
+                            <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
+                                class="w-full h-10 md:h-12 rounded-full border-2 border-[var(--gh-primary)] pl-4 md:pl-5 pr-11 md:pr-14 text-sm md:text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20 bg-white">
+                            <button type="submit" aria-label="검색"
+                                class="absolute right-1 md:right-1.5 top-1 md:top-1.5 h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--gh-primary)]">
+                                <i class="bi bi-search text-lg md:text-xl"></i>
+                            </button>
+                        </div>
+                    </form>
+                <% } else { %>
+                    <%# 검색바를 끈 몰 — 로고와 유저 액션 사이를 채워 우측 정렬을 유지한다. %>
+                    <div class="flex-1"></div>
+                <% } %>
+
+                <!-- User Actions -->
+                <div class="flex items-center gap-4 sm:gap-5 flex-shrink-0">
+                    <%# 마켓(국가) 선택기 — 옛 유틸바에 있던 것. Shopify 미사용이면 숨는다(res.locals.shopifyEnabled). %>
+                    <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
+                        <div class="hidden md:block"><%- include('../../shopify-market-selector') %></div>
+                    <% } %>
+                    <% if (user) { %>
+                        <a href="/auth/logout" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-box-arrow-right text-xl"></i><span class="text-xs">로그아웃</span>
+                        </a>
+                    <% } else { %>
+                        <a href="/auth/login" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-power text-xl"></i><span class="text-xs">로그인</span>
+                        </a>
+                    <% } %>
+                    <a href="/mypage" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                        <i class="bi bi-person text-xl"></i><span class="text-xs">마이쇼핑</span>
+                    </a>
+                    <a href="/cart" class="flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors relative">
+                        <i class="bi bi-bag text-xl"></i><span class="hidden sm:inline text-xs">장바구니</span>
+                        <% if (typeof cartCount !=='undefined' && cartCount> 0) { %>
+                            <span class="absolute -top-1.5 right-1 sm:right-3 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                                <%= cartCount %>
+                            </span>
+                        <% } %>
+                    </a>
+                    <%# 고객센터는 시스템 메뉴이지만 ON/OFF 가능 (feature_menu.HEADER_CS).
+                        표준 URL(default_path)도 데이터에서 온다 — 하드코딩 금지. %>
+                    <% var _cs = _headerUtil('HEADER_CS'); %>
+                    <% if (_cs) { %>
+                        <a href="<%= _cs.href %>" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-headset text-xl"></i><span class="text-xs"><%= _cs.name %></span>
+                        </a>
+                    <% } %>
+
+                    <%# 관리자모드 — 옛 유틸바에 있던 것. 운영자에게만 보인다(고객에게는 렌더되지 않는다). %>
+                    <% if (isAdmin) { %>
+                        <a href="/admin" class="hidden sm:flex flex-col items-center gap-0.5 text-[var(--gh-accent)] font-bold hover:text-red-500 transition-colors">
+                            <i class="bi bi-gear text-xl"></i><span class="text-xs">관리자모드</span>
+                        </a>
+                    <% } %>
+                </div>
+            </div>
+        </div>

@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const svc = require('../../services/live/liveService');
+const navigationService = require('../../services/menu/navigationService');
 const { sanitize } = require('../../services/display/htmlSanitizer');
 
 /*
@@ -327,6 +328,8 @@ exports.postAdd = async (req, res) => {
             [mallId, slug, ...vals]
         );
 
+        // 공개 라이브 수가 바뀌면 GNB 노출 판정도 바뀐다. 캐시를 비워 즉시 반영한다.
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${BASE}/${r.insertId}/edit?saved=1`);
     } catch (err) {
         console.error('[live] postAdd:', err.message);
@@ -388,6 +391,8 @@ exports.postEdit = async (req, res) => {
             [slug, ...Object.values(f), ...Object.values(images), id, mallId]
         );
 
+        // status·list_visible 이 바뀌면 공개 건수가 달라진다.
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${back}?saved=1`);
     } catch (err) {
         console.error('[live] postEdit:', err.message);
@@ -417,6 +422,8 @@ exports.postStatus = async (req, res) => {
         }
 
         await pool.query('UPDATE live_show SET status = ? WHERE id = ? AND mall_id = ?', [status, id, mallId]);
+        // CANCELED 로 내리면 공개 라이브가 0건이 될 수 있다 → GNB 에서 즉시 빠져야 한다.
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${back}?saved=1`);
     } catch (err) {
         console.error('[live] postStatus:', err.message);
@@ -444,6 +451,7 @@ exports.postDelete = async (req, res) => {
 
         // 하위 테이블(상품·쿠폰·공지)은 ON DELETE CASCADE 로 함께 지워진다.
         await pool.query('DELETE FROM live_show WHERE id = ? AND mall_id = ?', [id, mallId]);
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${BASE}?saved=1`);
     } catch (err) {
         console.error('[live] postDelete:', err.message);

@@ -1,0 +1,252 @@
+{
+  "source": {
+    "brand_site": "https://www.ssfshop.com/main",
+    "category_source_file": "enter6_categories_2026-07-14.json"
+  },
+  "collected_at": "2026-07-14",
+  "limit": 50,
+  "collected_count": 11,
+  "selection_policy": "엔터식스 수집 카테고리에 매핑 가능하고 SSF SHOP 공개 브랜드 페이지 및 대표 이미지 URL을 직접 확인할 수 있는 브랜드",
+  "image_policy": {
+    "brand_campaign": "SSF SHOP 브랜드 페이지의 캠페인/대표 배너 이미지",
+    "representative_product": "브랜드 페이지에서 노출된 대표 상품 이미지"
+  },
+  "brands": [
+    {
+      "name": "BEANPOLE LADIES",
+      "name_ko": "빈폴 레이디스",
+      "brand_shop_no": "BDMA01A02",
+      "brand_shop_id": "BPBBF",
+      "brand_url": "https://www.ssfshop.com/Beanpole-Ladies/main?brandShopNo=BDMA01A02&brndShopId=BPBBF",
+      "image_url": "https://img.ssfshop.com/display/category/BDM/A01/A02/contents/23358_474434_1_KOR_20260529145207.jpg",
+      "image_type": "brand_campaign",
+      "id": "ssf_brand_001",
+      "sort_order": 1,
+      "categories": [
+        { "code": "001000000000000", "name": "여성패션", "depth": 1, "path": ["여성패션"] },
+        { "code": "001003000000000", "name": "티셔츠", "depth": 2, "path": ["여성패션", "티셔츠"] },
+        { "code": "001004000000000", "name": "블라우스/셔츠", "depth": 2, "path": ["여성패션", "블라우스/셔츠"] },
+        { "code": "001008000000000", "name": "팬츠", "depth": 2, "path": ["여성패션", "팬츠"] },
+        { "code": "001009000000000", "name": "스커트", "depth": 2, "path": ["여성패션", "스커트"] },
+        { "code": "001001000000000", "name": "원피스", "depth": 2, "path": ["여성패션", "원피스"] },
+        { "code": "001002000000000", "name": "니트/가디건", "depth": 2, "path": ["여성패션", "니트/가디건"] },
+        { "code": "001005000000000", "name": "재킷", "depth": 2, "path": ["여성패션", "재킷"] },
+        { "code": "001006000000000", "name": "점퍼", "depth": 2, "path": ["여성패션", "점퍼"] },
+        { "code": "001007000000000", "name": "코트", "depth": 2, "path": ["여성패션", "코트"] }
+      ]
+    },
+    {
+      "name": "KUHO",
+      "name_ko": "구호",
+      "brand_shop_no": "BDMA07A02",
+      "brand_shop_id": "WMBKF",
+      "brand_url": "https://www.ssfshop.com/KUHO/main?brandShopNo=BDMA07A02&brndShopId=WMBKF",
+      "image_url": "https://img.ssfshop.com/cmd/LB_500x660/src/https%3A//img.ssfshop.com/goods/WMBR/26/04/10/GM0026041059314_0_THNAIL_ORGINL_20260417173246191.jpg",
+      "image_type": "representative_product",
+      "id": "ssf_brand_002",
+      "sort_order": 2,
+      "categories": [
+        { "code": "001000000000000", "name": "여성패션", "depth": 1, "path": ["여성패션"] },
+        { "code": "001003000000000", "name": "티셔츠", "depth": 2, "path": ["여성패션", "티셔츠"] },
+        { "code": "001004000000000", "name": "블라우스/셔츠", "depth": 2, "path": ["여성패션", "블라우스/셔츠"] },
+        { "code": "001008000000000", "name": "팬츠", "depth": 2, "path": ["여성패션", "팬츠"] },
+        { "code": "001009000000000", "name": "스커트", "depth": 2, "path": ["여성패션", "스커트"] },
+        { "code": "001001000000000", "name": "원피스", "depth": 2, "path": ["여성패션", "원피스"] },
+        { "code": "001002000000000", "name": "니트/가디건", "depth": 2, "path": ["여성패션", "니트/가디건"] },
+        { "code": "001005000000000", "name": "재킷", "depth": 2, "path": ["여성패션", "재킷"] },
+        { "code": "001006000000000", "name": "점퍼", "depth": 2, "path": ["여성패션", "점퍼"] },
+        { "code": "001007000000000", "name": "코트", "depth": 2, "path": ["여성패션", "코트"] },
+        { "code": "007001000000000", "name": "패션슈즈", "depth": 2, "path": ["잡화/명품/뷰티", "패션슈즈"] },
+        { "code": "007002000000000", "name": "핸드백/잡화", "depth": 2, "path": ["잡화/명품/뷰티", "핸드백/잡화"] }
+      ]
+    },
+    {
+      "name": "LEBEIGE",
+      "name_ko": "르베이지",
+      "brand_shop_no": "BDMA07A06",
+      "brand_shop_id": "ECBVF",
+      "brand_url": "https://www.ssfshop.com/LEBEIGE/main?brandShopNo=BDMA07A06&brndShopId=ECBVF",
+      "image_url": "https://img.ssfshop.com/cmd/LB_500x660/src/https%3A//img.ssfshop.com/goods/WMBR/26/06/11/GM0026061122706_0_THNAIL_ORGINL_20260703144917429.jpg",
+      "image_type": "representative_product",
+      "id": "ssf_brand_003",
+      "sort_order": 3,
+      "categories": [
+        { "code": "001000000000000", "name": "여성패션", "depth": 1, "path": ["여성패션"] },
+        { "code": "001004000000000", "name": "블라우스/셔츠", "depth": 2, "path": ["여성패션", "블라우스/셔츠"] },
+        { "code": "001008000000000", "name": "팬츠", "depth": 2, "path": ["여성패션", "팬츠"] },
+        { "code": "001009000000000", "name": "스커트", "depth": 2, "path": ["여성패션", "스커트"] },
+        { "code": "001001000000000", "name": "원피스", "depth": 2, "path": ["여성패션", "원피스"] },
+        { "code": "001002000000000", "name": "니트/가디건", "depth": 2, "path": ["여성패션", "니트/가디건"] },
+        { "code": "001005000000000", "name": "재킷", "depth": 2, "path": ["여성패션", "재킷"] },
+        { "code": "001006000000000", "name": "점퍼", "depth": 2, "path": ["여성패션", "점퍼"] },
+        { "code": "001007000000000", "name": "코트", "depth": 2, "path": ["여성패션", "코트"] },
+        { "code": "007001000000000", "name": "패션슈즈", "depth": 2, "path": ["잡화/명품/뷰티", "패션슈즈"] },
+        { "code": "007002000000000", "name": "핸드백/잡화", "depth": 2, "path": ["잡화/명품/뷰티", "핸드백/잡화"] }
+      ]
+    },
+    {
+      "name": "SANDRO",
+      "name_ko": "산드로",
+      "brand_shop_no": "BDMA07B14",
+      "brand_shop_id": "ssf",
+      "brand_url": "https://www.ssfshop.com/Sandro/main?brandShopNo=BDMA07B14&brndShopId=ssf",
+      "image_url": "https://img.ssfshop.com/display/category/BDM/A07/B14/contents/23409_471997_1_KOR_20260612165120.jpg",
+      "image_type": "brand_campaign",
+      "id": "ssf_brand_004",
+      "sort_order": 4,
+      "categories": [
+        { "code": "001000000000000", "name": "여성패션", "depth": 1, "path": ["여성패션"] },
+        { "code": "001003000000000", "name": "티셔츠", "depth": 2, "path": ["여성패션", "티셔츠"] },
+        { "code": "001004000000000", "name": "블라우스/셔츠", "depth": 2, "path": ["여성패션", "블라우스/셔츠"] },
+        { "code": "001008000000000", "name": "팬츠", "depth": 2, "path": ["여성패션", "팬츠"] },
+        { "code": "001009000000000", "name": "스커트", "depth": 2, "path": ["여성패션", "스커트"] },
+        { "code": "001001000000000", "name": "원피스", "depth": 2, "path": ["여성패션", "원피스"] },
+        { "code": "001002000000000", "name": "니트/가디건", "depth": 2, "path": ["여성패션", "니트/가디건"] },
+        { "code": "001005000000000", "name": "재킷", "depth": 2, "path": ["여성패션", "재킷"] },
+        { "code": "001006000000000", "name": "점퍼", "depth": 2, "path": ["여성패션", "점퍼"] },
+        { "code": "001007000000000", "name": "코트", "depth": 2, "path": ["여성패션", "코트"] },
+        { "code": "007001000000000", "name": "패션슈즈", "depth": 2, "path": ["잡화/명품/뷰티", "패션슈즈"] },
+        { "code": "007002000000000", "name": "핸드백/잡화", "depth": 2, "path": ["잡화/명품/뷰티", "핸드백/잡화"] }
+      ]
+    },
+    {
+      "name": "GALAXY",
+      "name_ko": "갤럭시",
+      "brand_shop_no": "BDMA04A01",
+      "brand_shop_id": "HMBGA",
+      "brand_url": "https://www.ssfshop.com/Galaxy/main?brandShopNo=BDMA04A01&brndShopId=HMBGA",
+      "image_url": "https://img.ssfshop.com/cmd/LB_220x293/src/https%3A//img.ssfshop.com/goods/HMBR/26/04/09/GM0026040956328_0_THNAIL_ORGINL_20260430142740345.jpg",
+      "image_type": "representative_product",
+      "id": "ssf_brand_005",
+      "sort_order": 5,
+      "categories": [
+        { "code": "002000000000000", "name": "남성패션", "depth": 1, "path": ["남성패션"] },
+        { "code": "002001000000000", "name": "티셔츠", "depth": 2, "path": ["남성패션", "티셔츠"] },
+        { "code": "002002000000000", "name": "셔츠/남방", "depth": 2, "path": ["남성패션", "셔츠/남방"] },
+        { "code": "002004000000000", "name": "팬츠", "depth": 2, "path": ["남성패션", "팬츠"] },
+        { "code": "002005000000000", "name": "정장", "depth": 2, "path": ["남성패션", "정장"] },
+        { "code": "002003000000000", "name": "니트/가디건/베스트", "depth": 2, "path": ["남성패션", "니트/가디건/베스트"] },
+        { "code": "002006000000000", "name": "재킷", "depth": 2, "path": ["남성패션", "재킷"] },
+        { "code": "002007000000000", "name": "점퍼", "depth": 2, "path": ["남성패션", "점퍼"] },
+        { "code": "002008000000000", "name": "코트", "depth": 2, "path": ["남성패션", "코트"] },
+        { "code": "007001000000000", "name": "패션슈즈", "depth": 2, "path": ["잡화/명품/뷰티", "패션슈즈"] }
+      ]
+    },
+    {
+      "name": "ROGATIS",
+      "name_ko": "로가디스",
+      "brand_shop_no": "BDMA04A05",
+      "brand_shop_id": "HMBRX",
+      "brand_url": "https://www.ssfshop.com/Rogatis/main?brandShopNo=BDMA04A05&brndShopId=HMBRX",
+      "image_url": "https://img.ssfshop.com/cmd/LB_220x293/src/https%3A//img.ssfshop.com/goods/HMBR/25/04/18/SM0025041823783_0_THNAIL_ORGINL_20250421114022924.jpg",
+      "image_type": "representative_product",
+      "id": "ssf_brand_006",
+      "sort_order": 6,
+      "categories": [
+        { "code": "002000000000000", "name": "남성패션", "depth": 1, "path": ["남성패션"] },
+        { "code": "002001000000000", "name": "티셔츠", "depth": 2, "path": ["남성패션", "티셔츠"] },
+        { "code": "002002000000000", "name": "셔츠/남방", "depth": 2, "path": ["남성패션", "셔츠/남방"] },
+        { "code": "002004000000000", "name": "팬츠", "depth": 2, "path": ["남성패션", "팬츠"] },
+        { "code": "002005000000000", "name": "정장", "depth": 2, "path": ["남성패션", "정장"] },
+        { "code": "002003000000000", "name": "니트/가디건/베스트", "depth": 2, "path": ["남성패션", "니트/가디건/베스트"] },
+        { "code": "002006000000000", "name": "재킷", "depth": 2, "path": ["남성패션", "재킷"] },
+        { "code": "002007000000000", "name": "점퍼", "depth": 2, "path": ["남성패션", "점퍼"] },
+        { "code": "002008000000000", "name": "코트", "depth": 2, "path": ["남성패션", "코트"] }
+      ]
+    },
+    {
+      "name": "BEANPOLE KIDS",
+      "name_ko": "빈폴 키즈",
+      "brand_shop_no": "BDMA01A03",
+      "brand_shop_id": "BPBBK",
+      "brand_url": "https://www.ssfshop.com/Beanpole-Kids/main?brandShopNo=BDMA01A03&brndShopId=BPBBK",
+      "image_url": "https://img.ssfshop.com/cmd/LB_220x293/src/https%3A//img.ssfshop.com/goods/BPBR/26/04/09/GM0026040956119_0_THNAIL_ORGINL_20260521181510781.jpg",
+      "image_type": "representative_product",
+      "id": "ssf_brand_007",
+      "sort_order": 7,
+      "categories": [
+        { "code": "006000000000000", "name": "키즈", "depth": 1, "path": ["키즈"] },
+        { "code": "006001000000000", "name": "신생아의류", "depth": 2, "path": ["키즈", "신생아의류"] },
+        { "code": "006002000000000", "name": "유아의류", "depth": 2, "path": ["키즈", "유아의류"] },
+        { "code": "006003000000000", "name": "아동의류", "depth": 2, "path": ["키즈", "아동의류"] }
+      ]
+    },
+    {
+      "name": "CROCS",
+      "name_ko": "크록스",
+      "brand_shop_no": "BDMA09Z62",
+      "brand_shop_id": "BQMCX",
+      "brand_url": "https://www.ssfshop.com/beaker/CROCS/main?brandShopNo=BDMA09Z62&brndShopId=BQMCX",
+      "image_url": "https://img.ssfshop.com/cmd/LB_500x660/src/https%3A//img.ssfshop.com/goods/MCBR/26/06/25/GM0026062532068_0_THNAIL_ORGINL_20260701170755237.jpg",
+      "image_type": "representative_product",
+      "id": "ssf_brand_008",
+      "sort_order": 8,
+      "categories": [
+        { "code": "004000000000000", "name": "스포츠/레저", "depth": 1, "path": ["스포츠/레저"] },
+        { "code": "004002000000000", "name": "스포츠슈즈", "depth": 2, "path": ["스포츠/레저", "스포츠슈즈"] },
+        { "code": "007001000000000", "name": "패션슈즈", "depth": 2, "path": ["잡화/명품/뷰티", "패션슈즈"] }
+      ]
+    },
+    {
+      "name": "KUHO PLUS",
+      "name_ko": "구호 플러스",
+      "brand_shop_no": "BDMA07A28",
+      "brand_shop_id": "ECBKE",
+      "brand_url": "https://www.ssfshop.com/kuho-plus/main?brandShopNo=BDMA07A28&brndShopId=ECBKE",
+      "image_url": "https://img.ssfshop.com/display/category/BDM/A07/A28/contents/23358_476434_1_KOR_20260610150128.jpg",
+      "image_type": "brand_campaign",
+      "id": "ssf_brand_009",
+      "sort_order": 9,
+      "categories": [
+        { "code": "001000000000000", "name": "여성패션", "depth": 1, "path": ["여성패션"] },
+        { "code": "001003000000000", "name": "티셔츠", "depth": 2, "path": ["여성패션", "티셔츠"] },
+        { "code": "001004000000000", "name": "블라우스/셔츠", "depth": 2, "path": ["여성패션", "블라우스/셔츠"] },
+        { "code": "001008000000000", "name": "팬츠", "depth": 2, "path": ["여성패션", "팬츠"] },
+        { "code": "001009000000000", "name": "스커트", "depth": 2, "path": ["여성패션", "스커트"] },
+        { "code": "001001000000000", "name": "원피스", "depth": 2, "path": ["여성패션", "원피스"] },
+        { "code": "001002000000000", "name": "니트/가디건", "depth": 2, "path": ["여성패션", "니트/가디건"] },
+        { "code": "001005000000000", "name": "재킷", "depth": 2, "path": ["여성패션", "재킷"] },
+        { "code": "001006000000000", "name": "점퍼", "depth": 2, "path": ["여성패션", "점퍼"] },
+        { "code": "001007000000000", "name": "코트", "depth": 2, "path": ["여성패션", "코트"] }
+      ]
+    },
+    {
+      "name": "SIE",
+      "name_ko": "시에",
+      "brand_shop_no": "BDMA19BR4",
+      "brand_shop_id": "RTIEE",
+      "brand_url": "https://www.ssfshop.com/SIE/main?brandShopNo=BDMA19BR4&brndShopId=RTIEE",
+      "image_url": "https://img.ssfshop.com/display/category/BDM/A19/BR4/contents/23415_436915_1_KOR_20260128175450.jpg",
+      "image_type": "brand_campaign",
+      "id": "ssf_brand_010",
+      "sort_order": 10,
+      "categories": [
+        { "code": "001000000000000", "name": "여성패션", "depth": 1, "path": ["여성패션"] },
+        { "code": "001003000000000", "name": "티셔츠", "depth": 2, "path": ["여성패션", "티셔츠"] },
+        { "code": "001004000000000", "name": "블라우스/셔츠", "depth": 2, "path": ["여성패션", "블라우스/셔츠"] },
+        { "code": "001008000000000", "name": "팬츠", "depth": 2, "path": ["여성패션", "팬츠"] },
+        { "code": "001009000000000", "name": "스커트", "depth": 2, "path": ["여성패션", "스커트"] },
+        { "code": "001001000000000", "name": "원피스", "depth": 2, "path": ["여성패션", "원피스"] },
+        { "code": "001002000000000", "name": "니트/가디건", "depth": 2, "path": ["여성패션", "니트/가디건"] },
+        { "code": "001005000000000", "name": "재킷", "depth": 2, "path": ["여성패션", "재킷"] },
+        { "code": "007002000000000", "name": "핸드백/잡화", "depth": 2, "path": ["잡화/명품/뷰티", "핸드백/잡화"] },
+        { "code": "007004000000000", "name": "뷰티", "depth": 2, "path": ["잡화/명품/뷰티", "뷰티"] }
+      ]
+    },
+    {
+      "name": "BRICS",
+      "name_ko": "브릭스",
+      "brand_shop_no": "BDMA27AJ6",
+      "brand_shop_id": "GLBRC",
+      "brand_url": "https://www.ssfshop.com/BRICS/main?brandShopNo=BDMA27AJ6&brndShopId=GLBRC",
+      "image_url": "https://img.ssfshop.com/display/category/BDM/A27/AJ6/contents/23415_358457_1_KOR_20240327093305.jpg",
+      "image_type": "brand_campaign",
+      "id": "ssf_brand_011",
+      "sort_order": 11,
+      "categories": [
+        { "code": "007000000000000", "name": "잡화/명품/뷰티", "depth": 1, "path": ["잡화/명품/뷰티"] },
+        { "code": "007002000000000", "name": "핸드백/잡화", "depth": 2, "path": ["잡화/명품/뷰티", "핸드백/잡화"] }
+      ]
+    }
+  ]
+}

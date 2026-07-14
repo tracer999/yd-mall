@@ -167,6 +167,17 @@ const CONTENT_GATES = {
         ]);
         return count >= (setting.min_product_count || 0);
     },
+
+    /*
+     * 공동구매·쇼핑라이브 — 임계치가 아니라 "1건이라도 있는가"다.
+     *
+     * 아울렛은 상시 채널이라 몇 개는 있어야 매장 꼴이 나지만(그래서 min_product_count),
+     * 공동구매·라이브는 **한 건만 열려도 그 자체가 콘텐츠**다. 방송 하나짜리 라이브관은 정상이다.
+     * 두 컨트롤러가 이미 0건 폴백(comingSoon)을 갖고 있으므로 판정 기준을 그대로 맞춘다
+     * — 게이트와 폴백이 어긋나면 "GNB 에는 있는데 눌러보면 준비중"이 다시 생긴다.
+     */
+    GROUP_BUY: (mallId) => require('../groupBuy/groupBuyService').hasAnyPublic(mallId),
+    LIVE: (mallId) => require('../live/liveService').hasAnyPublic(mallId),
 };
 
 /*
@@ -205,6 +216,19 @@ async function checkGate(mallId, featureCode) {
 
     gateCache.set(key, { value, expiresAt: Date.now() + GATE_TTL_MS });
     return value;
+}
+
+/**
+ * 이 메뉴가 콘텐츠 게이트에 걸려 있는가, 걸렸다면 통과했는가.
+ *
+ * 관리자 화면(메뉴 미리보기)이 "켰는데 왜 GNB 에 없는가"를 설명하려면 이 판정을 봐야 한다.
+ * 게이트는 조용히 숨기기 때문에, 이유를 보여주지 않으면 운영자에겐 원인 불명의 버그로 보인다.
+ *
+ * @returns {Promise<null|boolean>} null = 게이트 없는 메뉴 / true = 통과 / false = 콘텐츠 부족
+ */
+async function checkContentGate(mallId, featureCode) {
+    if (!CONTENT_GATES[featureCode]) return null;
+    return checkGate(mallId, featureCode);
 }
 
 async function applyContentGates(mallId, menus) {
@@ -567,6 +591,7 @@ module.exports = {
     buildTree,
     // 아울렛 등 콘텐츠 의존 메뉴의 GNB 노출 판정 캐시를 비운다(관리자가 콘텐츠를 바꿨을 때).
     invalidateContentGate,
+    checkContentGate,
     DEFAULT_CONFIG,
     BADGE_TYPES,
     LINK_RESOLVERS,

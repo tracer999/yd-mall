@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const upload = require('../../middleware/upload');
 const menuShowcaseService = require('../../services/menu/menuShowcaseService');
+const topbarService = require('../../services/display/topbarService');
 
 /*
  * 메뉴별 배너
@@ -358,5 +359,125 @@ exports.postDelete = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
+    }
+};
+
+/* ───────────────────── 헤더 톱바 (배너 3슬롯 + 알림 1) — '톱바 배너·알림' 탭 ─────────────────────
+ *
+ * 스토어프론트 헤더 최상단 바. 다른 배너와 달리 `banners` 가 아니라 `header_topbar_item` 에 담는다
+ * — banners 에는 mall_id 가 없어(전 몰 공용) 몰별 톱바를 구분할 수 없다.
+ * 슬롯이 UNIQUE 로 고정이라 목록·등록 화면 없이 편집 한 장으로 끝난다.
+ *
+ * 렌더 경로: topbarService → middleware/topbar → partials/storefront/header/_topbar.ejs
+ */
+
+const trimOrNull = (v) => {
+    const s = (v ?? '').toString().trim();
+    return s === '' ? null : s;
+};
+
+/** date input 은 값이 없으면 빈 문자열을 보낸다 — DATE 컬럼에 그대로 넣으면 에러다. */
+const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test((v ?? '').trim()) ? v.trim() : null);
+
+/** 업로드 파일 → 웹 경로. 새 파일이 없으면 폼이 들고 온 기존 경로(hidden)를 유지한다. */
+function topbarImageOf(files, field, existing) {
+    const f = files && files[field] && files[field][0];
+    if (f) return `/uploads/banners/${f.filename}`;
+    return trimOrNull(existing);
+}
+
+async function upsertTopbarItem(conn, mallId, kind, slot, row) {
+    await conn.query(`
+        INSERT INTO header_topbar_item
+            (mall_id, kind, slot, message, image_url, link_url, new_window, is_active, start_date, end_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            message = VALUES(message), image_url = VALUES(image_url), link_url = VALUES(link_url),
+            new_window = VALUES(new_window), is_active = VALUES(is_active),
+            start_date = VALUES(start_date), end_date = VALUES(end_date)
+    `, [mallId, kind, slot, row.message, row.image_url, row.link_url,
+        row.new_window, row.is_active, row.start_date, row.end_date]);
+}
+
+async function deleteTopbarItem(conn, mallId, kind, slot) {
+    await conn.query(
+        'DELETE FROM header_topbar_item WHERE mall_id = ? AND kind = ? AND slot = ?',
+        [mallId, kind, slot]
+    );
+}
+
+/** GET /admin/banners/topbar */
+exports.getTopbar = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        res.render('admin/banners/topbar', {
+            layout: 'layouts/admin_layout',
+            title: '배너 관리',
+            topbar: await topbarService.getTopbarForAdmin(mallId),
+            saved: req.query.saved === '1',
+            error: req.query.error || null,
+        });
+    } catch (err) {
+        console.error('[admin/banners] 톱바 조회 실패', err);
+        res.status(500).send('Server Error');
+    }
+};
+
+/**
+ * POST /admin/banners/topbar
+ *
+ * 내용이 빈 슬롯은 행을 지운다 — 빈 행을 남기면 스토어프론트가 "콘텐츠 있음"으로 보고
+ * 아무것도 없는 바를 낸다. 배너 4개째는 폼에도 스키마(UNIQUE slot)에도 자리가 없다.
+ */
+exports.postTopbar = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const conn = await pool.getConnection();
+    try {
+        const b = req.body;
+        const files = req.files || {};
+        await conn.beginTransaction();
+
+        // 알림 — 문구가 비면 등록하지 않은 것으로 본다.
+        const message = trimOrNull(b.notice_message);
+        if (!message) {
+            await deleteTopbarItem(conn, mallId, 'NOTICE', 1);
+        } else {
+            await upsertTopbarItem(conn, mallId, 'NOTICE', 1, {
+                message,
+                image_url: null,
+                link_url: trimOrNull(b.notice_link_url),
+                new_window: b.notice_new_window === '1' ? 1 : 0,
+                is_active: b.notice_is_active === '1' ? 1 : 0,
+                start_date: dateOrNull(b.notice_start_date),
+                end_date: dateOrNull(b.notice_end_date),
+            });
+        }
+
+        // 배너 3슬롯 — 이미지가 없으면 배너가 아니다(문구만 있는 배너는 없다).
+        for (const slot of [1, 2, 3]) {
+            const image = topbarImageOf(files, `topbar_banner_${slot}`, b[`banner_${slot}_existing_image`]);
+            if (!image || b[`banner_${slot}_delete`] === '1') {
+                await deleteTopbarItem(conn, mallId, 'BANNER', slot);
+                continue;
+            }
+            await upsertTopbarItem(conn, mallId, 'BANNER', slot, {
+                message: trimOrNull(b[`banner_${slot}_alt`]),   // 대체 텍스트(접근성)
+                image_url: image,
+                link_url: trimOrNull(b[`banner_${slot}_link_url`]),
+                new_window: b[`banner_${slot}_new_window`] === '1' ? 1 : 0,
+                is_active: b[`banner_${slot}_is_active`] === '1' ? 1 : 0,
+                start_date: dateOrNull(b[`banner_${slot}_start_date`]),
+                end_date: dateOrNull(b[`banner_${slot}_end_date`]),
+            });
+        }
+
+        await conn.commit();
+        res.redirect('/admin/banners/topbar?saved=1');
+    } catch (err) {
+        await conn.rollback();
+        console.error('[admin/banners] 톱바 저장 실패', err);
+        res.redirect(`/admin/banners/topbar?error=${encodeURIComponent('톱바 저장에 실패했습니다.')}`);
+    } finally {
+        conn.release();
     }
 };

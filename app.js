@@ -228,6 +228,9 @@ async function startServer() {
     // Theme Middleware (P4) — 활성 테마의 스타일 토큰을 res.locals.theme 에 주입
     app.use(require('./middleware/themeData'));
 
+    // 헤더 톱바 (배너·알림) — res.locals.topbar. 콘텐츠가 없으면 null 이고 바가 렌더되지 않는다.
+    app.use(require('./middleware/topbar'));
+
     // Shopify 사용 여부 (A3) — res.locals.shopifyEnabled 로 Shopify UI 노출 제어
     app.use(require('./middleware/shopifyFlag'));
 

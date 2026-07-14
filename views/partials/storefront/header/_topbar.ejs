@@ -1,0 +1,90 @@
+<%
+  /*
+   * 헤더 톱바 — 프로모션 배너(최대 3) + 알림 문구(1). 헤더 최상단, PC·모바일 공용.
+   *
+   * res.locals.topbar 가 null 이면(= 등록된 배너·알림이 하나도 없으면) 아무것도 렌더하지 않는다.
+   * 관리자: /admin/header-settings 의 '톱바(배너·알림)' 섹션.
+   *
+   * 배너 크기는 **개수로 정한다** — 1개는 크게 한 폭, 2개는 절반씩, 3개는 1/3씩.
+   * 개수와 무관하게 같은 높이를 쓰면 3개일 때 톱바가 페이지를 잡아먹는다.
+   */
+  const _tb = (typeof topbar !== 'undefined') ? topbar : null;
+%>
+<% if (_tb) { %>
+    <%
+      const _n = _tb.banners.length;
+      const _grid = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' }[_n] || 'grid-cols-1';
+      // 개수별 높이 — 많아질수록 낮게. 모바일은 한 단계 더 낮다.
+      const _h = { 1: 'h-20 md:h-28', 2: 'h-14 md:h-20', 3: 'h-11 md:h-16' }[_n] || '';
+    %>
+    <div id="yd-topbar" data-version="<%= _tb.version %>"
+         class="relative bg-[var(--gh-primary-dark)] text-white">
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <% if (_n) { %>
+                <div class="grid <%= _grid %> gap-2 py-2">
+                    <% _tb.banners.forEach(function (b) { %>
+                        <% if (b.link_url) { %>
+                            <a href="<%= b.link_url %>" <%- Number(b.new_window) ? 'target="_blank" rel="noopener noreferrer"' : '' %>
+                               class="block overflow-hidden rounded-md <%= _h %>">
+                                <img src="<%= b.image_url %>" alt="<%= b.message || '' %>" loading="lazy"
+                                     class="w-full h-full object-cover">
+                            </a>
+                        <% } else { %>
+                            <div class="overflow-hidden rounded-md <%= _h %>">
+                                <img src="<%= b.image_url %>" alt="<%= b.message || '' %>" loading="lazy"
+                                     class="w-full h-full object-cover">
+                            </div>
+                        <% } %>
+                    <% }); %>
+                </div>
+            <% } %>
+
+            <% if (_tb.notice) { %>
+                <%# 알림 문구 — 배너와 함께 쓰면 배너 아래 한 줄. 닫기 버튼 자리(pr-10)를 비워 둔다. %>
+                <div class="flex items-center justify-center py-2 pr-8 text-center text-[13px] <%= _n ? 'border-t border-white/15' : '' %>">
+                    <% if (_tb.notice.link_url) { %>
+                        <a href="<%= _tb.notice.link_url %>" <%- Number(_tb.notice.new_window) ? 'target="_blank" rel="noopener noreferrer"' : '' %>
+                           class="inline-flex items-center gap-1.5 hover:underline">
+                            <i class="bi bi-megaphone"></i><span><%= _tb.notice.message %></span>
+                            <i class="bi bi-chevron-right text-[11px] opacity-80"></i>
+                        </a>
+                    <% } else { %>
+                        <span class="inline-flex items-center gap-1.5">
+                            <i class="bi bi-megaphone"></i><span><%= _tb.notice.message %></span>
+                        </span>
+                    <% } %>
+                </div>
+            <% } %>
+        </div>
+
+        <button type="button" id="yd-topbar-close" aria-label="상단 알림 닫기"
+                class="absolute top-1.5 right-1.5 md:right-3 flex items-center justify-center w-7 h-7 rounded-full text-white/80 hover:text-white hover:bg-white/15 transition-colors">
+            <i class="bi bi-x-lg text-xs"></i>
+        </button>
+    </div>
+
+    <script>
+      /*
+       * 닫기 — 같은 콘텐츠(version)를 다시 보여 주지 않는다. 배너·문구가 바뀌면 version 이 바뀌므로
+       * 이전에 닫은 사용자에게도 새 톱바는 다시 뜬다(닫기가 영구 차단이 되면 안 된다).
+       * 스크립트는 요소 바로 뒤에서 동기 실행된다 — 이미 닫은 바가 한 번 깜빡이지 않게 하려는 것.
+       */
+      (function () {
+        var KEY = 'yd-topbar-dismissed';
+        var bar = document.getElementById('yd-topbar');
+        if (!bar) return;
+        var version = bar.getAttribute('data-version');
+
+        var dismissed = null;
+        try { dismissed = window.localStorage.getItem(KEY); } catch (e) { /* 사파리 프라이빗 등 */ }
+        if (dismissed === version) { bar.remove(); return; }
+
+        var btn = document.getElementById('yd-topbar-close');
+        if (btn) btn.addEventListener('click', function () {
+          try { window.localStorage.setItem(KEY, version); } catch (e) { /* 저장 실패해도 닫기는 된다 */ }
+          bar.remove();
+        });
+      })();
+    </script>
+<% } %>

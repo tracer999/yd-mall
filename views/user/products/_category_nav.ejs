@@ -13,15 +13,25 @@ const _brandQs = currentBrand ? ('?brandId=' + encodeURIComponent(currentBrand))
 const _catUrl = (id) => `/products/category/${id}${_brandQs}`;
 const _parent = _nav.ancestors.length ? _nav.ancestors[_nav.ancestors.length - 1] : null;
 const _trail = [..._nav.ancestors, _nav.current];
+
+/*
+ * panelItems 가 형제 목록인지(= 현재가 리프) 자식 목록인지 구분한다.
+ * 형제 모드에서는 칩 레일 맨 앞에 '전체'(= 부모 카테고리 전체 상품)를 하나 더 놓는다.
+ * 자식 모드에서는 현재 카테고리 자신이 이미 '전체'이므로 넣지 않는다.
+ */
+const _isSiblingMode = _nav.panelItems.some((i) => String(i.id) === String(_nav.current.id));
+const _showAllChip = _isSiblingMode && !!_parent;
 %>
 
 <%#
-  브레드크럼 — 3뎁스(홈 > 1 > 2 > 3)에서 줄바꿈으로 두 줄이 되며 레이아웃이 무너지던 것을 막는다.
-  줄바꿈(flex-wrap) 대신 **한 줄 유지 + 넘치면 가로 스크롤**이다. 카테고리 이름이 길어도
-  경로 자체가 깨지지 않아야 "지금 어디인가"가 읽힌다. 스크롤바는 숨기고(모바일 칩과 같은 방식)
+  브레드크럼 — PC 전용이다. 모바일은 아래 컨텍스트 바(뒤로가기 + 경로)가 같은 정보를 한 줄로 낸다.
+  둘을 같이 내면 화면 위쪽 세 줄이 전부 "지금 어디인가"만 반복하게 된다.
+
+  3뎁스(홈 > 1 > 2 > 3)에서 줄바꿈으로 두 줄이 되며 레이아웃이 무너지던 것을 막는다.
+  줄바꿈(flex-wrap) 대신 **한 줄 유지 + 넘치면 가로 스크롤**이다. 스크롤바는 숨기고,
   마지막(현재) 항목은 절대 줄이지 않는다 — 중간 조상 이름만 필요할 때 잘린다.
 %>
-<nav class="yd-bc flex text-sm text-gray-500 mb-4 overflow-x-auto" aria-label="Breadcrumb">
+<nav class="yd-bc hidden md:flex text-sm text-gray-500 mb-4 overflow-x-auto" aria-label="Breadcrumb">
     <ol class="flex items-center flex-nowrap whitespace-nowrap min-w-0">
         <li class="flex items-center shrink-0">
             <a href="/" class="hover:text-gray-900">홈</a>
@@ -93,22 +103,172 @@ const _trail = [..._nav.ancestors, _nav.current];
     </div>
 </div>
 
-<!-- 모바일: 패널 대신 가로 스크롤 칩 -->
-<div class="md:hidden -mx-4 px-4 mb-4">
-    <% if (_parent) { %>
-        <a href="<%= _catUrl(_parent.id) %>" class="inline-flex items-center gap-1 text-xs text-gray-500 mb-2">
-            <i class="bi bi-arrow-left"></i> <%= _parent.name %>
-        </a>
-    <% } %>
-    <% if (_nav.panelItems.length) { %>
-        <div class="flex gap-2 overflow-x-auto pb-1">
-            <% _nav.panelItems.forEach(item => {
-                const _isCurrent = String(item.id) === String(_nav.current.id); %>
-                <a href="<%= _catUrl(item.id) %>"
-                   class="shrink-0 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap <%= _isCurrent
-                       ? 'bg-[var(--gh-primary)] text-white border-[var(--gh-primary)] font-semibold'
-                       : 'bg-white text-gray-600 border-gray-200' %>"><%= item.name %></a>
+<%#
+  ────────────────────────────────────────────────────────────────────────────
+  모바일 카테고리 내비 — 컨텍스트 바(뒤로가기 + 경로) 1줄 + 칩 레일 1줄.
+
+  이전 마크업은 같은 화면에 뒤로가기가 두 개(list.ejs 의 원형 history.back 버튼 +
+  여기 '← 부모명' 링크)였고, 그 위에 브레드크럼까지 있어 위치 표시가 3중이었다.
+  이제 정보는 한 곳으로 모은다:
+
+    ‹  홈 / 여성패션 / **티셔츠**            ← 뒤로가기 = 부모 카테고리(경로상 한 단계 위)
+    [전체][티셔츠][블라우스][팬츠] …        ← 스냅되는 칩 레일, 활성 칩은 자동으로 시야에 들어온다
+
+  뒤로가기는 history.back() 이 아니라 **부모 카테고리 링크**다. 브라우저 히스토리는
+  사용자가 어디서 들어왔느냐에 따라 검색결과·홈·외부로 튈 수 있어 "한 단계 위"를 보장하지 못한다.
+  최상위(부모 없음)일 때만 history.back() 으로 떨어진다.
+%>
+<div class="yd-cnav md:hidden -mx-4 mb-5">
+    <div class="yd-cnav__bar">
+        <% if (_parent) { %>
+            <a href="<%= _catUrl(_parent.id) %>" class="yd-cnav__back" aria-label="<%= _parent.name %> 로 이동">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        <% } else { %>
+            <button type="button" onclick="history.back()" class="yd-cnav__back" aria-label="뒤로 가기">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+        <% } %>
+
+        <%# 경로는 절대 두 줄이 되지 않는다. 좁으면 조상 이름만 말줄임되고, 현재 카테고리는 항상 온전히 보인다. %>
+        <div class="yd-cnav__trail">
+            <a href="/" class="yd-cnav__crumb">홈</a>
+            <% _nav.ancestors.forEach((node) => { %>
+                <span class="yd-cnav__sep" aria-hidden="true">/</span>
+                <a href="<%= _catUrl(node.id) %>" class="yd-cnav__crumb" title="<%= node.name %>"><%= node.name %></a>
             <% }) %>
+            <span class="yd-cnav__sep" aria-hidden="true">/</span>
+            <strong class="yd-cnav__now" aria-current="page"><%= _nav.current.name %></strong>
+        </div>
+    </div>
+
+    <% if (_nav.panelItems.length) { %>
+        <div class="yd-cnav__rail-wrap" data-cnav-rail-wrap>
+            <div class="yd-cnav__rail" data-cnav-rail>
+                <% if (_showAllChip) { %>
+                    <a href="<%= _catUrl(_parent.id) %>" class="yd-cnav__chip yd-cnav__chip--all">
+                        <i class="bi bi-grid text-[10px]"></i><span>전체</span>
+                    </a>
+                <% } %>
+                <% _nav.panelItems.forEach((item) => {
+                    const _isCurrent = String(item.id) === String(_nav.current.id); %>
+                    <a href="<%= _catUrl(item.id) %>"
+                       class="yd-cnav__chip <%= _isCurrent ? 'is-current' : '' %>"
+                       <%= _isCurrent ? 'aria-current="page" data-cnav-current' : '' %>><%= item.name %></a>
+                <% }) %>
+            </div>
         </div>
     <% } %>
 </div>
+
+<style>
+  /* ── 모바일 카테고리 내비 ─────────────────────────────────────────────
+     레일은 화면 가장자리까지 흐르게 두고(-mx-4), 내부 padding 으로 본문 정렬선을 맞춘다.
+     칩이 잘리는 지점에 페이드를 얹어 "옆에 더 있다"를 알린다 — 스크롤바를 보여 주는 대신. */
+  .yd-cnav { --cnav-gutter: 1rem; }
+
+  .yd-cnav__bar {
+    display: flex; align-items: center; gap: .375rem;
+    padding: 0 var(--cnav-gutter);
+    min-height: 2rem;
+  }
+
+  .yd-cnav__back {
+    flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    width: 1.75rem; height: 1.75rem; margin-left: -.375rem;
+    border-radius: 9999px;
+    color: #6b7280; font-size: 1rem; line-height: 1;
+    transition: background-color .15s ease, color .15s ease, transform .15s ease;
+  }
+  .yd-cnav__back:active { transform: scale(.9); background: #f3f4f6; color: #111827; }
+
+  .yd-cnav__trail {
+    flex: 1 1 auto; min-width: 0;
+    display: flex; align-items: baseline; gap: .3rem;
+    font-size: .75rem; color: #9ca3af;
+  }
+  /* 조상만 줄어든다 — flex 기본 min-width:auto 때문에 min-width:0 이 없으면 말줄임이 먹지 않는다 */
+  .yd-cnav__crumb {
+    flex: 0 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    transition: color .15s ease;
+  }
+  .yd-cnav__crumb:active { color: #374151; }
+  .yd-cnav__sep { flex: 0 0 auto; color: #e5e7eb; }
+  .yd-cnav__now {
+    flex: 0 0 auto; white-space: nowrap;
+    font-size: .8125rem; font-weight: 700; color: #111827; letter-spacing: -.01em;
+  }
+
+  .yd-cnav__rail-wrap { position: relative; margin-top: .5rem; }
+  /* 양끝 페이드 — 넘칠 때만 켠다(스크롤 위치에 따라 JS 가 클래스를 토글) */
+  .yd-cnav__rail-wrap::before,
+  .yd-cnav__rail-wrap::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 1.75rem;
+    pointer-events: none; opacity: 0; transition: opacity .2s ease; z-index: 1;
+  }
+  .yd-cnav__rail-wrap::before { left: 0;  background: linear-gradient(90deg, #fff 30%, rgba(255,255,255,0)); }
+  .yd-cnav__rail-wrap::after  { right: 0; background: linear-gradient(270deg, #fff 30%, rgba(255,255,255,0)); }
+  .yd-cnav__rail-wrap.is-scrolled::before { opacity: 1; }
+  .yd-cnav__rail-wrap.has-more::after     { opacity: 1; }
+
+  .yd-cnav__rail {
+    display: flex; gap: .375rem;
+    padding: .125rem var(--cnav-gutter);
+    overflow-x: auto; overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--cnav-gutter);
+    /* 스크롤바는 숨긴다 — 칩 아래 회색 막대가 보이던 원인 */
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .yd-cnav__rail::-webkit-scrollbar { display: none; }
+
+  .yd-cnav__chip {
+    flex: 0 0 auto; scroll-snap-align: start;
+    display: inline-flex; align-items: center; gap: .25rem;
+    height: 2rem; padding: 0 .875rem;
+    border: 1px solid #e5e7eb; border-radius: 9999px;
+    background: #fff; color: #4b5563;
+    font-size: .8125rem; line-height: 1; white-space: nowrap;
+    transition: transform .15s ease, border-color .15s ease, color .15s ease, background-color .15s ease;
+  }
+  .yd-cnav__chip:active { transform: scale(.95); border-color: #d1d5db; }
+  .yd-cnav__chip--all { color: #6b7280; background: #f9fafb; border-color: #f3f4f6; }
+
+  .yd-cnav__chip.is-current {
+    background: var(--gh-primary); border-color: var(--gh-primary);
+    color: #fff; font-weight: 700;
+    box-shadow: 0 4px 10px -4px rgba(17, 24, 39, .35);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .yd-cnav__back, .yd-cnav__chip, .yd-cnav__rail-wrap::before, .yd-cnav__rail-wrap::after { transition: none; }
+  }
+</style>
+
+<script>
+  (function () {
+    var wrap = document.querySelector('[data-cnav-rail-wrap]');
+    if (!wrap) return;
+    var rail = wrap.querySelector('[data-cnav-rail]');
+    if (!rail) return;
+
+    // 활성 칩을 시야 가운데로. scrollIntoView 는 페이지 세로 스크롤까지 건드리므로 scrollLeft 를 직접 계산한다.
+    var current = rail.querySelector('[data-cnav-current]');
+    if (current) {
+      var target = current.offsetLeft - (rail.clientWidth - current.offsetWidth) / 2;
+      rail.scrollLeft = Math.max(0, target);
+    }
+
+    function sync() {
+      var max = rail.scrollWidth - rail.clientWidth;
+      wrap.classList.toggle('is-scrolled', rail.scrollLeft > 4);
+      wrap.classList.toggle('has-more', max - rail.scrollLeft > 4);
+    }
+    sync();
+    rail.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+  })();
+</script>

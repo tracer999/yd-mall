@@ -50,6 +50,13 @@ async function findExcluded(isLoggedIn, MALL_ID) {
         else if (Number(r.login_required) && !isLoggedIn) reason = '로그인 필요';
         else if (r.visible_start_at && new Date(r.visible_start_at) > now) reason = '노출 기간 전';
         else if (r.visible_end_at && new Date(r.visible_end_at) < now) reason = '노출 기간 종료';
+        /*
+         * 콘텐츠 게이트 — 여기까지 통과했는데도 스토어프론트에 없는 유일한 사유다.
+         * 이 줄이 없으면 "켜져 있는데 GNB 에 안 뜬다"가 원인 불명이 된다(설계: outlet §4-5).
+         */
+        else if ((await navigationService.checkContentGate(MALL_ID, r.feature_code)) === false) {
+            reason = '콘텐츠 부족 — 채울 내용이 없어 자동으로 숨겨짐';
+        }
         if (reason) excluded.push(Object.assign({}, r, {
             reason,
             positionLabel: POSITION_LABELS[r.position] || r.position,

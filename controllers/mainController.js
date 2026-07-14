@@ -31,7 +31,11 @@ async function buildHomeContext(req, res) {
         "SELECT * FROM banners WHERE is_active = 1 AND banner_type = 'MAIN' ORDER BY display_order ASC, id ASC"
     );
     const heroBanners = (banners || []).slice(0, 6);
-    const mobileHeroBanners = heroBanners.filter(b => !!b.mobile_image_url);
+    // 모바일 이미지가 없는 배너는 PC 이미지로 대체한다. 예전처럼 걸러내 버리면 모바일 슬라이드가
+    // 1장으로 줄어 Swiper 의 loop·autoplay·스와이프가 통째로 죽는다(= "모바일만 안 넘어감").
+    const mobileHeroBanners = heroBanners
+        .filter(b => !!(b.mobile_image_url || b.image_url))
+        .map(b => ({ ...b, mobile_image_url: b.mobile_image_url || b.image_url }));
 
     // 1-b. 히어로 변형 결정 (full_banner | product_showcase)
     const _settings = res.locals.siteSettings || {};

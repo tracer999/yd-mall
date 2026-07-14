@@ -3,138 +3,19 @@
    * 기본형 헤더 스킨 — header_layout_type='main_right_utility_v1' (nav_mode='split')
    *   상단바(유틸) + Row1(로고/검색/유저액션) + Row2(GNB: 카테고리 드롭다운 + 몰별 가변 메뉴) + 모바일 메뉴
    *
-   * header.ejs(디스패처)가 include 한다. 원래 header.ejs 본문 그대로이며(경로 include 2곳만 조정),
-   * 마크업을 바꾸지 않았다 — 기존 몰에 회귀를 만들지 않기 위한 의도적 무수정 이관이다.
+   * header.ejs(디스패처)가 include 한다.
+   * GNB 위쪽(상단바 + Row1)은 **_pc_top.ejs 공통 파셜**로 뽑았다 — 스킨이 달라도 PC 상단은 같아야 한다.
+   * 이 스킨은 Row1 을 모바일에서도 쓰므로(로고+검색+장바구니) pcOnly 없이 부른다.
    * 로컬(siteSettings/user/isAdmin/cartCount/gnbMenus/categoryTree/currentPath)은
    * EJS include 가 상위 locals 를 그대로 상속한다.
    */
-
-  /* headerUtil 항목(feature_menu position='header_util')을 코드로 찾는다.
-     로그인/마이쇼핑/장바구니/검색은 is_required 라 항상 켜져 있고, 고객센터는 ON/OFF 가능하다. */
-  const _headerUtil = (code) => {
-    const list = (typeof headerUtilMenus !== 'undefined' && Array.isArray(headerUtilMenus)) ? headerUtilMenus : [];
-    return list.find((m) => m.featureCode === code) || null;
-  };
+  const _cfg = (typeof nav !== 'undefined' && nav && nav.config) ? nav.config : {};
 %>
     <!-- Header -->
     <header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
-        <!-- Top Bar — 모바일에서는 숨긴다(모바일은 로고줄 + GNB 슬라이더 + 하단바 구조).
-             여기 있던 몰 선택은 모바일에서 카테고리 레이어 상단으로 옮겨간다. -->
-        <div class="hidden md:flex bg-[var(--gh-secondary)] text-sm h-12 items-center px-4 border-b border-green-50">
-            <div class="max-w-7xl mx-auto flex justify-between items-center w-full">
-                <span class="hidden sm:inline text-gray-700 font-normal">
-                    <%= siteSettings.header_slogan || '건강한 하루의 시작 | 와이디몰' %>
-                </span>
-                <div class="flex items-center gap-4">
-                    <%#
-                      몰 선택 셀렉트는 스토어프론트에서 제거했다(고객에게 몰을 고르게 하지 않는다).
-                      몰 전환은 여전히 `?mall=<code>` 쿼리로 가능하고 세션에 고정된다(middleware/mallContext.js)
-                      — 관리자 미리보기·QA 는 이 경로를 쓴다. 관리자 화면의 몰 셀렉트는 그대로 있다.
-                    %>
 
-                    <%# Shopify 미사용 시 마켓(국가) 선택기 숨김 — res.locals.shopifyEnabled (A3) %>
-                    <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
-                        <%- include('../../shopify-market-selector') %>
-                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                    <% } %>
-
-                    <%#
-                      로그인·회원가입 링크는 이 줄에서 제거했다.
-                      같은 동작이 아래 로고 줄의 유틸 아이콘(feature_menu.position='header_util')에 있다.
-                    %>
-                    <% if (user) { %>
-                        <div class="flex items-center gap-2">
-                            <% if (user.picture) { %>
-                                <img src="<%= user.picture %>" alt="<%= user.name %>"
-                                    class="w-8 h-8 rounded-full border border-gray-200 object-cover">
-                            <% } %>
-                            <span class="text-gray-700">
-                                환영합니다,
-                                <strong class="text-gray-900"><%= user.name %></strong>님
-                            </span>
-                        </div>
-                    <% } %>
-
-                    <% if (isAdmin) { %>
-                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                        <a href="/admin"
-                            class="text-[var(--gh-accent)] font-bold hover:text-red-500 transition-colors">관리자모드</a>
-                    <% } %>
-                </div>
-            </div>
-        </div>
-
-        <!-- Header Row 1: 로고 + 검색바 + 유저 액션 (신세계TV쇼핑형) -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center gap-4 sm:gap-6 h-20">
-                <!-- Logo -->
-                <div class="flex-shrink-0 flex items-center">
-                    <a href="/" class="flex items-center gap-2">
-                        <% if (siteSettings.logo_url) { %>
-                            <img class="h-10 w-auto" src="<%= siteSettings.logo_url %>"
-                                alt="<%= siteSettings.company_name || '와이디몰' %>">
-                            <% } else { %>
-                                <div
-                                    class="h-10 w-10 bg-[var(--gh-primary)] text-white rounded-full flex items-center justify-center font-bold text-xl">
-                                    G</div>
-                                <span class="gh-serif text-2xl font-bold text-[var(--gh-primary-dark)] tracking-tight">
-                                    <%= siteSettings.company_name || '와이디몰' %>
-                                </span>
-                                <% } %>
-                    </a>
-                </div>
-
-                <!-- Search (center) — 모바일에서도 노출한다(로고 + 검색 + 장바구니 구조) -->
-                <form action="/search" method="get" class="flex flex-1 max-w-2xl mx-auto" role="search">
-                    <div class="relative w-full">
-                        <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
-                            class="w-full h-10 md:h-12 rounded-full border-2 border-[var(--gh-primary)] pl-4 md:pl-5 pr-11 md:pr-14 text-sm md:text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20 bg-white">
-                        <button type="submit" aria-label="검색"
-                            class="absolute right-1 md:right-1.5 top-1 md:top-1.5 h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--gh-primary)]">
-                            <i class="bi bi-search text-lg md:text-xl"></i>
-                        </button>
-                    </div>
-                </form>
-
-                <!-- User Actions -->
-                <div class="flex items-center gap-4 sm:gap-5 flex-shrink-0">
-                    <% if (user) { %>
-                        <a href="/auth/logout" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                            <i class="bi bi-box-arrow-right text-xl"></i><span class="text-xs">로그아웃</span>
-                        </a>
-                    <% } else { %>
-                        <a href="/auth/login" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                            <i class="bi bi-power text-xl"></i><span class="text-xs">로그인</span>
-                        </a>
-                    <% } %>
-                    <a href="/mypage" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                        <i class="bi bi-person text-xl"></i><span class="text-xs">마이쇼핑</span>
-                    </a>
-                    <a href="/cart" class="flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors relative">
-                        <i class="bi bi-bag text-xl"></i><span class="hidden sm:inline text-xs">장바구니</span>
-                        <% if (typeof cartCount !=='undefined' && cartCount> 0) { %>
-                            <span class="absolute -top-1.5 right-1 sm:right-3 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                                <%= cartCount %>
-                            </span>
-                        <% } %>
-                    </a>
-                    <%# 고객센터는 시스템 메뉴이지만 ON/OFF 가능 (feature_menu.HEADER_CS).
-                        표준 URL(default_path)도 데이터에서 온다 — 하드코딩 금지. %>
-                    <% var _cs = _headerUtil('HEADER_CS'); %>
-                    <% if (_cs) { %>
-                        <a href="<%= _cs.href %>" class="hidden sm:flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
-                            <i class="bi bi-headset text-xl"></i><span class="text-xs"><%= _cs.name %></span>
-                        </a>
-                    <% } %>
-
-                    <%#
-                      모바일 햄버거 버튼은 제거했다. 모바일 내비게이션은
-                      GNB 슬라이더(아래) + 하단 시스템 바 + 카테고리 전체 레이어가 담당한다
-                      (partials/storefront/mobile_bottom_nav.ejs). 두 벌의 모바일 메뉴를 두지 않는다.
-                    %>
-                </div>
-            </div>
-        </div>
+        <%# GNB 위쪽 공통부 — 드로어형 스킨과 같은 마크업을 쓴다. %>
+        <%- include('./_pc_top', { pcOnly: false, useSearch: Number(_cfg.use_search_bar) !== 0 }) %>
 
         <!-- Mobile GNB 슬라이더 — 가로 스크롤. 카테고리는 여기 없다(하단 바가 담당). -->
         <nav class="md:hidden border-t border-gray-100" aria-label="주 메뉴">

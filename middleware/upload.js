@@ -31,10 +31,18 @@ const GROUP_BUY_IMAGE_FIELDS = new Set([
     'gb_mobile_hero_image',
 ]);
 
+/** 헤더 톱바 배너 3슬롯 — header_topbar_item.image_url 과 1:1 */
+const TOPBAR_IMAGE_FIELDS = new Set([
+    'topbar_banner_1',
+    'topbar_banner_2',
+    'topbar_banner_3',
+]);
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         let uploadPath = 'public/uploads/products';
-        if (file.fieldname === 'banner_image' || file.fieldname === 'mobile_banner_image') {
+        if (file.fieldname === 'banner_image' || file.fieldname === 'mobile_banner_image'
+            || TOPBAR_IMAGE_FIELDS.has(file.fieldname)) {
             uploadPath = 'public/uploads/banners';
         } else if (file.fieldname === 'logo') {
             uploadPath = 'public/uploads/logo';
@@ -74,6 +82,7 @@ const imageOnlyFields = new Set([
     'file',
     ...EXHIBITION_IMAGE_FIELDS,
     ...GROUP_BUY_IMAGE_FIELDS,
+    ...TOPBAR_IMAGE_FIELDS,
 ]);
 
 const fileFilter = (req, file, cb) => {

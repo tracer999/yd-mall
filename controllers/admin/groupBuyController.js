@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const svc = require('../../services/groupBuy/groupBuyService');
+const navigationService = require('../../services/menu/navigationService');
 const { sanitize } = require('../../services/display/htmlSanitizer');
 
 /*
@@ -248,6 +249,8 @@ exports.postAdd = async (req, res) => {
             [mallId, slug, ...vals]
         );
 
+        // 공개 공동구매 수가 바뀌면 GNB 노출 판정도 바뀐다. 캐시를 비워 즉시 반영한다.
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${BASE}/${r.insertId}/edit?saved=1`);
     } catch (err) {
         console.error('[group-buy] postAdd:', err.message);
@@ -296,6 +299,8 @@ exports.postEdit = async (req, res) => {
             [slug, ...Object.values(fields), ...Object.values(images), id, mallId]
         );
 
+        // status·list_visible 이 바뀌면 공개 건수가 달라진다.
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${back}?saved=1`);
     } catch (err) {
         console.error('[group-buy] postEdit:', err.message);
@@ -323,6 +328,7 @@ exports.postDelete = async (req, res) => {
 
         // group_buy_product 는 ON DELETE CASCADE 로 함께 지워진다.
         await pool.query('DELETE FROM group_buy WHERE id = ? AND mall_id = ?', [id, mallId]);
+        navigationService.invalidateContentGate(mallId);
         res.redirect(`${BASE}?saved=1`);
     } catch (err) {
         console.error('[group-buy] postDelete:', err.message);

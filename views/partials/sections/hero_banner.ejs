@@ -19,20 +19,22 @@
   const _alignBox = { LEFT: 'items-start text-left', CENTER: 'items-center text-center mx-auto', RIGHT: 'items-end text-right ml-auto' };
   const _align = (b) => _alignBox[b.overlay_align] || _alignBox.LEFT;
 %>
-<section class="relative bg-white overflow-hidden">
+<section class="yd-hero relative bg-white overflow-hidden">
   <% if (heroBanners.length > 0) { %>
     <div class="swiper mySwiperDesktop group hidden sm:block">
       <div class="swiper-wrapper">
         <% heroBanners.forEach(banner => { %>
-          <div class="swiper-slide relative cursor-pointer"
-               data-href="<%= banner.link_url || '#' %>"
-               onclick="window.location.href=this.getAttribute('data-href')">
+          <div class="swiper-slide relative">
             <div class="w-full relative aspect-[1920/600]">
               <img src="<%= banner.image_url %>" alt="<%= banner.title %>" class="w-full h-full object-cover block">
 
+              <%# 슬라이드 전체 링크는 <a> 오버레이로 건다. 인라인 onclick 이면 스와이프 도중의
+                  짧은 드래그까지 클릭으로 처리돼 배너로 튕겨 나간다(= "슬라이더가 안 먹는다"). %>
+              <a href="<%= banner.link_url || '#' %>" class="absolute inset-0 z-10" aria-label="<%= banner.title %>"></a>
+
               <% if (_hasOverlay(banner)) { %>
                 <%# 문구는 본문 폭(max-w-6xl) 안에 둔다 — 전체폭 이미지에 그냥 붙이면 넓은 화면에서 가장자리로 밀린다. %>
-                <div class="absolute inset-0 flex items-center pointer-events-none">
+                <div class="absolute inset-0 z-20 flex items-center pointer-events-none">
                   <div class="max-w-6xl w-full mx-auto px-6 lg:px-8">
                     <div class="yd-hero-ov flex flex-col gap-4 max-w-xl <%= _align(banner) %>">
                       <% if (banner.overlay_title) { %>
@@ -50,9 +52,10 @@
                       <% if (banner.overlay_button_text) { %>
                         <%# 슬라이드 전체가 링크지만 버튼은 따로 눌려야 한다 → pointer-events 복구. %>
                         <a href="<%= banner.link_url || '#' %>"
-                           class="pointer-events-auto inline-flex items-center justify-center px-7 py-3 rounded-md text-sm md:text-base font-semibold shadow-sm transition-transform hover:-translate-y-0.5"
+                           class="yd-hero-cta pointer-events-auto group/cta inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-sm md:text-base font-semibold"
                            style="background-color: <%= _btnBg(banner) %>; color: <%= _btnFg(banner) %>;">
-                          <%= banner.overlay_button_text %>
+                          <span><%= banner.overlay_button_text %></span>
+                          <i class="bi bi-arrow-right text-base transition-transform duration-200 group-hover/cta:translate-x-1"></i>
                         </a>
                       <% } %>
                     </div>
@@ -63,23 +66,28 @@
           </div>
         <% }); %>
       </div>
+      <%# Swiper 기본 화살표(::after 아이콘 폰트)는 CSS 로 끄고 부트스트랩 아이콘을 직접 넣는다.
+          기본 아이콘은 획이 얇아 사진 위에서 뭉개진다. %>
       <div class="swiper-pagination swiper-pagination-desktop"></div>
-      <div class="swiper-button-next swiper-button-next-desktop hidden group-hover:block text-white/70 hover:text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
-      <div class="swiper-button-prev swiper-button-prev-desktop hidden group-hover:block text-white/70 hover:text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
+      <div class="swiper-button-next swiper-button-next-desktop"><i class="bi bi-chevron-right"></i></div>
+      <div class="swiper-button-prev swiper-button-prev-desktop"><i class="bi bi-chevron-left"></i></div>
     </div>
     <% if (mobileHeroBanners.length > 0) { %>
       <div class="swiper mySwiperMobile group block sm:hidden">
         <div class="swiper-wrapper">
           <% mobileHeroBanners.forEach(banner => { %>
-            <div class="swiper-slide relative cursor-pointer"
-                 data-href="<%= banner.link_url || '#' %>"
-                 onclick="window.location.href=this.getAttribute('data-href')">
-              <div class="w-full relative aspect-[390/422] bg-white">
+            <div class="swiper-slide relative">
+              <%# 고정 비율(aspect) 컨테이너 + object-contain 조합은 등록된 이미지 비율이 컨테이너와
+                  다를 때 위아래에 흰 레터박스를 남긴다(= "헤더와 떨어져 보임"). 모바일은 이미지가
+                  높이를 정하게 두고(h-auto), Swiper 의 autoHeight 가 슬라이드 높이를 따라간다. %>
+              <div class="w-full relative">
                 <img src="<%= banner.mobile_image_url %>" alt="<%= banner.title %>"
-                     class="w-full h-full object-contain block">
+                     class="w-full h-auto block align-top">
+
+                <a href="<%= banner.link_url || '#' %>" class="absolute inset-0 z-10" aria-label="<%= banner.title %>"></a>
 
                 <% if (_hasOverlay(banner)) { %>
-                  <div class="absolute inset-0 flex items-center pointer-events-none px-6">
+                  <div class="absolute inset-0 z-20 flex items-center pointer-events-none px-6">
                     <div class="yd-hero-ov flex flex-col gap-3 w-full <%= _align(banner) %>">
                       <% if (banner.overlay_title) { %>
                         <h2 class="text-2xl font-extrabold text-white leading-tight tracking-tight"><%= banner.overlay_title %></h2>
@@ -93,9 +101,10 @@
                       <% } %>
                       <% if (banner.overlay_button_text) { %>
                         <a href="<%= banner.link_url || '#' %>"
-                           class="pointer-events-auto inline-flex items-center justify-center px-5 py-2.5 rounded-md text-sm font-semibold shadow-sm"
+                           class="yd-hero-cta pointer-events-auto inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold"
                            style="background-color: <%= _btnBg(banner) %>; color: <%= _btnFg(banner) %>;">
-                          <%= banner.overlay_button_text %>
+                          <span><%= banner.overlay_button_text %></span>
+                          <i class="bi bi-arrow-right text-sm"></i>
                         </a>
                       <% } %>
                     </div>
@@ -106,8 +115,8 @@
           <% }); %>
         </div>
         <div class="swiper-pagination swiper-pagination-mobile"></div>
-        <div class="swiper-button-next swiper-button-next-mobile text-white/80 hover:text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
-        <div class="swiper-button-prev swiper-button-prev-mobile text-white/80 hover:text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
+        <div class="swiper-button-next swiper-button-next-mobile"><i class="bi bi-chevron-right"></i></div>
+        <div class="swiper-button-prev swiper-button-prev-mobile"><i class="bi bi-chevron-left"></i></div>
       </div>
     <% } else { %>
       <div class="flex sm:hidden w-full h-[50vh] max-h-[50vh] bg-[var(--gh-secondary)] flex-col items-center justify-center text-center px-4">
@@ -128,8 +137,61 @@
   .yd-hero-ov h2 { text-shadow: 0 2px 12px rgba(0, 0, 0, .45); }
   .yd-hero-ov p  { text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
 
+  /* CTA — 사진 위에 얹히므로 색만으로는 뜨지 않는다. 그림자로 띄우고 hover 에서 살짝 들어올린다. */
+  .yd-hero-cta {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+    transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+  }
+  .yd-hero-cta:hover  { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0, 0, 0, .34); filter: brightness(1.06); }
+  .yd-hero-cta:active { transform: translateY(0); box-shadow: 0 4px 12px rgba(0, 0, 0, .28); }
+
   /*
-   * 좌우 이동 화살표.
+   * 좌우 이동 화살표 — Swiper 기본형(얇은 획의 아이콘 폰트)은 밝은 사진 위에서 뭉개져 사라진다.
+   * ::after 아이콘은 끄고 부트스트랩 아이콘을 직접 넣었으며(뷰), 반투명 원형 + 블러로 배경과 분리한다.
+   * PC 는 배너에 마우스를 올릴 때만 나타난다.
+   */
+  .yd-hero .swiper-button-next::after,
+  .yd-hero .swiper-button-prev::after { display: none; }
+
+  .yd-hero .swiper-button-next,
+  .yd-hero .swiper-button-prev {
+    width: 46px; height: 46px;
+    margin-top: -23px;              /* 세로 중앙 — 높이의 절반만큼 올린다 */
+    border-radius: 9999px;
+    background: rgba(17, 24, 39, .32);
+    border: 1px solid rgba(255, 255, 255, .40);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .22);
+    transition: background .2s ease, transform .2s ease, opacity .25s ease, box-shadow .2s ease;
+  }
+  .yd-hero .swiper-button-next i,
+  .yd-hero .swiper-button-prev i { font-size: 18px; line-height: 1; }
+  .yd-hero .swiper-button-next:hover,
+  .yd-hero .swiper-button-prev:hover {
+    background: rgba(17, 24, 39, .60);
+    transform: scale(1.07);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+  }
+  .yd-hero .swiper-button-next:active,
+  .yd-hero .swiper-button-prev:active { transform: scale(.96); }
+  .yd-hero .swiper-button-disabled { opacity: 0 !important; }
+
+  /* PC: 평소엔 숨기고 배너에 마우스를 올릴 때만 (display:none 이면 fade 가 안 걸린다) */
+  .mySwiperDesktop .swiper-button-next,
+  .mySwiperDesktop .swiper-button-prev { opacity: 0; transform: scale(.9); }
+  .mySwiperDesktop:hover .swiper-button-next,
+  .mySwiperDesktop:hover .swiper-button-prev { opacity: 1; transform: scale(1); }
+
+  /* 모바일: 스와이프가 주 조작이므로 화살표는 작게 + 흐리게 */
+  .mySwiperMobile .swiper-button-next,
+  .mySwiperMobile .swiper-button-prev { width: 34px; height: 34px; margin-top: -17px; opacity: .78; }
+  .mySwiperMobile .swiper-button-next i,
+  .mySwiperMobile .swiper-button-prev i { font-size: 13px; }
+
+  /*
+   * 화살표 위치.
    *   - Swiper 기본값(10px)은 화면 끝에 붙어 배너 밖으로 나간 것처럼 보인다 → 안쪽으로 들인다.
    *   - 우측 유틸 레일(.yd-rail — right:16px, width:74px)은 ≥1600px 에서만 뜬다. 그 폭 안에 화살표가
    *     들어가면 레일과 겹치므로, 같은 지점에서 오른쪽 화살표를 레일 바깥으로 더 민다.
@@ -138,5 +200,48 @@
   .mySwiperDesktop .swiper-button-next-desktop { right: 48px; }
   @media (min-width: 1600px) {
     .mySwiperDesktop .swiper-button-next-desktop { right: 122px; }
+  }
+  .mySwiperMobile .swiper-button-prev-mobile { left: 8px; }
+  .mySwiperMobile .swiper-button-next-mobile { right: 8px; }
+
+  /*
+   * 인디케이터 — 점이 아니라 '진행 막대'다. 현재 슬라이드의 막대가 autoplay 주기(5s)에 맞춰
+   * 왼쪽부터 흰색으로 차오른다. 몇 번째인지와 '언제 넘어가는지'를 같이 알려주므로,
+   * 점만 찍힌 기본형보다 배너가 살아 있다는 느낌이 난다.
+   */
+  .yd-hero .swiper-pagination {
+    bottom: 18px;
+    display: flex; justify-content: center; align-items: center; gap: 8px;
+  }
+  .yd-hero .swiper-pagination-bullet {
+    width: 30px; height: 4px;
+    margin: 0 !important;           /* Swiper 기본 좌우 마진 — gap 으로 대체한다 */
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, .45);
+    opacity: 1;
+    position: relative; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+    transition: width .3s ease, background .2s ease;
+  }
+  .yd-hero .swiper-pagination-bullet:hover { background: rgba(255, 255, 255, .7); }
+  .yd-hero .swiper-pagination-bullet::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 0; background: #fff; border-radius: inherit;
+  }
+  .yd-hero .swiper-pagination-bullet-active { width: 56px; }
+  .yd-hero .swiper-pagination-bullet-active::after {
+    animation: yd-hero-fill var(--yd-hero-delay, 5s) linear forwards;
+  }
+  @keyframes yd-hero-fill { from { width: 0; } to { width: 100%; } }
+
+  .mySwiperMobile .swiper-pagination { bottom: 12px; gap: 6px; }
+  .mySwiperMobile .swiper-pagination-bullet { width: 22px; height: 3px; }
+  .mySwiperMobile .swiper-pagination-bullet-active { width: 40px; }
+
+  /* 모션 최소화 설정을 켠 사용자에게는 차오르는 애니메이션 대신 채운 상태로 둔다. */
+  @media (prefers-reduced-motion: reduce) {
+    .yd-hero .swiper-pagination-bullet-active::after { animation: none; width: 100%; }
+    .yd-hero .swiper-button-next,
+    .yd-hero .swiper-button-prev { transition: none; }
   }
 </style>

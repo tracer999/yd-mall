@@ -13,6 +13,13 @@ const heroSlideUpload = upload.fields([
     { name: 'slide_image', maxCount: 1 }
 ]);
 
+// 헤더 톱바 — 배너 3슬롯을 한 폼에서 함께 올린다(슬롯이 고정이라 개별 등록 화면이 없다).
+const topbarUpload = upload.fields([
+    { name: 'topbar_banner_1', maxCount: 1 },
+    { name: 'topbar_banner_2', maxCount: 1 },
+    { name: 'topbar_banner_3', maxCount: 1 }
+]);
+
 // 업로드 미들웨어 공통 에러 처리 (배너·슬라이드 공용)
 function makeUploadHandler(uploadFn) {
     return function (req, res, next) {
@@ -37,6 +44,11 @@ function makeUploadHandler(uploadFn) {
 
 const handleBannerUpload = makeUploadHandler(bannerUpload);
 const handleHeroSlideUpload = makeUploadHandler(heroSlideUpload);
+const handleTopbarUpload = makeUploadHandler(topbarUpload);
+
+// 헤더 톱바(배너 3 + 알림 1) — /add, /edit 보다 먼저 마운트해 경로 충돌을 피한다.
+router.get('/topbar', bannerController.getTopbar);
+router.post('/topbar', handleTopbarUpload, bannerController.postTopbar);
 
 // 메인 슬라이더 관리 — /add, /edit 라우트보다 먼저 마운트해 경로 충돌을 피한다.
 // 한 화면에서 히어로 방식(상품 쇼케이스 / 이미지 배너)을 고르고 그 방식의 콘텐츠를 편집한다.

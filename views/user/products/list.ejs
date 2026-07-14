@@ -109,33 +109,41 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
 %>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Mobile Back Button -->
-        <div class="sm:hidden mb-4">
-            <button onclick="history.back()" class="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition">
-                <i class="bi bi-chevron-left text-lg"></i>
-            </button>
-        </div>
+        <%# 뒤로가기(모바일)와 로케이션을 같은 줄에 둔다. 형제 block 으로 두면 모바일에서 두 줄로 깨진다.
+            _category_nav 는 자체 패널에 mb-6 을 가지므로 여기서 하단 여백을 또 주지 않는다. %>
+        <div class="flex items-center gap-3 <%= _hasCatNav ? '' : 'mb-6' %>">
+            <%# 카테고리 패널이 있으면 뒤로가기·현재위치는 _category_nav 의 컨텍스트 바가 전담한다.
+                여기서 또 원형 back 버튼을 내면 같은 기능이 두 개가 되고, 세로 중앙 정렬이라
+                칩 레일 옆에 붕 떠 보인다. 패널이 없는 경로(브랜드·테마·전체)에서만 남긴다. %>
+            <% if (!_hasCatNav) { %>
+                <button onclick="history.back()" aria-label="뒤로 가기" class="sm:hidden shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition">
+                    <i class="bi bi-chevron-left text-lg"></i>
+                </button>
+            <% } %>
 
-        <% if (_hasCatNav) { %>
-            <%- include('./_category_nav', { categoryNav, currentBrand }) %>
-        <% } else { %>
-            <!-- Breadcrumb -->
-            <nav class="flex text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
-                <ol class="inline-flex items-center space-x-1 md:space-x-3">
-                    <li class="inline-flex items-center">
-                        <a href="/" class="inline-flex items-center hover:text-gray-900">Home</a>
-                    </li>
-                    <li>
-                        <div class="flex items-center">
-                            <i class="bi bi-chevron-right text-gray-400 mx-1"></i>
-                            <span class="text-gray-900 font-medium">
-                                <%= title %>
-                            </span>
-                        </div>
-                    </li>
-                </ol>
-            </nav>
-        <% } %>
+            <% if (_hasCatNav) { %>
+                <div class="min-w-0 flex-1">
+                    <%- include('./_category_nav', { categoryNav, currentBrand }) %>
+                </div>
+            <% } else { %>
+                <!-- Breadcrumb -->
+                <nav class="min-w-0 flex-1 flex text-sm text-gray-500" aria-label="Breadcrumb">
+                    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                        <li class="inline-flex items-center">
+                            <a href="/" class="inline-flex items-center hover:text-gray-900">Home</a>
+                        </li>
+                        <li>
+                            <div class="flex items-center">
+                                <i class="bi bi-chevron-right text-gray-400 mx-1"></i>
+                                <span class="text-gray-900 font-medium">
+                                    <%= title %>
+                                </span>
+                            </div>
+                        </li>
+                    </ol>
+                </nav>
+            <% } %>
+        </div>
 
         <!-- 모바일: 필터 바텀시트 구조는 리스트 하단에 배치 -->
 

@@ -53,23 +53,45 @@
 <!-- ── 페이지 스크립트 (여러 섹션 공유) ── -->
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 <script>
-  // 전체폭 배너 히어로(full_banner) Swiper — 해당 DOM이 없으면 no-op
-  if (document.querySelector('.mySwiperDesktop')) {
-    new Swiper('.mySwiperDesktop', {
-      spaceBetween: 0, centeredSlides: true, loop: true,
+  /*
+   * 전체폭 배너 히어로(full_banner) Swiper — 해당 DOM 이 없으면 no-op.
+   * 슬라이드가 1장이면 loop 를 켜지 않는다. Swiper 11 은 loop 에 슬라이드가 모자라면 경고와 함께
+   * loop 를 해제하는데, 그 상태에서 autoplay·스와이프가 함께 죽어 "슬라이더가 안 돌아간다"로 보인다.
+   * 1장짜리는 아예 정적 배너로 두고 화살표/인디케이터도 감춘다.
+   */
+  function initHeroSwiper(sel, pagination, next, prev, extra) {
+    var el = document.querySelector(sel);
+    if (!el) return;
+
+    var count = el.querySelectorAll('.swiper-slide').length;
+    if (count < 2) {
+      el.querySelectorAll('.swiper-pagination, .swiper-button-next, .swiper-button-prev')
+        .forEach(function (n) { n.style.display = 'none'; });
+      return;
+    }
+
+    var opts = {
+      spaceBetween: 0,
+      centeredSlides: true,
+      loop: true,
       autoplay: { delay: 5000, disableOnInteraction: false },
-      pagination: { el: '.swiper-pagination-desktop', clickable: true },
-      navigation: { nextEl: '.swiper-button-next-desktop', prevEl: '.swiper-button-prev-desktop' }
+      pagination: { el: pagination, clickable: true },
+      navigation: { nextEl: next, prevEl: prev }
+    };
+    for (var k in (extra || {})) opts[k] = extra[k];
+    var sw = new Swiper(sel, opts);
+
+    // autoHeight 는 초기화 시점의 이미지 높이로 컨테이너를 잡는다. 아직 안 받아온 이미지가 있으면
+    // 높이가 0 으로 굳으므로, 로드가 끝날 때마다 다시 계산시킨다.
+    el.querySelectorAll('img').forEach(function (img) {
+      if (img.complete) return;
+      img.addEventListener('load', function () { sw.update(); });
     });
   }
-  if (document.querySelector('.mySwiperMobile')) {
-    new Swiper('.mySwiperMobile', {
-      spaceBetween: 0, centeredSlides: true, loop: true,
-      autoplay: { delay: 5000, disableOnInteraction: false },
-      pagination: { el: '.swiper-pagination-mobile', clickable: true },
-      navigation: { nextEl: '.swiper-button-next-mobile', prevEl: '.swiper-button-prev-mobile' }
-    });
-  }
+
+  initHeroSwiper('.mySwiperDesktop', '.swiper-pagination-desktop', '.swiper-button-next-desktop', '.swiper-button-prev-desktop');
+  // 모바일은 이미지 원본 높이를 그대로 쓴다(레터박스 흰 여백 제거) → 슬라이드마다 높이가 달라지므로 autoHeight.
+  initHeroSwiper('.mySwiperMobile', '.swiper-pagination-mobile', '.swiper-button-next-mobile', '.swiper-button-prev-mobile', { autoHeight: true });
 </script>
 
 <!-- ── 팝업 스크립트 ── -->

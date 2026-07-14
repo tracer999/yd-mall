@@ -3,6 +3,8 @@ const pool = require('../../config/db');
 /*
  * Header 설정 (B5) — `navigation_config` 편집
  *
+ * 헤더 톱바(배너·알림)는 여기가 아니라 **배너 관리**에 있다 → /admin/banners/topbar
+ *
  * 몰별 내비게이션 정책(GNB 슬롯 수, 카테고리 최대 뎁스, 헤더 레이아웃)을 관리한다.
  * 설계: docs/사이트개선/admin_dev_plan.md §3.2 (쇼핑몰 설정 > Header 설정)
  *
