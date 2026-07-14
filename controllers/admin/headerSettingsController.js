@@ -24,11 +24,6 @@ const HEADER_LAYOUT_TYPES = [
     { value: 'main_right_utility_v1', label: '기본형 (로고 좌측 · 유틸 우측)', supported: true },
 ];
 
-const CATEGORY_DISPLAY_TYPES = [
-    { value: 'dropdown', label: '드롭다운', supported: true },
-    { value: 'mega', label: '메가 메뉴', supported: false },
-];
-
 /** 정수 필드의 허용 범위 */
 const LIMITS = {
     max_gnb_items: { min: 1, max: 20 },
@@ -73,7 +68,6 @@ exports.getEdit = async (req, res) => {
             title: 'Header 설정',
             config,
             headerLayoutTypes: HEADER_LAYOUT_TYPES,
-            categoryDisplayTypes: CATEGORY_DISPLAY_TYPES,
             limits: LIMITS,
             maxCategoryDepth: await currentMaxCategoryDepth(MALL_ID),
             saved: req.query.saved === '1',
@@ -93,7 +87,6 @@ exports.postUpdate = async (req, res) => {
         if (!config) return res.status(500).send('navigation_config 행이 없습니다.');
 
         const headerLayout = pickWhitelisted(req.body.header_layout_type, HEADER_LAYOUT_TYPES, config.header_layout_type);
-        const categoryDisplay = pickWhitelisted(req.body.category_display_type, CATEGORY_DISPLAY_TYPES, config.category_display_type);
 
         const maxGnb = clampInt(req.body.max_gnb_items, LIMITS.max_gnb_items, config.max_gnb_items);
         let maxCustom = clampInt(req.body.max_custom_items, LIMITS.max_custom_items, config.max_custom_items);
@@ -111,12 +104,12 @@ exports.postUpdate = async (req, res) => {
 
         await pool.query(`
             UPDATE navigation_config
-               SET header_layout_type = ?, category_display_type = ?,
+               SET header_layout_type = ?,
                    max_gnb_items = ?, max_custom_items = ?, category_max_depth = ?,
                    use_mega_menu = ?, use_search_bar = ?
              WHERE mall_id = ?
         `, [
-            headerLayout, categoryDisplay,
+            headerLayout,
             maxGnb, maxCustom, maxDepth,
             // 메가 메뉴는 렌더 미지원이므로 항상 0 으로 고정한다.
             0,
