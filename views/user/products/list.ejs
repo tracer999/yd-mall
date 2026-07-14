@@ -108,24 +108,29 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
 ];
 %>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <%# 뒤로가기(모바일)와 로케이션을 같은 줄에 둔다. 형제 block 으로 두면 모바일에서 두 줄로 깨진다.
-            _category_nav 는 자체 카드에 하단 여백을 가지므로 여기서 또 주지 않는다. %>
-        <div class="flex items-center gap-3 <%= _hasCatNav ? '' : 'mb-6' %>">
-            <%# 카테고리 카드가 있으면 현재 위치는 _category_nav 가 전담하고 뒤로가기 버튼은 두지 않는다
-                (헤더 로고·브라우저 뒤로가기로 충분하고, 카드 옆에 원형 버튼이 붙으면 붕 떠 보인다).
-                카드가 없는 경로(브랜드·테마·전체)에서만 남긴다. %>
-            <% if (!_hasCatNav) { %>
+    <%# 로케이션(카테고리) 영역은 컨테이너 밖 **전폭 밴드**다.
+        헤더 바로 아래에 붙여 사이 여백을 없애고, 흰 배경 + 하단 구분선으로
+        회색 페이지 배경(brand-page-surface #F7F8FB)과 경계를 만든다.
+        컨테이너 안에 카드로 띄우면 헤더와의 간격이 벌어지고 경계도 흐릿해진다. %>
+    <% if (_hasCatNav) { %>
+        <div class="bg-white border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <%- include('./_category_nav', { categoryNav, currentBrand }) %>
+            </div>
+        </div>
+    <% } %>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 <%= _hasCatNav ? 'pt-6 pb-8' : 'py-8' %>">
+        <%# 뒤로가기(모바일)와 로케이션을 같은 줄에 둔다. 형제 block 으로 두면 모바일에서 두 줄로 깨진다. %>
+        <% if (!_hasCatNav) { %>
+        <div class="flex items-center gap-3 mb-6">
+            <%# 카테고리 밴드가 있는 경로에서는 현재 위치를 밴드가 전담하고 뒤로가기 버튼도 두지 않는다
+                (헤더 로고·브라우저 뒤로가기로 충분하다).
+                밴드가 없는 경로(브랜드·테마·전체)에서만 이 줄을 남긴다. %>
                 <button onclick="history.back()" aria-label="뒤로 가기" class="sm:hidden shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition">
                     <i class="bi bi-chevron-left text-lg"></i>
                 </button>
-            <% } %>
 
-            <% if (_hasCatNav) { %>
-                <div class="min-w-0 flex-1">
-                    <%- include('./_category_nav', { categoryNav, currentBrand }) %>
-                </div>
-            <% } else { %>
                 <!-- Breadcrumb -->
                 <nav class="min-w-0 flex-1 flex text-sm text-gray-500" aria-label="Breadcrumb">
                     <ol class="inline-flex items-center space-x-1 md:space-x-3">
@@ -142,8 +147,8 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                         </li>
                     </ol>
                 </nav>
-            <% } %>
         </div>
+        <% } %>
 
         <!-- 모바일: 필터 바텀시트 구조는 리스트 하단에 배치 -->
 
