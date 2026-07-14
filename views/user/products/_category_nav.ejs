@@ -1,145 +1,88 @@
 <%
 /*
- * 카테고리 목록 페이지 상단 내비 (브레드크럼 + 카테고리 패널)
+ * 카테고리 목록 페이지 상단 내비 (위치 + 하위 카테고리)
  *
  * categoryNav 가 있을 때만 include 한다 (NORMAL 카테고리 경로).
  * 브랜드·테마·전체 경로는 기존 사이드바 레이아웃을 쓴다.
  *
  * 패널 규칙: 자식이 있으면 자식, 리프면 형제(현재 강조).
  *   리프에서 자식을 깔면 패널이 통째로 빈다.
+ *
+ * 구성 원칙(2026-07 개편):
+ *   - '홈' 크럼과 뒤로가기 버튼은 두지 않는다. 헤더 로고와 브라우저/앱 뒤로가기가 이미 그 역할을 한다.
+ *   - 경로에는 **조상만** 남기고, 현재 카테고리는 제목(h1)으로 승격한다.
+ *     이 페이지에 다른 제목이 없어서(list.ejs 는 개수만 표시) 여기가 사실상 페이지 타이틀이다.
+ *   - 위치 + 하위 카테고리를 하나의 카드로 묶어 상품 그리드와 시각적으로 분리한다.
  */
 const _nav = categoryNav;
 const _brandQs = currentBrand ? ('?brandId=' + encodeURIComponent(currentBrand)) : '';
 const _catUrl = (id) => `/products/category/${id}${_brandQs}`;
 const _parent = _nav.ancestors.length ? _nav.ancestors[_nav.ancestors.length - 1] : null;
-const _trail = [..._nav.ancestors, _nav.current];
 
 /*
  * panelItems 가 형제 목록인지(= 현재가 리프) 자식 목록인지 구분한다.
- * 형제 모드에서는 칩 레일 맨 앞에 '전체'(= 부모 카테고리 전체 상품)를 하나 더 놓는다.
+ * 형제 모드에서는 칩 맨 앞에 '전체'(= 부모 카테고리 전체 상품)를 하나 더 놓는다.
  * 자식 모드에서는 현재 카테고리 자신이 이미 '전체'이므로 넣지 않는다.
  */
 const _isSiblingMode = _nav.panelItems.some((i) => String(i.id) === String(_nav.current.id));
 const _showAllChip = _isSiblingMode && !!_parent;
 %>
 
-<%#
-  브레드크럼 — PC 전용이다. 모바일은 아래 컨텍스트 바(뒤로가기 + 경로)가 같은 정보를 한 줄로 낸다.
-  둘을 같이 내면 화면 위쪽 세 줄이 전부 "지금 어디인가"만 반복하게 된다.
-
-  3뎁스(홈 > 1 > 2 > 3)에서 줄바꿈으로 두 줄이 되며 레이아웃이 무너지던 것을 막는다.
-  줄바꿈(flex-wrap) 대신 **한 줄 유지 + 넘치면 가로 스크롤**이다. 스크롤바는 숨기고,
-  마지막(현재) 항목은 절대 줄이지 않는다 — 중간 조상 이름만 필요할 때 잘린다.
-%>
-<nav class="yd-bc hidden md:flex text-sm text-gray-500 mb-4 overflow-x-auto" aria-label="Breadcrumb">
-    <ol class="flex items-center flex-nowrap whitespace-nowrap min-w-0">
-        <li class="flex items-center shrink-0">
-            <a href="/" class="hover:text-gray-900">홈</a>
-        </li>
-        <% _trail.forEach((node, i) => {
-             const _last = i === _trail.length - 1; %>
-            <li class="flex items-center min-w-0 <%= _last ? 'shrink-0' : '' %>">
-                <i class="bi bi-chevron-right text-gray-300 text-xs mx-2 shrink-0"></i>
-                <% if (_last) { %>
-                    <span class="text-gray-900 font-medium"><%= node.name %></span>
-                <% } else { %>
-                    <a href="<%= _catUrl(node.id) %>" class="truncate hover:text-gray-900" title="<%= node.name %>"><%= node.name %></a>
-                <% } %>
-            </li>
-        <% }) %>
-    </ol>
-</nav>
-<style>
-  /* 가로 스크롤바 숨김 — 경로가 길 때만 드래그/스와이프로 밀린다 */
-  .yd-bc { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  .yd-bc::-webkit-scrollbar { display: none; }
-</style>
-
-<!-- 카테고리 패널 -->
-<div class="hidden md:flex border border-gray-200 bg-white mb-6">
-    <!-- 좌측 라벨 -->
-    <div class="w-40 shrink-0 bg-gray-600 text-white flex items-start px-5 py-4">
-        <span class="text-sm font-bold">카테고리</span>
-    </div>
-
-    <!-- 우측 -->
-    <div class="flex-1 min-w-0">
-        <!-- 헤더: 현재 위치. 하위가 있으면 이름만, 하위로 내려왔으면 ← 로 부모 복귀 -->
-        <%# 경로는 한 줄 유지. 두 줄이 되면 좌측 '카테고리' 라벨 박스와 높이가 어긋나 패널이 깨진다.
-            min-w-0 이 없으면 flex 자식이 줄어들지 않아 truncate 가 먹지 않는다. %>
-        <div class="flex items-center gap-2 px-6 py-4 min-w-0 <%= _nav.panelItems.length ? 'border-b border-gray-200' : '' %>">
-            <% if (_parent) { %>
-                <a href="<%= _catUrl(_parent.id) %>"
-                   class="text-gray-500 hover:text-gray-900 shrink-0" aria-label="<%= _parent.name %> 로 이동">
-                    <i class="bi bi-arrow-left"></i>
-                </a>
-            <% } %>
-            <span class="flex items-center min-w-0 text-sm text-gray-800 whitespace-nowrap">
-                <% _trail.forEach((node, i) => {
-                     const _last = i === _trail.length - 1; %>
-                    <% if (i > 0) { %><span class="text-gray-300 mx-1.5 shrink-0">&gt;</span><% } %>
-                    <span class="<%= _last ? 'font-bold shrink-0' : 'truncate' %>" title="<%= node.name %>"><%= node.name %></span>
+<%# ── PC ───────────────────────────────────────────────────────────────────
+    카드 1장 = [좌측 액센트 바 | 경로 + 제목] / [하위 카테고리 칩]
+    이전 마크업의 진회색 '카테고리' 라벨 박스는 제거했다. 제목이 곧 카테고리이므로
+    라벨이 같은 말을 반복했고, 높이 정렬 때문에 경로가 한 줄에 갇혀 있었다. %>
+<section class="yd-cnav-pc hidden md:block mb-6" aria-label="카테고리">
+    <div class="yd-cnav-pc__head">
+        <% if (_nav.ancestors.length) { %>
+            <nav class="yd-cnav-pc__path" aria-label="카테고리 경로">
+                <% _nav.ancestors.forEach((node, i) => { %>
+                    <% if (i > 0) { %><i class="bi bi-chevron-right yd-cnav-pc__sep" aria-hidden="true"></i><% } %>
+                    <a href="<%= _catUrl(node.id) %>" class="yd-cnav-pc__crumb" title="<%= node.name %>"><%= node.name %></a>
                 <% }) %>
-            </span>
-        </div>
-
-        <!-- 하위(또는 형제) 카테고리 그리드 -->
-        <% if (_nav.panelItems.length) { %>
-            <div class="px-6 py-4 bg-gray-50">
-                <ul class="grid grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-3">
-                    <% _nav.panelItems.forEach(item => {
-                        const _isCurrent = String(item.id) === String(_nav.current.id); %>
-                        <li>
-                            <a href="<%= _catUrl(item.id) %>"
-                               class="block text-sm truncate hover:underline <%= _isCurrent
-                                   ? 'text-[color:var(--gh-primary)] font-bold'
-                                   : 'text-gray-600 hover:text-gray-900' %>"
-                               title="<%= item.name %>"><%= item.name %></a>
-                        </li>
-                    <% }) %>
-                </ul>
-            </div>
+            </nav>
         <% } %>
+        <h1 class="yd-cnav-pc__title"><%= _nav.current.name %></h1>
     </div>
-</div>
 
-<%#
-  ────────────────────────────────────────────────────────────────────────────
-  모바일 카테고리 내비 — 컨텍스트 바(뒤로가기 + 경로) 1줄 + 칩 레일 1줄.
-
-  이전 마크업은 같은 화면에 뒤로가기가 두 개(list.ejs 의 원형 history.back 버튼 +
-  여기 '← 부모명' 링크)였고, 그 위에 브레드크럼까지 있어 위치 표시가 3중이었다.
-  이제 정보는 한 곳으로 모은다:
-
-    ‹  홈 / 여성패션 / **티셔츠**            ← 뒤로가기 = 부모 카테고리(경로상 한 단계 위)
-    [전체][티셔츠][블라우스][팬츠] …        ← 스냅되는 칩 레일, 활성 칩은 자동으로 시야에 들어온다
-
-  뒤로가기는 history.back() 이 아니라 **부모 카테고리 링크**다. 브라우저 히스토리는
-  사용자가 어디서 들어왔느냐에 따라 검색결과·홈·외부로 튈 수 있어 "한 단계 위"를 보장하지 못한다.
-  최상위(부모 없음)일 때만 history.back() 으로 떨어진다.
-%>
-<div class="yd-cnav md:hidden -mx-4 mb-5">
-    <div class="yd-cnav__bar">
-        <% if (_parent) { %>
-            <a href="<%= _catUrl(_parent.id) %>" class="yd-cnav__back" aria-label="<%= _parent.name %> 로 이동">
-                <i class="bi bi-chevron-left"></i>
-            </a>
-        <% } else { %>
-            <button type="button" onclick="history.back()" class="yd-cnav__back" aria-label="뒤로 가기">
-                <i class="bi bi-chevron-left"></i>
-            </button>
-        <% } %>
-
-        <%# 경로는 절대 두 줄이 되지 않는다. 좁으면 조상 이름만 말줄임되고, 현재 카테고리는 항상 온전히 보인다. %>
-        <div class="yd-cnav__trail">
-            <a href="/" class="yd-cnav__crumb">홈</a>
-            <% _nav.ancestors.forEach((node) => { %>
-                <span class="yd-cnav__sep" aria-hidden="true">/</span>
-                <a href="<%= _catUrl(node.id) %>" class="yd-cnav__crumb" title="<%= node.name %>"><%= node.name %></a>
-            <% }) %>
-            <span class="yd-cnav__sep" aria-hidden="true">/</span>
-            <strong class="yd-cnav__now" aria-current="page"><%= _nav.current.name %></strong>
+    <% if (_nav.panelItems.length) { %>
+        <div class="yd-cnav-pc__body">
+            <ul class="yd-cnav-pc__chips">
+                <% if (_showAllChip) { %>
+                    <li>
+                        <a href="<%= _catUrl(_parent.id) %>" class="yd-cnav-pc__chip yd-cnav-pc__chip--all">
+                            <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i><span><%= _parent.name %> 전체</span>
+                        </a>
+                    </li>
+                <% } %>
+                <% _nav.panelItems.forEach((item) => {
+                     const _isCurrent = String(item.id) === String(_nav.current.id); %>
+                    <li>
+                        <a href="<%= _catUrl(item.id) %>"
+                           class="yd-cnav-pc__chip <%= _isCurrent ? 'is-current' : '' %>"
+                           <%= _isCurrent ? 'aria-current="page"' : '' %>
+                           title="<%= item.name %>"><%= item.name %></a>
+                    </li>
+                <% }) %>
+            </ul>
         </div>
+    <% } %>
+</section>
+
+<%# ── 모바일 ───────────────────────────────────────────────────────────────
+    같은 구성을 세로로 압축한다. 화면 가장자리까지 흘려(-mx-4) 배경색과 아래 경계선으로
+    "여기까지가 카테고리 영역"을 만든다. 칩은 스냅되는 가로 레일. %>
+<section class="yd-cnav md:hidden -mx-4 mb-5" aria-label="카테고리">
+    <div class="yd-cnav__head">
+        <% if (_nav.ancestors.length) { %>
+            <nav class="yd-cnav__path" aria-label="카테고리 경로">
+                <% _nav.ancestors.forEach((node, i) => { %>
+                    <% if (i > 0) { %><span class="yd-cnav__sep" aria-hidden="true">/</span><% } %>
+                    <a href="<%= _catUrl(node.id) %>" class="yd-cnav__crumb" title="<%= node.name %>"><%= node.name %></a>
+                <% }) %>
+            </nav>
+        <% } %>
+        <h1 class="yd-cnav__title"><%= _nav.current.name %></h1>
     </div>
 
     <% if (_nav.panelItems.length) { %>
@@ -147,11 +90,11 @@ const _showAllChip = _isSiblingMode && !!_parent;
             <div class="yd-cnav__rail" data-cnav-rail>
                 <% if (_showAllChip) { %>
                     <a href="<%= _catUrl(_parent.id) %>" class="yd-cnav__chip yd-cnav__chip--all">
-                        <i class="bi bi-grid text-[10px]"></i><span>전체</span>
+                        <i class="bi bi-grid-3x3-gap text-[10px]" aria-hidden="true"></i><span>전체</span>
                     </a>
                 <% } %>
                 <% _nav.panelItems.forEach((item) => {
-                    const _isCurrent = String(item.id) === String(_nav.current.id); %>
+                     const _isCurrent = String(item.id) === String(_nav.current.id); %>
                     <a href="<%= _catUrl(item.id) %>"
                        class="yd-cnav__chip <%= _isCurrent ? 'is-current' : '' %>"
                        <%= _isCurrent ? 'aria-current="page" data-cnav-current' : '' %>><%= item.name %></a>
@@ -159,57 +102,118 @@ const _showAllChip = _isSiblingMode && !!_parent;
             </div>
         </div>
     <% } %>
-</div>
+</section>
 
 <style>
-  /* ── 모바일 카테고리 내비 ─────────────────────────────────────────────
-     레일은 화면 가장자리까지 흐르게 두고(-mx-4), 내부 padding 으로 본문 정렬선을 맞춘다.
-     칩이 잘리는 지점에 페이드를 얹어 "옆에 더 있다"를 알린다 — 스크롤바를 보여 주는 대신. */
-  .yd-cnav { --cnav-gutter: 1rem; }
-
-  .yd-cnav__bar {
-    display: flex; align-items: center; gap: .375rem;
-    padding: 0 var(--cnav-gutter);
-    min-height: 2rem;
+  /* ── PC 카테고리 카드 ──────────────────────────────────────────────── */
+  .yd-cnav-pc {
+    border: 1px solid #e5e7eb;
+    border-radius: .875rem;
+    background: #fff;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, .04);
   }
 
-  .yd-cnav__back {
-    flex: 0 0 auto;
-    display: flex; align-items: center; justify-content: center;
-    width: 1.75rem; height: 1.75rem; margin-left: -.375rem;
-    border-radius: 9999px;
-    color: #6b7280; font-size: 1rem; line-height: 1;
-    transition: background-color .15s ease, color .15s ease, transform .15s ease;
+  /* 좌측 액센트 바 — 브랜드 컬러로 이 블록이 "위치"임을 표시한다 */
+  .yd-cnav-pc__head {
+    position: relative;
+    padding: 1.125rem 1.5rem 1.125rem 1.75rem;
   }
-  .yd-cnav__back:active { transform: scale(.9); background: #f3f4f6; color: #111827; }
+  .yd-cnav-pc__head::before {
+    content: "";
+    position: absolute; left: 0; top: 1.125rem; bottom: 1.125rem;
+    width: 3px; border-radius: 0 3px 3px 0;
+    background: var(--gh-primary);
+  }
 
-  .yd-cnav__trail {
-    flex: 1 1 auto; min-width: 0;
-    display: flex; align-items: baseline; gap: .3rem;
-    font-size: .75rem; color: #9ca3af;
+  /* 경로(조상). 좁아지면 조상 이름만 말줄임된다 — 한 줄 유지. */
+  .yd-cnav-pc__path {
+    display: flex; align-items: center; min-width: 0;
+    margin-bottom: .25rem;
+    font-size: .75rem; color: #9ca3af; white-space: nowrap; overflow: hidden;
   }
-  /* 조상만 줄어든다 — flex 기본 min-width:auto 때문에 min-width:0 이 없으면 말줄임이 먹지 않는다 */
+  .yd-cnav-pc__crumb {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    transition: color .15s ease;
+  }
+  .yd-cnav-pc__crumb:hover { color: #374151; text-decoration: underline; }
+  .yd-cnav-pc__sep { flex: 0 0 auto; margin: 0 .375rem; font-size: .625rem; color: #d1d5db; }
+
+  .yd-cnav-pc__title {
+    font-size: 1.5rem; font-weight: 800; line-height: 1.25;
+    color: #111827; letter-spacing: -.02em;
+  }
+
+  .yd-cnav-pc__body {
+    padding: .875rem 1.5rem;
+    border-top: 1px solid #f3f4f6;
+    background: #fafafa;
+  }
+  .yd-cnav-pc__chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+  .yd-cnav-pc__chip {
+    display: inline-flex; align-items: center; gap: .375rem;
+    max-width: 14rem; height: 2rem; padding: 0 .875rem;
+    border: 1px solid #e5e7eb; border-radius: 9999px;
+    background: #fff; color: #4b5563;
+    font-size: .8125rem; line-height: 1; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    transition: border-color .15s ease, color .15s ease, background-color .15s ease, box-shadow .15s ease;
+  }
+  .yd-cnav-pc__chip:hover {
+    border-color: var(--gh-primary);
+    color: var(--gh-primary-dark, var(--gh-primary));
+    box-shadow: 0 1px 3px rgba(17, 24, 39, .08);
+  }
+  .yd-cnav-pc__chip--all { color: #6b7280; background: #f3f4f6; border-color: #e5e7eb; }
+  .yd-cnav-pc__chip.is-current {
+    background: var(--gh-primary); border-color: var(--gh-primary);
+    color: #fff; font-weight: 700;
+  }
+  .yd-cnav-pc__chip.is-current:hover { color: #fff; }
+
+  /* ── 모바일 카테고리 영역 ──────────────────────────────────────────────
+     -mx-4 로 화면 폭을 다 쓰고, 배경 + 아래 경계선으로 상품 그리드와 갈라 놓는다.
+     내부 padding(--cnav-gutter)이 본문 정렬선을 맞춘다. */
+  .yd-cnav {
+    --cnav-gutter: 1rem;
+    --cnav-bg: #f9fafb;
+    padding-bottom: .75rem;
+    background: var(--cnav-bg);
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .yd-cnav__head { padding: .875rem var(--cnav-gutter) 0; }
+
+  .yd-cnav__path {
+    display: flex; align-items: center; min-width: 0;
+    margin-bottom: .125rem;
+    font-size: .6875rem; color: #9ca3af; white-space: nowrap; overflow: hidden;
+  }
+  /* flex 기본 min-width:auto 때문에 min-width:0 이 없으면 말줄임이 먹지 않는다 */
   .yd-cnav__crumb {
     flex: 0 1 auto; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
     transition: color .15s ease;
   }
   .yd-cnav__crumb:active { color: #374151; }
-  .yd-cnav__sep { flex: 0 0 auto; color: #e5e7eb; }
-  .yd-cnav__now {
-    flex: 0 0 auto; white-space: nowrap;
-    font-size: .8125rem; font-weight: 700; color: #111827; letter-spacing: -.01em;
+  .yd-cnav__sep { flex: 0 0 auto; margin: 0 .25rem; color: #d1d5db; }
+
+  .yd-cnav__title {
+    font-size: 1.125rem; font-weight: 800; line-height: 1.3;
+    color: #111827; letter-spacing: -.02em;
   }
 
-  .yd-cnav__rail-wrap { position: relative; margin-top: .5rem; }
-  /* 양끝 페이드 — 넘칠 때만 켠다(스크롤 위치에 따라 JS 가 클래스를 토글) */
+  .yd-cnav__rail-wrap { position: relative; margin-top: .625rem; }
+  /* 양끝 페이드 — 넘칠 때만 켠다(스크롤 위치에 따라 JS 가 클래스를 토글).
+     배경이 흰색이 아니므로 --cnav-bg 로 맞춘다. 안 맞추면 페이드가 흰 얼룩처럼 보인다. */
   .yd-cnav__rail-wrap::before,
   .yd-cnav__rail-wrap::after {
     content: ""; position: absolute; top: 0; bottom: 0; width: 1.75rem;
     pointer-events: none; opacity: 0; transition: opacity .2s ease; z-index: 1;
   }
-  .yd-cnav__rail-wrap::before { left: 0;  background: linear-gradient(90deg, #fff 30%, rgba(255,255,255,0)); }
-  .yd-cnav__rail-wrap::after  { right: 0; background: linear-gradient(270deg, #fff 30%, rgba(255,255,255,0)); }
+  .yd-cnav__rail-wrap::before { left: 0;  background: linear-gradient(90deg, var(--cnav-bg) 30%, rgba(249, 250, 251, 0)); }
+  .yd-cnav__rail-wrap::after  { right: 0; background: linear-gradient(270deg, var(--cnav-bg) 30%, rgba(249, 250, 251, 0)); }
   .yd-cnav__rail-wrap.is-scrolled::before { opacity: 1; }
   .yd-cnav__rail-wrap.has-more::after     { opacity: 1; }
 
@@ -235,7 +239,7 @@ const _showAllChip = _isSiblingMode && !!_parent;
     transition: transform .15s ease, border-color .15s ease, color .15s ease, background-color .15s ease;
   }
   .yd-cnav__chip:active { transform: scale(.95); border-color: #d1d5db; }
-  .yd-cnav__chip--all { color: #6b7280; background: #f9fafb; border-color: #f3f4f6; }
+  .yd-cnav__chip--all { color: #6b7280; background: #f3f4f6; border-color: #e5e7eb; }
 
   .yd-cnav__chip.is-current {
     background: var(--gh-primary); border-color: var(--gh-primary);
@@ -244,7 +248,7 @@ const _showAllChip = _isSiblingMode && !!_parent;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .yd-cnav__back, .yd-cnav__chip, .yd-cnav__rail-wrap::before, .yd-cnav__rail-wrap::after { transition: none; }
+    .yd-cnav__chip, .yd-cnav-pc__chip, .yd-cnav__rail-wrap::before, .yd-cnav__rail-wrap::after { transition: none; }
   }
 </style>
 

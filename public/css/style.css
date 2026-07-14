@@ -597,12 +597,6 @@
   .mx-1 {
     margin-inline: var(--spacing);
   }
-  .mx-1\.5 {
-    margin-inline: calc(var(--spacing) * 1.5);
-  }
-  .mx-2 {
-    margin-inline: calc(var(--spacing) * 2);
-  }
   .mx-3 {
     margin-inline: calc(var(--spacing) * 3);
   }
@@ -1252,6 +1246,9 @@
   .max-w-\[85vw\] {
     max-width: 85vw;
   }
+  .max-w-\[92vw\] {
+    max-width: 92vw;
+  }
   .max-w-\[180px\] {
     max-width: 180px;
   }
@@ -1499,9 +1496,6 @@
   }
   .flex-col {
     flex-direction: column;
-  }
-  .flex-nowrap {
-    flex-wrap: nowrap;
   }
   .flex-wrap {
     flex-wrap: wrap;
@@ -1774,6 +1768,9 @@
   }
   .overflow-hidden {
     overflow: hidden;
+  }
+  .overflow-visible {
+    overflow: visible;
   }
   .overflow-x-auto {
     overflow-x: auto;
@@ -3680,6 +3677,18 @@
   .\[file\:line\] {
     file: line;
   }
+  .\[passport\:google\] {
+    passport: google;
+  }
+  .\[passport\:kakao\] {
+    passport: kakao;
+  }
+  .\[passport\:local\] {
+    passport: local;
+  }
+  .\[passport\:naver\] {
+    passport: naver;
+  }
   .group-open\:rotate-180 {
     &:is(:where(.group):is([open], :popover-open, :open) *) {
       rotate: 180deg;
@@ -3707,16 +3716,6 @@
         --tw-scale-x: 105%;
         --tw-scale-y: 105%;
         --tw-scale-z: 105%;
-        scale: var(--tw-scale-x) var(--tw-scale-y);
-      }
-    }
-  }
-  .group-hover\:scale-110 {
-    &:is(:where(.group):hover *) {
-      @media (hover: hover) {
-        --tw-scale-x: 110%;
-        --tw-scale-y: 110%;
-        --tw-scale-z: 110%;
         scale: var(--tw-scale-x) var(--tw-scale-y);
       }
     }

@@ -110,11 +110,11 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <%# 뒤로가기(모바일)와 로케이션을 같은 줄에 둔다. 형제 block 으로 두면 모바일에서 두 줄로 깨진다.
-            _category_nav 는 자체 패널에 mb-6 을 가지므로 여기서 하단 여백을 또 주지 않는다. %>
+            _category_nav 는 자체 카드에 하단 여백을 가지므로 여기서 또 주지 않는다. %>
         <div class="flex items-center gap-3 <%= _hasCatNav ? '' : 'mb-6' %>">
-            <%# 카테고리 패널이 있으면 뒤로가기·현재위치는 _category_nav 의 컨텍스트 바가 전담한다.
-                여기서 또 원형 back 버튼을 내면 같은 기능이 두 개가 되고, 세로 중앙 정렬이라
-                칩 레일 옆에 붕 떠 보인다. 패널이 없는 경로(브랜드·테마·전체)에서만 남긴다. %>
+            <%# 카테고리 카드가 있으면 현재 위치는 _category_nav 가 전담하고 뒤로가기 버튼은 두지 않는다
+                (헤더 로고·브라우저 뒤로가기로 충분하고, 카드 옆에 원형 버튼이 붙으면 붕 떠 보인다).
+                카드가 없는 경로(브랜드·테마·전체)에서만 남긴다. %>
             <% if (!_hasCatNav) { %>
                 <button onclick="history.back()" aria-label="뒤로 가기" class="sm:hidden shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition">
                     <i class="bi bi-chevron-left text-lg"></i>
