@@ -20,6 +20,32 @@
                         <input type="hidden" name="old_video" value="<%= product.video_url %>">
                         <% } %>
 
+                            <%#
+                              URL 로 상품 가져오기 — 등록 화면 전용.
+                              외부 상품 상세 페이지의 구조화 데이터(JSON-LD/OpenGraph)를 읽어 폼을 채운다.
+                              **저장은 하지 않는다.** 값을 확인하고 [저장] 을 눌러야 상품이 만들어진다.
+                              페이지가 JS 로 그리는 값은 읽을 수 없어, 가져오지 못한 칸은 비어 있는 채로 남는다.
+                            %>
+                            <% if (!product) { %>
+                                <div class="mb-6 rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+                                    <label class="block text-sm font-bold text-gray-800 mb-1">URL 로 상품 가져오기</label>
+                                    <p class="text-xs text-gray-500 mb-2">
+                                        다른 쇼핑몰의 <strong>상품 상세 페이지 URL</strong> 을 넣으면 상품명·가격·이미지·설명을 읽어 아래 폼을 채웁니다.
+                                        읽을 수 있는 항목만 채워지며, 저장 전까지 상품은 만들어지지 않습니다.
+                                    </p>
+                                    <div class="flex gap-2">
+                                        <input type="url" id="import-url" placeholder="https://..." autocomplete="off"
+                                            class="flex-1 min-w-0 text-sm border-gray-300 rounded-md">
+                                        <button type="button" id="import-url-btn"
+                                            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">가져오기</button>
+                                    </div>
+                                    <p id="import-status" class="mt-2 text-xs hidden"></p>
+
+                                    <%# 가져오기가 내려받아 저장한 이미지 경로. 파일을 직접 올리면 그쪽이 우선한다(서버에서 판정). %>
+                                    <div id="imported-images"></div>
+                                </div>
+                            <% } %>
+
                             <!-- 기본 정보 -->
                             <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4">기본 정보</h6>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -881,5 +907,117 @@
             tinymce.init({ ...commonConfig, selector: 'textarea#short_description', height: 200 });
             tinymce.init({ ...commonConfig, selector: 'textarea#description', height: 1000 });
         }
+
+        /*
+         * URL 로 상품 가져오기 (등록 화면 전용)
+         *
+         * 서버가 외부 페이지를 읽어 초안을 돌려주면 그 값으로 폼을 채운다. 읽지 못한 필드는 건드리지 않는다
+         * — 운영자가 이미 입력해 둔 값을 빈 값으로 덮어쓰면 안 된다.
+         * 이미지는 서버가 이미 uploads 에 저장해 두었으므로, 경로만 hidden 으로 실어 보낸다.
+         */
+        (function () {
+            const btn = document.getElementById('import-url-btn');
+            const urlInput = document.getElementById('import-url');
+            const status = document.getElementById('import-status');
+            const imported = document.getElementById('imported-images');
+            if (!btn || !urlInput || !status || !imported) return;
+
+            const say = (msg, tone) => {
+                status.textContent = msg;
+                status.className = 'mt-2 text-xs ' + (tone === 'error' ? 'text-red-600' : tone === 'ok' ? 'text-emerald-700' : 'text-gray-500');
+            };
+
+            const setField = (selector, value) => {
+                if (value === null || value === undefined || value === '') return false;
+                const el = document.querySelector(selector);
+                if (!el) return false;
+                el.value = value;
+                el.dispatchEvent(new Event('input', { bubbles: true }));   // 슬러그 미리보기 등 파생값 갱신
+                return true;
+            };
+
+            // TinyMCE 가 붙은 textarea 는 value 를 바꿔도 에디터에 보이지 않는다 → 에디터 API 로 넣는다.
+            const setEditor = (id, html) => {
+                if (!html) return;
+                const ed = (typeof tinymce !== 'undefined') && tinymce.get(id);
+                if (ed) ed.setContent(html);
+                else setField('#' + id, html);
+            };
+
+            const hidden = (name, value) => {
+                const el = document.createElement('input');
+                el.type = 'hidden'; el.name = name; el.value = value;
+                imported.appendChild(el);
+            };
+
+            async function run() {
+                const url = urlInput.value.trim();
+                if (!url) return say('상품 상세 페이지 URL 을 입력하세요.', 'error');
+
+                btn.disabled = true;
+                btn.textContent = '가져오는 중…';
+                say('페이지를 읽고 이미지를 내려받는 중입니다…');
+
+                try {
+                    const res = await fetch('/admin/products/import-url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+                    const json = await res.json();
+                    if (!res.ok || !json.success) throw new Error(json.error || '가져오기에 실패했습니다.');
+
+                    const d = json.data;
+                    const filled = [];
+                    if (setField('input[name="name"]', d.name)) filled.push('상품명');
+                    if (setField('input[name="product_code"]', d.sku)) filled.push('상품코드');
+                    if (setField('#price', d.price)) filled.push('판매가');
+                    if (setField('#original_price', d.original_price)) filled.push('정가');
+                    if (setField('input[name="stock"]', d.stock)) filled.push('재고');
+                    if (d.brand_category_id && setField('select[name="brand_category_id"]', d.brand_category_id)) filled.push('브랜드');
+                    if (d.description) { setEditor('short_description', d.description); filled.push('요약 설명'); }
+
+                    imported.innerHTML = '';
+                    if (d.main_image) {
+                        hidden('imported_main_image', d.main_image);
+                        (d.sub_images || []).forEach(u => hidden('imported_sub_images[]', u));
+                        filled.push('이미지 ' + ((d.sub_images || []).length + 1) + '장');
+
+                        const strip = document.createElement('div');
+                        strip.className = 'mt-3 flex flex-wrap gap-2';
+                        [d.main_image].concat(d.sub_images || []).forEach((u, i) => {
+                            const wrap = document.createElement('div');
+                            wrap.className = 'relative';
+                            wrap.innerHTML = '<img src="' + u + '" class="h-16 w-16 object-cover rounded border border-gray-200">'
+                                + (i === 0 ? '<span class="absolute -top-1 -left-1 text-[9px] font-bold bg-blue-600 text-white px-1 rounded">대표</span>' : '');
+                            strip.appendChild(wrap);
+                        });
+                        imported.appendChild(strip);
+
+                        const note = document.createElement('p');
+                        note.className = 'mt-1 text-[11px] text-gray-400';
+                        note.textContent = '첫 장이 대표 이미지, 나머지는 추가 이미지로 저장됩니다. 파일을 직접 올리면 그쪽이 우선합니다.';
+                        imported.appendChild(note);
+                    }
+
+                    const missing = ['상품명', '판매가', '이미지'].filter(k => !filled.some(f => f.startsWith(k)));
+                    say(
+                        (filled.length ? '가져왔습니다: ' + filled.join(', ') : '가져올 수 있는 항목이 없었습니다.')
+                        + (missing.length ? ' · 못 가져온 항목(' + missing.join(', ') + ')은 직접 입력하세요.' : ''),
+                        filled.length ? 'ok' : 'error'
+                    );
+                } catch (err) {
+                    say(err.message, 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '가져오기';
+                }
+            }
+
+            btn.addEventListener('click', run);
+            urlInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); run(); }   // 폼 전체가 제출되지 않게 막는다
+            });
+        })();
     });
 </script>

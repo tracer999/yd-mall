@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { syncProductById, syncProductsByIds, deleteProductById, isShopifySyncEnabled } = require('../../services/shopify/syncService');
 const newArrival = require('../../services/catalog/newArrival');
+const productImporter = require('../../services/catalog/productImporter');
 
 const OpenAI = require('openai');
 
@@ -517,6 +518,35 @@ exports.getAdd = async (req, res) => {
     }
 };
 
+/**
+ * POST /admin/products/import-url  { url }  → 상품 초안(JSON)
+ *
+ * 외부 상품 상세 URL 을 읽어 폼을 채울 값을 돌려준다. **DB 는 건드리지 않는다** —
+ * 운영자가 폼에서 확인하고 [저장] 을 눌러야 상품이 만들어진다.
+ * 가져오지 못한 필드는 null 로 온다(페이지가 JS 로 그리는 값은 읽을 수 없다).
+ */
+exports.postImportUrl = async (req, res) => {
+    try {
+        const draft = await productImporter.importFromUrl(req.body && req.body.url);
+
+        // 브랜드는 이름만 안다. 이 몰의 BRAND 카테고리와 이름이 정확히 같으면 폼에서 자동 선택한다.
+        let brandCategoryId = null;
+        if (draft.brand) {
+            const [rows] = await pool.query(
+                `SELECT id FROM categories WHERE type = 'BRAND' AND mall_id = ? AND name = ? LIMIT 1`,
+                [req.adminMallId || 1, draft.brand],
+            );
+            brandCategoryId = rows.length ? rows[0].id : null;
+        }
+
+        res.json({ success: true, data: Object.assign(draft, { brand_category_id: brandCategoryId }) });
+    } catch (err) {
+        const status = err.statusCode || 500;
+        if (status >= 500) console.error('[products] importUrl:', err.message);
+        res.status(status).json({ success: false, error: err.message || '가져오기에 실패했습니다.' });
+    }
+};
+
 exports.postAdd = async (req, res) => {
     const {
         category_id, brand_category_id, name, product_code, provider, description, short_description,
@@ -526,9 +556,21 @@ exports.postAdd = async (req, res) => {
         distribution_badge, product_badge, badge_expire_date, visibility
     } = req.body;
 
-    // Handle File Uploads
-    const main_image = req.files['main_image'] ? '/uploads/products/' + req.files['main_image'][0].filename : null;
-    const thumbnail_image = req.files['thumbnail_image'] ? '/uploads/products/' + req.files['thumbnail_image'][0].filename : null;
+    /*
+     * 이미지 출처는 둘이다.
+     *   1) 관리자가 직접 올린 파일 (req.files)
+     *   2) URL 가져오기가 미리 내려받아 업로드 경로에 저장해 둔 이미지 (imported_*)
+     * 직접 올린 파일이 항상 우선한다 — 가져오기 후 이미지를 바꿔 올렸다면 그게 운영자의 최종 의사다.
+     * imported_* 는 서버가 방금 만든 경로만 유효하다(임의 경로 주입 차단 → safeImported).
+     */
+    const safeImported = (v) => (typeof v === 'string' && /^\/uploads\/products\/[\w.-]+$/.test(v) ? v : null);
+
+    const main_image = req.files['main_image']
+        ? '/uploads/products/' + req.files['main_image'][0].filename
+        : safeImported(req.body.imported_main_image);
+    const thumbnail_image = req.files['thumbnail_image']
+        ? '/uploads/products/' + req.files['thumbnail_image'][0].filename
+        : safeImported(req.body.imported_thumbnail_image);
 
     let final_video_url = video_url;
     if (video_type === 'FILE' && req.files['video_file']) {
@@ -594,13 +636,14 @@ exports.postAdd = async (req, res) => {
         });
 
 
-        // Sub Images Insert
-        if (req.files['sub_images']) {
-            const subImagePromises = req.files['sub_images'].map(async (file, index) => {
-                await pool.query('INSERT INTO product_images (product_id, image_url, display_order) VALUES (?, ?, ?)',
-                    [productId, '/uploads/products/' + file.filename, index]);
-            });
-            await Promise.all(subImagePromises);
+        // Sub Images Insert — 직접 올린 파일 + URL 가져오기로 저장된 이미지
+        const subImageUrls = (req.files['sub_images'] || []).map(f => '/uploads/products/' + f.filename)
+            .concat([].concat(req.body.imported_sub_images || []).map(safeImported).filter(Boolean));
+
+        if (subImageUrls.length) {
+            await Promise.all(subImageUrls.slice(0, 10).map((url, index) =>
+                pool.query('INSERT INTO product_images (product_id, image_url, display_order) VALUES (?, ?, ?)',
+                    [productId, url, index])));
         }
 
         // 추천 상품 연결 (신규 등록 시)

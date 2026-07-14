@@ -19,6 +19,8 @@ router.post('/edit', upload.fields([
     { name: 'sub_images', maxCount: 10 },
     { name: 'video_file', maxCount: 1 }
 ]), productController.postEdit);
+// URL 로 상품 가져오기 — 외부 상품 상세 페이지를 읽어 등록 폼을 채운다(DB 쓰기 없음).
+router.post('/import-url', express.json(), productController.postImportUrl);
 router.post('/delete', productController.postDelete);
 
 router.post('/product-image-upload', upload.single('file'), productController.postUploadImage);
