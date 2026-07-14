@@ -19,5 +19,5 @@ jobs:
           script: |
             cd /data/yd-mall
             git fetch origin main && git reset --hard origin/main
-            ./dev-mall.sh build
-            ./dev-mall.sh start
+            ./yd-mall.sh build
+            ./yd-mall.sh start
