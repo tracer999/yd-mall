@@ -89,8 +89,11 @@
                     </script>
                     <% } %>
 
-                        <meta name="robots"
-                            content="<%= (typeof seo !== 'undefined' && seo && seo.robots) ? seo.robots : 'index,follow' %>">
+                        <%# 색인 차단 중이면 컨트롤러의 seo.robots 오버라이드를 무시하고 강제 차단 %>
+                            <meta name="robots"
+                                content="<%= (typeof blockIndexing === 'undefined' || blockIndexing)
+                                    ? 'noindex, nofollow, noarchive, nosnippet'
+                                    : ((typeof seo !== 'undefined' && seo && seo.robots) ? seo.robots : 'index,follow') %>">
                         <% if (typeof seo !=='undefined' && seo) { %>
                             <% if (seo.description) { %>
                                 <meta name="description" content="<%= seo.description %>">

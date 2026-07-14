@@ -5,6 +5,7 @@ const { Readable } = require('stream');
 const crypto = require('crypto');
 const pool = require('../config/db');
 const newArrival = require('../services/catalog/newArrival');
+const { isIndexingAllowed } = require('../config/indexingPolicy');
 
 // ── 캐시 (24시간 TTL) ───────────────────────────────
 let cache = { xml: null, etag: null, generatedAt: 0 };
@@ -112,6 +113,11 @@ async function generateSitemap() {
 
 // ── GET /sitemap.xml ────────────────────────────────
 router.get('/sitemap.xml', async (req, res) => {
+    // 색인 차단 중에는 사이트맵 자체를 제공하지 않는다.
+    if (!isIndexingAllowed()) {
+        return res.status(404).type('text/plain').send('Not Found');
+    }
+
     try {
         const now = Date.now();
 
@@ -154,19 +160,23 @@ router.get('/sitemap.xml', async (req, res) => {
 // ── GET /robots.txt ─────────────────────────────────
 router.get('/robots.txt', (req, res) => {
     const domain = getDomain();
-    const robots = [
-        'User-agent: *',
-        'Allow: /',
-        '',
-        'Disallow: /admin/',
-        'Disallow: /auth/',
-        'Disallow: /cart/',
-        'Disallow: /checkout/',
-        'Disallow: /mypage/',
-        'Disallow: /api/',
-        '',
-        `Sitemap: ${domain}/sitemap.xml`
-    ].join('\n');
+
+    // 색인 차단 중에는 전면 Disallow. sitemap 도 함께 감춘다.
+    const robots = !isIndexingAllowed()
+        ? ['User-agent: *', 'Disallow: /'].join('\n')
+        : [
+            'User-agent: *',
+            'Allow: /',
+            '',
+            'Disallow: /admin/',
+            'Disallow: /auth/',
+            'Disallow: /cart/',
+            'Disallow: /checkout/',
+            'Disallow: /mypage/',
+            'Disallow: /api/',
+            '',
+            `Sitemap: ${domain}/sitemap.xml`
+        ].join('\n');
 
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Cache-Control', 'public, max-age=86400');

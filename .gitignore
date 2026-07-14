@@ -37,3 +37,8 @@ _*tmp*.js
 
 # Playwright MCP 산출물(스냅샷·스크린샷)
 /.playwright-mcp/
+
+# 업로드 이미지 — 런타임 산출물이라 추적하지 않는다.
+# 이미 추적 중인 기존 파일은 그대로 둔다: 인덱스에서 빼면 배포 서버의
+# `git reset --hard origin/main` 이 서버 디스크의 이미지까지 지운다.
+/public/uploads/

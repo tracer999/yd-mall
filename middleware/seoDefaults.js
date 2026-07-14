@@ -1,3 +1,5 @@
+const { isIndexingAllowed, BLOCK_DIRECTIVE } = require('../config/indexingPolicy');
+
 module.exports = (req, res, next) => {
     const siteSettings = res.locals.siteSettings || {};
     const companyName = siteSettings.company_name || '와이디몰';
@@ -6,8 +8,12 @@ module.exports = (req, res, next) => {
     // canonical URL (쿼리 파라미터 제외)
     const canonicalUrl = domain + req.path;
 
-    // 테스트 서버 — 전체 페이지 크롤링 차단
-    const robots = 'noindex,nofollow';
+    // 색인 차단 중에는 컨트롤러가 seo.robots 를 index,follow 로 덮어써도
+    // 레이아웃이 이 플래그를 보고 무시한다(뷰에서 최종 강제).
+    const blockIndexing = !isIndexingAllowed();
+    res.locals.blockIndexing = blockIndexing;
+
+    const robots = blockIndexing ? BLOCK_DIRECTIVE : 'index,follow';
 
     // 기본 OG 이미지
     const ogImageSource = siteSettings.kakao_share_image_url || siteSettings.logo_url;

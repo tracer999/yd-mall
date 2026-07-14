@@ -89,9 +89,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // (예: https://dev-mall.ydata.co.kr/docs/develop/mall/shopify-setup-guide.html)
 app.use('/docs', express.static(path.join(__dirname, '..', 'docs')));
 
-// 테스트 서버 — 검색엔진 크롤링 전면 차단
+// 검색엔진 색인 차단 (config/indexingPolicy.js 가 단일 스위치)
+const { isIndexingAllowed, BLOCK_DIRECTIVE } = require('./config/indexingPolicy');
 app.use((req, res, next) => {
-    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    if (!isIndexingAllowed()) {
+        res.setHeader('X-Robots-Tag', BLOCK_DIRECTIVE);
+    }
     next();
 });
 
