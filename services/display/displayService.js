@@ -59,6 +59,27 @@ function filterSnapshotRows(rows) {
 }
 
 /*
+ * 노출 대상(page_section.visible_on_pc / visible_on_mobile) → 렌더 게이트.
+ *
+ * 이 두 컬럼은 오래도록 **저장만 되고 렌더에는 쓰이지 않았다**. 그래서 빌더에서
+ * "모바일만 노출"로 꺼도 PC 에 그대로 나왔다 = 빌더가 거짓말을 했다.
+ * SSR 이라 UA 로 갈라 굽지 않고(캐시·프록시가 섞인다) CSS 로 감춘다.
+ *
+ * @returns 'all' | 'pc_only' | 'mobile_only' | 'none'
+ */
+function deviceGate(s) {
+  const onPc = Number(s.visible_on_pc) !== 0;      // 컬럼 없으면(레거시 스냅샷) 노출로 본다
+  const onMobile = Number(s.visible_on_mobile) !== 0;
+  if (!onPc && !onMobile) return 'none';
+  if (!onPc) return 'mobile_only';
+  if (!onMobile) return 'pc_only';
+  return 'all';
+}
+
+// 게이트 → 뷰가 감싸는 wrapper 클래스 (public/css/input.css 에 정의)
+const GATE_CLASS = { pc_only: 'yd-only-pc', mobile_only: 'yd-only-mobile' };
+
+/*
  * 섹션 행 목록 → 렌더 가능한 형태로 해석한다. (스토어프론트/미리보기 공통)
  *
  * CT-0: section_type 별 분기를 resolvers/ 맵으로 위임한다.
@@ -68,13 +89,16 @@ function filterSnapshotRows(rows) {
  *
  * @param rows   page_section 행 배열(DB 또는 스냅샷)
  * @param shared { hasUser, heroData, kakaoUrl }
- * @returns [{ type, view, locals }]
+ * @returns [{ type, view, locals, gateClass }]
  */
 async function resolveSections(rows, shared = {}) {
   const sections = [];
   for (const s of rows) {
     const reg = registry[s.section_type];
     if (!reg) continue; // 미등록 섹션 타입은 스킵
+
+    const gate = deviceGate(s);
+    if (gate === 'none') continue; // PC·모바일 둘 다 끔 = 아무 데도 안 나온다
 
     const config = parseConfig(s.config_json);
     const baseLocals = Object.assign({}, config, { title: s.title });
@@ -92,9 +116,51 @@ async function resolveSections(rows, shared = {}) {
     }
     if (!locals) continue; // 리졸버가 스킵을 지시
 
-    sections.push({ type: s.section_type, view: reg.view, locals });
+    sections.push({ type: s.section_type, view: reg.view, locals, gateClass: GATE_CLASS[gate] || '' });
   }
   return sections;
+}
+
+/*
+ * 진단 — 이 섹션이 스토어프론트에 **실제로 나오는가**, 안 나온다면 왜인가.
+ *
+ * 페이지 빌더는 page_section 목록을 그대로 보여줬고, 렌더 엔진은 데이터가 없는 섹션을
+ * 조용히 버렸다. 그래서 "빌더에는 있는데 화면에는 없다"가 상시로 났다(새 몰은 상품그룹·
+ * 베스트그룹이 없어 절반이 증발했다). 빌더가 그 사실을 알아야 운영자에게 말해 줄 수 있다.
+ *
+ * resolveSections 와 **같은 판정을 같은 순서로** 돈다. 여기가 갈라지면 진단이 거짓말이 된다.
+ *
+ * @param rows page_section 원본 행(비활성·기간 밖 포함 — 빌더는 전부 보여주므로)
+ * @returns Map<sectionId, { rendered: boolean, code: string|null }>
+ */
+async function diagnoseSections(rows, shared = {}) {
+  const now = Date.now();
+  const out = new Map();
+
+  for (const s of rows) {
+    const put = (code) => out.set(s.id, { rendered: !code, code: code || null });
+
+    if (!registry[s.section_type]) { put('unregistered'); continue; }
+    if (Number(s.is_active) === 0) { put('inactive'); continue; }
+    if (s.visible_start_at && new Date(s.visible_start_at).getTime() > now) { put('scheduled'); continue; }
+    if (s.visible_end_at && new Date(s.visible_end_at).getTime() < now) { put('expired'); continue; }
+    if (deviceGate(s) === 'none') { put('device_off'); continue; }
+
+    const resolver = resolvers[s.section_type];
+    if (!resolver) { put(null); continue; } // 정적 섹션 — 데이터가 필요 없다
+
+    const config = parseConfig(s.config_json);
+    try {
+      const locals = await resolver.resolve({
+        section: s, shared, config, locals: Object.assign({}, config, { title: s.title })
+      });
+      put(locals ? null : 'empty');
+    } catch (err) {
+      console.error(`[diagnose] '${s.section_type}' 리졸버 실패:`, err.message);
+      put('error');
+    }
+  }
+  return out;
 }
 
 /*
@@ -150,6 +216,8 @@ module.exports = {
   getHomeSections,
   getDraftSections,
   resolveSections,
+  diagnoseSections,
+  getLiveSections,
   loadHomeCategories,
   getHomePage,
   getPageBySlug,

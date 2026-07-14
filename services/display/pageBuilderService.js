@@ -101,6 +101,23 @@ function sanitizeSectionConfig(sectionType, config) {
   return Object.assign({}, config, { html: sanitize(config.html) });
 }
 
+/*
+ * 섹션에 물릴 상품 그룹이 **이 섹션이 속한 몰의 것인지** 검증한다.
+ *
+ * 드롭다운을 몰 스코프로 좁혀도 서버는 그것을 신뢰하면 안 된다. 남의 몰 그룹을 물리면
+ * productGroupService 가 그룹의 mall_id 로 상품을 뽑으므로 **다른 몰 상품이 이 몰 홈에 뜬다**.
+ */
+async function assertGroupInSameMall(sectionId, groupId) {
+  const [[row]] = await pool.query(`
+    SELECT g.id
+      FROM page_section s
+      JOIN page p ON p.id = s.page_id
+      JOIN product_group g ON g.id = ? AND g.mall_id = p.mall_id
+     WHERE s.id = ?`,
+    [groupId, sectionId]);
+  if (!row) throw new Error('이 몰의 상품 그룹이 아닙니다.');
+}
+
 async function updateSection(id, patch) {
   const section = await getSection(id);
   if (!section) throw new Error('섹션을 찾을 수 없습니다.');
@@ -111,7 +128,12 @@ async function updateSection(id, patch) {
 
   if (patch.title !== undefined) set('title', patch.title || null);
   if (patch.data_source_id !== undefined) {
-    set('data_source_id', patch.data_source_id === '' || patch.data_source_id == null ? null : Number(patch.data_source_id));
+    const groupId = patch.data_source_id === '' || patch.data_source_id == null
+      ? null : Number(patch.data_source_id);
+    if (groupId) await assertGroupInSameMall(id, groupId);
+    set('data_source_id', groupId);
+    // 리졸버는 data_source_id 만 보지만, 비어 있던 타입 컬럼이 스냅샷·진단을 헷갈리게 한다.
+    set('data_source_type', groupId ? 'product_group' : null);
   }
   if (patch.config_json !== undefined) {
     // custom_html 은 저장 시점에도 새니타이즈한다(렌더 시 리졸버의 새니타이즈와 이중 방어).
@@ -218,6 +240,46 @@ async function publish(pageId, createdBy) {
   return maxRow.next_no;
 }
 
+/*
+ * 발행 이후에 작업본이 바뀌었는가(= 지금 화면과 스토어프론트가 다른가).
+ *
+ * 빌더의 "미발행 변경사항" 배지는 클라이언트가 편집할 때만 켜졌다. 새로고침하거나 다음 날
+ * 다시 들어오면 배지가 사라져, 발행을 잊은 변경분을 **아무도 모른 채** 남겨 두게 된다.
+ * (실제로 홈 page 1 이 그 상태였다 — 마지막 편집이 마지막 발행보다 뒤였다)
+ *
+ * 타임스탬프 비교로는 **삭제**를 못 잡는다(지운 행의 updated_at 은 남지 않는다). 그래서 발행할
+ * 때와 똑같이 스냅샷을 떠서 최신 리비전과 통째로 비교한다 — 추가·삭제·순서·설정 전부 잡힌다.
+ */
+/*
+ * 비교용 정규화. 그냥 JSON.stringify 로 맞대면 **항상 다르다**고 나온다:
+ *   - MySQL JSON 컬럼은 객체 키를 제 맘대로 재정렬해 저장한다(길이순 → 사전순)
+ *   - DATETIME 은 라이브에서 Date, 스냅샷에서 ISO 문자열로 온다
+ * 키를 정렬하고 값을 문자열로 눕혀 같은 내용이면 같은 문자열이 되게 한다.
+ */
+function canonical(v) {
+  if (v === null || v === undefined) return null;
+  if (v instanceof Date) return v.toISOString();
+  if (Array.isArray(v)) return v.map(canonical);
+  if (typeof v === 'object') {
+    return Object.keys(v).sort().reduce((o, k) => { o[k] = canonical(v[k]); return o; }, {});
+  }
+  return typeof v === 'number' ? String(v) : v; // 1 과 "1" 을 같게 본다(JSON 왕복에서 갈린다)
+}
+
+async function isDirty(pageId) {
+  const [[rev]] = await pool.query(
+    'SELECT snapshot_json FROM page_revision WHERE page_id = ? ORDER BY revision_no DESC LIMIT 1',
+    [pageId]);
+  if (!rev) return true; // 한 번도 발행 안 함 → 라이브 폴백 상태
+
+  const live = pickSnapshot(await getSections(pageId));
+  const raw = typeof rev.snapshot_json === 'object'
+    ? rev.snapshot_json : JSON.parse(rev.snapshot_json || '[]');
+  const published = Array.isArray(raw) ? raw : (raw.sections || []);
+
+  return JSON.stringify(canonical(live)) !== JSON.stringify(canonical(published));
+}
+
 async function listRevisions(pageId, limit = 20) {
   const [rows] = await pool.query(
     `SELECT id, revision_no, status, created_by, created_at, published_at
@@ -266,10 +328,17 @@ async function rollback(pageId, revisionId) {
   }
 }
 
-// 데이터소스 드롭다운용 목록
-async function listProductGroups() {
+/*
+ * 데이터소스 드롭다운용 목록.
+ *
+ * ⚠️ 반드시 몰 스코프다. 예전에는 전 몰의 그룹을 다 내려줘서, 소형몰 빌더에서 종합관 그룹을
+ * 고를 수 있었다. 골라도 productGroupService 가 그룹의 mall_id 로 상품을 조회하므로 화면에는
+ * **남의 몰 상품**이 뜬다(또는 0건이라 섹션이 통째로 사라진다).
+ */
+async function listProductGroups(mallId = 1) {
   const [rows] = await pool.query(
-    'SELECT id, name, group_type FROM product_group WHERE is_active = 1 ORDER BY id ASC'
+    'SELECT id, name, group_type FROM product_group WHERE is_active = 1 AND mall_id = ? ORDER BY id ASC',
+    [mallId]
   );
   return rows;
 }
@@ -286,6 +355,7 @@ module.exports = {
   duplicateSection,
   reorderSections,
   publish,
+  isDirty,
   listRevisions,
   rollback,
   listProductGroups

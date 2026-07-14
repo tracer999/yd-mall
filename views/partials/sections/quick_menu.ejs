@@ -5,7 +5,7 @@
    *
    * locals (config_json):
    *   title        : 섹션 제목 (없으면 헤더 생략)
-   *   items        : [{ icon, label, url, badge }]  icon = bootstrap-icons 클래스명(bi- 제외)
+   *   items        : [{ icon, label, url, badge }]  icon = bootstrap-icons 이름(bi- 제외, 붙여 넣어도 벗겨냄)
    *   columns      : PC 열 수 (기본 4)
    *   sectionClass : <section> 클래스
    *
@@ -17,7 +17,8 @@
   const _sectionClass = (typeof sectionClass !== 'undefined' && sectionClass) ? sectionClass : 'py-10 bg-white';
   const _title = (typeof title !== 'undefined' && title) ? title : '';
   const _safeIcon = (v) => {
-    const s = String(v || '').trim();
+    // 아이콘 목록 사이트가 'bi-award' 로 표기하므로 그대로 붙여 넣는 일이 잦다 — 접두어를 벗겨 받아준다.
+    const s = String(v || '').trim().replace(/^bi-/, '');
     return /^[a-z0-9-]+$/i.test(s) ? s : 'dot';
   };
 %>

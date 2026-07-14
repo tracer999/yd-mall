@@ -9,6 +9,15 @@
  *  - dataSource  : 'product_group' | 'category' | 'banner_group' | null (data_source_id 연결 대상)
  *  - fields     : config_json 편집 필드 스키마(관리자 설정폼 동적 생성). 섹션 공통 필드
  *                 (title/노출기간/PC·모바일/활성)은 에디터가 일괄 처리하므로 여기엔 config 전용 키만.
+ *
+ *  필드 type: text | number | select | textarea | json | repeater
+ *   - repeater 는 객체 배열을 행 단위 UI로 편집한다. itemFields(행 안의 입력 스키마) 필수,
+ *     addLabel(추가 버튼 문구)·hint(필드 아래 도움말 HTML) 선택. 저장 형태는 json 과 같은 배열이라
+ *     기존 데이터를 그대로 읽고 쓴다. itemFields 의 type 'icon' 은 입력 옆에 아이콘 미리보기를 붙인다.
+ *     picker: 'linkTargets' 를 주면 type 'linkTarget' 필드가 **이 몰에서 실제로 열리는 페이지**
+ *     셀렉트가 되고(services/menu/linkTargets.js), 고르는 즉시 url·icon·label 을 채운다.
+ *     manualOnly 필드는 '직접 입력(URL)' 을 골랐을 때만 보인다.
+ *   - json 은 스키마를 못 정하는 자유 구조에만 쓴다. 형태가 정해져 있으면 repeater 를 쓸 것.
  */
 
 const FIELD = {
@@ -159,7 +168,23 @@ module.exports = {
     description: '아이콘 바로가기 버튼 줄. 항목을 직접 입력해 원하는 곳으로 링크한다.',
     dataSource: null, // config_json 만 사용 (리졸버 없음)
     fields: [
-      { key: 'items', label: '항목 [{icon,label,url,badge}]', type: 'json', default: [] },
+      {
+        key: 'items',
+        label: '바로가기 항목',
+        type: 'repeater',
+        default: [],
+        addLabel: '항목 추가',
+        // 이동할 페이지를 목록에서 고르면 URL·아이콘이 자동으로 채워진다(운영자는 이름만 고친다).
+        picker: 'linkTargets',
+        hint: '이동할 페이지를 고르면 링크와 아이콘이 자동으로 채워집니다. 화면에 보일 이름만 바꾸면 됩니다.',
+        itemFields: [
+          { key: 'url', label: '이동할 페이지', type: 'linkTarget' },
+          { key: 'label', label: '표시 이름', type: 'text', placeholder: '오늘특가' },
+          { key: 'badge', label: '뱃지(선택)', type: 'text', placeholder: 'N' },
+          // 페이지를 고르면 자동으로 채워진다. '직접 입력' 을 골랐을 때만 손으로 넣는다.
+          { key: 'icon', label: '아이콘', type: 'icon', placeholder: 'lightning-charge', manualOnly: true }
+        ]
+      },
       Object.assign({}, FIELD.columns, { label: '열 수(PC)', max: 6, default: 4 })
     ]
   },

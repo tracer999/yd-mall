@@ -109,7 +109,10 @@ page (page_type='home', mall_id)
 - 섹션 행에 레지스트리 메타를 덧입힌다(`decorateSection`): `label`, `fields`, `dataSource`, `config`(파싱), `dataSourceName`, `isUnknownType`.
 - 팔레트(`buildPalette`)는 `sectionRegistry` 를 그대로 나열한다 → **레지스트리에 등록하면 즉시 추가 가능한 섹션이 된다.**
 - 초기 데이터는 `<script id="pb-data" type="application/json">` 에 JSON 으로 실려 `public/js/admin/page-builder.js` 가 읽는다. `</`, `<!--`, U+2028/2029 를 이스케이프한다(스크립트 조기 종료 방지).
-- 설정폼은 `fields` 스키마로 동적 생성한다(`page-builder.js:138 renderConfigInput`): `number` / `select` / `textarea` / `json` / (기본) `text`. `json` 타입은 textarea 에 pretty-print 하고 `data-json="1"` 로 표시해 저장 시 파싱한다.
+- 설정폼은 `fields` 스키마로 동적 생성한다(`page-builder.js` `renderConfigInput`): `number` / `select` / `textarea` / `json` / `repeater` / (기본) `text`. `json` 타입은 textarea 에 pretty-print 하고 `data-json="1"` 로 표시해 저장 시 파싱한다.
+- `repeater` 는 객체 배열을 **행 단위 UI**(추가·삭제·순서 이동)로 편집한다. 레지스트리에 `itemFields`(행 안의 입력 스키마)를 주면 되고, `addLabel`·`hint`(필드 아래 도움말 HTML)는 선택이다. 저장 형태는 `json` 과 같은 배열이라 기존 `config_json` 을 그대로 읽고 쓴다. 형태가 정해진 배열이면 `json` 대신 이쪽을 쓸 것.
+- `picker: 'linkTargets'` 를 준 repeater 는 `type: 'linkTarget'` 필드가 **이 몰에서 실제로 열리는 페이지 셀렉트**가 된다. 고르는 즉시 `url`·`icon`·`label` 이 채워지고(운영자는 표시 이름만 수정), 목록에 없는 곳은 `직접 입력(URL)` 을 골라야 `manualOnly` 필드(URL·아이콘)가 열린다. `type: 'icon'` 필드는 아이콘 미리보기를 붙이고 저장 시 `bi-` 접두어를 벗겨 정규화한다. 현재 `quick_menu.items` 가 사용한다.
+- 선택지 목록은 `services/menu/linkTargets.js` 의 `getLinkTargets(mallId)` 가 만든다 — `navigationService` 의 `getFeatureMenus`(몰에서 켜짐 + `module_ready` + 콘텐츠 게이트 통과) + `getCustomMenus`(대상이 유효한 것) + 고정 페이지(홈)를 URL 기준으로 중복 제거한다. **즉 GNB 에 나올 수 있는 페이지만 바로가기 후보가 된다.** 아이콘은 `feature_menu` 에 컬럼이 없으므로 같은 파일의 `FEATURE_ICONS`(feature_code → Bootstrap Icons 이름) 가 관장한다 — 기능 메뉴를 추가하면 여기에 한 줄 넣는다.
 - 공통 필드(제목·PC/모바일 노출·활성·노출기간)는 에디터가 일괄 처리하므로 레지스트리 `fields` 에는 **config 전용 키만** 둔다.
 
 ---
@@ -130,7 +133,7 @@ page (page_type='home', mall_id)
 | `ranking_tabs` | 랭킹 탭 | `partials/sections/ranking_tabs` | – (고정 소스: 카테고리 탭) | `ranking_tabs.js` — 첫 탭만 SSR, 나머지는 `GET /sections/ranking` | `maxTabs`(6), `rankLimit`(8), `sort`(`views`\|`sales`\|`newest`\|`discount`) |
 | `promotion_banner` | 프로모션 배너 | `partials/sections/promotion_banner` | `banner_group` | `promotion_banner.js` — `bannerService.getByGroup(config.groupKey)` | `groupKey`, `maxCount`(4), `layout`(`rect`\|`vertical`), `columns`(2) |
 | `benefit_bento` | 혜택 벤토 | `partials/sections/benefit_bento` | `product_group` | `benefit_bento.js` — 대형 딜 + 썸네일 + 프로모 블록 | `dealProductId`, `maxCount`(8), `promoBlocks`(JSON `[{copy,color,url}]`) |
-| `quick_menu` | 퀵 메뉴 | `partials/sections/quick_menu` | – | **없음(정적)** — `config_json` 만으로 렌더 | `items`(JSON `[{icon,label,url,badge}]`), `columns`(4) |
+| `quick_menu` | 퀵 메뉴 | `partials/sections/quick_menu` | – | **없음(정적)** — `config_json` 만으로 렌더 | `items`(repeater → `[{icon,label,url,badge}]`), `columns`(4) |
 | `recent_product` | 최근 본 상품 | `partials/sections/recent_product` | – | `recent_product.js` — 로그인=`recent_views`, 비로그인=클라이언트 localStorage | `maxCount`(8) |
 | `custom_html` | 커스텀 HTML | `partials/sections/custom_html` | – | `custom_html.js` — 렌더 직전 새니타이즈, 비면 스킵 | `html`(textarea) |
 

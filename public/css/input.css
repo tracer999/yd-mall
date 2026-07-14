@@ -88,6 +88,13 @@
   .prose code { @apply bg-gray-100 px-1 py-0.5 rounded text-sm; }
 }
 
+/*
+ * SDUI 섹션 노출 대상 (page_section.visible_on_pc / visible_on_mobile)
+ * displayService 가 게이트를 계산해 wrapper 클래스로 내려준다. 헤더·GNB 와 같은 1024px 경계.
+ */
+@media (max-width: 1023px) { .yd-only-pc { display: none !important; } }
+@media (min-width: 1024px) { .yd-only-mobile { display: none !important; } }
+
 /* 가로 스크롤 캐러셀의 스크롤바 숨김 (기획전 PRODUCT_CAROUSEL 섹션) */
 @utility scrollbar-none {
   scrollbar-width: none;

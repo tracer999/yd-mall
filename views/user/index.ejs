@@ -42,12 +42,15 @@
 <%- include('../partials/sections/popup_banner', { popupBanner }) %>
 
 <!-- ── 섹션 조립 렌더 (page_section 순서대로) ── -->
+<%/* gateClass = 노출 대상(PC/모바일) 제한. 빈 문자열이면 감싸지 않는다(불필요한 div 금지). */%>
 <% _sections.forEach(function (section) { %>
+  <% if (section.gateClass) { %><div class="<%= section.gateClass %>"><% } %>
   <% try { %>
     <%- include('../' + section.view, section.locals) %>
   <% } catch (e) { %>
     <% console.error('[home] 섹션 렌더 실패 — 스킵:', section.type, e && e.message); %>
   <% } %>
+  <% if (section.gateClass) { %></div><% } %>
 <% }); %>
 
 <!-- ── 페이지 스크립트 (여러 섹션 공유) ── -->

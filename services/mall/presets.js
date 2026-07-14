@@ -27,11 +27,15 @@
 /*
  * homeSections — page_section 시딩 목록.
  *
- * ⚠️ 상품그룹·베스트그룹을 요구하는 섹션(product_grid, best_ranking 등)은 새 몰에
- * 해당 데이터가 없으면 리졸버가 null 을 돌려 **조용히 스킵**된다(displayService 가 격리).
- * 화면이 깨지지는 않지만 섹션이 안 보인다. 운영자가 상품그룹을 만들고 페이지 빌더에서
- * 연결하면 그때 나타난다. 그래서 데이터 없이도 뜨는 섹션(hero, value_proposition,
- * category_showcase, custom_html, kakao_cta)을 골격으로 깔아 둔다.
+ * ⚠️ 상품그룹·베스트그룹을 요구하는 섹션(product_grid, best_ranking 등)은 그 데이터가 없으면
+ * 리졸버가 null 을 돌려 **조용히 스킵**된다(displayService 가 격리). 화면이 깨지지는 않지만
+ * 섹션이 안 보인다 — 그래서 예전 새 몰은 홈 절반이 증발한 채로 태어났고, 운영자는 빌더 목록에
+ * 있는 섹션이 왜 화면에 없는지 알 방법이 없었다.
+ *
+ * 이제 프로비저너가 이 섹션들이 먹고 살 데이터 소스를 **함께** 만든다:
+ *   group: 'recommend' | 'new'  →  같은 이름의 product_group 을 만들어 data_source_id 로 물린다
+ *   best_ranking                →  몰의 'ALL' 베스트 그룹을 만들고 초기 랭킹을 집계한다
+ * (mallProvisioner.PRODUCT_GROUP_SEEDS 참고)
  */
 
 const PRESETS = {
@@ -77,7 +81,7 @@ const PRESETS = {
             { type: 'hero', title: null },
             { type: 'value_proposition', title: null },
             { type: 'best_ranking', title: '베스트 상품' },
-            { type: 'product_grid', title: 'MD 추천' },
+            { type: 'product_grid', title: 'MD 추천', group: 'recommend' },
             { type: 'category_showcase', title: '카테고리' },
             { type: 'recent_product', title: '최근 본 상품' },
             { type: 'kakao_cta', title: null },
@@ -123,7 +127,7 @@ const PRESETS = {
         homeSections: [
             { type: 'hero', title: null },
             { type: 'value_proposition', title: null },
-            { type: 'product_grid', title: '상품' },
+            { type: 'product_grid', title: '상품', group: 'recommend' },
             { type: 'category_showcase', title: '카테고리' },
             { type: 'kakao_cta', title: null },
         ],

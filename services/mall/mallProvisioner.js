@@ -5,6 +5,7 @@ const pageBuilderService = require('../display/pageBuilderService');
 const mallContext = require('../../middleware/mallContext');
 const themeData = require('../../middleware/themeData');
 const navigationService = require('../menu/navigationService');
+const bestRankingService = require('../best/bestRankingService');
 
 /*
  * 몰 프로비저너 (몰 빌더 P4)
@@ -130,12 +131,59 @@ async function applySiteSettings(conn, mallId, mallName) {
         [mallId, String(mallName || '').slice(0, 100)]);
 }
 
+/*
+ * 홈 섹션이 먹고 살 상품 그룹.
+ *
+ * condition(조건형)이라 상품을 하나씩 담을 필요가 없다 — 몰에 상품이 들어오는 순간 채워진다.
+ * manual 로 만들면 운영자가 상품을 담기 전까지 0건이라 섹션이 그대로 증발한다.
+ */
+const PRODUCT_GROUP_SEEDS = [
+    { key: 'recommend', name: '추천 상품', sort_type: 'newest', filter: {} },
+    { key: 'new', name: '신상품', sort_type: 'sale_start', filter: { isNew: true } },
+];
+
+/**
+ * product_group — 프리셋 섹션이 참조할 조건형 그룹. 이름으로 멱등(있으면 재사용).
+ * @returns {Promise<Object>} { recommend: id, new: id }
+ */
+async function applyProductGroups(conn, mallId) {
+    const idByKey = {};
+    for (const seed of PRODUCT_GROUP_SEEDS) {
+        const [[existing]] = await conn.query(
+            'SELECT id FROM product_group WHERE mall_id = ? AND name = ? LIMIT 1', [mallId, seed.name]);
+        if (existing) { idByKey[seed.key] = existing.id; continue; }
+
+        const [r] = await conn.query(`
+            INSERT INTO product_group (mall_id, name, group_type, sort_type, filter_condition_json, is_active)
+            VALUES (?, ?, 'condition', ?, ?, 1)`,
+            [mallId, seed.name, seed.sort_type, JSON.stringify(seed.filter)]);
+        idByKey[seed.key] = r.insertId;
+    }
+    return idByKey;
+}
+
+/**
+ * best_group — 몰의 'ALL'(전체) 베스트 그룹. 없으면 best_ranking 리졸버가 즉시 null 을 돌려
+ * 베스트 섹션이 통째로 사라진다. 랭킹 산출(집계)은 트랜잭션 밖에서 따로 돈다.
+ */
+async function applyBestGroups(conn, mallId) {
+    const [[existing]] = await conn.query(
+        "SELECT id FROM best_group WHERE mall_id = ? AND group_type = 'ALL' LIMIT 1", [mallId]);
+    if (existing) return existing.id;
+
+    const [r] = await conn.query(
+        "INSERT INTO best_group (mall_id, name, group_type, sort_order, is_active) VALUES (?, '전체', 'ALL', 0, 1)",
+        [mallId]);
+    return r.insertId;
+}
+
 /**
  * page(home) + page_section — 홈 골격.
  *
+ * @param groupIdByKey 프리셋 섹션의 `group` 힌트 → product_group.id
  * @returns {Promise<{ pageId: number, replaced: boolean }>}
  */
-async function applyHome(conn, mallId, mallCode, mallName, sections, overwrite) {
+async function applyHome(conn, mallId, mallCode, mallName, sections, overwrite, groupIdByKey = {}) {
     const [[existing]] = await conn.query(
         "SELECT id FROM page WHERE mall_id = ? AND page_type = 'home' ORDER BY id ASC LIMIT 1", [mallId]);
 
@@ -157,10 +205,13 @@ async function applyHome(conn, mallId, mallCode, mallName, sections, overwrite) 
 
     let sortOrder = 1;
     for (const s of sections) {
+        // 데이터 소스를 여기서 물려 준다. 안 물리면 리졸버가 0건을 보고 섹션을 통째로 버린다.
+        const groupId = s.group ? (groupIdByKey[s.group] || null) : null;
         await conn.query(`
-            INSERT INTO page_section (page_id, section_type, position, title, sort_order, config_json, is_active)
-            VALUES (?, ?, 'main_content', ?, ?, NULL, 1)`,
-            [pageId, s.type, s.title || null, sortOrder++]);
+            INSERT INTO page_section
+              (page_id, section_type, position, title, sort_order, data_source_type, data_source_id, config_json, is_active)
+            VALUES (?, ?, 'main_content', ?, ?, ?, ?, NULL, 1)`,
+            [pageId, s.type, s.title || null, sortOrder++, groupId ? 'product_group' : null, groupId]);
     }
 
     return { pageId, replaced };
@@ -202,7 +253,10 @@ async function provisionMall(mallId, presetKey, opts = {}) {
         await applySiteSettings(conn, id, mall.name);
 
         if (includeHome) {
-            home = await applyHome(conn, id, mall.code, mall.name, preset.homeSections, overwrite);
+            // 섹션보다 **먼저** 데이터 소스를 만든다 — 섹션이 만들어질 때 물려야 하므로.
+            const groupIdByKey = await applyProductGroups(conn, id);
+            await applyBestGroups(conn, id);
+            home = await applyHome(conn, id, mall.code, mall.name, preset.homeSections, overwrite, groupIdByKey);
         }
 
         // 마지막으로 적용한 프리셋을 기억한다(목록·재적용 화면 표시용).
@@ -215,6 +269,19 @@ async function provisionMall(mallId, presetKey, opts = {}) {
         throw err;
     } finally {
         conn.release();
+    }
+
+    /*
+     * 베스트 랭킹 초기 집계. best_group 만 만들어 두면 best_ranking(스냅샷)이 비어 있어
+     * getRanking 이 0건을 돌려주고 → 섹션이 또 사라진다. 배치(cron)를 기다리지 않고 지금 한 번 돈다.
+     * 실패해도 몰은 살아야 한다 — 다음 배치나 관리자의 "지금 집계"가 채운다.
+     */
+    if (includeHome) {
+        try {
+            await bestRankingService.calculateAllPeriods(id);
+        } catch (err) {
+            console.error(`[provisionMall] 베스트 초기 집계 실패(몰 ${id}):`, err.message);
+        }
     }
 
     /*
@@ -234,4 +301,11 @@ async function provisionMall(mallId, presetKey, opts = {}) {
     return { preset, created: mode === 'create', homeReplaced: home.replaced, revisionNo };
 }
 
-module.exports = { provisionMall, inspect };
+module.exports = {
+    provisionMall,
+    inspect,
+    // 백필 스크립트(scripts/backfill_mall_data_sources.js)가 같은 시드 정의를 재사용한다.
+    PRODUCT_GROUP_SEEDS,
+    applyProductGroups,
+    applyBestGroups,
+};

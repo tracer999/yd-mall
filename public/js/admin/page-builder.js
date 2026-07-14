@@ -10,6 +10,7 @@
   var PAGE_ID = STATE.pageId;          // 편집 대상 페이지. 모든 요청·미리보기가 이걸 따른다
   var sections = STATE.sections || [];
   var productGroups = STATE.productGroups || [];
+  var linkTargets = STATE.linkTargets || [];   // 이 몰에서 실제로 열리는 페이지 목록(바로가기 선택지)
   var selectedId = null;
 
   var listEl = document.getElementById('pb-section-list');
@@ -71,12 +72,21 @@
       if (s.dataSourceName) badges += '<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-600">' + esc(s.dataSourceName) + '</span>';
       if (Number(s.is_active) === 0) badges += '<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-200 text-gray-600">숨김</span>';
       if (s.isUnknownType) badges += '<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-600">미등록</span>';
+      // 서버가 리졸버를 실제로 돌려 본 결과. 목록에만 있고 화면에는 없는 섹션을 드러낸다.
+      if (s.willRender === false) badges += '<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-700">프론트 미노출</span>';
+
+      // 왜 안 나오는지까지 말해 준다 — "상품 그룹을 만드세요" 수준으로 구체적으로.
+      var reason = (s.willRender === false && s.skipReason)
+        ? '<p class="mt-1 text-[11px] text-amber-700 leading-snug">' +
+            '<i class="bi bi-exclamation-triangle-fill mr-1"></i>' + esc(s.skipReason) + '</p>'
+        : '';
 
       row.innerHTML =
         '<span class="text-xs font-bold text-gray-400 w-5 text-center">' + (idx + 1) + '</span>' +
         '<div class="flex-1 min-w-0">' +
           '<p class="text-sm font-medium text-gray-900 truncate">' + esc(s.title || s.label) + badges + '</p>' +
           '<p class="text-[11px] text-gray-400">' + esc(s.section_type) + '</p>' +
+          reason +
         '</div>' +
         '<div class="flex items-center gap-0.5 flex-shrink-0">' +
           btn('up', 'bi-chevron-up', '위로') +
@@ -120,7 +130,7 @@
     (s.fields || []).forEach(function (f) {
       var val = (s.config && s.config[f.key] != null) ? s.config[f.key] : (f.default != null ? f.default : '');
       var input = renderConfigInput(f, val);
-      html += field(f.label, input);
+      html += field(f.label, input, f.hint);
     });
 
     // 노출 대상
@@ -162,10 +172,207 @@
       }
       return '<textarea data-c="' + f.key + '" data-json="1" rows="10" class="pb-input font-mono text-sm">' + esc(jsonText) + '</textarea>';
     }
+    if (f.type === 'repeater') return renderRepeater(f, val);
     return '<input type="text" data-c="' + f.key + '" value="' + esc(val) + '" class="pb-input">';
   }
-  function field(label, input) {
-    return '<div><label class="block text-xs font-medium text-gray-600 mb-1">' + label + '</label>' + input + '</div>';
+
+  // ---------- 반복 항목(repeater) ----------
+  // 객체 배열(퀵메뉴 items 등)을 행 단위로 편집한다. 저장 형태는 json 필드와 같은 배열이라
+  // 기존 config_json 을 그대로 읽고 쓴다. 스키마는 레지스트리의 f.itemFields 가 준다.
+  function renderRepeater(f, val) {
+    var rows = Array.isArray(val) ? val : [];
+    var body = rows.map(function (item) { return repeaterRow(f, item); }).join('');
+    return '<div data-c="' + f.key + '" data-repeater="1" data-fkey="' + esc(f.key) + '">' +
+      '<div class="pb-rep-rows space-y-2">' + body + '</div>' +
+      '<p class="pb-rep-empty text-[11px] text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-lg' +
+        (rows.length ? ' hidden' : '') + '">항목이 없습니다. 하나도 없으면 이 섹션은 화면에 나오지 않습니다.</p>' +
+      '<button type="button" class="pb-rep-add mt-2 w-full inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 ' +
+        'text-xs font-medium text-gray-700 rounded-md hover:bg-gray-50">' +
+        '<i class="bi bi-plus-lg mr-1"></i>' + esc(f.addLabel || '항목 추가') + '</button>' +
+      '</div>';
+  }
+  function repeaterRow(f, item) {
+    if (f.picker === 'linkTargets') return linkTargetRow(f, item || {});
+    return plainRow(f, item);
+  }
+
+  /*
+   * 링크 대상 선택 행 — 퀵메뉴처럼 "실제로 있는 페이지로 보내는" 항목용.
+   *
+   * 운영자에게 URL·아이콘을 물으면 오타와 죽은 링크만 나온다. 그래서 이동할 페이지를
+   * 목록(STATE.linkTargets = GNB 에 나올 수 있는 페이지들)에서 고르게 하고 url·icon 은 자동으로
+   * 채운다. 목록에 없는 곳으로 보내야 할 때만 '직접 입력' 으로 URL·아이콘을 연다.
+   * url/icon 입력은 숨겨져 있어도 계속 존재하므로 collectRepeater 가 그대로 읽어 간다.
+   */
+  function linkTargetRow(f, it) {
+    var linkField = (f.itemFields || []).filter(function (x) { return x.type === 'linkTarget'; })[0];
+    var normals = (f.itemFields || []).filter(function (x) { return x !== linkField && !x.manualOnly; });
+    var manuals = (f.itemFields || []).filter(function (x) { return x.manualOnly; });
+
+    var url = it[linkField.key] != null ? String(it[linkField.key]) : '';
+    var target = targetByUrl(url);
+    var isCustom = !!url && !target;
+    var icon = it.icon || (target ? target.icon : '');
+
+    var select = '<select data-picker="1" class="pb-input">' +
+      '<option value="">— 페이지 선택 —</option>' +
+      linkTargetOptions(url, isCustom) +
+      '<option value="__custom__"' + (isCustom ? ' selected' : '') + '>직접 입력(URL)</option>' +
+      '</select>';
+
+    var head = '<div class="flex items-end gap-1.5">' +
+      '<span class="pb-rep-icon w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700">' +
+        '<i class="bi bi-' + esc(safeIconName(icon)) + '"></i></span>' +
+      '<div class="flex-1 min-w-0">' +
+        '<label class="block text-[10px] text-gray-400 mb-0.5">' + esc(linkField.label) + '</label>' + select +
+      '</div></div>';
+
+    var rest = '<div class="grid grid-cols-2 gap-1.5">' + normals.map(function (sub) {
+      return subField(sub, it[sub.key]);
+    }).join('') + '</div>';
+
+    // 직접 입력일 때만 여는 칸 — URL 과 아이콘. 평소에는 숨긴 채 값만 들고 있는다.
+    var manualInputs = subField(linkField, url, 'text') + manuals.map(function (sub) {
+      return subField(sub, it[sub.key]);
+    }).join('');
+    var manual = '<div class="pb-rep-manual grid grid-cols-2 gap-1.5' + (isCustom ? '' : ' hidden') + '">' +
+      manualInputs + '</div>';
+
+    return '<div class="pb-rep-row flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2">' +
+      '<div class="flex-1 min-w-0 space-y-1.5">' + head + rest + manual + '</div>' +
+      rowButtons() +
+      '</div>';
+  }
+  /** 링크 대상 셀렉트의 <optgroup> 목록. 그룹(기본/기능 메뉴/커스텀 메뉴)별로 묶는다. */
+  function linkTargetOptions(url, isCustom) {
+    var groups = [];
+    linkTargets.forEach(function (t) {
+      var g = groups.filter(function (x) { return x.name === t.group; })[0];
+      if (!g) { g = { name: t.group, items: [] }; groups.push(g); }
+      g.items.push(t);
+    });
+    return groups.map(function (g) {
+      return '<optgroup label="' + esc(g.name) + '">' + g.items.map(function (t) {
+        var sel = (!isCustom && t.url === url) ? ' selected' : '';
+        return '<option value="' + esc(t.url) + '"' + sel + '>' + esc(t.label) + ' (' + esc(t.url) + ')</option>';
+      }).join('') + '</optgroup>';
+    }).join('');
+  }
+  function targetByUrl(url) {
+    if (!url) return null;
+    return linkTargets.filter(function (t) { return t.url === url; })[0] || null;
+  }
+
+  function plainRow(f, item) {
+    var it = item || {};
+    // 설정 패널이 좁아 한 줄에 4칸을 넣으면 값이 잘린다 — 2열로 접는다.
+    var inputs = (f.itemFields || []).map(function (sub) { return subField(sub, it[sub.key]); }).join('');
+    return '<div class="pb-rep-row flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2">' +
+      '<div class="flex-1 min-w-0 grid grid-cols-2 gap-1.5">' + inputs + '</div>' +
+      rowButtons() +
+      '</div>';
+  }
+  /** 행 안의 입력 한 칸. asType 으로 렌더 타입을 강제할 수 있다(링크 대상 → 직접 입력용 text). */
+  function subField(sub, val, asType) {
+    var type = asType || sub.type;
+    var v = val != null ? val : '';
+    var input = '<input type="text" data-ri="' + esc(sub.key) + '"' + (type === 'icon' ? ' data-icon="1"' : '') +
+      ' value="' + esc(v) + '" placeholder="' + esc(sub.placeholder || '') + '" class="pb-input pb-rep-input">';
+    var label = (type === 'text' && sub.type === 'linkTarget') ? 'URL 직접 입력' : sub.label;
+    return '<div class="min-w-0">' +
+      '<label class="block text-[10px] text-gray-400 mb-0.5">' + esc(label) + '</label>' + input + '</div>';
+  }
+  function rowButtons() {
+    return '<div class="flex flex-col gap-0.5 flex-shrink-0">' +
+        '<button type="button" data-rep="up" title="위로" class="px-1 text-gray-400 hover:text-gray-700"><i class="bi bi-chevron-up text-xs"></i></button>' +
+        '<button type="button" data-rep="down" title="아래로" class="px-1 text-gray-400 hover:text-gray-700"><i class="bi bi-chevron-down text-xs"></i></button>' +
+      '</div>' +
+      '<button type="button" data-rep="del" title="삭제" class="px-1.5 py-1 text-red-400 hover:text-red-600"><i class="bi bi-trash"></i></button>';
+  }
+  // 뷰(partials/sections/quick_menu.ejs)의 _safeIcon 과 같은 규칙 — 미리보기가 실제 렌더와 어긋나면 안 된다.
+  function safeIconName(v) {
+    var s = String(v || '').trim().replace(/^bi-/, '');
+    return /^[a-z0-9-]+$/i.test(s) ? s : 'dot';
+  }
+  function collectRepeater(wrap) {
+    var out = [];
+    wrap.querySelectorAll('.pb-rep-row').forEach(function (row) {
+      var obj = {};
+      var filled = false;
+      row.querySelectorAll('[data-ri]').forEach(function (el) {
+        var v = el.value.trim();
+        if (!v) return;              // 빈 칸은 키 자체를 넣지 않는다(뱃지 없음 = badge 키 없음)
+        // 아이콘은 'bi-award' 로 붙여 넣어도 받아주되, 저장은 'award' 로 통일한다.
+        obj[el.dataset.ri] = el.dataset.icon === '1' ? v.replace(/^bi-/, '') : v;
+        filled = true;
+      });
+      if (filled) out.push(obj);     // 전부 빈 행은 저장하지 않는다
+    });
+    return out;
+  }
+  // 행 추가·삭제·정렬·아이콘 미리보기. 설정폼은 매번 innerHTML 로 다시 그려지므로
+  // 개별 행이 아니라 컨테이너에 위임한다.
+  settingsEl.addEventListener('click', function (e) {
+    var addBtn = e.target.closest('.pb-rep-add');
+    if (addBtn) {
+      var wrapAdd = addBtn.closest('[data-repeater]');
+      var s = findSection(selectedId);
+      var f = (s && (s.fields || []).filter(function (x) { return x.key === wrapAdd.dataset.fkey; })[0]) || {};
+      var rowsEl = wrapAdd.querySelector('.pb-rep-rows');
+      rowsEl.insertAdjacentHTML('beforeend', repeaterRow(f, {}));
+      wrapAdd.querySelector('.pb-rep-empty').classList.add('hidden');
+      var added = rowsEl.lastElementChild.querySelector('[data-ri]');
+      if (added) added.focus();
+      return;
+    }
+    var actBtn = e.target.closest('[data-rep]');
+    if (!actBtn) return;
+    var row = actBtn.closest('.pb-rep-row');
+    var wrap = actBtn.closest('[data-repeater]');
+    var act = actBtn.dataset.rep;
+    if (act === 'del') row.remove();
+    else if (act === 'up' && row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
+    else if (act === 'down' && row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+    var left = wrap.querySelectorAll('.pb-rep-row').length;
+    wrap.querySelector('.pb-rep-empty').classList.toggle('hidden', left > 0);
+  });
+  settingsEl.addEventListener('input', function (e) {
+    var el = e.target.closest('[data-icon="1"]');
+    if (!el) return;
+    setRowIcon(el.closest('.pb-rep-row'), el.value);
+  });
+  // 이동할 페이지를 고르면 URL·아이콘·이름을 대신 채운다 — 운영자가 손댈 것은 이름뿐이다.
+  settingsEl.addEventListener('change', function (e) {
+    var sel = e.target.closest('[data-picker]');
+    if (!sel) return;
+    var row = sel.closest('.pb-rep-row');
+    var manual = row.querySelector('.pb-rep-manual');
+    var urlEl = row.querySelector('[data-ri="url"]');
+    var iconEl = row.querySelector('[data-ri="icon"]');
+    var labelEl = row.querySelector('[data-ri="label"]');
+
+    if (sel.value === '__custom__') {   // 목록에 없는 곳 — URL·아이콘을 직접 받는다
+      manual.classList.remove('hidden');
+      urlEl.focus();
+      return;
+    }
+    manual.classList.add('hidden');
+    var t = targetByUrl(sel.value);
+    urlEl.value = sel.value;
+    if (t) {
+      iconEl.value = t.icon;
+      labelEl.value = t.label;         // 고른 페이지의 이름으로 채운다(이후 자유롭게 수정)
+      setRowIcon(row, t.icon);
+    }
+  });
+  function setRowIcon(row, icon) {
+    var box = row && row.querySelector('.pb-rep-icon i');
+    if (box) box.className = 'bi bi-' + safeIconName(icon);
+  }
+
+  function field(label, input, hint) {
+    var hintHtml = hint ? '<p class="mt-1 text-[11px] text-gray-500 leading-snug">' + hint + '</p>' : '';
+    return '<div><label class="block text-xs font-medium text-gray-600 mb-1">' + label + '</label>' + input + hintHtml + '</div>';
   }
   function checkbox(name, label, checked) {
     return '<label class="inline-flex items-center gap-1.5 text-sm text-gray-700">' +
@@ -183,7 +390,10 @@
     try {
       var body = { config: {} };
       settingsEl.querySelectorAll('[data-f]').forEach(function (el) { body[el.dataset.f] = el.value; });
-      settingsEl.querySelectorAll('[data-c]').forEach(function (el) {
+      settingsEl.querySelectorAll('[data-repeater]').forEach(function (el) {
+        body.config[el.dataset.c] = collectRepeater(el);
+      });
+      settingsEl.querySelectorAll('[data-c]:not([data-repeater])').forEach(function (el) {
         var v = el.value;
         if (el.dataset.json === '1') {
           if (!v.trim()) {
@@ -200,10 +410,13 @@
         body.config[el.dataset.c] = (el.type === 'number' && v !== '') ? Number(v) : v;
       });
       settingsEl.querySelectorAll('[data-chk]').forEach(function (el) { body[el.dataset.chk] = el.checked; });
-      await api('/admin/page-builder/sections/' + id + '/update', body);
+      var saved = await api('/admin/page-builder/sections/' + id + '/update', body);
       // 로컬 상태 갱신
       var s = findSection(id);
       if (s) {
+        // 서버가 다시 판정한 노출 여부 — 그룹을 붙여 고쳤으면 경고가 바로 사라진다.
+        s.willRender = saved.willRender !== false;
+        s.skipReason = saved.skipReason || null;
         s.title = body.title; s.config = body.config;
         if (body.data_source_id !== undefined) {
           s.data_source_id = body.data_source_id || null;

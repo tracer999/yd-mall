@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const registry = require('../../services/display/sectionRegistry');
 const builder = require('../../services/display/pageBuilderService');
 const displayService = require('../../services/display/displayService');
+const linkTargetService = require('../../services/menu/linkTargets');
 const mainController = require('../mainController');
 
 /*
@@ -58,6 +59,43 @@ async function resolvePage(req) {
   return await builder.getHomePage(mallId);
 }
 
+/*
+ * 편집 중인 몰 기준으로 리졸버 shared 를 만든다.
+ *
+ * buildHomeContext 는 res.locals.siteSettings(= 스토어프론트 몰의 설정)를 읽는다. 관리자 요청의
+ * 스토어프론트 몰은 편집 몰과 다를 수 있어, 그대로 쓰면 "건강식품관 카카오 설정으로 소형몰
+ * 섹션을 판정"하는 어긋남이 난다. 편집 몰의 site_settings 로 갈아끼운 뒤 부른다.
+ * (요청 스코프에서만 유효 — 이 응답은 관리자 화면이라 스토어프론트 렌더에 영향이 없다)
+ */
+async function buildAdminShared(req, res) {
+  const mallId = req.adminMallId || 1;
+  req.mallId = mallId;
+
+  const [rows] = await pool.query(
+    'SELECT * FROM site_settings WHERE mall_id = ? LIMIT 1', [mallId]
+  );
+  if (rows[0]) res.locals.siteSettings = rows[0];
+
+  const { shared } = await mainController.buildHomeContext(req, res);
+  return shared;
+}
+
+/* 스킵 코드 → 운영자에게 보여줄 이유. 'empty' 만 섹션 타입별로 갈린다(EMPTY_REASON). */
+const SKIP_MESSAGE = {
+  unregistered: '코드에 없는 섹션 타입입니다. 삭제하세요.',
+  inactive: '비활성(숨김) 상태입니다. 설정에서 “활성”을 켜세요.',
+  scheduled: '노출 시작 시각이 아직 오지 않았습니다.',
+  expired: '노출 종료 시각이 지났습니다.',
+  device_off: 'PC·모바일 노출이 둘 다 꺼져 있습니다.',
+  error: '데이터를 불러오다 오류가 났습니다. 서버 로그를 확인하세요.',
+};
+
+function skipMessage(code, sectionType) {
+  if (!code) return null;
+  if (code === 'empty') return EMPTY_REASON[sectionType] || '이 섹션을 채울 데이터가 아직 없습니다.';
+  return SKIP_MESSAGE[code] || '스토어프론트에 노출되지 않습니다.';
+}
+
 exports.getEditor = async (req, res) => {
   try {
     const mallId = req.adminMallId || 1;
@@ -73,21 +111,47 @@ exports.getEditor = async (req, res) => {
       });
     }
 
-    const [rawSections, productGroups, revisions] = await Promise.all([
+    const [rawSections, productGroups, revisions, dirty, linkTargets] = await Promise.all([
       builder.getSections(page.id),
-      builder.listProductGroups(),
-      builder.listRevisions(page.id)
+      builder.listProductGroups(mallId),
+      builder.listRevisions(page.id),
+      builder.isDirty(page.id),
+      // 퀵메뉴 등 바로가기 섹션이 "이 몰에서 실제로 열리는 페이지"만 고르게 한다.
+      linkTargetService.getLinkTargets(mallId).catch((e) => {
+        console.error('[pageBuilder.getEditor] 링크 대상 조회 실패:', e.message);
+        return [];   // 목록을 못 만들어도 빌더는 떠야 한다(직접 입력으로 폴백)
+      })
     ]);
+
+    /*
+     * 목록에 있는 섹션이 스토어프론트에 실제로 나오는지 미리 돌려 본다.
+     * 안 나오는 섹션을 그냥 목록에 두면 운영자는 "저장했는데 화면이 안 바뀐다"만 겪는다.
+     * 진단이 실패해도 빌더 자체는 떠야 하므로 실패는 삼키고 배지만 생략한다.
+     */
+    let diag = new Map();
+    try {
+      const shared = await buildAdminShared(req, res);
+      diag = await displayService.diagnoseSections(rawSections, shared);
+    } catch (e) {
+      console.error('[pageBuilder.getEditor] 섹션 진단 실패:', e.message);
+    }
 
     const groupNameById = {};
     for (const g of productGroups) groupNameById[g.id] = g.name;
-    const sections = rawSections.map((s) => decorateSection(s, groupNameById));
+    const sections = rawSections.map((s) => {
+      const d = diag.get(s.id);
+      return Object.assign(decorateSection(s, groupNameById), {
+        // 진단을 못 돌렸으면(diag 비었음) 노출로 가정한다 — 거짓 경고가 더 나쁘다.
+        willRender: d ? d.rendered : true,
+        skipReason: d ? skipMessage(d.code, s.section_type) : null,
+      });
+    });
 
     res.render('admin/page-builder/editor', {
       layout: 'layouts/admin_layout',
       title: '페이지 빌더',
       subtitle: '섹션을 추가·삭제·재정렬한 뒤 발행해야 스토어프론트에 반영됩니다.',
-      page, pages, sections, palette: buildPalette(), productGroups, revisions
+      page, pages, sections, palette: buildPalette(), productGroups, revisions, dirty, linkTargets
     });
   } catch (err) {
     console.error('[pageBuilder.getEditor]', err);
@@ -122,7 +186,27 @@ exports.postSectionUpdate = async (req, res) => {
     if (b.is_active !== undefined) patch.is_active = !!b.is_active;
 
     await builder.updateSection(id, patch);
-    res.json({ success: true });
+
+    /*
+     * 저장 직후의 노출 여부를 다시 판정해 돌려준다.
+     * 안 그러면 운영자가 상품 그룹을 붙여 고친 뒤에도 "프론트 미노출" 배지가 그대로 남아
+     * 배지 자체를 못 믿게 된다. 판정 실패는 삼킨다 — 저장은 이미 성공했다.
+     */
+    let willRender = true;
+    let skipReason = null;
+    try {
+      const saved = await builder.getSection(id);
+      const shared = await buildAdminShared(req, res);
+      const d = (await displayService.diagnoseSections([saved], shared)).get(id);
+      if (d) {
+        willRender = d.rendered;
+        skipReason = skipMessage(d.code, saved.section_type);
+      }
+    } catch (e) {
+      console.error('[pageBuilder.postSectionUpdate] 진단 실패:', e.message);
+    }
+
+    res.json({ success: true, willRender, skipReason });
   } catch (err) {
     console.error('[pageBuilder.postSectionUpdate]', err);
     res.status(400).json({ success: false, message: err.message || '섹션 저장 실패' });
@@ -214,11 +298,12 @@ function defaultConfig(def) {
  */
 const SAMPLE_CONFIG = {
   quick_menu: {
+    // icon 은 bootstrap-icons 이름에서 'bi-' 를 뺀 값이다(뷰가 `bi bi-<icon>` 으로 조립).
     items: [
-      { icon: 'bi-lightning-charge', label: '오늘특가', url: '/deals' },
-      { icon: 'bi-award', label: '베스트', url: '/best' },
-      { icon: 'bi-stars', label: '신상품', url: '/new' },
-      { icon: 'bi-ticket-perforated', label: '쿠폰', url: '/coupons', badge: 'N' }
+      { icon: 'lightning-charge', label: '오늘특가', url: '/deals' },
+      { icon: 'award', label: '베스트', url: '/best' },
+      { icon: 'stars', label: '신상품', url: '/new' },
+      { icon: 'ticket-perforated', label: '쿠폰', url: '/coupon', badge: 'N' }
     ]
   },
   custom_html: {
@@ -294,9 +379,6 @@ exports.getSectionPreview = async (req, res) => {
 
   try {
     const mallId = req.adminMallId || 1;
-    // 리졸버·히어로가 편집 중인 몰로 스코프되도록 맞춘다(미리보기 전용, 요청 안에서만 유효).
-    req.mallId = mallId;
-
     const sample = SAMPLE_CONFIG[type] || null;
     const config = Object.assign(defaultConfig(def), sample || {});
     if (type === 'promotion_banner' && !config.groupKey) {
@@ -313,7 +395,8 @@ exports.getSectionPreview = async (req, res) => {
       sort_order: 0
     };
 
-    const { shared } = await mainController.buildHomeContext(req, res);
+    // 리졸버·히어로가 편집 중인 몰로 스코프되도록 맞춘다(미리보기 전용, 요청 안에서만 유효).
+    const shared = await buildAdminShared(req, res);
     const sections = await displayService.resolveSections([row], shared);
 
     res.render('admin/page-builder/section_preview', {

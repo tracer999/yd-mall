@@ -24,7 +24,9 @@
     <span class="px-2 py-0.5 rounded text-[11px] font-medium <%= revisions.length ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' %>">
       <%= revisions.length ? '발행됨 #' + revisions[0].revision_no : '발행 이력 없음' %>
     </span>
-    <span id="pb-dirty" class="hidden px-2 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-700">미발행 변경사항</span>
+    <%/* 서버가 작업본 ↔ 최신 발행 스냅샷을 비교해 준다. 예전엔 클라이언트가 편집할 때만 켜서,
+         새로고침하면 배지가 사라지고 발행을 잊은 변경분이 조용히 남았다. */%>
+    <span id="pb-dirty" class="<%= dirty ? '' : 'hidden ' %>px-2 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-700">미발행 변경사항</span>
   </div>
 
   <div class="flex items-center gap-2 flex-wrap">
@@ -145,7 +147,7 @@
 </div>
 
 <script id="pb-data" type="application/json">
-  <%- JSON.stringify({ pageId: page.id, sections, palette, productGroups })
+  <%- JSON.stringify({ pageId: page.id, sections, palette, productGroups, linkTargets: (typeof linkTargets !== 'undefined' ? linkTargets : []) })
     .replace(/<\//g, '<\\/')
     .replace(/<!--/g, '<\\!--')
     .replace(/\u2028/g, '\\u2028')

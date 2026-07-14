@@ -585,6 +585,9 @@ async function getNavigation(mallId = 1, opts = {}) {
 module.exports = {
     getNavigation,
     getConfig,
+    // 링크 대상 카탈로그(services/menu/linkTargets.js)가 "실제로 열리는 페이지"를 여기서 가져간다.
+    getFeatureMenus,
+    getCustomMenus,
     getCategoryTree,
     getCategoryRows,
     getCategoryContext,

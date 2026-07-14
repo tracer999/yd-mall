@@ -269,7 +269,7 @@
 
       .yd-dw__row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 
-      .yd-dw__link { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: .375rem; padding: .625rem 0; }
+      .yd-dw__link { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: .375rem; padding: .625rem 0; text-align: left; }
       .yd-dw__link--top { font-size: .9375rem; color: #1f2937; }
       .yd-dw__link--sub { font-size: .875rem; color: #6b7280; }
       .yd-dw__link:hover { color: var(--gh-primary); }
@@ -278,14 +278,18 @@
       /* 하위 목록은 좌측 라인으로 계층을 보인다(들여쓰기만으로는 3뎁스에서 구분이 흐려진다) */
       .yd-dw__sub { border-left: 1px solid #f3f4f6; margin-left: .125rem; padding-left: .5rem; }
 
-      .yd-dw__toggle {
+      /* 항목명 = 아코디언 토글. 캐럿은 접힘 ▾ / 펼침 ▴ 로 회전한다 */
+      .yd-dw__caret { font-size: .75rem; color: #9ca3af; transition: transform .2s; }
+      .yd-dw__name[aria-expanded="true"] .yd-dw__caret { transform: rotate(180deg); }
+      @media (prefers-reduced-motion: reduce) { .yd-dw__caret { transition: none; } }
+
+      /* 행 끝의 [>] — 하위가 있는 메뉴에서 해당 메뉴로 가는 유일한 진입점 */
+      .yd-dw__go {
         flex: 0 0 auto; width: 2rem; height: 2rem;
         display: flex; align-items: center; justify-content: center;
         color: #9ca3af; border-radius: 9999px; transition: color .15s, background-color .15s;
       }
-      .yd-dw__toggle:hover { color: #374151; background: #f9fafb; }
-      /* 펼침 상태는 아이콘을 + → − 로 바꾼다(아이콘 폰트 교체 대신 회전으로 처리하면 x 가 된다) */
-      .yd-dw__toggle[aria-expanded="true"] .bi-plus::before { content: "\f2ea"; }  /* bi-dash */
+      .yd-dw__go:hover { color: var(--gh-primary); background: #f9fafb; }
 
       .yd-dw__badge {
         font-size: 9px; font-weight: 800; line-height: 1;
@@ -325,16 +329,15 @@
           if (e.key === 'Escape' && drawer.classList.contains('is-open')) setOpen(false);
         });
 
-        // 아코디언 — 토글 버튼의 다음 형제(<ul.yd-dw__sub>)를 펼친다.
-        // 항목명(<a>)은 링크로 남겨 둔다: 상위 카테고리로 이동할 방법이 사라지면 안 된다.
+        // 아코디언 — 항목명(<button.yd-dw__name>)을 누르면 그 행 다음의 <ul.yd-dw__sub> 를 펼친다.
+        // 해당 메뉴로 이동하는 링크는 행 끝의 [>](a.yd-dw__go) 다: 상위 카테고리로 갈 방법이 사라지면 안 된다.
         drawer.addEventListener('click', function (e) {
-          var btn = e.target.closest('.yd-dw__toggle');
+          var btn = e.target.closest('.yd-dw__name');
           if (!btn) return;
           var sub = btn.parentElement.nextElementSibling;
           if (!sub || !sub.classList.contains('yd-dw__sub')) return;
           var open = sub.classList.toggle('hidden') === false;
           btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-          btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace(open ? '열기' : '닫기', open ? '닫기' : '열기'));
         });
       })();
     </script>
