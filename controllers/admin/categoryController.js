@@ -242,9 +242,11 @@ exports.postEdit = async (req, res) => {
     // 입점일은 브랜드에만 의미가 있다. NORMAL/THEME 에 값이 새어들지 않게 여기서 막는다.
     const onboardedAt = (allowedType === 'BRAND' && req.body.onboarded_at) ? req.body.onboarded_at : null;
 
+    const MALL_ID = req.adminMallId || 1;
     const conn = await pool.getConnection();
     try {
-        const [[current]] = await conn.query('SELECT parent_id FROM categories WHERE id = ?', [nodeId]);
+        // P5: 편집 중인 몰 소유 카테고리만 수정(크로스몰 덮어쓰기 방지)
+        const [[current]] = await conn.query('SELECT parent_id FROM categories WHERE id = ? AND mall_id = ?', [nodeId, MALL_ID]);
         if (!current) return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
 
         const parentChanged = (current.parent_id || null) !== newParentId;
@@ -265,9 +267,9 @@ exports.postEdit = async (req, res) => {
             `UPDATE categories
              SET name = ?, display_order = ?, type = ?, logo_image_path = ?, onboarded_at = ?, description = ?, parent_id = ?,
                  is_active = ?, pc_visible = ?, mobile_visible = ?
-             WHERE id = ?`,
+             WHERE id = ? AND mall_id = ?`,
             [name, display_order, allowedType, logoPath, onboardedAt, description, newParentId,
-             toBool(req.body.is_active), toBool(req.body.pc_visible), toBool(req.body.mobile_visible), nodeId]
+             toBool(req.body.is_active), toBool(req.body.pc_visible), toBool(req.body.mobile_visible), nodeId, MALL_ID]
         );
 
         if (parentChanged) {
@@ -337,15 +339,20 @@ exports.postDelete = async (req, res) => {
     const { id, active_tab } = req.body;
     const activeTab = normalizeTab(active_tab);
     const nodeId = Number(id);
+    const MALL_ID = req.adminMallId || 1;
 
     try {
+        // P5: 편집 중인 몰 소유 카테고리만 삭제(크로스몰 삭제·Shopify 오발화 방지)
+        const [[owned]] = await pool.query('SELECT id FROM categories WHERE id = ? AND mall_id = ?', [nodeId, MALL_ID]);
+        if (!owned) return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
+
         /*
          * categories.parent_id 는 ON DELETE SET NULL 이다.
          * 그대로 부모를 지우면 자식들이 조용히 최상위로 승격되고 depth 가 어긋난 채 남는다.
          * → 하위 카테고리가 있으면 삭제를 막는다.
          */
         const [[{ n: childCount }]] = await pool.query(
-            'SELECT COUNT(*) AS n FROM categories WHERE parent_id = ?', [nodeId]
+            'SELECT COUNT(*) AS n FROM categories WHERE parent_id = ? AND mall_id = ?', [nodeId, MALL_ID]
         );
         if (childCount > 0) {
             return redirectWithError(res, activeTab,
@@ -357,7 +364,7 @@ exports.postDelete = async (req, res) => {
         await deleteCategoryFromShopify(nodeId)
             .catch(e => console.error(`[Shopify] 카테고리 컬렉션 삭제 실패 (id=${nodeId}): ${e.message}`));
 
-        await pool.query('DELETE FROM categories WHERE id = ?', [nodeId]);
+        await pool.query('DELETE FROM categories WHERE id = ? AND mall_id = ?', [nodeId, MALL_ID]);
         res.redirect(`/admin/categories?tab=${activeTab}`);
     } catch (err) {
         console.error('[category] postDelete:', err.message);

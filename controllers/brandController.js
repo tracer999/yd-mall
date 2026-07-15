@@ -1,3 +1,4 @@
+const pool = require('../config/db');
 const brandSvc = require('../services/brand/brandService');
 const benefitSvc = require('../services/brand/benefitService');
 const { INITIAL_BUCKETS } = require('../shared/hangul');
@@ -113,12 +114,24 @@ exports.getDetail = async (req, res, next) => {
             brandSvc.getLikedBrandIds(req.user?.id)
         ]);
 
+        // 관리자 '브랜드 배너'(banner_type='BRAND', category_id=브랜드id) — 상세관 최상단 노출.
+        // banners 테이블은 전 몰 공용이지만 category_id 가 이 브랜드(=이 몰의 categories 행)를 가리키므로 몰 스코프가 성립한다.
+        const [bannerRows] = await pool.query(
+            `SELECT * FROM banners
+             WHERE is_active = 1 AND banner_type = 'BRAND' AND category_id = ?
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1`,
+            [brandId]
+        );
+        const brandBanner = bannerRows[0] || null;
+
         const siteSettings = res.locals.siteSettings || {};
         const companyName = siteSettings.company_name || '와이디몰';
 
         res.render('user/brands/detail', {
             title: brand.name,
             brand,
+            brandBanner,
             tab,
             benefits,
             best: bestRes.products,

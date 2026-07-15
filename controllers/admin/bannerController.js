@@ -64,7 +64,7 @@ const HERO_LIST_URL = '/admin/banners/hero-slides?mode=full_banner';
 
 exports.getList = async (req, res) => {
     try {
-        const mallId = req.mallId || 1;
+        const mallId = req.adminMallId || 1;
         // type 없이 들어온 경우(사이드바 '배너 관리')는 mode 를 지정하지 않는다 —
         // 그래야 메인 슬라이더 화면이 '적용 중'인 방식으로 열린다. 옛 ?type=MAIN 링크만 배너 방식으로 보낸다.
         if (!req.query.type) return res.redirect('/admin/banners/hero-slides');
@@ -101,13 +101,21 @@ exports.getList = async (req, res) => {
                 : [[]];
         } else {
             // 일반 타입 배너에는 메뉴별 배너(group_key='menu:%')가 섞이지 않도록 제외한다.
+            //
+            // 몰 스코프: banners 테이블엔 mall_id 가 없다(전 몰 공용). 다만 CATEGORY·BRAND 배너는
+            // 대상 카테고리/브랜드(= 이 몰의 categories 행)로 몰이 정해지므로, 조인한 categories.mall_id
+            // 로 현재 몰 것만 보여준다(새 몰에서 다른 몰 배너가 보이던 버그 수정). 대상 미선택
+            // (category_id NULL) 유령 배너는 관리 가능하도록 남긴다. POPUP 은 대상이 없어 몰을
+            // 특정할 수 없으므로 전 몰 공용으로 둔다.
+            const scopeByMall = (type === 'CATEGORY' || type === 'BRAND');
             [banners] = await pool.query(`
                 SELECT b.*, c.name AS category_name
                 FROM banners b
                 LEFT JOIN categories c ON b.category_id = c.id
                 WHERE b.banner_type = ? AND (b.group_key IS NULL OR b.group_key NOT LIKE 'menu:%')
+                ${scopeByMall ? 'AND (c.mall_id = ? OR b.category_id IS NULL)' : ''}
                 ORDER BY b.display_order ASC, b.created_at DESC
-            `, [type]);
+            `, scopeByMall ? [type, mallId] : [type]);
         }
 
         res.render('admin/banners/list', {
@@ -129,12 +137,15 @@ exports.getList = async (req, res) => {
 exports.getAdd = async (req, res) => {
     try {
         const type = req.query.type || 'MAIN';
-        const menuTargets = await getBannerMenuTargets(req.mallId || 1);
+        const menuTargets = await getBannerMenuTargets(req.adminMallId || 1);
         // 목록의 메뉴 서브탭에서 '배너 등록'을 누르면 그 메뉴가 골라진 채로 열린다.
         const requested = req.query.menu;
         const currentMenuKey = menuTargets.some(t => t.key === requested) ? requested : '';
 
-        const [categories] = await pool.query('SELECT id, name, type FROM categories ORDER BY display_order ASC, id ASC');
+        const [categories] = await pool.query(
+            'SELECT id, name, type FROM categories WHERE mall_id = ? ORDER BY display_order ASC, id ASC',
+            [req.adminMallId || 1]
+        );
         res.render('admin/banners/form', {
             layout: 'layouts/admin_layout',
             title: '배너 등록',
@@ -192,7 +203,7 @@ exports.postAdd = async (req, res) => {
 
     try {
         // 신규 등록 — 보존할 기존 group_key 없음(null).
-        const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
+        const menuKeys = (await getBannerMenuTargets(req.adminMallId || 1)).map(t => t.key);
         const { storedType, categoryId, groupKey, redirectType, menuKey } =
             resolveBannerTarget(banner_type, category_id, req.body.menu_target, null, menuKeys);
         const ov = readOverlay(req.body, banner_type);
@@ -281,14 +292,17 @@ exports.getEdit = async (req, res) => {
         const isMenuBanner = banner.group_key && banner.group_key.startsWith('menu:');
         const currentMenuKey = isMenuBanner ? banner.group_key.slice('menu:'.length) : '';
 
-        const [categories] = await pool.query('SELECT id, name, type FROM categories ORDER BY display_order ASC, id ASC');
+        const [categories] = await pool.query(
+            'SELECT id, name, type FROM categories WHERE mall_id = ? ORDER BY display_order ASC, id ASC',
+            [req.adminMallId || 1]
+        );
         res.render('admin/banners/form', {
             layout: 'layouts/admin_layout',
             title: '배너 수정',
             categories,
             banner,
             currentType: isMenuBanner ? 'MENU' : banner.banner_type,
-            menuTargets: await getBannerMenuTargets(req.mallId || 1),
+            menuTargets: await getBannerMenuTargets(req.adminMallId || 1),
             currentMenuKey,
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
         });
@@ -315,7 +329,7 @@ exports.postEdit = async (req, res) => {
 
     try {
         // 편집 — 기존 group_key(existing_group_key)를 넘겨 이 화면과 무관한 group_key 를 보존한다.
-        const menuKeys = (await getBannerMenuTargets(req.mallId || 1)).map(t => t.key);
+        const menuKeys = (await getBannerMenuTargets(req.adminMallId || 1)).map(t => t.key);
         const { storedType, categoryId, groupKey, redirectType, menuKey } =
             resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key, menuKeys);
         const ov = readOverlay(req.body, banner_type);

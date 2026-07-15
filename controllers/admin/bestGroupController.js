@@ -326,6 +326,10 @@ async function postAddPin(req, res, next) {
         const [[p]] = await pool.query('SELECT id FROM products WHERE id = ? AND mall_id = ?', [pid, mallId]);
         if (!p) return res.redirect(`/admin/best-groups/${groupId}?error=` + encodeURIComponent('이 몰의 상품이 아닙니다.'));
 
+        // 다른 몰의 그룹에 핀을 주입하지 못하게 막는다(group_id 는 URL 파라미터).
+        const [[g]] = await pool.query('SELECT id FROM best_group WHERE id = ? AND mall_id = ?', [groupId, mallId]);
+        if (!g) return res.redirect(`/admin/best-groups/${groupId}?error=` + encodeURIComponent('이 몰의 그룹이 아닙니다.'));
+
         const [[mx]] = await pool.query(
             'SELECT COALESCE(MAX(sort_order), 0) AS m FROM best_pin WHERE group_id = ?', [groupId]
         );

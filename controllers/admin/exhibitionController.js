@@ -64,6 +64,16 @@ async function findOwned(mallId, id) {
     return row || null;
 }
 
+/** brand_category_id 가 이 몰의 BRAND 카테고리인지 검증. 아니면 null(귀속 해제) — 타 몰 브랜드 참조 차단. */
+async function resolveOwnedBrandId(mallId, brandCategoryId) {
+    if (!brandCategoryId) return null;
+    const [[row]] = await pool.query(
+        "SELECT id FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id = ?",
+        [brandCategoryId, mallId]
+    );
+    return row ? brandCategoryId : null;
+}
+
 /** 기본정보 폼 → 컬럼 값 */
 function buildBasicFields(req, current = {}) {
     const b = req.body;
@@ -160,7 +170,8 @@ async function renderForm(req, res, exhibition, extra = {}) {
     let ownedBrandName = null;
     if (exhibition.brand_category_id) {
         const [[b]] = await pool.query(
-            "SELECT name FROM categories WHERE id = ? AND type = 'BRAND'", [exhibition.brand_category_id]
+            "SELECT name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id = ?",
+            [exhibition.brand_category_id, exhibition.mall_id]
         );
         ownedBrandName = b?.name || null;
     }
@@ -215,6 +226,8 @@ exports.postAdd = async (req, res) => {
     const mallId = req.adminMallId || 1;
     try {
         const fields = buildBasicFields(req);
+        // P5: 타 몰 브랜드로 귀속하지 못하게 — 이 몰의 BRAND 가 아니면 귀속 해제
+        fields.brand_category_id = await resolveOwnedBrandId(mallId, fields.brand_category_id);
         if (!fields.title) return redirectWith(res, `${BASE}/add`, 'error', '기획전명을 입력하세요.');
         if (!fields.start_at) return redirectWith(res, `${BASE}/add`, 'error', '시작일을 입력하세요.');
         if (fields.end_at && fields.end_at < fields.start_at) {
@@ -267,6 +280,8 @@ exports.postEdit = async (req, res) => {
         if (!current) return redirectWith(res, BASE, 'error', '기획전을 찾을 수 없습니다.');
 
         const fields = buildBasicFields(req, current);
+        // P5: 타 몰 브랜드로 귀속하지 못하게 — 이 몰의 BRAND 가 아니면 귀속 해제
+        fields.brand_category_id = await resolveOwnedBrandId(mallId, fields.brand_category_id);
         if (!fields.title) return redirectWith(res, back, 'error', '기획전명을 입력하세요.');
         if (!fields.start_at) return redirectWith(res, back, 'error', '시작일을 입력하세요.');
         if (fields.end_at && fields.end_at < fields.start_at) {

@@ -353,13 +353,19 @@ exports.postCategoryEdit = async (req, res) => {
         // 순서를 지키지 않으면 recalcSubtreeDepth 가 DB 를 오염시킨 뒤 예외를 던진다.
         if (parentId !== own[0].parent_id) {
             if (parentId === id) throw new Error('자기 자신을 상위로 지정할 수 없습니다.');
+            // P5: 상위도 이 몰의 OUTLET 카테고리여야 한다(타 몰/타 타입 부모 지정 차단)
+            if (parentId) {
+                const [[parentOwned]] = await pool.query(
+                    `SELECT id FROM categories WHERE id = ? AND mall_id = ? AND type = 'OUTLET'`, [parentId, mallId]);
+                if (!parentOwned) throw new Error('상위 카테고리가 올바르지 않습니다.');
+            }
             const maxDepth = await getCategoryMaxDepth(mallId);
             if (parentId && await wouldCreateCycle({ table: 'categories', nodeId: id, candidateParentId: parentId })) {
                 throw new Error('순환 참조가 발생합니다. 하위 카테고리를 상위로 지정할 수 없습니다.');
             }
             await assertDepthAllowed({ table: 'categories', parentId, maxDepth });
 
-            await pool.query('UPDATE categories SET parent_id = ? WHERE id = ?', [parentId, id]);
+            await pool.query('UPDATE categories SET parent_id = ? WHERE id = ? AND mall_id = ?', [parentId, id, mallId]);
             await recalcSubtreeDepth({ table: 'categories', nodeId: id, maxDepth });
         }
 

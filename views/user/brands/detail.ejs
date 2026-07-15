@@ -22,6 +22,14 @@
     : null;
 %>
 
+<!-- 관리자 브랜드 배너 (배너 관리 > 브랜드 배너) — 상세관 최상단 -->
+<% if (typeof brandBanner !== 'undefined' && brandBanner) { %>
+  <a href="<%= brandBanner.link_url || '#' %>" class="block w-full">
+    <img src="<%= brandBanner.image_url %>" alt="<%= brandBanner.title || b.name %>"
+         class="w-full h-auto object-cover">
+  </a>
+<% } %>
+
 <!-- 히어로 (공식 브랜드관만) -->
 <% if (official && b.hero_image_url) { %>
   <div class="w-full h-40 sm:h-64 bg-gray-100 overflow-hidden">
