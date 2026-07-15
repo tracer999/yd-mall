@@ -12,6 +12,7 @@ async function listGrades(mallId) {
     const [rows] = await pool.query(
         `SELECT g.*, b.discount_rate, b.max_discount_amount, b.min_order_amount,
                 b.point_rate, b.point_rate_mode, b.free_shipping, b.free_ship_threshold,
+                b.discount_enabled, b.point_enabled, b.shipping_enabled,
                 (SELECT COUNT(*) FROM customer_membership cm WHERE cm.current_grade_id = g.id) AS member_count
            FROM membership_grade g
            LEFT JOIN membership_grade_benefit b ON b.grade_id = g.id
@@ -31,7 +32,8 @@ async function listActiveGrades(mallId) {
 async function getGrade(id) {
     const [[row]] = await pool.query(
         `SELECT g.*, b.discount_rate, b.max_discount_amount, b.min_order_amount,
-                b.point_rate, b.point_rate_mode, b.free_shipping, b.free_ship_threshold
+                b.point_rate, b.point_rate_mode, b.free_shipping, b.free_ship_threshold,
+                b.discount_enabled, b.point_enabled, b.shipping_enabled
            FROM membership_grade g
            LEFT JOIN membership_grade_benefit b ON b.grade_id = g.id
           WHERE g.id = ?`,
@@ -125,15 +127,21 @@ async function upsertBenefitConn(conn, gradeId, data) {
     const maxDiscount = data.max_discount_amount === '' || data.max_discount_amount == null ? null : Number(data.max_discount_amount);
     await conn.query(
         `INSERT INTO membership_grade_benefit
-            (grade_id, discount_rate, max_discount_amount, min_order_amount, point_rate, point_rate_mode, free_shipping, free_ship_threshold)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (grade_id, discount_enabled, point_enabled, shipping_enabled,
+             discount_rate, max_discount_amount, min_order_amount, point_rate, point_rate_mode, free_shipping, free_ship_threshold)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
+            discount_enabled = VALUES(discount_enabled), point_enabled = VALUES(point_enabled),
+            shipping_enabled = VALUES(shipping_enabled),
             discount_rate = VALUES(discount_rate), max_discount_amount = VALUES(max_discount_amount),
             min_order_amount = VALUES(min_order_amount), point_rate = VALUES(point_rate),
             point_rate_mode = VALUES(point_rate_mode), free_shipping = VALUES(free_shipping),
             free_ship_threshold = VALUES(free_ship_threshold)`,
         [
             gradeId,
+            Number(data.discount_enabled) === 1 ? 1 : 0,
+            Number(data.point_enabled) === 1 ? 1 : 0,
+            Number(data.shipping_enabled) === 1 ? 1 : 0,
             Number(data.discount_rate) || 0,
             maxDiscount,
             Number(data.min_order_amount) || 0,

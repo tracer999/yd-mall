@@ -82,14 +82,19 @@
 
 ## 2차 추가 구현 (2026-07)
 
-- **등급 진입 쿠폰(쿠폰팩)**: `membership_grade_coupon`(등급↔쿠폰, `issue_on='ENTRY'`). `membershipService.setGrade` 가 UPGRADE·MANUAL 상향 시 `gradeCouponService.issueEntryCoupons` 호출 → `couponIssueService.issueCoupon(issuedBy='EVENT', skipIfHeld)`. 관리자 등급 편집 폼에서 연결.
-- **대시보드 분석**: `membershipController.getDashboard` 가 `order_membership_benefit_snapshot` 를 집계해 등급별 최근 30일 매출·객단가·할인 비용·적립 예정액 표시.
+- **쿠폰 혜택 3종(쿠폰팩)**: `membership_grade_coupon`(`issue_on` = ENTRY/BIRTHDAY/PERIODIC), 발급 모두 `gradeCouponService` + `couponIssueService.issueCoupon(issuedBy='EVENT')`.
+  - ENTRY: `membershipService.setGrade`(UPGRADE·MANUAL) → `issueEntryCoupons`(`skipIfHeld`).
+  - BIRTHDAY: `scripts/calc_membership_birthday.js`(일일 cron `membership_birthday_cron.sh`) → `issueBirthdayCoupons`, 연 1회 가드 `membership_birthday_issue_log`.
+  - PERIODIC: `scripts/calc_membership_periodic.js`(월 cron `membership_periodic_cron.sh`) → `issuePeriodicCoupons`, 월 1회 가드 `membership_periodic_issue_log`.
+- **혜택별 사용여부 토글**: `membership_grade_benefit.{discount_enabled,point_enabled,shipping_enabled}`. `membershipBenefitService.getOrderBenefits` 가 enabled 인 혜택만 반영(미사용이면 할인 0 / 적립률 null / 무료배송 off). 등급 편집 폼 체크박스.
+- **대시보드 분석**: `membershipController.getDashboard` 가 `order_membership_benefit_snapshot` 집계 → 등급별 최근 30일 매출·객단가·할인 비용·적립 예정액.
 
 ## 알려진 한계 (남은 2차)
 
 - 혜택: 등급당 1행(정률할인·적립·무료배송)으로 단순화 — 채널/결제수단 제한·중복 그룹·benefit_policy 재사용 미도입.
-- 정기(월) 쿠폰팩·생일·상품/브랜드별 혜택·세그먼트·강등 사전 알림 미구현.
+- 상품/브랜드별 등급 혜택·고객 세그먼트·강등 사전 알림(이메일)·설정형 할인 우선순위 미구현.
 - 실적 확정 시점 = 결제확정(PAID). 부분 반품 비율 차감은 반품 모듈 도입 시.
+- 생일 쿠폰: 2/29 생일은 평년에 미발급(택배사 관행상 흔한 한계).
 
 ---
 

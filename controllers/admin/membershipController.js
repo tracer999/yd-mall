@@ -97,11 +97,13 @@ exports.getGradeForm = async (req, res, next) => {
             }
         }
         const mallCoupons = await gradeCouponService.listLinkableCoupons(mallId);
-        const linkedCouponIds = grade ? await gradeCouponService.getLinkedCouponIds(grade.id) : [];
+        const linkedCouponIds = grade ? await gradeCouponService.getLinkedCouponIds(grade.id, 'ENTRY') : [];
+        const birthdayCouponIds = grade ? await gradeCouponService.getLinkedCouponIds(grade.id, 'BIRTHDAY') : [];
+        const periodicCouponIds = grade ? await gradeCouponService.getLinkedCouponIds(grade.id, 'PERIODIC') : [];
         res.render('admin/membership/grade_form', {
             layout: LAYOUT,
             title: grade ? '등급 수정' : '등급 등록',
-            grade, mallCoupons, linkedCouponIds, error: req.query.error,
+            grade, mallCoupons, linkedCouponIds, birthdayCouponIds, periodicCouponIds, error: req.query.error,
         });
     } catch (e) { next(e); }
 };
@@ -123,11 +125,11 @@ exports.postGradeSave = async (req, res) => {
             }
             gradeId = await gradeService.createGrade(mallId, req.body);
         }
-        // 등급 진입 쿠폰(쿠폰팩) 연결 저장. 체크박스 미선택 시 빈 배열 → 전체 해제.
-        const couponIds = req.body.entry_coupon_ids
-            ? (Array.isArray(req.body.entry_coupon_ids) ? req.body.entry_coupon_ids : [req.body.entry_coupon_ids])
-            : [];
-        await gradeCouponService.setGradeCoupons(gradeId, couponIds);
+        // 등급 진입 쿠폰(쿠폰팩) + 생일 쿠폰 연결 저장. 미선택 시 빈 배열 → 전체 해제.
+        const asArray = (v) => (v ? (Array.isArray(v) ? v : [v]) : []);
+        await gradeCouponService.setGradeCoupons(gradeId, asArray(req.body.entry_coupon_ids), 'ENTRY');
+        await gradeCouponService.setGradeCoupons(gradeId, asArray(req.body.birthday_coupon_ids), 'BIRTHDAY');
+        await gradeCouponService.setGradeCoupons(gradeId, asArray(req.body.periodic_coupon_ids), 'PERIODIC');
         res.redirect('/admin/membership/grades?success=' + encodeURIComponent('저장되었습니다.'));
     } catch (e) {
         const back = id ? `/admin/membership/grades/${id}/edit` : '/admin/membership/grades/new';

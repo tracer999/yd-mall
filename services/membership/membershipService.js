@@ -54,7 +54,9 @@ async function ensureMembership(userId, mallId) {
 async function getMembershipWithGrade(userId, mallId) {
     const [[row]] = await pool.query(
         `SELECT cm.*, g.grade_code, g.grade_name, g.rank_order, g.color, g.badge_icon, g.mypage_note,
-                b.discount_rate, b.point_rate, b.point_rate_mode, b.free_shipping, b.free_ship_threshold
+                b.discount_rate, b.max_discount_amount, b.min_order_amount,
+                b.point_rate, b.point_rate_mode, b.free_shipping, b.free_ship_threshold,
+                b.discount_enabled, b.point_enabled, b.shipping_enabled
            FROM customer_membership cm
            LEFT JOIN membership_grade g ON g.id = cm.current_grade_id
            LEFT JOIN membership_grade_benefit b ON b.grade_id = g.id

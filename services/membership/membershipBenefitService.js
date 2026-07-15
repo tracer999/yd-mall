@@ -38,12 +38,18 @@ async function getOrderBenefits({ userId, mallId, subtotalAmount }) {
     if (!full || !full.current_grade_id) return { ...ZERO };
 
     const subtotal = Math.max(0, Number(subtotalAmount) || 0);
+
+    // 혜택별 사용여부(enabled) — "사용"인 혜택만 적용한다. 컬럼이 없으면(구 데이터) 기본 사용.
+    const discountEnabled = full.discount_enabled == null ? true : Number(full.discount_enabled) === 1;
+    const pointEnabled = full.point_enabled == null ? true : Number(full.point_enabled) === 1;
+    const shippingEnabled = full.shipping_enabled == null ? true : Number(full.shipping_enabled) === 1;
+
     const discountRate = Number(full.discount_rate) || 0;
     const minOrder = Number(full.min_order_amount) || 0;
     const maxDiscount = full.max_discount_amount != null ? Number(full.max_discount_amount) : null;
 
     let discountAmount = 0;
-    if (discountRate > 0 && subtotal >= minOrder) {
+    if (discountEnabled && discountRate > 0 && subtotal >= minOrder) {
         discountAmount = Math.floor((subtotal * discountRate) / 100);
         if (maxDiscount != null && discountAmount > maxDiscount) discountAmount = maxDiscount;
     }
@@ -52,14 +58,16 @@ async function getOrderBenefits({ userId, mallId, subtotalAmount }) {
         gradeId: full.current_grade_id,
         gradeCode: full.grade_code || null,
         gradeName: full.grade_name || null,
-        discountRate,
+        discountRate: discountEnabled ? discountRate : 0,
         discountAmount,
         maxDiscountAmount: maxDiscount,
         minOrderAmount: minOrder,
-        pointRate: full.point_rate != null ? Number(full.point_rate) : null,
+        // 적립 혜택 미사용이면 등급 적립률을 주지 않는다(null → 기본 적립률만 적용).
+        pointRate: (pointEnabled && full.point_rate != null) ? Number(full.point_rate) : null,
         pointRateMode: full.point_rate_mode || 'ADD',
-        freeShipping: Number(full.free_shipping) === 1,
-        freeShipThreshold: full.free_ship_threshold != null ? Number(full.free_ship_threshold) : null,
+        // 배송 혜택 미사용이면 무료배송/문턱 override 를 적용하지 않는다.
+        freeShipping: shippingEnabled && Number(full.free_shipping) === 1,
+        freeShipThreshold: (shippingEnabled && full.free_ship_threshold != null) ? Number(full.free_ship_threshold) : null,
         _membershipEnsured: !!m,
     };
 }

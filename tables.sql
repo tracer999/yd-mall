@@ -1343,11 +1343,14 @@ CREATE TABLE IF NOT EXISTS `membership_grade` (
 -- 2) 등급별 혜택 (등급당 1행, MVP 단순화) ----------------------------------
 CREATE TABLE IF NOT EXISTS `membership_grade_benefit` (
   `grade_id` int NOT NULL COMMENT '등급 ID (PK, FK membership_grade)',
+  `discount_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '정률 할인 혜택 사용 여부',
   `discount_rate` decimal(5,2) NOT NULL DEFAULT '0.00' COMMENT '주문 상품금액 정률 할인 (%)',
   `max_discount_amount` int DEFAULT NULL COMMENT '등급 할인 최대액 (NULL=무제한)',
+  `point_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '등급 적립 혜택 사용 여부',
   `min_order_amount` int NOT NULL DEFAULT '0' COMMENT '등급 할인 최소 주문금액',
   `point_rate` decimal(5,2) DEFAULT NULL COMMENT '등급 적립률 (%). NULL=등급 적립 없음(기본률만)',
   `point_rate_mode` enum('REPLACE','ADD') NOT NULL DEFAULT 'ADD' COMMENT 'REPLACE=기본 적립률 대체 / ADD=기본률에 가산',
+  `shipping_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '배송 혜택(무료배송/문턱) 사용 여부',
   `free_shipping` tinyint(1) NOT NULL DEFAULT '0' COMMENT '무조건 무료배송 (지역할증 제외)',
   `free_ship_threshold` int DEFAULT NULL COMMENT '등급별 무료배송 문턱 override (NULL=몰 기본 정책 사용)',
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1499,7 +1502,7 @@ CREATE TABLE IF NOT EXISTS `membership_grade_coupon` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT 'PK',
   `grade_id` int NOT NULL COMMENT '등급 ID (FK)',
   `coupon_id` int NOT NULL COMMENT '지급할 쿠폰 ID (FK)',
-  `issue_on` enum('ENTRY') NOT NULL DEFAULT 'ENTRY' COMMENT '지급 시점 (ENTRY=등급 진입 시)',
+  `issue_on` enum('ENTRY','BIRTHDAY','PERIODIC') NOT NULL DEFAULT 'ENTRY' COMMENT '지급 시점 (ENTRY=진입 / BIRTHDAY=생일 / PERIODIC=정기 월)',
   `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT '사용 여부',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -1507,4 +1510,32 @@ CREATE TABLE IF NOT EXISTS `membership_grade_coupon` (
   KEY `idx_grade_coupon_grade` (`grade_id`),
   CONSTRAINT `fk_grade_coupon_grade` FOREIGN KEY (`grade_id`) REFERENCES `membership_grade` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_grade_coupon_coupon` FOREIGN KEY (`coupon_id`) REFERENCES `coupons` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='등급 진입 지급 쿠폰(쿠폰팩)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='등급 진입/생일/정기 지급 쿠폰(쿠폰팩)';
+
+-- 멤버십 2차: 생일 쿠폰 연 1회 발급 로그 (정본: scripts/migrate_membership_birthday.sql)
+CREATE TABLE IF NOT EXISTS `membership_birthday_issue_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `mall_id` bigint DEFAULT NULL,
+  `coupon_id` int NOT NULL,
+  `issue_year` smallint NOT NULL COMMENT '발급 연도 (연 1회 가드)',
+  `issued_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_birthday_issue` (`user_id`, `coupon_id`, `issue_year`),
+  KEY `idx_birthday_log_user` (`user_id`),
+  CONSTRAINT `fk_birthday_log_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='생일 쿠폰 연 1회 발급 로그';
+
+-- 멤버십 2차: 정기 쿠폰 월 1회 발급 로그 (정본: scripts/migrate_membership_periodic.sql)
+CREATE TABLE IF NOT EXISTS `membership_periodic_issue_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `mall_id` bigint DEFAULT NULL,
+  `coupon_id` int NOT NULL,
+  `period_ym` char(7) NOT NULL COMMENT '발급 대상 월 (YYYY-MM)',
+  `issued_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_periodic_issue` (`user_id`, `coupon_id`, `period_ym`),
+  KEY `idx_periodic_log_user` (`user_id`),
+  CONSTRAINT `fk_periodic_log_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='정기 쿠폰 월 1회 발급 로그';

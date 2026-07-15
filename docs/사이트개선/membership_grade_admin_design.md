@@ -1052,7 +1052,12 @@ POST   /internal/membership/calculate-benefits
 
 MVP 이후 아래 2차 항목을 추가 구현했다.
 
-- **등급 진입 쿠폰(쿠폰팩)** — `membership_grade_coupon`(등급↔쿠폰 연결) 신설. 승급·수동 상향으로 등급에 **진입**할 때 연결 쿠폰을 자동 발급한다(기존 `couponIssueService.issueCoupon` 재사용, `issued_by='EVENT'`, `skipIfHeld` 로 재평가 중복 방지). 관리자 등급 편집 폼에서 "등급 진입 시 지급 쿠폰"으로 연결. 산출물: `services/membership/gradeCouponService.js` · `membershipService.setGrade` 훅 · `views/admin/membership/grade_form.ejs`. (강등·가입에는 미발급. 정기 쿠폰팩·생일은 여전히 2차 잔여.)
-- **멤버십 대시보드 분석** — 등급별 최근 30일 매출·주문수·객단가·**등급 할인 비용**·**적립 예정액**(주문 스냅샷 집계, §4.1). 산출물: `membershipController.getDashboard` + `views/admin/membership/dashboard.ejs`.
+- **쿠폰 혜택 3종(쿠폰팩)** — `membership_grade_coupon`(등급↔쿠폰, `issue_on` = ENTRY/BIRTHDAY/PERIODIC) 신설. 발급은 모두 기존 `couponIssueService.issueCoupon` 재사용(`issued_by='EVENT'`).
+  - **진입(ENTRY)** — 승급·수동 상향으로 등급 진입 시. `membershipService.setGrade` 훅, `skipIfHeld` 로 재평가 중복 방지.
+  - **생일(BIRTHDAY)** — 회원 생일 당일, 현재 등급의 생일 쿠폰. 일일 배치 `scripts/calc_membership_birthday.js`(+cron). 연 1회 가드 `membership_birthday_issue_log`.
+  - **정기(PERIODIC)** — 매월 1회, 등급 회원 전체. 월 배치 `scripts/calc_membership_periodic.js`(+cron). 월 1회 가드 `membership_periodic_issue_log`.
+  - 관리자 등급 편집 폼에서 세 시점별로 쿠폰 연결. 연결/해제가 곧 on/off. 산출물: `services/membership/gradeCouponService.js`.
+- **혜택별 사용여부 토글** — `membership_grade_benefit` 에 `discount_enabled`·`point_enabled`·`shipping_enabled` 추가. **"사용"인 혜택만 결제에 적용**된다(값이 있어도 미사용이면 미적용). `membershipBenefitService.getOrderBenefits` 가 플래그를 반영. 등급 편집 폼에 "할인/적립/배송 혜택 사용" 체크박스. (쿠폰팩·생일·정기의 on/off 는 쿠폰 연결/해제로 관리.)
+- **멤버십 대시보드 분석** — 등급별 최근 30일 매출·주문수·객단가·**등급 할인 비용**·**적립 예정액**(주문 스냅샷 집계, §4.1). `membershipController.getDashboard`.
 
-남은 2차: 정기(월) 쿠폰팩·생일 혜택, 상품/브랜드별 등급 혜택, 고객 세그먼트, 강등 사전 알림, 설정형 할인 우선순위.
+남은 2차: 상품/브랜드별 등급 혜택, 고객 세그먼트, 강등 사전 알림(이메일), 설정형 할인 우선순위 엔진.
