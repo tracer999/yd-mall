@@ -42,18 +42,18 @@ ssh tracer999@192.168.1.2
 ```bash
 cd /data/yd-mall
 git fetch origin main && git reset --hard origin/main
-./dev-mall.sh build      # npm install + Tailwind CSS 빌드
-./dev-mall.sh start      # PM2 기동/갱신 (앱명: dev-mall, fork 모드, instances: 1)
+./yd-mall.sh build      # npm install + Tailwind CSS 빌드
+./yd-mall.sh start      # PM2 기동/갱신 (앱명: yd-mall, fork 모드, instances: 1)
 ```
 
 서버에서 수동으로 조작할 때:
 
 ```bash
 cd /data/yd-mall
-./dev-mall.sh status
-./dev-mall.sh logs
-./dev-mall.sh restart
-./dev-mall.sh stop
+./yd-mall.sh status
+./yd-mall.sh logs
+./yd-mall.sh restart
+./yd-mall.sh stop
 ```
 
 자세한 실행 옵션은 [`실행가이드.md`](./실행가이드.md) 를 참고하세요.

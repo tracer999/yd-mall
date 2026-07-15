@@ -23,9 +23,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-**dev-mall** — 건강식품 전문 B2C 이커머스 쇼핑몰(국내향)을 표준 예시로 삼는 몰 빌더. Node.js/Express 5 기반의 서버사이드 렌더링(EJS) 풀스택 애플리케이션으로, 고객 쇼핑 인터페이스와 관리자 백오피스를 함께 제공합니다. **이 저장소는 dev-mall 단독 프로젝트**입니다(서브프로젝트 없음).
+**yd-mall** — 건강식품 전문 B2C 이커머스 쇼핑몰(국내향)을 표준 예시로 삼는 몰 빌더. Node.js/Express 5 기반의 서버사이드 렌더링(EJS) 풀스택 애플리케이션으로, 고객 쇼핑 인터페이스와 관리자 백오피스를 함께 제공합니다. **이 저장소는 yd-mall 단독 프로젝트**입니다(서브프로젝트 없음).
 
-상품·카테고리·재고·이미지의 **소스 오브 트루스**는 이 앱의 DB(`dev_mall` @ MySQL)입니다. 과거 이 몰을 원천으로 삼아 Shopify 스토어(`ydatasvcmall.myshopify.com`)로 상품을 push 하고 주문·재고를 Webhook 으로 pull 하는 해외몰 연동 데모가 함께 구성됐고, 그 **연동 코드는 `services/shopify/` 에 그대로 살아 있으나 현재는 꺼져 있습니다**(아래 [Shopify 연동](#shopify-연동-현재-비활성) 참고). 당시 Shopify 스토어를 소비하던 헤드리스 프론트·자체 관리자는 **별도 저장소**이며 이 저장소에는 없습니다.
+상품·카테고리·재고·이미지의 **소스 오브 트루스**는 이 앱의 DB(`yd_mall` @ MySQL)입니다. 과거 이 몰을 원천으로 삼아 Shopify 스토어(`ydatasvcmall.myshopify.com`)로 상품을 push 하고 주문·재고를 Webhook 으로 pull 하는 해외몰 연동 데모가 함께 구성됐고, 그 **연동 코드는 `services/shopify/` 에 그대로 살아 있으나 현재는 꺼져 있습니다**(아래 [Shopify 연동](#shopify-연동-현재-비활성) 참고). 당시 Shopify 스토어를 소비하던 헤드리스 프론트·자체 관리자는 **별도 저장소**이며 이 저장소에는 없습니다.
 
 ## 저장소 운영 정책
 
@@ -38,13 +38,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 브랜치 · 배포 (중요)
 
 - 브랜치는 **`main` 하나**입니다.
-- `git push origin main` → `.github/workflows/deploy.yml` (GitHub Actions) → 개발 서버 `/data/yd-mall` 에서 `git reset --hard origin/main` 후 `./dev-mall.sh build && ./dev-mall.sh start`.
+- `git push origin main` → `.github/workflows/deploy.yml` (GitHub Actions) → 개발 서버 `/data/yd-mall` 에서 `git reset --hard origin/main` 후 `./yd-mall.sh build && ./yd-mall.sh start`.
 - 즉 **푸시 = 즉시 개발 서버 반영**입니다(상용 배포 아님). 그래도 푸시는 사용자가 명시적으로 요청할 때만 수행하세요.
-- **DB 는 로컬·서버 공용 한 벌입니다**(`dev_mall` @ ydata.co.kr). 로컬에서 돌린 검증 스크립트가 넣은 테스트 행도 그대로 남으니 쓰기 작업은 신중히. 다만 이는 **개발 데이터**이지 상용 데이터가 아닙니다.
+- **DB 는 로컬·서버 공용 한 벌입니다**(`yd_mall` @ ydata.co.kr). 로컬에서 돌린 검증 스크립트가 넣은 테스트 행도 그대로 남으니 쓰기 작업은 신중히. 다만 이는 **개발 데이터**이지 상용 데이터가 아닙니다.
 
 ## 기술 스택
 
-- **Runtime**: Node.js 22 (배포 서버는 `dev-mall.sh` 가 nvm 으로 22 선택)
+- **Runtime**: Node.js 22 (배포 서버는 `yd-mall.sh` 가 nvm 으로 22 선택)
 - **Framework**: Express 5.x (MVC 패턴)
 - **Database**: MySQL 8.4 (mysql2, ORM 없이 raw SQL + connection pool)
 - **Template**: EJS + express-ejs-layouts
@@ -82,9 +82,9 @@ npm run pm2:start          # NODE_ENV=production
 npm run pm2:start:dev      # NODE_ENV=development
 
 # 배포 서버에서 쓰는 통합 스크립트 (ENCRYPTION_KEY 자동 로드 + nvm 22)
-./dev-mall.sh build        # npm install + Tailwind 빌드
-./dev-mall.sh start        # PM2 기동/갱신
-./dev-mall.sh status | logs | restart | stop
+./yd-mall.sh build        # npm install + Tailwind 빌드
+./yd-mall.sh start        # PM2 기동/갱신
+./yd-mall.sh status | logs | restart | stop
 
 # DB 초기화 (스키마 + 시드)
 npm run init:db
@@ -110,12 +110,12 @@ set -a; . /etc/environment; set +a; node _tmp.js
 ## DB 접근 규칙
 
 - **DB 조회/조작 시 반드시 `mysql` CLI 클라이언트(mysql-client)를 사용**할 것 (node mysql2 직접 실행 금지)
-- `dev_mall` (@ydata.co.kr) 이 이 프로젝트의 DB이자 소스 오브 트루스입니다. **로컬·배포 서버 공용 한 벌**(49개 테이블) — 전부 개발 데이터입니다.
+- `yd_mall` (@ydata.co.kr) 이 이 프로젝트의 DB이자 소스 오브 트루스입니다. **로컬·배포 서버 공용 한 벌**(49개 테이블) — 전부 개발 데이터입니다.
 
 ```bash
-mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' dev_mall
+mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' yd_mall
 # 단발 쿼리
-mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' dev_mall -e "SELECT ... ;"
+mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' yd_mall -e "SELECT ... ;"
 ```
 
 > `.env` 에는 이 비밀번호가 `ENC:` 로 암호화되어 있습니다. 위 평문은 CLI 접속 편의를 위해 여기에만 기재합니다.
@@ -172,7 +172,7 @@ scripts/                  # init_db.js, migrate_*.js, seed_*.js, shopify-*.js, e
 docs/                     # 개발 문서 + 온라인 매뉴얼 소스 + 사이트개선 계획서
 tables.sql                # DB 스키마 (42개 테이블 — 실제 DB 49개와 차이 있음)
 ecosystem.config.cjs      # PM2 설정 (fork, instances: 1)
-dev-mall.sh               # 배포 서버 배포/기동 스크립트
+yd-mall.sh               # 배포 서버 배포/기동 스크립트
 ```
 
 ## 아키텍처 패턴

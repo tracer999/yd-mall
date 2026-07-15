@@ -15,7 +15,7 @@
 프로젝트 최상위(루트)에서 보면 대략 이렇게 생겼습니다.
 
 ```text
-dev-mall/
+yd-mall/
 ├── app.js                 # 진입점. Express 앱, 미들웨어, 라우터 연결
 ├── package.json           # 프로젝트 정보, npm 스크립트, 의존성
 ├── .env                   # 환경 변수 (DB, 세션, API 키 등) — git에 올리지 않음
@@ -516,7 +516,7 @@ views/user/products/              views/admin/products/
 위시리스트 기능을 추가한 후의 새 파일들을 트리로 보면 이렇습니다.
 
 ```text
-dev-mall/
+yd-mall/
 ├── tables.sql                          ← [수정] wishlist 테이블 추가
 ├── app.js                              ← [수정] 라우트 등록 추가
 │
@@ -801,7 +801,7 @@ app.use('/wishlist', wishlistRoutes);
 이 기능을 구현하기 위해 만들거나 수정해야 할 파일들입니다.
 
 ```text
-dev-mall/
+yd-mall/
 │
 ├── tables.sql                              [수정] wishlists 테이블 추가
 │

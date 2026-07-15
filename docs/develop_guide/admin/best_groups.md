@@ -149,7 +149,7 @@ score = 판매수량 × weight_sales
 크론 라인을 단순하게 유지하려고 쉘이 4가지를 처리합니다.
 
 1. **`ENCRYPTION_KEY`** — cron 은 `/etc/environment` 를 자동 로드하지 않습니다. 없으면 `config/env.js` 가 `process.exit(1)` 합니다.
-2. **node 경로** — nvm 은 비대화 셸의 PATH 에 없습니다(`dev-mall.sh` 와 같은 방식으로 로드).
+2. **node 경로** — nvm 은 비대화 셸의 PATH 에 없습니다(`yd-mall.sh` 와 같은 방식으로 로드).
 3. **중복 실행 방지** — `flock`. 긴 집계가 다음 tick 이나 관리자의 "지금 집계"와 부딪힐 수 있습니다.
 4. **종료 코드** — 실패해도 `exit 0`. 안 그러면 cron 이 5분마다 실패 메일을 씁니다. 실패는 `logs/best_ranking.log` 와 `best_ranking_run.status` 에 남습니다.
 

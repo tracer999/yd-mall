@@ -547,7 +547,7 @@ Error: Failed to lookup view "admin/notices/list"
 
 **에러 메시지:**
 ```
-Error: ER_NO_SUCH_TABLE: Table 'dev_mall.notice' doesn't exist
+Error: ER_NO_SUCH_TABLE: Table 'yd_mall.notice' doesn't exist
 ```
 
 **원인:** 테이블명 오타 (`notice` vs `notices`)

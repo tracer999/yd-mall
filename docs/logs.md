@@ -123,8 +123,8 @@ systemctl status logrotate.timer   # systemd 기반인 경우
 
 ```bash
 cd /data/yd-mall
-./dev-mall.sh logs                  # pm2 logs dev-mall --lines 50
-pm2 logs dev-mall --err             # 에러만
+./yd-mall.sh logs                  # pm2 logs yd-mall --lines 50
+pm2 logs yd-mall --err             # 에러만
 tail -f logs/access.log             # 접속 로그 실시간
 ```
 

@@ -521,7 +521,7 @@ async function getData() {
 
 ```json
 {
-  "name": "dev-mall",
+  "name": "yd-mall",
   "version": "1.0.0",
   "description": "쇼핑몰 프로젝트",
   "main": "app.js",
@@ -545,7 +545,7 @@ async function getData() {
 
 | 필드 | 설명 | 예시 |
 |------|------|------|
-| `name` | 프로젝트 이름 | "dev-mall" |
+| `name` | 프로젝트 이름 | "yd-mall" |
 | `version` | 버전 (Semantic Versioning) | "1.0.0" |
 | `scripts` | npm 명령어 단축키 | `npm run dev` |
 | `dependencies` | 운영에 필요한 패키지 | express, mysql2 |
