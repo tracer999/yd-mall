@@ -112,6 +112,8 @@ exports.getList = async (req, res) => {
     let pageTitle = '전체상품';
     let categoryBanner = null;
     let categoryNav = null;
+    // 카테고리 리스트 상단 베스트 슬라이드쇼용 상위 상품(최대 5개). 카테고리 진입 시에만 채운다.
+    let categoryBest = [];
     // 메뉴 상단 쇼케이스(캐러셀)는 middleware/menuShowcase 가 경로로 판별해 주입하고
     // main_layout 이 body 위에 렌더한다 — 여기서 배너를 조회하지 않는다.
 
@@ -149,6 +151,33 @@ exports.getList = async (req, res) => {
                 if (bannerRows.length > 0) {
                     categoryBanner = bannerRows[0];
                 }
+
+                /*
+                 * 카테고리 베스트 슬라이드쇼 — 이 카테고리(하위 트리 포함) 인기 상품 상위 5개.
+                 * 판매수·좋아요·조회수 가중 점수로 뽑는다(services/best 의 가중 랭킹과 같은 취지).
+                 * 목록 필터(뱃지·정렬·페이지)와 무관하게 카테고리 전체에서 계산한 뒤 상단에 노출한다.
+                 */
+                let bestQuery = `SELECT * FROM products
+                    WHERE mall_id = ?
+                      AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
+                      AND ${_visibilityFilter}
+                      AND category_id IN (${ids.map(() => '?').join(',')})`;
+                const bestParams = [mallId, ...ids];
+                // 목록과 동일하게, 아울렛 상품을 일반 목록에서 빼는 몰이면 베스트에서도 뺀다.
+                if (!outletSetting.show_in_normal_list) {
+                    bestQuery += ' AND id NOT IN (SELECT product_id FROM outlet_product WHERE mall_id = ?)';
+                    bestParams.push(mallId);
+                }
+                bestQuery += ` ORDER BY (
+                      (SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi WHERE oi.product_id = products.id) * 3
+                      + (SELECT COUNT(*) FROM likes l WHERE l.product_id = products.id) * 2
+                      + products.view_count
+                    ) DESC, products.view_count DESC, products.created_at DESC
+                    LIMIT 5`;
+                const [bestRows] = await pool.query(bestQuery, bestParams);
+                // 카드 가격도 활성 특가가로 표시한다(목록/추천과 동일).
+                await dealSvc.applyDeals(bestRows);
+                categoryBest = bestRows;
             }
         }
 
@@ -311,6 +340,7 @@ exports.getList = async (req, res) => {
             likedProductIds,
             categoryBanner,
             categoryNav,
+            categoryBest,
             sortTabs: SORT_TABS,
             seo,
             pagination: { page, perPage, total, totalPages }

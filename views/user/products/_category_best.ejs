@@ -1,0 +1,181 @@
+<%
+  /*
+   * 카테고리 베스트 슬라이드쇼 — 카테고리 리스트 상단에 그 카테고리(하위 트리 포함)의 인기
+   * 상품 최대 5개를 자동재생 캐러셀로 노출한다. 데이터는 productController.getList 가
+   * 판매수·좋아요·조회수 가중 점수 상위 5개(categoryBest)로 채운다.
+   *
+   * storefront/menu_showcase 와 마크업/스크립트 계약이 매우 비슷하지만, 그 파티셜은
+   * GNB 쇼케이스(menuShowcase) 전용이고 init 가드(window.__ydShowcaseInit)가 전역이라
+   * 같은 페이지에 둘 다 있으면 서로의 초기화를 막는다. 그래서 독립 네임스페이스로 분리했다.
+   *
+   * locals: products = 상품 배열(최대 5). 2개 미만이면 슬라이드쇼로서 의미가 없어 렌더하지 않는다.
+   */
+  const _best = (typeof products !== 'undefined' && products) ? products : [];
+%>
+<% if (_best.length >= 2) { %>
+<style>
+  /* peek — 트랙 좌우 여백만큼 이전/다음 카드가 걸쳐 보인다. scroll-padding 으로 스냅 위치를 맞춘다. */
+  .yd-bestslide { --ybs-gap: 1rem; --ybs-peek: 2rem; --ybs-per: 2; }
+  @media (min-width: 1024px) { .yd-bestslide { --ybs-per: 3; --ybs-peek: 3rem; } }
+  .yd-bestslide__track {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: calc(
+      (100% - var(--ybs-peek) * 2 - var(--ybs-gap) * (var(--ybs-per) - 1)) / var(--ybs-per)
+    );
+    gap: var(--ybs-gap);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    padding-inline: var(--ybs-peek);
+    scroll-padding-inline-start: var(--ybs-peek);
+  }
+  .yd-bestslide__track::-webkit-scrollbar { display: none; }
+  .yd-bestslide__track > * { scroll-snap-align: start; }
+
+  /* 화살표 — 카드 위에 겹쳐 띄운다(PC 이상) */
+  .yd-bestslide__nav {
+    position: absolute; top: 42%; transform: translateY(-50%); z-index: 2;
+    width: 40px; height: 40px; border-radius: 9999px;
+    background: rgba(255,255,255,.94); border: 1px solid var(--gh-border);
+    box-shadow: 0 2px 12px rgba(0,0,0,.12);
+    display: none; align-items: center; justify-content: center;
+    color: #4b5563; transition: color .15s, border-color .15s, opacity .15s;
+  }
+  .yd-bestslide__nav:hover { color: var(--gh-primary); border-color: var(--gh-primary); }
+  .yd-bestslide__nav:disabled { opacity: .3; cursor: default; }
+  .yd-bestslide__nav--prev { left: .25rem; }
+  .yd-bestslide__nav--next { right: .25rem; }
+  @media (min-width: 768px) { .yd-bestslide__nav { display: inline-flex; } }
+
+  /* 하단 진행바 + 카운터 + 일시정지 */
+  .yd-bestslide__bar { height: 2px; background: #e5e7eb; flex: 1; overflow: hidden; }
+  .yd-bestslide__bar > span {
+    display: block; height: 100%; width: 0;
+    background: var(--gh-primary, #111827); transition: width .3s ease;
+  }
+  .yd-bestslide__count { font-variant-numeric: tabular-nums; }
+</style>
+
+<section class="yd-bestslide mb-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base sm:text-lg font-extrabold text-gray-900 flex items-center gap-1.5">
+      <i class="bi bi-fire text-[color:var(--gh-primary)]"></i> 카테고리 베스트
+    </h2>
+    <span class="text-[11px] font-bold text-white bg-[var(--gh-primary)] rounded-full px-2 py-0.5">TOP <%= _best.length %></span>
+  </div>
+
+  <div class="relative" data-yd-bestslide>
+    <button type="button" class="yd-bestslide__nav yd-bestslide__nav--prev" data-yd-bs-prev aria-label="이전">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <button type="button" class="yd-bestslide__nav yd-bestslide__nav--next" data-yd-bs-next aria-label="다음">
+      <i class="bi bi-chevron-right"></i>
+    </button>
+
+    <div class="yd-bestslide__track" data-yd-bs-track>
+      <% _best.forEach(function (product) { %>
+        <div><%- include('../../partials/product_card', { product }) %></div>
+      <% }); %>
+    </div>
+
+    <div class="mt-3 flex items-center gap-3">
+      <div class="yd-bestslide__bar"><span data-yd-bs-bar></span></div>
+      <span class="yd-bestslide__count text-xs text-gray-500" data-yd-bs-count>1/<%= _best.length %></span>
+      <button type="button" class="text-gray-400 hover:text-gray-700 text-xs w-6 h-6 border border-gray-200 rounded flex items-center justify-center"
+              data-yd-bs-toggle aria-label="자동재생 일시정지">
+        <i class="bi bi-pause-fill"></i>
+      </button>
+    </div>
+  </div>
+</section>
+
+<script>
+/* 카테고리 베스트 슬라이드쇼 — 1개씩 슬라이드 + 자동재생.
+   storefront/menu_showcase 와 별개 스크립트다(전역 init 가드가 서로를 막지 않도록 네임스페이스 분리). */
+(function () {
+  if (window.__ydBestSlideInit) return;
+  window.__ydBestSlideInit = true;
+
+  var AUTOPLAY_MS = 4000;
+
+  function init(root) {
+    var track = root.querySelector('[data-yd-bs-track]');
+    var prev = root.querySelector('[data-yd-bs-prev]');
+    var next = root.querySelector('[data-yd-bs-next]');
+    var bar = root.querySelector('[data-yd-bs-bar]');
+    var count = root.querySelector('[data-yd-bs-count]');
+    var toggle = root.querySelector('[data-yd-bs-toggle]');
+    if (!track) return;
+
+    var total = track.children.length;
+    var timer = null;
+    var playing = false;
+
+    /* 카드 1장 이동 거리 */
+    function step() {
+      var first = track.firstElementChild;
+      if (!first) return track.clientWidth;
+      var gap = parseFloat(getComputedStyle(track).columnGap || '0') || 0;
+      return first.offsetWidth + gap;
+    }
+
+    function atEnd() {
+      return track.scrollLeft + track.clientWidth >= track.scrollWidth - 2;
+    }
+
+    function sync() {
+      var idx = Math.round(track.scrollLeft / step());
+      var shown = Math.min(idx + 1, total);
+      if (count) count.textContent = shown + '/' + total;
+      if (bar) bar.style.width = ((shown / total) * 100) + '%';
+      if (prev) prev.disabled = track.scrollLeft <= 1;
+      if (next) next.disabled = atEnd();
+    }
+
+    function slide(dir) {
+      /* 끝에서 다음 → 처음으로 되감는다(자동재생이 멈추지 않도록) */
+      if (dir > 0 && atEnd()) track.scrollTo({ left: 0, behavior: 'smooth' });
+      else track.scrollBy({ left: dir * step(), behavior: 'smooth' });
+    }
+
+    function play() {
+      if (playing || total <= 1) return;
+      playing = true;
+      timer = setInterval(function () { slide(1); }, AUTOPLAY_MS);
+      if (toggle) toggle.innerHTML = '<i class="bi bi-pause-fill"></i>';
+    }
+
+    function pause() {
+      playing = false;
+      clearInterval(timer);
+      timer = null;
+      if (toggle) toggle.innerHTML = '<i class="bi bi-play-fill"></i>';
+    }
+
+    if (prev) prev.addEventListener('click', function () { pause(); slide(-1); });
+    if (next) next.addEventListener('click', function () { pause(); slide(1); });
+    if (toggle) toggle.addEventListener('click', function () { playing ? pause() : play(); });
+    track.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+
+    /* 마우스가 올라가 있는 동안은 자동으로 넘기지 않는다 */
+    root.addEventListener('mouseenter', function () { if (playing) { clearInterval(timer); timer = null; } });
+    root.addEventListener('mouseleave', function () { if (playing && !timer) timer = setInterval(function () { slide(1); }, AUTOPLAY_MS); });
+
+    sync();
+    /* 접근성 — 모션 최소화 설정이면 자동재생하지 않는다 */
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) play();
+    else pause();
+  }
+
+  function initAll() {
+    document.querySelectorAll('[data-yd-bestslide]').forEach(init);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAll);
+  else initAll();
+})();
+</script>
+<% } %>

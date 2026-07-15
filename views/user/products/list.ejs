@@ -198,6 +198,12 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                         </a>
                     </div>
                     <% } %>
+
+                        <%# 카테고리 리스트 상단 베스트 슬라이드쇼 — categoryBest(최대 5개)가 있을 때만 렌더. %>
+                        <% if (typeof categoryBest !== 'undefined' && categoryBest && categoryBest.length >= 2) { %>
+                            <%- include('./_category_best', { products: categoryBest }) %>
+                        <% } %>
+
                         <div class="flex flex-col mb-6 gap-3 lg:sticky lg:top-0 lg:bg-gray-50 lg:z-10 lg:pt-2 lg:pb-2" id="products-filter-bar">
                             <div class="flex justify-between items-center">
                                 <% if (_hasCatNav) { %>
