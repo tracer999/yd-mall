@@ -74,7 +74,10 @@
         </thead>
         <tbody class="divide-y divide-gray-100">
           <% _malls.forEach(function (m) {
-               const deletable = !m.is_default && m.counts.categories === 0 && m.counts.products === 0;
+               /* 기본몰만 삭제 불가. 그 외는 데이터가 있어도 강제 삭제 가능(몰 빌더 성격).
+                  데이터가 없으면 바로 confirm, 있으면 강제 삭제 모달로 코드 재입력을 받는다. */
+               const deletable = !m.is_default;
+               const hasData = m.counts.categories > 0 || m.counts.products > 0;
                const editing = Number(m.id) === _editingId;
                /* 몰 해석기(getMalls)는 활성 몰만 캐시한다 → 비활성 몰은 ?adminMall 로 선택해도 무시된다.
                   버튼을 내주면 눌러도 아무 일이 안 일어나므로 아예 잠근다. */
@@ -123,13 +126,20 @@
                           title="비활성 몰은 편집 대상으로 선택할 수 없습니다. 먼저 활성화하세요.">선택</span>
                   <% } %>
                   <a href="/admin/malls/<%= m.id %>" class="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 no-underline">수정</a>
-                  <% if (deletable) { %>
+                  <% if (!deletable) { %>
+                    <span class="text-xs px-2 py-1 rounded border border-gray-100 text-gray-300 cursor-not-allowed"
+                          title="기본몰은 삭제 불가 — 다른 몰을 기본몰로 지정한 뒤 삭제하세요.">삭제</span>
+                  <% } else if (!hasData) { %>
+                    <%# 데이터 없는 몰: 가벼운 confirm 후 바로 삭제 %>
                     <form method="POST" action="/admin/malls/<%= m.id %>/delete" onsubmit="return confirm('몰 &quot;<%= m.name %>&quot; 을(를) 삭제합니다. 몰별 설정(내비·메뉴·테마)도 함께 지워집니다.');">
                       <button type="submit" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">삭제</button>
                     </form>
                   <% } else { %>
-                    <span class="text-xs px-2 py-1 rounded border border-gray-100 text-gray-300 cursor-not-allowed"
-                          title="<%= m.is_default ? '기본몰은 삭제 불가' : '데이터가 있어 삭제 불가' %>">삭제</span>
+                    <%# 데이터 있는 몰: 강제 삭제 모달(코드 재입력)로 유도 %>
+                    <button type="button"
+                            class="js-force-del text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
+                            data-mall-id="<%= m.id %>" data-mall-name="<%= m.name %>" data-mall-code="<%= m.code %>"
+                            data-cats="<%= m.counts.categories %>" data-prods="<%= m.counts.products %>">삭제</button>
                   <% } %>
                 </div>
               </td>
@@ -141,7 +151,83 @@
   </div>
 
   <p class="mt-4 text-xs text-gray-400">
-    기본몰은 삭제·비활성할 수 없습니다(몰 해석기 폴백 대상). 데이터(카테고리·상품)가 있는 몰도 삭제할 수 없습니다 —
-    <code>mall_id</code> 참조에 외래키가 없어 몰만 지우면 고아 데이터가 남기 때문입니다. 먼저 데이터를 비우세요.
+    기본몰은 삭제·비활성할 수 없습니다(몰 해석기 폴백 대상). 그 외 몰은 데이터(카테고리·상품)가 있어도
+    <strong>강제 삭제</strong>할 수 있습니다 — 몰을 만들고 지우고 다시 만드는 <strong>몰 빌더</strong> 작업을 위한 것입니다.
+    강제 삭제는 딸린 데이터(상품·카테고리·리뷰·장바구니·메뉴·테마·페이지 등)를 함께 지우며, 되돌릴 수 없으므로 삭제 창에서 몰 코드 재입력으로 확인합니다.
   </p>
 </div>
+
+<%# ─────────── 강제 삭제 확인 모달 (데이터 있는 몰) ─────────── %>
+<div id="forceDelModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+  <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+    <h3 class="text-lg font-bold text-red-700 flex items-center gap-2">
+      <i class="bi bi-exclamation-octagon-fill"></i> 몰 강제 삭제
+    </h3>
+    <p class="mt-3 text-sm text-gray-700">
+      <strong id="fdName" class="text-gray-900"></strong> 을(를) 삭제합니다.
+      이 몰에 딸린 <strong class="text-red-600">모든 데이터가 영구 삭제</strong>됩니다:
+    </p>
+    <ul class="mt-2 text-sm text-gray-600 list-disc pl-5 space-y-0.5">
+      <li>카테고리 <strong id="fdCats">0</strong>개 · 상품 <strong id="fdProds">0</strong>개 (딸린 리뷰·장바구니·이미지 포함)</li>
+      <li>몰 전용 설정: 내비·GNB 메뉴·테마·페이지·배너·딜·이벤트·쿠폰 등</li>
+    </ul>
+    <p class="mt-3 text-xs text-gray-500">주문 이력은 지워지지 않고 상품 링크만 끊깁니다. <strong>되돌릴 수 없습니다.</strong></p>
+    <form method="POST" id="fdForm" class="mt-4">
+      <input type="hidden" name="force" value="1">
+      <label class="block text-sm text-gray-700 mb-1">
+        확인을 위해 몰 코드 <code class="text-red-600 font-semibold" id="fdCodeHint"></code> 를 그대로 입력하세요
+      </label>
+      <input type="text" name="confirm_code" id="fdCodeInput" autocomplete="off" spellcheck="false"
+             class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-red-200 focus:border-red-400"
+             placeholder="몰 코드 입력">
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button" id="fdCancel"
+                class="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">취소</button>
+        <button type="submit" id="fdSubmit" disabled
+                class="px-4 py-2 text-sm rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed">
+          강제 삭제
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  var modal = document.getElementById('forceDelModal');
+  if (!modal) return;
+  var form = document.getElementById('fdForm');
+  var codeInput = document.getElementById('fdCodeInput');
+  var submitBtn = document.getElementById('fdSubmit');
+  var expectCode = '';
+
+  function openModal(btn) {
+    expectCode = (btn.getAttribute('data-mall-code') || '').toLowerCase();
+    document.getElementById('fdName').textContent = btn.getAttribute('data-mall-name') || '';
+    document.getElementById('fdCats').textContent = btn.getAttribute('data-cats') || '0';
+    document.getElementById('fdProds').textContent = btn.getAttribute('data-prods') || '0';
+    document.getElementById('fdCodeHint').textContent = btn.getAttribute('data-mall-code') || '';
+    form.action = '/admin/malls/' + btn.getAttribute('data-mall-id') + '/delete';
+    codeInput.value = '';
+    submitBtn.disabled = true;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    codeInput.focus();
+  }
+  function closeModal() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  var buttons = document.querySelectorAll('.js-force-del');
+  for (var i = 0; i < buttons.length; i++) {
+    (function (b) { b.addEventListener('click', function () { openModal(b); }); })(buttons[i]);
+  }
+  codeInput.addEventListener('input', function () {
+    submitBtn.disabled = codeInput.value.trim().toLowerCase() !== expectCode;
+  });
+  document.getElementById('fdCancel').addEventListener('click', closeModal);
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+})();
+</script>

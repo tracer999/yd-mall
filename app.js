@@ -318,6 +318,9 @@ const liveRoutes = require('./routes/live');
     app.use('/admin', adminMenuMiddleware, adminRoutes);
     app.use('/cart', cartRoutes);
     app.use('/checkout', checkoutRoutes);
+    // /doc, /doc/manual → 매뉴얼 홈(사용자가 흔히 치는 진입 경로 별칭). /docs 는 정적 문서 서빙이라 단수 /doc 사용.
+    app.get('/doc', (req, res) => res.redirect('/manual'));
+    app.get('/doc/manual', (req, res) => res.redirect('/manual'));
     app.use('/manual', manualRoutes);
 
     // 404 catch-all (매칭되는 라우트 없음)

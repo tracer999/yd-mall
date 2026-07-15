@@ -173,7 +173,6 @@ const SECTIONS = [
 /** 최종 홈 섹션 순서 (section_type 또는 seed_key 기준) */
 const ORDER = [
     { match: { section_type: 'hero' } },
-    { match: { section_type: 'value_proposition' } },
     { match: { section_type: 'product_grid', data_source_id: 1 } },   // 베스트
     { match: { seedKey: 'ct1_carousel_recommend' } },
     { match: { section_type: 'product_grid', data_source_id: 2 } },   // 신상품

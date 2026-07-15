@@ -15,7 +15,13 @@ router.use(adminAuth); // Apply middleware to all routes below
 // 관리자 편집 몰 컨텍스트 (P5) — 인증된 관리자 요청에만. req.adminMallId 주입.
 router.use(require('../middleware/adminMallContext'));
 
-router.get('/', dashboardController.getDashboard);
+// 로그인 후 최초 진입 화면은 첫 번째 접근 가능 메뉴(기본: 몰 관리)로 보낸다.
+// 대시보드는 /admin/dashboard 로 분리되어 '운영/시스템 관리' 하위 메뉴로 접근한다.
+router.get('/', (req, res) => {
+	const first = (res.locals.adminMenus || [])[0];
+	return res.redirect(first && first.path ? first.path : '/admin/dashboard');
+});
+router.get('/dashboard', dashboardController.getDashboard);
 router.get('/design-guide', (req, res) => {
 	res.render('admin/design_guide', {
 		layout: 'layouts/admin_layout',

@@ -35,13 +35,6 @@ module.exports = {
     dataSource: null,
     fields: []
   },
-  value_proposition: {
-    view: 'partials/sections/value_proposition',
-    label: '특장점',
-    description: '무료배송·정품보장 같은 쇼핑몰 강점 아이콘 띠. 고정 문구라 설정이 없다.',
-    dataSource: null,
-    fields: []
-  },
   product_grid: {
     view: 'partials/sections/product_grid_section',
     label: '상품 그리드',

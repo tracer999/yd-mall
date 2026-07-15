@@ -79,7 +79,6 @@ const PRESETS = {
 
         homeSections: [
             { type: 'hero', title: null },
-            { type: 'value_proposition', title: null },
             { type: 'best_ranking', title: '베스트 상품' },
             { type: 'product_grid', title: 'MD 추천', group: 'recommend' },
             { type: 'category_showcase', title: '카테고리' },
@@ -126,7 +125,6 @@ const PRESETS = {
 
         homeSections: [
             { type: 'hero', title: null },
-            { type: 'value_proposition', title: null },
             { type: 'product_grid', title: '상품', group: 'recommend' },
             { type: 'category_showcase', title: '카테고리' },
             { type: 'kakao_cta', title: null },

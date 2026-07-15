@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const mallContext = require('../../middleware/mallContext');
 const presets = require('../../services/mall/presets');
 const mallProvisioner = require('../../services/mall/mallProvisioner');
+const mallEraser = require('../../services/mall/mallEraser');
 
 /*
  * 몰 관리 (P5 관리자편 Phase 2 · 몰 빌더 P4) — `mall` 정의 테이블 CRUD + 프리셋 프로비저닝
@@ -18,8 +19,10 @@ const mallProvisioner = require('../../services/mall/mallProvisioner');
  * 반드시 지켜야 할 불변식:
  *   - 기본몰(is_default=1)은 **정확히 하나**. 새로 지정하면 나머지를 내린다(트랜잭션).
  *   - **기본몰은 삭제·비활성 불가** — 해석기의 폴백 대상이라 없으면 몰 해석이 깨진다.
- *   - **데이터(카테고리·상품)가 있는 몰은 삭제 불가** — mall_id 참조에 FK 가 없어
- *     몰 행만 지우면 고아 데이터가 남는다. 먼저 데이터를 비워야 한다.
+ *   - 기본몰이 아닌 몰은 **데이터가 있어도 강제 삭제**할 수 있다(몰 빌더 성격상
+ *     "만들고 → 지우고 → 다시 만드는" 반복이 잦다). mall_id 참조에 FK 가 없어
+ *     고아가 남으므로, 딸린 데이터는 services/mall/mallEraser 가 안전 순서로 함께 지운다.
+ *     오삭제 방지로 삭제 창에서 몰 코드 재입력을 요구한다.
  */
 
 const CODE_RE = /^[a-z0-9_-]{2,50}$/;
@@ -31,6 +34,26 @@ function normalizeCode(v) {
 /** 폼에서 온 프리셋 키를 화이트리스트로 검증한다. */
 function pickPreset(raw) {
     return presets.isValidKey(raw) ? String(raw) : presets.DEFAULT_KEY;
+}
+
+/*
+ * 기본몰인데 코드를 비워 두면 서버가 자동 부여한다.
+ *
+ * 대부분의 납품처는 멀티몰을 쓰지 않는다 — 몰 하나만 쓰는 고객은 코드(?mall= slug)를
+ * 알 필요가 없다(해석기가 기본몰로 폴백하므로 `/` 로 바로 접속). 그래서 "기본몰" 체크 시
+ * 운영자가 코드를 입력하지 않아도 되게, base('main')부터 시작해 유일 코드를 찾아 준다.
+ * code 컬럼 자체는 NOT NULL·UNIQUE 이고 slug 생성에도 쓰이므로 "없애는" 게 아니라
+ * "보이지 않게 자동으로 채우는" 것이다.
+ */
+async function ensureUniqueCode(conn, base) {
+    const [[first]] = await conn.query('SELECT id FROM mall WHERE code = ?', [base]);
+    if (!first) return base;
+    for (let i = 2; i <= 100; i++) {
+        const candidate = `${base}-${i}`;
+        const [[dup]] = await conn.query('SELECT id FROM mall WHERE code = ?', [candidate]);
+        if (!dup) return candidate;
+    }
+    return `${base}-${Date.now()}`; // 100개까지 찰 리 없지만 최후 폴백
 }
 
 /** 이 몰이 보유한 데이터 수(삭제 가드용) */
@@ -132,19 +155,24 @@ async function setDefault(conn, mallId) {
 
 /** POST /admin/malls — 생성 + 프리셋 프로비저닝 */
 exports.postAdd = async (req, res) => {
-    const code = normalizeCode(req.body.code);
     const name = String(req.body.name || '').trim();
     const presetKey = pickPreset(req.body.preset_key);
-    const draft = {
-        id: null, code, name, domain: req.body.domain,
-        is_active: 1, is_default: req.body.is_default ? 1 : 0,
-        preset_key: presetKey,
-    };
+    const wantDefault = !!req.body.is_default;
+    let code = normalizeCode(req.body.code);
 
     const conn = await pool.getConnection();
     let newMallId = null;
     try {
-        if (!CODE_RE.test(code)) return renderForm(res, draft, { error: '코드는 소문자·숫자·-·_ 2~50자여야 합니다.' });
+        // 기본몰인데 코드를 비워 두면 자동 부여(단일몰 납품 편의). 기본몰이 아니면 종전대로 필수.
+        if (!code && wantDefault) code = await ensureUniqueCode(conn, 'main');
+
+        const draft = {
+            id: null, code, name, domain: req.body.domain,
+            is_active: 1, is_default: wantDefault ? 1 : 0,
+            preset_key: presetKey,
+        };
+
+        if (!CODE_RE.test(code)) return renderForm(res, draft, { error: '코드는 소문자·숫자·-·_ 2~50자여야 합니다. (기본몰은 비워 두면 자동 부여됩니다)' });
         if (!name) return renderForm(res, draft, { error: '몰 이름을 입력하세요.' });
 
         const [[dup]] = await conn.query('SELECT id FROM mall WHERE code = ?', [code]);
@@ -157,7 +185,7 @@ exports.postAdd = async (req, res) => {
              String(req.body.domain || '').trim() || null, req.body.is_active ? 1 : 0]
         );
         newMallId = r.insertId;
-        if (req.body.is_default) await setDefault(conn, newMallId);
+        if (wantDefault) await setDefault(conn, newMallId);
         await conn.commit();
     } catch (err) {
         await conn.rollback();
@@ -260,7 +288,13 @@ exports.postProvision = async (req, res) => {
     }
 };
 
-/** POST /admin/malls/:id/delete */
+/**
+ * POST /admin/malls/:id/delete — 몰 삭제(강제)
+ *
+ * 기본몰은 여전히 삭제 불가. 그 외 몰은 데이터가 있어도 지운다:
+ *   - 데이터가 있으면 삭제 창에서 force=1 + 몰 코드 재입력(confirm_code)을 받아야 한다.
+ *   - 딸린 데이터는 mallEraser.cascadeDeleteMall 가 FK 안전 순서로 한 트랜잭션에 지운다.
+ */
 exports.postDelete = async (req, res) => {
     const id = Number(req.params.id);
     try {
@@ -270,24 +304,22 @@ exports.postDelete = async (req, res) => {
         if (mall.is_default) {
             return res.redirect('/admin/malls?error=' + encodeURIComponent('기본몰은 삭제할 수 없습니다. 다른 몰을 기본몰로 지정한 뒤 삭제하세요.'));
         }
+
         const counts = await mallDataCounts(id);
-        if (counts.categories > 0 || counts.products > 0) {
+        const hasData = counts.categories > 0 || counts.products > 0;
+        const force = req.body.force === '1';
+
+        // 데이터가 있는 몰은 강제 삭제 확인(force)을 거쳐야만 지운다.
+        if (hasData && !force) {
             return res.redirect('/admin/malls?error=' + encodeURIComponent(
-                `이 몰에 카테고리 ${counts.categories}개·상품 ${counts.products}개가 있어 삭제할 수 없습니다. 먼저 데이터를 비우세요(예: 종합관은 scripts/seed_mall2_general.js --remove).`));
+                `이 몰에 카테고리 ${counts.categories}개·상품 ${counts.products}개가 있습니다. 삭제 창에서 '강제 삭제'를 확인하세요.`));
+        }
+        // 강제 삭제 시 오삭제 방지: 입력한 코드가 몰 코드와 정확히 일치해야 한다.
+        if (force && String(req.body.confirm_code || '').trim().toLowerCase() !== String(mall.code).toLowerCase()) {
+            return res.redirect('/admin/malls?error=' + encodeURIComponent('입력한 몰 코드가 일치하지 않아 삭제를 취소했습니다.'));
         }
 
-        /*
-         * 몰 소유의 설정 행은 함께 정리한다(FK 가 없어 자동 정리되지 않는다).
-         * 데이터(카테고리·상품)는 위에서 0 임을 보장했다.
-         * page 는 page_section / page_revision 을 FK CASCADE 로 끌고 간다.
-         */
-        await pool.query('DELETE FROM page WHERE mall_id = ?', [id]);
-        await pool.query('DELETE FROM site_settings WHERE mall_id = ?', [id]);
-        await pool.query('DELETE FROM navigation_config WHERE mall_id = ?', [id]);
-        await pool.query('DELETE FROM mall_feature_menu WHERE mall_id = ?', [id]);
-        await pool.query('DELETE FROM custom_menu WHERE mall_id = ?', [id]);
-        await pool.query('DELETE FROM theme WHERE mall_id = ?', [id]);
-        await pool.query('DELETE FROM mall WHERE id = ?', [id]);
+        await mallEraser.cascadeDeleteMall(id);
 
         mallContext.invalidate();
         res.redirect('/admin/malls?saved=1');

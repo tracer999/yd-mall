@@ -36,13 +36,23 @@
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div class="p-5 space-y-5">
 
-        <div>
+        <div id="codeField">
           <label class="block text-sm font-medium text-gray-700 mb-1.5">코드 <span class="text-gray-400 font-normal">(고정 식별자)</span></label>
           <input type="text" name="code" value="<%= mall.code %>" maxlength="50" required
                  placeholder="general" pattern="[a-z0-9_-]{2,50}"
                  class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono">
           <p class="mt-1 text-xs text-gray-400">소문자·숫자·<code>-</code>·<code>_</code> 2~50자. <code>?mall=코드</code> 로 접속에 쓰입니다.</p>
         </div>
+
+        <% if (isNew) { %>
+          <%# 기본몰이면 코드를 입력하지 않아도 된다 — 서버가 자동 부여한다(단일몰 납품 편의).
+              JS 로 기본몰 체크 상태에 따라 위 코드 입력칸과 이 안내를 토글한다. %>
+          <div id="codeAutoNote" class="hidden text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2.5 leading-relaxed">
+            <i class="bi bi-magic mr-1"></i>
+            <strong>기본몰</strong>은 코드를 입력하지 않아도 됩니다 — 저장 시 자동으로 부여됩니다(예: <code>main</code>).
+            몰을 하나만 쓰는 납품 환경에서는 <code>?mall=</code> 없이 <code>/</code> 로 바로 접속합니다.
+          </div>
+        <% } %>
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">몰 이름</label>
@@ -190,3 +200,32 @@
     </div>
   <% } %>
 </div>
+
+<% if (isNew) { %>
+<%# 기본몰 체크 ↔ 코드 입력칸 토글. 기본몰이면 코드칸을 감추고(required 해제) 자동부여 안내를 띄운다.
+    수정 화면(isNew=false)은 기존 코드를 유지해야 하므로 이 스크립트를 걸지 않는다. %>
+<script>
+(function () {
+  var def = document.querySelector('input[name="is_default"]');
+  var codeField = document.getElementById('codeField');
+  var note = document.getElementById('codeAutoNote');
+  var codeInput = codeField ? codeField.querySelector('input[name="code"]') : null;
+  if (!def || !codeField || !note || !codeInput) return;
+
+  function sync() {
+    if (def.checked) {
+      codeField.classList.add('hidden');
+      note.classList.remove('hidden');
+      // disabled 로 두면 제출에서 빠지고(required·pattern 검증도 건너뜀) → 서버가 코드를 자동 부여한다.
+      codeInput.disabled = true;
+    } else {
+      codeField.classList.remove('hidden');
+      note.classList.add('hidden');
+      codeInput.disabled = false;
+    }
+  }
+  def.addEventListener('change', sync);
+  sync();
+})();
+</script>
+<% } %>

@@ -22,6 +22,7 @@ const docsDir = path.join(__dirname, '..', 'docs');
 const manualAdminDir = path.join(docsDir, 'manual', 'admin');
 const manualUserDir = path.join(docsDir, 'manual', 'user');
 const manualCodingGuideDir = path.join(docsDir, 'manual', 'coding_guide');
+const manualMallBuilderDir = path.join(docsDir, 'manual', 'mall_builder');
 
 // Doc key → 한글 제목 (운영자 매뉴얼용, docs/manual/admin 기준)
 const adminTitles = {
@@ -73,6 +74,27 @@ const userDescriptions = {
     checkout: '주문서 작성, 배송지/결제수단 선택, 주문 완료까지의 전체 결제 흐름 설명',
     ga4: 'GA4 이벤트 추적이 사용자 행동에 어떤 식으로 반영되는지, 기본 개념을 간단히 소개'
 };
+
+// 몰 빌더 가이드 제목 (docs/manual/mall_builder 기준)
+const mallBuilderTitles = {
+    index: '몰 빌더 시작하기',
+    overview: '솔루션 개요',
+    create_mall: '몰 만들기',
+    fill_content: '몰 채우기',
+    delete_rebuild: '몰 지우고 다시 만들기'
+};
+
+// 몰 빌더 가이드 각 항목 설명 (목차 화면에서 사용)
+const mallBuilderDescriptions = {
+    index: '새 몰을 처음부터 만들려는 사람을 위한 전체 안내와 따라 하기 순서',
+    overview: '이 프로젝트가 "몰을 찍어내 납품하는 몰 빌더"라는 성격과 멀티몰 구조를 설명',
+    create_mall: '관리자에서 새 몰을 등록하고 헤더 스킨을 골라 초기 골격(메뉴·테마·홈)을 채우는 단계',
+    fill_content: '선택한 몰에 카테고리 → 상품 → 메뉴·테마·페이지를 채우고 스토어프론트로 확인하는 방법',
+    delete_rebuild: '만든 몰을 강제 삭제(딸린 데이터 포함)하고 처음부터 다시 만드는 방법'
+};
+
+// 몰 빌더 가이드 목차 순서
+const mallBuilderOrder = ['index', 'overview', 'create_mall', 'fill_content', 'delete_rebuild'];
 
 // 코딩 가이드 제목 (docs/manual/coding_guide 기준)
 const codingGuideTitles = {
@@ -131,17 +153,28 @@ const codingGuideOrder = [
     'glossary'
 ];
 
+// 명시 순서가 정의된 섹션 → 그 순서 배열
+const sectionOrders = {
+    coding_guide: codingGuideOrder,
+    mall_builder: mallBuilderOrder
+};
+
 function getDocList(section) {
-    const dir = section === 'admin' ? manualAdminDir : section === 'user' ? manualUserDir : section === 'coding_guide' ? manualCodingGuideDir : path.join(docsDir, section);
+    const dir = section === 'admin' ? manualAdminDir
+        : section === 'user' ? manualUserDir
+        : section === 'coding_guide' ? manualCodingGuideDir
+        : section === 'mall_builder' ? manualMallBuilderDir
+        : path.join(docsDir, section);
     if (!fs.existsSync(dir)) return [];
     const keys = fs.readdirSync(dir)
         .filter((f) => f.endsWith('.md'))
         .map((f) => f.replace(/\.md$/, ''));
 
-    if (section === 'coding_guide') {
+    const order = sectionOrders[section];
+    if (order) {
         return keys.sort((a, b) => {
-            const i = codingGuideOrder.indexOf(a);
-            const j = codingGuideOrder.indexOf(b);
+            const i = order.indexOf(a);
+            const j = order.indexOf(b);
             if (i === -1 && j === -1) return a.localeCompare(b);
             if (i === -1) return 1;
             if (j === -1) return -1;
@@ -161,7 +194,11 @@ function safeDocName(name) {
 }
 
 function getTitle(section, key) {
-    const map = section === 'admin' ? adminTitles : section === 'user' ? userTitles : section === 'coding_guide' ? codingGuideTitles : {};
+    const map = section === 'admin' ? adminTitles
+        : section === 'user' ? userTitles
+        : section === 'coding_guide' ? codingGuideTitles
+        : section === 'mall_builder' ? mallBuilderTitles
+        : {};
     return (map[key] !== undefined ? map[key] : key);
 }
 
@@ -172,12 +209,21 @@ function getDescription(section, key) {
     if (section === 'user') {
         return userDescriptions[key] || '';
     }
+    if (section === 'mall_builder') {
+        return mallBuilderDescriptions[key] || '';
+    }
     return '';
 }
 
 // /manual 인덱스: 관리자/사용자/코딩 가이드로 이동할 수 있는 안내 페이지
 router.get('/', (req, res) => {
     const sections = [
+        {
+            key: 'mall_builder',
+            title: '몰 빌더 가이드',
+            description: '새 쇼핑몰을 처음부터 만들려는 사람을 위한 안내서 — 이 프로젝트는 몰을 찍어내 포팅해 주는 몰 빌더 솔루션입니다. 몰 만들기·채우기·삭제/재생성을 순서대로 설명합니다.',
+            href: '/manual/mall_builder'
+        },
         {
             key: 'admin',
             title: '관리자 매뉴얼',
@@ -352,6 +398,58 @@ router.get('/coding_guide/:doc', async (req, res) => {
         docList: listWithTitles,
         currentDoc: docKey,
         docTitle: getTitle('coding_guide', docKey),
+        contentHtml
+    });
+});
+
+// 몰 빌더 가이드 목차
+router.get('/mall_builder', (req, res) => {
+    const docList = getDocList('mall_builder');
+    const listWithTitles = docList.map((key) => ({
+        key,
+        title: getTitle('mall_builder', key),
+        description: getDescription('mall_builder', key)
+    }));
+    res.render('manual/index', {
+        layout: 'layouts/manual_layout',
+        section: 'mall_builder',
+        sectionTitle: '몰 빌더 가이드',
+        docList: listWithTitles,
+        currentDoc: null,
+        contentHtml: null
+    });
+});
+
+// 몰 빌더 가이드 문서 (docs/manual/mall_builder)
+router.get('/mall_builder/:doc', async (req, res) => {
+    const docKey = safeDocName(req.params.doc);
+    if (!docKey) return res.status(400).send('Bad Request');
+
+    const filePath = path.join(manualMallBuilderDir, `${docKey}.md`);
+    const resolved = path.resolve(filePath);
+    const mallBuilderDirResolved = path.resolve(manualMallBuilderDir);
+    if (!resolved.startsWith(mallBuilderDirResolved) || !fs.existsSync(filePath)) {
+        return res.status(404).send('Not Found');
+    }
+
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const marked = await getMarked();
+    const contentHtml = marked.parse(raw);
+
+    const docList = getDocList('mall_builder');
+    const listWithTitles = docList.map((key) => ({
+        key,
+        title: getTitle('mall_builder', key),
+        description: getDescription('mall_builder', key)
+    }));
+
+    res.render('manual/index', {
+        layout: 'layouts/manual_layout',
+        section: 'mall_builder',
+        sectionTitle: '몰 빌더 가이드',
+        docList: listWithTitles,
+        currentDoc: docKey,
+        docTitle: getTitle('mall_builder', docKey),
         contentHtml
     });
 });
