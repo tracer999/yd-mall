@@ -25,8 +25,9 @@ exports.postInquiry = async (req, res) => {
     if (!req.user) return res.status(401).send('Login Required');
 
     try {
-        await pool.query('INSERT INTO inquiries (user_id, title, content) VALUES (?, ?, ?)', 
-            [req.user.id, title, content]);
+        // 손님이 문의를 넣은 몰을 기록한다(관리자 몰별 조회 필터용). req.mallId 는 mallContext 가 주입.
+        await pool.query('INSERT INTO inquiries (user_id, mall_id, title, content) VALUES (?, ?, ?, ?)',
+            [req.user.id, req.mallId || 1, title, content]);
         res.redirect('/inquiries');
     } catch (err) {
         console.error(err);
