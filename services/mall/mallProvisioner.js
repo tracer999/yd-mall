@@ -6,6 +6,7 @@ const mallContext = require('../../middleware/mallContext');
 const themeData = require('../../middleware/themeData');
 const navigationService = require('../menu/navigationService');
 const bestRankingService = require('../best/bestRankingService');
+const taxonomyResolver = require('../catalog/taxonomyResolver');
 
 /*
  * 몰 프로비저너 (몰 빌더 P4)
@@ -251,6 +252,10 @@ async function provisionMall(mallId, presetKey, opts = {}) {
         await applyFeatureMenus(conn, id, preset.featureMenus);
         await applyTheme(conn, id, preset.theme, mall.name, overwrite);
         await applySiteSettings(conn, id, mall.name);
+
+        // "미분류" 폴백 카테고리를 미리 심는다(멱등). 근거 텍스트 없이 등록되는 상품이
+        // category_id=null 로 사라지지 않게 하는 안전망. 고객 GNB 에는 숨는다.
+        await taxonomyResolver.getUncategorizedCategoryId({ mallId: id, conn });
 
         if (includeHome) {
             // 섹션보다 **먼저** 데이터 소스를 만든다 — 섹션이 만들어질 때 물려야 하므로.

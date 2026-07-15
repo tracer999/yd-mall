@@ -1,7 +1,7 @@
 /**
  * Shopify Smart Collection 동기화 스크립트
  *
- * dev-mall의 카테고리를 Shopify Smart Collection으로 생성한다.
+ * yd-mall의 카테고리를 Shopify Smart Collection으로 생성한다.
  *   - NORMAL 카테고리 → ruleSet: product_type = '영양제' 등
  *   - BRAND  카테고리 → ruleSet: vendor = '백세식품' 등
  *
@@ -118,7 +118,7 @@ async function deleteAll() {
 }
 
 async function syncCollections(dryRun) {
-    // 1. dev-mall에서 카테고리 목록 조회 (상품이 있는 것만)
+    // 1. yd-mall에서 카테고리 목록 조회 (상품이 있는 것만)
     const [normalRows] = await pool.query(`
         SELECT c.name
         FROM categories c

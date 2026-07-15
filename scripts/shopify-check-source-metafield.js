@@ -1,5 +1,5 @@
 /**
- * 원본(dev-mall) 연결 metafield(devmall.source) 현황 점검 — 읽기 전용
+ * 원본(yd-mall) 연결 metafield(devmall.source) 현황 점검 — 읽기 전용
  *
  * shopifyApp 의 "동기화 현황" 대시보드가 실행하는 것과 동일한 GraphQL 쿼리를
  * CLI 로 돌려 총계/원본연결/미연결/최근동기화를 출력한다. (아무것도 쓰지 않음)

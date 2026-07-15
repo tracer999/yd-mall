@@ -1,9 +1,9 @@
 -- Shopify 연동 테이블
--- 실행: mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' dev_mall < scripts/shopify-create-tables.sql
+-- 실행: mysql -h ydata.co.kr -u ydatasvc -p'NEWtec4075@@' yd_mall < scripts/shopify-create-tables.sql
 
 CREATE TABLE IF NOT EXISTS `shopify_product_mappings` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `product_id` INT NOT NULL COMMENT 'dev-mall 상품 ID (FK)',
+  `product_id` INT NOT NULL COMMENT 'yd-mall 상품 ID (FK)',
   `shopify_product_id` VARCHAR(100) NOT NULL COMMENT 'gid://shopify/Product/xxx',
   `shopify_variant_id` VARCHAR(100) NOT NULL COMMENT 'gid://shopify/ProductVariant/xxx',
   `shopify_handle` VARCHAR(255) COMMENT 'Shopify 상품 핸들 (URL slug)',
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS `shopify_product_mappings` (
   UNIQUE KEY `uk_shopify_product_id` (`shopify_product_id`),
   CONSTRAINT `fk_spm_product` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
-  COMMENT='dev-mall 상품 ↔ Shopify 상품 매핑';
+  COMMENT='yd-mall 상품 ↔ Shopify 상품 매핑';
 
 CREATE TABLE IF NOT EXISTS `shopify_orders` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `shopify_orders` (
 CREATE TABLE IF NOT EXISTS `shopify_image_mappings` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `source_hash` CHAR(64) NOT NULL COMMENT 'sha256(source_url)',
-  `source_url` VARCHAR(1024) NOT NULL COMMENT '원본 이미지 절대 URL (dev-mall/cafe24 등)',
+  `source_url` VARCHAR(1024) NOT NULL COMMENT '원본 이미지 절대 URL (yd-mall/cafe24 등)',
   `shopify_file_id` VARCHAR(255) COMMENT 'gid://shopify/MediaImage/xxx',
   `shopify_cdn_url` VARCHAR(1024) COMMENT 'cdn.shopify.com 이미지 URL',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

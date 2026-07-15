@@ -101,7 +101,7 @@ const CREATE_MEDIA = `
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────
 
-// dev-mall 상대 경로(/uploads/...) → 절대 URL
+// yd-mall 상대 경로(/uploads/...) → 절대 URL
 function toAbsoluteUrl(path) {
     if (!path) return null;
     if (path.startsWith('http')) return path;
@@ -121,7 +121,7 @@ function rewriteRelativeImageUrls(html) {
     );
 }
 
-// dev-mall status → Shopify status
+// yd-mall status → Shopify status
 // SOLD_OUT / RESTOCK 는 상품 노출 유지, 재고만 0으로 표시
 function toShopifyStatus(status) {
     if (status === 'ON' || status === 'SOLD_OUT' || status === 'RESTOCK') return 'ACTIVE';
@@ -149,7 +149,7 @@ function buildMediaInput(product) {
 
 /**
  * 단일 상품 동기화 (신규 생성 또는 업데이트)
- * @param {number} productId  dev-mall products.id
+ * @param {number} productId  yd-mall products.id
  * @returns {{ action: 'created'|'updated', shopifyProductId: string }}
  */
 async function syncProductById(productId) {
@@ -199,11 +199,11 @@ async function syncProductById(productId) {
             price,
             sku: product.product_code || undefined,
             optionValues: [{ optionName: 'Title', name: 'Default Title' }],
-            inventoryItem: { tracked: true }, // 재고 추적 활성화 (dev-mall 재고로 관리)
+            inventoryItem: { tracked: true }, // 재고 추적 활성화 (yd-mall 재고로 관리)
         }],
     };
 
-    // 원본(dev-mall) 연결정보를 Shopify 상품 metafield 로 심는다.
+    // 원본(yd-mall) 연결정보를 Shopify 상품 metafield 로 심는다.
     // shopifyApp(동기화 현황 대시보드)이 Shopify Admin API 만으로 원본 연결/미연결·
     // 마지막 동기화 시각을 읽을 수 있게 하기 위함. productSet 에 함께 실어 별도 호출이 없다.
     input.metafields = [{

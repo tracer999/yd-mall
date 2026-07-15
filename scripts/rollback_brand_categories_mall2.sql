@@ -9,7 +9,7 @@
 --   단 banners(banner_type='BRAND', category_id) 는 FK 가 없으므로 함께 확인할 것.
 --
 -- 실행:
---   mysql -h ydata.co.kr -u ydatasvc -p'...' dev_mall --default-character-set=utf8mb4 \
+--   mysql -h ydata.co.kr -u ydatasvc -p'...' yd_mall --default-character-set=utf8mb4 \
 --     < scripts/rollback_brand_categories_mall2.sql
 -- ---------------------------------------------------------------------------
 

@@ -6,7 +6,7 @@ const path = require('path');
 // 실행:
 //   상용:   pm2 start ecosystem.config.cjs                    (또는 npm run pm2:start)
 //   개발:   pm2 start ecosystem.config.cjs --env development  (또는 npm run pm2:start:dev)
-//   전환:   pm2 restart dev-mall --env development / --env production (--update-env 자동)
+//   전환:   pm2 restart yd-mall --env development / --env production (--update-env 자동)
 module.exports = {
   apps: [
     {

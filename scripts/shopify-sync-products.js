@@ -1,5 +1,5 @@
 /**
- * dev-mall 상품 → Shopify Product 동기화 스크립트
+ * yd-mall 상품 → Shopify Product 동기화 스크립트
  *
  * 실행: node scripts/shopify-sync-products.js [--dry-run] [--limit=10]
  *   --dry-run   실제 API 호출 없이 처리 대상만 출력

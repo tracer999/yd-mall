@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# dev-mall(국내몰, Express) 만 PM2로 관리하는 스크립트.
+# yd-mall(국내몰, Express) 만 PM2로 관리하는 스크립트.
 # (spf-mall / spf-admin 등 다른 앱은 건드리지 않는다.)
 #
 # 사용법:
-#   ./dev-mall.sh start            # dev-mall 기동/갱신 (상용, NODE_ENV=production) [기본]
-#   ./dev-mall.sh start dev        # dev-mall 기동/갱신 (개발, NODE_ENV=development)
-#   ./dev-mall.sh dev              # 위와 동일(개발 모드 기동 단축)
-#   ./dev-mall.sh restart [dev]    # 재시작 (dev 지정 시 개발 모드)
-#   ./dev-mall.sh stop             # dev-mall 중지
-#   ./dev-mall.sh delete           # dev-mall PM2에서 제거
-#   ./dev-mall.sh status           # 상태 표시
-#   ./dev-mall.sh logs             # 로그(tail)
-#   ./dev-mall.sh build            # 의존성 설치 + Tailwind CSS 빌드만
+#   ./yd-mall.sh start            # yd-mall 기동/갱신 (상용, NODE_ENV=production) [기본]
+#   ./yd-mall.sh start dev        # yd-mall 기동/갱신 (개발, NODE_ENV=development)
+#   ./yd-mall.sh dev              # 위와 동일(개발 모드 기동 단축)
+#   ./yd-mall.sh restart [dev]    # 재시작 (dev 지정 시 개발 모드)
+#   ./yd-mall.sh stop             # yd-mall 중지
+#   ./yd-mall.sh delete           # yd-mall PM2에서 제거
+#   ./yd-mall.sh status           # 상태 표시
+#   ./yd-mall.sh logs             # 로그(tail)
+#   ./yd-mall.sh build            # 의존성 설치 + Tailwind CSS 빌드만
 #
 # 환경 구분(config/env.js): NODE_ENV 하나로 env 파일이 결정된다.
 #   production  → .env → .env.production  (PORT=3006)
@@ -24,8 +24,8 @@ set -euo pipefail
 
 # 앱(app.js / ecosystem.config.cjs)은 이 스크립트가 있는 프로젝트 루트에 위치한다.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEV_MALL_DIR="$ROOT"
-APP="dev-mall"
+APP_DIR="$ROOT"
+APP="yd-mall"
 
 # --- ENCRYPTION_KEY 확보 ---
 # .env* 의 DB_PASS/REDIS_PASSWORD 는 ENC: 로 암호화돼 있고, config/env.js 는
@@ -70,15 +70,15 @@ for arg in "$@"; do
 done
 
 build_dev() {
-  echo "▶ dev-mall 의존성 설치 (npm install)..."
-  ( cd "$DEV_MALL_DIR" && npm install )
-  echo "▶ dev-mall Tailwind CSS 빌드..."
-  ( cd "$DEV_MALL_DIR" && npm run build:css )
+  echo "▶ yd-mall 의존성 설치 (npm install)..."
+  ( cd "$APP_DIR" && npm install )
+  echo "▶ yd-mall Tailwind CSS 빌드..."
+  ( cd "$APP_DIR" && npm run build:css )
 }
 
 up() {
-  echo "▶ dev-mall 기동/갱신 (NODE_ENV=$PM2_ENV, 포트 $PORT_INFO)..."
-  ( cd "$DEV_MALL_DIR" && pm2 startOrRestart ecosystem.config.cjs --env "$PM2_ENV" --update-env )
+  echo "▶ yd-mall 기동/갱신 (NODE_ENV=$PM2_ENV, 포트 $PORT_INFO)..."
+  ( cd "$APP_DIR" && pm2 startOrRestart ecosystem.config.cjs --env "$PM2_ENV" --update-env )
   pm2 save >/dev/null 2>&1 || true
   pm2 status
 }

@@ -7,7 +7,7 @@
 --   DELETE FROM outlet_product WHERE mall_id = 2;
 --   DELETE FROM categories WHERE mall_id = 2 AND type = 'OUTLET';
 --
--- 실행: mysql -h ydata.co.kr -u ydatasvc -p'...' dev_mall < scripts/seed_outlet_demo.sql
+-- 실행: mysql -h ydata.co.kr -u ydatasvc -p'...' yd_mall < scripts/seed_outlet_demo.sql
 
 -- ── 아울렛 카테고리 (mall 2) ─────────────────────────────
 -- '무엇을 파는가'의 축이다. 할인 사유(왜 싼가)와는 다른 축이다.

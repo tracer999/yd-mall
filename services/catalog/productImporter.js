@@ -154,6 +154,62 @@ function stripTags(s) {
     return decodeEntities(String(s || '').replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 }
 
+/** "화장품/헤어 > 트리트먼트" 처럼 계층 문자열에서 마지막(가장 구체) 조각만 뽑는다. */
+function categoryLeaf(str) {
+    if (!str) return null;
+    const parts = String(str).split(/[>/»|\\›]/).map(s => s.trim()).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : null;
+}
+
+/** JSON-LD BreadcrumbList 의 이름 배열(홈→…→분류). 없으면 []. */
+function findJsonLdBreadcrumb(html) {
+    const blocks = html.match(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi) || [];
+    for (const block of blocks) {
+        const json = block.replace(/^[\s\S]*?>/, '').replace(/<\/script>$/i, '');
+        let data;
+        try { data = JSON.parse(json); } catch { continue; }
+        const stack = [data];
+        while (stack.length) {
+            const node = stack.shift();
+            if (!node || typeof node !== 'object') continue;
+            if (Array.isArray(node)) { stack.push(...node); continue; }
+            const type = [].concat(node['@type'] || []);
+            if (type.includes('BreadcrumbList') && Array.isArray(node.itemListElement)) {
+                return node.itemListElement
+                    .map(li => (li && (li.name || (li.item && (li.item.name || li.item['@id'])))) || null)
+                    .map(n => (typeof n === 'string' ? n.trim() : null))
+                    .filter(Boolean);
+            }
+            if (node['@graph']) stack.push(node['@graph']);
+        }
+    }
+    return [];
+}
+
+/**
+ * 상품 페이지에서 카테고리(가장 구체적인 분류) 한 개를 추정한다. AI 없이 규칙 기반.
+ *   1) JSON-LD Product.category
+ *   2) BreadcrumbList 의 리프(마지막이 '홈'·상품명이면 걸러낸다)
+ * categories.name 은 varchar(50) 이라 잘라서 돌려준다.
+ */
+function deriveCategory(ld, html, productName) {
+    let cat = categoryLeaf(typeof ld.category === 'string' ? ld.category : (ld.category && ld.category.name));
+
+    if (!cat) {
+        const crumbs = findJsonLdBreadcrumb(html).filter(c => !/^(홈|home)$/i.test(c));
+        if (crumbs.length) {
+            let leaf = crumbs[crumbs.length - 1];
+            const loose = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
+            // 빵부스러기 마지막 칸이 상품명 그 자체면(= 분류가 아님) 한 칸 앞을 쓴다.
+            if (productName && loose(leaf) === loose(productName) && crumbs.length >= 2) {
+                leaf = crumbs[crumbs.length - 2];
+            }
+            cat = leaf;
+        }
+    }
+    return cat ? cat.slice(0, 50) : null;
+}
+
 function parseProduct(html, pageUrl) {
     const ld = findJsonLdProduct(html) || {};
     const offer = firstOffer(ld);
@@ -197,6 +253,7 @@ function parseProduct(html, pageUrl) {
         original_price: toPrice(ld.highPrice) || toPrice(offer && offer.highPrice) || null,
         description,
         brand,
+        category: deriveCategory(ld, html, name),
         sku: ld.sku ? String(ld.sku).slice(0, 100) : null,
         stock: null,
         images,
@@ -258,6 +315,11 @@ async function loadNaverShopping(url) {
         original_price: original,
         description: '',            // 상세 설명은 API 에 없다(에디터 콘텐츠 별도) — 운영자가 채운다
         brand: (d.channel && d.channel.channelName) || null,   // 판매 채널(스토어)명
+        // 네이버 카테고리는 응답 스키마가 자주 바뀐다 — 알려진 필드를 순서대로 시도하고 리프만 취한다.
+        category: categoryLeaf(
+            (d.category && (d.category.wholeCategoryName || d.category.categoryName || d.category.name))
+            || d.wholeCategoryName || d.categoryName || null
+        ),
         sku: d.productNo ? String(d.productNo).slice(0, 100) : String(id),
         stock: Number.isFinite(Number(d.stockQuantity)) ? Number(d.stockQuantity) : null,
         images,
@@ -339,4 +401,11 @@ async function importFromUrl(rawUrl, { withImages = true } = {}) {
     });
 }
 
-module.exports = { importFromUrl, ImportError };
+module.exports = {
+    importFromUrl,
+    ImportError,
+    // 테스트/재사용용 (카테고리 추출 규칙)
+    deriveCategory,
+    categoryLeaf,
+    findJsonLdBreadcrumb,
+};

@@ -5,7 +5,7 @@
  * 사용:
  *   node scripts/shopify-delete-products.js --dry-run        # 삭제 대상 목록만 출력
  *   node scripts/shopify-delete-products.js --all            # 매핑된 전체 삭제
- *   node scripts/shopify-delete-products.js --product-id=27  # 특정 dev-mall product_id 삭제
+ *   node scripts/shopify-delete-products.js --product-id=27  # 특정 yd-mall product_id 삭제
  */
 const bootstrap = require('./_bootstrap');
 const pool = require('../config/db');
@@ -42,7 +42,7 @@ async function main() {
         console.error('옵션을 지정하세요: --dry-run | --all | --product-id=N');
         console.error('  --dry-run       삭제 대상 목록만 출력 (실제 삭제 안 함)');
         console.error('  --all           매핑된 전체 상품 삭제');
-        console.error('  --product-id=N  특정 dev-mall product_id 삭제');
+        console.error('  --product-id=N  특정 yd-mall product_id 삭제');
         process.exit(1);
     }
 

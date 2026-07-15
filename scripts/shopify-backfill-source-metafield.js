@@ -1,5 +1,5 @@
 /**
- * Shopify 상품에 원본(dev-mall) 연결 metafield(devmall.source) 백필
+ * Shopify 상품에 원본(yd-mall) 연결 metafield(devmall.source) 백필
  *
  * shopify_product_mappings 의 각 매핑을 읽어, 대응하는 Shopify 상품에
  * metafield `devmall.source` = { productId, handle, syncedAt } 를 기록한다.

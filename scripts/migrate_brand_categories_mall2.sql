@@ -8,7 +8,7 @@
 -- 멱등: 재실행해도 브랜드가 중복 생성되지 않고, display_order 와 링크만 재동기화된다.
 --
 -- 실행:
---   mysql -h ydata.co.kr -u ydatasvc -p'...' dev_mall --default-character-set=utf8mb4 \
+--   mysql -h ydata.co.kr -u ydatasvc -p'...' yd_mall --default-character-set=utf8mb4 \
 --     < scripts/migrate_brand_categories_mall2.sql
 --
 -- 롤백:

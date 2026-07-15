@@ -73,15 +73,22 @@ async function resolveBrandName(brandCategoryId) {
  *   - 목록에서 고른 id 가 있으면 그대로 사용한다.
  *   - id 가 없고 자유 텍스트(new_*_name)만 있으면 유사 항목을 찾아 매핑하거나
  *     없으면 신규 생성해 그 id 를 돌려준다(taxonomyResolver).
- *   - 둘 다 없으면 null(미분류) — 기존 동작과 동일하게 비워둘 수 있다.
+ *   - 근거가 전혀 없고 fallbackUncategorized 이면(카테고리만) "미분류"로 폴백해
+ *     상품이 목록·검색에서 사라지지 않게 한다. 브랜드는 폴백하지 않는다
+ *     (빈 브랜드는 허브에서 빠질 뿐 상품 노출과 무관하고 provider 텍스트가 대체).
  */
-async function resolveTaxonomyField(selectedId, freeText, type, mallId) {
+async function resolveTaxonomyField(selectedId, freeText, type, mallId, fallbackUncategorized = false) {
     const id = selectedId ? Number(selectedId) || null : null;
     if (id) return id;
     const text = String(freeText || '').trim();
-    if (!text) return null;
-    const r = await taxonomyResolver.resolveOrCreateCategory({ mallId, name: text, type });
-    return r && r.id ? r.id : null;
+    if (text) {
+        const r = await taxonomyResolver.resolveOrCreateCategory({ mallId, name: text, type });
+        if (r && r.id) return r.id;
+    }
+    if (fallbackUncategorized && type === 'NORMAL') {
+        return await taxonomyResolver.getUncategorizedCategoryId({ mallId });
+    }
+    return null;
 }
 
 async function generateUniqueSlugFromName(name, requestedSlug, excludeId) {
@@ -643,7 +650,7 @@ exports.postAdd = async (req, res) => {
         // 찾아 매핑하거나(없으면) 신규 생성한다. (services/catalog/taxonomyResolver)
         const _mallId = req.adminMallId || 1;
         const resolvedCategoryId = await resolveTaxonomyField(
-            category_id, req.body.new_category_name, 'NORMAL', _mallId);
+            category_id, req.body.new_category_name, 'NORMAL', _mallId, true);
         const normalizedBrandCategoryId = await resolveTaxonomyField(
             brand_category_id, req.body.new_brand_name, 'BRAND', _mallId);
 
@@ -776,7 +783,7 @@ exports.postEdit = async (req, res) => {
         if (!_owned) return res.redirect('/admin/products');
 
         const resolvedCategoryId = await resolveTaxonomyField(
-            category_id, req.body.new_category_name, 'NORMAL', _mallId);
+            category_id, req.body.new_category_name, 'NORMAL', _mallId, true);
         const normalizedBrandCategoryId = await resolveTaxonomyField(
             brand_category_id, req.body.new_brand_name, 'BRAND', _mallId);
 

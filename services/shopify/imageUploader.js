@@ -1,7 +1,7 @@
 /**
  * 상품 설명(description) 본문 내 이미지 → Shopify Files(CDN) 업로드
  *
- * dev-mall/cafe24 등 국내 서버에 있는 본문 이미지를 Shopify CDN(cdn.shopify.com)으로
+ * yd-mall/cafe24 등 국내 서버에 있는 본문 이미지를 Shopify CDN(cdn.shopify.com)으로
  * 옮겨, 해외에서도 빠르게 로드되고 외부 서버 의존성을 제거한다.
  *
  * 업로드 전략(2단계):
@@ -111,7 +111,7 @@ async function saveMapping(absoluteUrl, fileId, cdnUrl) {
 
 /**
  * fileCreate + READY 폴링. items: [{ key, originalSource }]
- *   key          = 매핑 저장에 쓸 원본 dev-mall URL
+ *   key          = 매핑 저장에 쓸 원본 yd-mall URL
  *   originalSource = Shopify가 가져갈 소스(원본 URL 또는 staged resourceUrl)
  * @returns {{ success: Map<key,cdnUrl>, failedKeys: Set<key> }}
  */

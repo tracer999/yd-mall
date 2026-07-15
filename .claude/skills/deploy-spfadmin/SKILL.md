@@ -120,6 +120,6 @@ curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Host: spf-admin.ydata.co.kr" h
   Nginx 설정 파일: `/etc/nginx/sites-enabled/spf-admin.ydata.co.kr.conf` (Nginx 서버에서 수정).
 - Spring Boot가 `X-Forwarded-Proto: https`를 인식하도록 `server.forward-headers-strategy: NATIVE` 설정 적용 중.
   CSRF 토큰은 `CookieCsrfTokenRepository` 방식으로 동작 (Nginx 프록시 환경 대응).
-- 로그인 계정: `dev_mall.admins` 테이블의 `tracer999` (비밀번호 `NEWtec4075@@`, 2FA 미사용).
+- 로그인 계정: `yd_mall.admins` 테이블의 `tracer999` (비밀번호 `NEWtec4075@@`, 2FA 미사용).
 - 부팅 시 자동 기동: `pm2 save` 후 `pm2 startup`으로 systemd 연동 (1회 설정).
 - 롤백: 서버에서 직전 커밋으로 `git reset --hard <이전커밋>` 후 재빌드/restart (신중히, 사람 확인 후).

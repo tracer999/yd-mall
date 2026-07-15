@@ -7,7 +7,7 @@
 --   · 아울렛의 존재 이유는 '할인 사유(outlet_type)' 다. 할인율이 아니다.
 --     할인율로 상품을 긁어오는 방식은 2026-07-11 구현했다가 되돌렸다(설계서 §3-1).
 --
--- 실행: mysql -h ydata.co.kr -u ydatasvc -p'...' dev_mall < scripts/migrate_outlet.sql
+-- 실행: mysql -h ydata.co.kr -u ydatasvc -p'...' yd_mall < scripts/migrate_outlet.sql
 
 -- ---------------------------------------------------------------------------
 -- 1. 아울렛 카테고리 — categories.type 에 'OUTLET' 추가

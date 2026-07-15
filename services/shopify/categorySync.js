@@ -1,5 +1,5 @@
 /**
- * Shopify 컬렉션 ↔ dev-mall 카테고리 동기화 서비스
+ * Shopify 컬렉션 ↔ yd-mall 카테고리 동기화 서비스
  *
  * - NORMAL 카테고리 → Smart Collection (ruleSet: TYPE = 카테고리명)
  * - BRAND  카테고리 → Smart Collection (ruleSet: VENDOR = 브랜드명)

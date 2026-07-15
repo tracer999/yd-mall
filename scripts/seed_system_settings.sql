@@ -3,7 +3,7 @@
 -- (DB/Redis 이외의 설정은 system_settings 에서 관리한다)
 --
 -- 실행:
---   mysql -h <host> -u <user> -p dev_mall < scripts/seed_system_settings.sql
+--   mysql -h <host> -u <user> -p yd_mall < scripts/seed_system_settings.sql
 --
 -- 값은 관리자 UI 로 수정 가능하며, DB 접근이 통제되므로 평문으로 저장한다.
 -- (커밋되는 .env 파일의 DB_PASS/REDIS_PASSWORD 만 ENC: 로 암호화)

@@ -217,7 +217,8 @@
 > - **카테고리도 임포트에서 추출**(2026-07-15 추가) — `productImporter` 가 JSON-LD `Product.category`·`BreadcrumbList` 리프·네이버 카테고리에서 분류 텍스트를 뽑아 `draft.category` 로 넘기고, `postImportUrl` 이 브랜드와 동일하게 유사매칭(매칭 실패 시 폼 "직접 입력"칸 프리필) → 저장 시 자동 생성. (임포트 출처에 분류 정보가 없으면 여전히 비어 옴 — 그때는 운영자 입력 또는 후속 AI/미분류 폴백 몫)
 > - `views/admin/products/form.ejs` — 카테고리·브랜드 셀렉트 아래 "직접 입력" 텍스트칸 추가.
 > - 동작 방식은 우선 **단일 임계값 자동 매핑/생성**(요청의 "있으면 저장·없으면 생성"에 직결). 임계값 기본 0.85, `TAXONOMY_MATCH_THRESHOLD` 로 조정. E2E 검증: 신규 1건·재조회 매칭·띄어쓰기 변형 중복 없음 PASS.
-> - **미구현(후속)**: `assist`(후보 확인 UI) 모드, "미분류" 시드, Quick Add(B-1), AI 채움(B-2·Premium), CSV(B-4), 정리 도구.
+> - **"미분류" 폴백 시드 완료**(2026-07-15 추가) — `taxonomyResolver.getUncategorizedCategoryId({mallId})` 가 몰별 "미분류" 카테고리를 find-or-create(멱등). `pc_visible=0·mobile_visible=0` 이라 **고객 GNB/드로어에는 숨고 관리자 목록에는 보인다**(스토어프론트 뷰는 `pcVisible!==0` 필터, 관리자 `getList` 는 무필터). `mallProvisioner` 가 몰 생성 시 시드하고, `postAdd`/`postEdit` 는 카테고리 근거가 전혀 없을 때(브랜드는 제외) 이 id 로 폴백해 `category_id=null` 유실을 막는다. 기존 몰 3개(health·general·main) 백필 완료.
+> - **미구현(후속)**: `assist`(후보 확인 UI) 모드, Quick Add(B-1), AI 채움(B-2·Premium), CSV(B-4), 정리 도구.
 
 
 | 단계 | 산출물 | DDL |

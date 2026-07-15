@@ -14,7 +14,7 @@
 # 이 스크립트가 흡수하는 것 (크론 라인을 단순하게 유지하려고):
 #   1. ENCRYPTION_KEY  — cron 은 /etc/environment 를 자동 로드하지 않는다.
 #                        없으면 config/env.js 가 process.exit(1) 한다.
-#   2. node 경로       — nvm 은 비대화 셸의 PATH 에 없다. dev-mall.sh 와 같은 방식으로 로드한다.
+#   2. node 경로       — nvm 은 비대화 셸의 PATH 에 없다. yd-mall.sh 와 같은 방식으로 로드한다.
 #   3. 중복 실행       — 긴 집계가 다음 tick 과 겹치거나, 관리자의 "지금 집계"와 부딪힐 수 있다.
 #   4. 종료 코드       — 실패해도 exit 0. 안 그러면 cron 이 5분마다 실패 메일을 쏜다.
 #                        실패는 로그와 관리자 화면(best_ranking_run.status)에 남는다.
@@ -31,7 +31,7 @@ mkdir -p "$LOG_DIR"
 
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
-# --- 1. ENCRYPTION_KEY (dev-mall.sh 와 동일한 방식) ---
+# --- 1. ENCRYPTION_KEY (yd-mall.sh 와 동일한 방식) ---
 if [ -z "${ENCRYPTION_KEY:-}" ] && [ -r /etc/environment ]; then
   ENCRYPTION_KEY="$(grep -m1 '^ENCRYPTION_KEY=' /etc/environment | cut -d= -f2- | tr -d '"'"'"'')"
   export ENCRYPTION_KEY
@@ -41,7 +41,7 @@ if [ -z "${ENCRYPTION_KEY:-}" ]; then
   exit 0
 fi
 
-# --- 2. Node 22 (nvm) — 비대화 셸에서도 동작하도록 (dev-mall.sh 와 동일) ---
+# --- 2. Node 22 (nvm) — 비대화 셸에서도 동작하도록 (yd-mall.sh 와 동일) ---
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [ -s "$NVM_DIR/nvm.sh" ]; then
   # shellcheck disable=SC1091

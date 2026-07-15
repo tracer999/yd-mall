@@ -1,4 +1,4 @@
-name: Deploy dev-mall to Production
+name: Deploy yd-mall to Production
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy dev-mall
+    name: Deploy yd-mall
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
