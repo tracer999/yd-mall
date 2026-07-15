@@ -21,7 +21,7 @@
 
 | 메서드 | URL | 핸들러 | 설명 |
 |--------|-----|--------|------|
-| GET | `/admin/sales` | getList | 주문 목록 (`?status=` 상태 필터) |
+| GET | `/admin/sales` | getList | 주문 목록 (`?status=` 상태 필터, `?mallId=` 몰 필터) |
 | GET | `/admin/sales/:id` | getDetail | 주문 상세 |
 | POST | `/admin/sales/status` | postStatus | 주문 상태 변경 (취소·환불 시 자원 복원 + PG 환불) |
 
@@ -29,10 +29,14 @@
 
 ## 3. 주문 목록 (GET /admin/sales)
 
-- **쿼리:** `orders` LEFT JOIN `users` (주문자 이름/이메일/프로필), `ORDER BY o.created_at DESC`  
-- **필터:** `?status=` 값이 주문 상태 7종에 포함될 때만 `WHERE o.status = ?` 적용. 그 외 값은 무시  
-- **표시:** 주문번호, 주문일시, 주문자, 결제금액, 상태, 관리. 상태별 뱃지 색상 구분  
-- **뷰 전달:** `orders`, `statusFilter`, `title: '판매 관리'`
+- **쿼리:** `orders` LEFT JOIN `users` (주문자 이름/이메일/프로필) LEFT JOIN `mall` (소속 몰 이름/코드/기본여부), `ORDER BY o.created_at DESC`  
+- **필터:** 아래 두 조건을 `AND` 로 합쳐 `WHERE` 를 만듭니다(둘 다 없으면 전체 조회).
+  - `?status=` — 값이 주문 상태 7종에 포함될 때만 `o.status = ?`. 그 외 값은 무시
+  - `?mallId=` — 정수로 파싱되면 `o.mall_id = ?`. **주문은 몰별로 "관리"하지 않고 통합 조회하며, 몰 필터는 조회 편의일 뿐 기본은 전 몰 통합**입니다. 소속 몰은 손님 결제 시 `checkoutController` 가 `orders.mall_id` 에 기록합니다([checkout](../user/checkout.md)).
+- **표시:** 주문번호, **몰**(뱃지, 기록 없으면 "미확인"), 주문일시, 주문자, 결제금액, 상태, 관리. 상태별 뱃지 색상 구분  
+- **뷰 전달:** `orders`, `statusFilter`, `malls`(몰 셀렉트용), `selectedMallId`(없으면 null), `title: '판매 관리'`
+
+> ℹ️ **레거시 주문은 `mall_id = NULL`.** `orders.mall_id` 도입 前 생성된 주문은 몰이 비어 있어 몰 필터에 걸리지 않고 "전체" 조회에서만 보입니다(목록엔 "미확인" 뱃지). 필요 시 기본몰로 backfill 하는 1회성 UPDATE 로 보정합니다.
 
 **주문 상태 (`orders.status` enum):**  
 `PENDING`, `PAID`, `PREPARING`, `SHIPPED`, `DELIVERED`, `CANCELLED`, `REFUNDED`
@@ -117,4 +121,4 @@
 
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

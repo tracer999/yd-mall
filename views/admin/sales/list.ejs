@@ -1,11 +1,24 @@
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
     <p class="text-sm text-gray-500">주문 결제 및 배송 상태를 모니터링하고 관리합니다.</p>
-    <div class="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
         <% const statusLabels = { PENDING: '대기', PAID: '결제완료', PREPARING: '배송준비', SHIPPED: '배송중', DELIVERED: '배송완료', CANCELLED: '취소', REFUNDED: '환불' }; %>
+        <form method="get" action="/admin/sales" class="flex items-center gap-2">
+            <% if (statusFilter) { %><input type="hidden" name="status" value="<%= statusFilter %>"><% } %>
+            <label for="mallId" class="text-sm text-gray-500">몰</label>
+            <select name="mallId" id="mallId" onchange="this.form.submit()"
+                class="rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                <option value="">전체 몰</option>
+                <% malls.forEach(function(m){ %>
+                    <option value="<%= m.id %>" <%= selectedMallId === Number(m.id) ? 'selected' : '' %>>
+                        <%= m.name %>
+                    </option>
+                <% }) %>
+            </select>
+        </form>
         <% if (statusFilter) { %>
             <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-medium">
                 <%= statusLabels[statusFilter] || statusFilter %>
-                <a href="/admin/sales" class="ml-1 text-blue-600 hover:text-blue-800" title="필터 해제">×</a>
+                <a href="/admin/sales<%= selectedMallId ? '?mallId=' + selectedMallId : '' %>" class="ml-1 text-blue-600 hover:text-blue-800" title="필터 해제">×</a>
             </span>
         <% } %>
     </div>

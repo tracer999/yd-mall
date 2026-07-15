@@ -12,7 +12,7 @@
 |---|---|---|
 | 1 | **[P5] 몰 구성 탭 허브** — `/admin/malls/:id` 6탭 (기본정보 / 프리셋 / 헤더·GNB / 메뉴 / 디자인 / 메인화면) | **유일한 미구현 P.** 지금은 몰 하나를 구성하려면 `malls` → `header-settings` → `menus` → `custom-menus` → `theme-settings` → `page-builder` 6개 화면을 떠돌아야 한다. "어느 몰을 편집 중인지"가 화면마다 흩어진다 |
 | 2 | **`navigation_config.config_json` 레이아웃 세부 옵션** (`dropdown_trigger` hover/click 등) | 컬럼만 있고 **아무도 안 읽는다**. 새 컬럼을 늘리지 말고 여기에 담는다는 원칙만 남아 있다 |
-| 3 | **대시보드·매출 몰 스코프** | `dashboardController`·`salesController` 가 `adminMallId` 를 안 쓴다. 편집 몰을 바꿔도 숫자가 전 몰 합산으로 나온다. 근본 원인은 **`orders`·`carts` 에 `mall_id` 가 없다**는 것 |
+| 3 | **대시보드 몰 필터** _(후순위 보류)_ | `dashboardController` 가 몰 스코프를 안 써서 편집 몰을 바꿔도 대시보드 숫자가 전 몰 합산으로 나온다. **매출/주문(`/admin/sales`)은 완료** — `orders.mall_id`(손님 결제 시 `checkoutController` 가 기록) + `?mallId=` 통합 조회 필터. 정본 → [`develop_guide/admin/sales.md`](../develop_guide/admin/sales.md). 대시보드도 같은 `?mallId=` 패턴으로 붙일 수 있으나 사용자 요청으로 보류. (참고: `carts` 는 `mall_id` 컬럼 자체가 없음) |
 | 4 | **sitemap 이 기본 몰만 수록** | `routes/sitemap.js` 가 `is_default=1` 몰만 본다. 몰 2의 상품 9,677건이 SEO 에서 통째로 빠진다 |
 | 5 | **모바일 하단바 하드코딩** | `feature_menu(position='mobile_quick')` 스키마와 `nav.mobileQuick` 출력이 있는데 `mobile_bottom_nav.ejs` 가 안 읽고 홈/카테고리/장바구니/마이를 하드코딩한다 |
 | 6 | **도메인 기반 몰 라우팅** | `mall.domain` 컬럼만 존재. 아직 안 쓴다. 현재는 셀렉트 박스 + 세션 방식 |

@@ -2,16 +2,27 @@ const pool = require('../../config/db');
 const { restoreOrderResources } = require('../../services/order/orderCancelService');
 const { refundOrder } = require('../../services/order/refundService');
 const { transition, history } = require('../../services/order/orderStatusService');
+const { getMalls } = require('../../middleware/mallContext');
 
 exports.getList = async (req, res) => {
     try {
         const statusFilter = req.query.status || '';
-        let whereClause = '';
+        // 주문은 몰별로 "관리"하지 않고 통합 조회한다. 몰 필터(?mallId=<id>)는 조회 편의일 뿐이고
+        // 기본은 전 몰 통합이다. 소속 몰은 손님 결제 시 orders.mall_id 에 기록된다(checkoutController).
+        const conditions = [];
         const params = [];
         if (statusFilter && ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'].includes(statusFilter)) {
-            whereClause = 'WHERE o.status = ?';
+            conditions.push('o.status = ?');
             params.push(statusFilter);
         }
+        const filterMallId = Number.parseInt(req.query.mallId, 10);
+        const hasMallFilter = Number.isFinite(filterMallId);
+        if (hasMallFilter) {
+            conditions.push('o.mall_id = ?');
+            params.push(filterMallId);
+        }
+        const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        const malls = [...(await getMalls()).byId.values()];
         const [orders] = await pool.query(`
             SELECT
                 o.*,
@@ -33,7 +44,9 @@ exports.getList = async (req, res) => {
             layout: 'layouts/admin_layout',
             title: '판매 관리',
             orders,
-            statusFilter
+            statusFilter,
+            malls,
+            selectedMallId: hasMallFilter ? filterMallId : null
         });
     } catch (err) {
         console.error(err);
