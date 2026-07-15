@@ -1,0 +1,138 @@
+<% var p = policy || {}; %>
+<% if (success) { %><div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800"><%= success %></div><% } %>
+<% if (error) { %><div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800"><%= error %></div><% } %>
+
+<div class="flex flex-wrap gap-2 mb-6">
+  <form action="/admin/membership/policy/simulate" method="POST" class="inline">
+    <button type="submit" class="inline-flex items-center h-[38px] px-4 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">시뮬레이션</button>
+  </form>
+  <form action="/admin/membership/policy/evaluate" method="POST" class="inline" onsubmit="return confirm('지금 전체 회원 등급을 평가·반영할까요? (승급/강등이 실제 적용됩니다)');">
+    <button type="submit" class="inline-flex items-center h-[38px] px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">지금 평가 실행</button>
+  </form>
+</div>
+
+<% if (simResult) { %>
+<div class="mb-6 p-5 bg-indigo-50 border border-indigo-200 rounded-xl">
+  <h3 class="font-semibold text-indigo-900 mb-2">시뮬레이션 결과 (반영 안 됨)</h3>
+  <p class="text-sm text-indigo-800 mb-3">대상 <%= simResult.summary.target %> · 승급 <%= simResult.summary.upgrade %> · 강등 <%= simResult.summary.downgrade %> · 유지 <%= simResult.summary.maintain %> · 실패 <%= simResult.summary.failure %></p>
+  <% if (simResult.changes && simResult.changes.length) { %>
+  <div class="overflow-x-auto max-h-72 overflow-y-auto bg-white rounded-lg border border-indigo-100">
+    <table class="min-w-full text-sm">
+      <thead class="bg-indigo-50 sticky top-0"><tr>
+        <th class="px-3 py-2 text-left text-xs text-indigo-700">회원ID</th>
+        <th class="px-3 py-2 text-center text-xs text-indigo-700">변경</th>
+        <th class="px-3 py-2 text-center text-xs text-indigo-700">등급</th>
+        <th class="px-3 py-2 text-right text-xs text-indigo-700">인정금액</th>
+        <th class="px-3 py-2 text-right text-xs text-indigo-700">건수</th>
+      </tr></thead>
+      <tbody>
+        <% simResult.changes.forEach(function(c){ %>
+        <tr class="border-t border-indigo-50">
+          <td class="px-3 py-1.5"><%= c.userId %></td>
+          <td class="px-3 py-1.5 text-center"><span class="text-xs <%= c.decision==='UPGRADE'?'text-green-600':'text-red-600' %>"><%= c.decision %></span></td>
+          <td class="px-3 py-1.5 text-center text-xs"><%= c.from %> → <%= c.to %></td>
+          <td class="px-3 py-1.5 text-right"><%= Number(c.amount).toLocaleString() %></td>
+          <td class="px-3 py-1.5 text-right"><%= c.count %></td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <% } else { %><p class="text-sm text-indigo-700">변경 예정 인원이 없습니다.</p><% } %>
+</div>
+<% } %>
+
+<form action="/admin/membership/policy" method="POST" class="space-y-8">
+  <section>
+    <h2 class="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b">평가 기준</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">정책명</label>
+        <input type="text" name="policy_name" value="<%= p.policy_name || '기본 등급 평가 정책' %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">실적 인정 기간 (개월)</label>
+        <input type="number" name="performance_period_months" value="<%= p.performance_period_months != null ? p.performance_period_months : 12 %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">평가 주기</label>
+        <select name="evaluation_cycle" class="w-full border rounded-lg px-3 h-[38px]">
+          <option value="MONTHLY" <%= p.evaluation_cycle!=='DAILY'&&p.evaluation_cycle!=='MANUAL'?'selected':'' %>>월 1회</option>
+          <option value="DAILY" <%= p.evaluation_cycle==='DAILY'?'selected':'' %>>일 1회</option>
+          <option value="MANUAL" <%= p.evaluation_cycle==='MANUAL'?'selected':'' %>>수동</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">인정금액 산식</label>
+        <select name="amount_basis" class="w-full border rounded-lg px-3 h-[38px]">
+          <option value="B_NET" <%= (!p.amount_basis||p.amount_basis==='B_NET')?'selected':'' %>>상품금액 − 쿠폰 (권장)</option>
+          <option value="A_GROSS" <%= p.amount_basis==='A_GROSS'?'selected':'' %>>상품 판매가 합계</option>
+          <option value="C_PAID" <%= p.amount_basis==='C_PAID'?'selected':'' %>>실결제 상품액</option>
+          <option value="D_NET_PLUS_SHIP" <%= p.amount_basis==='D_NET_PLUS_SHIP'?'selected':'' %>>실결제액(배송비 포함)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">금액/건수 결합</label>
+        <select name="condition_operator" class="w-full border rounded-lg px-3 h-[38px]">
+          <option value="OR" <%= (!p.condition_operator||p.condition_operator==='OR')?'selected':'' %>>금액 또는 건수 (OR)</option>
+          <option value="AND" <%= p.condition_operator==='AND'?'selected':'' %>>금액 그리고 건수 (AND)</option>
+          <option value="AMOUNT_ONLY" <%= p.condition_operator==='AMOUNT_ONLY'?'selected':'' %>>금액만</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">승급 반영</label>
+        <select name="upgrade_mode" class="w-full border rounded-lg px-3 h-[38px]">
+          <option value="IMMEDIATE" <%= p.upgrade_mode==='IMMEDIATE'?'selected':'' %>>즉시(결제 시)</option>
+          <option value="SCHEDULED" <%= p.upgrade_mode!=='IMMEDIATE'?'selected':'' %>>정기 평가 시</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">강등 반영</label>
+        <select name="downgrade_mode" class="w-full border rounded-lg px-3 h-[38px]">
+          <option value="SCHEDULED" <%= (!p.downgrade_mode||p.downgrade_mode==='SCHEDULED')?'selected':'' %>>정기 평가 시</option>
+          <option value="IMMEDIATE" <%= p.downgrade_mode==='IMMEDIATE'?'selected':'' %>>즉시</option>
+          <option value="NONE" <%= p.downgrade_mode==='NONE'?'selected':'' %>>강등 안 함</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">신규 회원 보호기간 (일)</label>
+        <input type="number" name="new_member_protect_days" value="<%= p.new_member_protect_days != null ? p.new_member_protect_days : 0 %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">승급 후 최소 유지 (일)</label>
+        <input type="number" name="min_holding_days" value="<%= p.min_holding_days != null ? p.min_holding_days : 0 %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="text-sm font-semibold text-gray-900 mb-1 pb-2 border-b">등급별 진입/유지 기준</h2>
+    <p class="text-xs text-gray-500 mb-3">유지 기준을 비우면 진입 기준과 동일하게 적용됩니다. (히스테리시스: 유지 &lt; 진입 권장)</p>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">등급</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">진입 금액</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">진입 건수</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">유지 금액</th>
+          <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">유지 건수</th>
+        </tr></thead>
+        <tbody class="divide-y divide-gray-100">
+          <% grades.forEach(function(g){ var c = criteriaByGrade.get(Number(g.id)) || {}; %>
+          <tr>
+            <td class="px-4 py-2 text-sm font-medium whitespace-nowrap"><span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:<%= g.color||'#9ca3af' %>"></span><%= g.grade_name %></td>
+            <td class="px-4 py-2"><input type="number" name="criteria[<%= g.id %>][entry_amount]" value="<%= c.entry_amount_min != null ? c.entry_amount_min : 0 %>" class="w-32 border rounded px-2 h-[34px] text-right"></td>
+            <td class="px-4 py-2"><input type="number" name="criteria[<%= g.id %>][entry_count]" value="<%= c.entry_order_count_min != null ? c.entry_order_count_min : 0 %>" class="w-20 border rounded px-2 h-[34px] text-right"></td>
+            <td class="px-4 py-2"><input type="number" name="criteria[<%= g.id %>][retention_amount]" value="<%= c.retention_amount_min != null ? c.retention_amount_min : '' %>" class="w-32 border rounded px-2 h-[34px] text-right" placeholder="진입과 동일"></td>
+            <td class="px-4 py-2"><input type="number" name="criteria[<%= g.id %>][retention_count]" value="<%= c.retention_order_count_min != null ? c.retention_order_count_min : '' %>" class="w-20 border rounded px-2 h-[34px] text-right" placeholder="동일"></td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="flex justify-end pt-2">
+    <button type="submit" class="inline-flex items-center h-[38px] px-5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">정책 저장</button>
+  </div>
+</form>

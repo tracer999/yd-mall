@@ -6,6 +6,7 @@ const bestController = require('../controllers/bestController');
 const dealController = require('../controllers/dealController');
 const displayService = require('../services/display/displayService');
 const membershipInfo = require('../services/membership/membershipInfo');
+const evaluationService = require('../services/membership/evaluationService');
 
 /*
  * 기능 메뉴 표준 URL (M3)
@@ -282,17 +283,20 @@ router.get('/ranking', (req, res) => res.redirect(301, '/best'));
  * 등급·혜택 정의는 services/membership/membershipInfo.js 한 곳에 둔다
  * (이 페이지와 이벤트 페이지가 함께 쓴다 — 두 벌로 갈라지면 반드시 어긋난다).
  */
-router.get('/membership', (req, res) => {
-    res.render('user/membership/index', {
-        title: '멤버십',
-        tiers: membershipInfo.TIERS,
-        benefits: membershipInfo.BENEFITS,
-        seo: Object.assign({}, res.locals.seo, {
-            title: '멤버십 안내',
-            description: '구매 실적에 따른 등급별 적립·배송·전용 혜택을 안내합니다.',
-            robots: 'index,follow',
-        }),
-    });
+router.get('/membership', async (req, res, next) => {
+    try {
+        // DB 등급이 있으면 그것을, 없으면 정적 상수(membershipInfo)로 폴백한다.
+        const { tiers, benefits } = await evaluationService.getPublicTiers(req.mallId || 1);
+        res.render('user/membership/index', {
+            title: '멤버십',
+            tiers, benefits,
+            seo: Object.assign({}, res.locals.seo, {
+                title: '멤버십 안내',
+                description: '구매 실적에 따른 등급별 적립·배송·전용 혜택을 안내합니다.',
+                robots: 'index,follow',
+            }),
+        });
+    } catch (e) { next(e); }
 });
 
 module.exports = router;

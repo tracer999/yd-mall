@@ -1004,3 +1004,46 @@ POST   /internal/membership/calculate-benefits
 | `gnb_menu_design.md` 함정 | "멤버십 등급을 미룬 이유 — 주문 데이터 부족(orders 21건)" | A.2 |
 | `admin_dev_plan.md` 회원/프로모션 잔여과제 | "회원 등급 · 멤버십 혜택 관리 — 정적 하드코딩" | 본 문서 + A.1 |
 | `commerce_backbone.md` 쿠폰 3차 #4 | "발급 조건 확장(등급·누적구매·생일) — `user_grade` 도입" | 등급·누적구매 축은 본 문서 §7.1 쿠폰 혜택 + A.4. 생일 축은 쿠폰 모듈 잔존 |
+
+---
+
+## 부록 B. 구현 현황 — 1차 MVP 완료 (2026-07)
+
+> §17 의 **1차 MVP** 범위를 구현·검증 완료했다. 아래는 실제 산출물 지도와 운영 방법이다. 표준 설계(§4~§16)와 이 부록의 차이(단순화·연기)는 각 항목에 명시했다.
+
+### B.1 구현된 것 (§17 1차 MVP)
+
+- **등급 CRUD·순위·기본 등급** — `membership_grade` + 등급당 혜택 1행 `membership_grade_benefit`(§11 의 benefit_policy+link 를 MVP 로 단순화).
+- **평가 정책 + 등급별 진입/유지 기준(히스테리시스)** — `membership_evaluation_policy` + `membership_grade_criterion`. 최근 N개월 인정 실적, 금액/건수 AND·OR·금액전용.
+- **실적 원장** — `customer_performance_ledger`(구매확정 적립 / 취소 역분개, append-only). 인정금액 산식 A/B/C/D(§6.2), 기본 B_NET.
+- **자동 평가** — 즉시 승급(결제 확정 시) + 정기 배치(승급·강등). `membership_evaluation_run` 에 실행 기록.
+- **수동 등급 변경·고정** — 관리자 회원 등급 현황 화면. `membership_grade_history` 에 이력.
+- **등급 혜택 적용** — 정률 할인(`orders.grade_discount`)·추가/대체 적립률·무료배송(상시/문턱 override). 결제 계산에 반영.
+- **주문 스냅샷** — `order_membership_benefit_snapshot`(주문 시점 등급·유효 적립률·할인·무료배송, §2.2).
+- **시뮬레이션** — 정책 화면에서 반영 없이 승급/강등 예정 인원·명단 미리보기.
+- **마이페이지 등급 표시** — 현재 등급·인정 실적·다음 등급까지 남은 금액·혜택 배지.
+- **공개 등급 안내** — `/membership`·`/event` 멤버십 섹션을 DB 등급으로 동적화(상수 폴백).
+
+### B.2 산출물 지도
+
+| 영역 | 파일 |
+|---|---|
+| DDL / 시드 | `scripts/migrate_membership.sql` · `scripts/seed_membership.sql` · `scripts/seed_membership_admin_menu.sql` (+ `tables.sql` 동기화, `orders.grade_discount` 컬럼) |
+| 서비스 | `services/membership/` — `gradeService`(등급·혜택 CRUD) · `membershipService`(회원 등급 상태·이력) · `performanceService`(실적 원장) · `evaluationService`(평가 엔진·요약·공개 등급표) · `membershipBenefitService`(주문 혜택 계산) · `membershipInfo`(정적 폴백 상수) |
+| 관리자 | `controllers/admin/membershipController.js` · `routes/admin/membership.js`(+`routes/admin.js` 등록) · `views/admin/membership/*`(dashboard·grades·grade_form·policy·customers·history) · `admin_menus` "멤버십 관리" 그룹 |
+| 결제·취소 통합 | `controllers/checkoutController.js`(적립률·등급할인·무료배송·스냅샷·실적적립·즉시승급) · `services/shipping/shippingCalculator.js`(grade 인자) · `services/order/orderCancelService.js`(실적 역분개) · `views/user/checkout/form.ejs`(등급 할인 표시·포인트 상한) |
+| 배치 | `scripts/calc_membership_grade.js` · `scripts/membership_evaluate_cron.sh`(best_ranking 패턴) |
+| 스토어프론트 | `controllers/mypageController.js`(대시보드 등급 위젯) · `views/user/mypage/dashboard.ejs` · `routes/feature.js`(`/membership` 동적) · `controllers/eventController.js`(`/event` 멤버십 섹션) |
+
+### B.3 운영 방법
+
+- **관리자**: `/admin/membership` (멤버십 관리 그룹). 등급/혜택 편집 → 등급 관리, 기준·주기 → 평가 정책(시뮬레이션·지금 평가 실행 버튼), 회원별 조정 → 회원 등급 현황, 이력 → 변경·평가 이력.
+- **정기 평가 크론**(선택): `scripts/membership_evaluate_cron.sh` 를 crontab 에 등록(예 `0 4 * * *`). 무엇을 돌릴지는 각 몰 정책 `evaluation_cycle` 이 판정. 미등록이어도 결제 시 **즉시 승급** + 관리자 "지금 평가 실행" 으로 동작한다.
+- **초기 등급 기준**은 §18 예시값으로 시드됨(SILVER 30만/3건, GOLD 100만/8건, VIP 300만/15건, 유지 기준 별도). 실데이터 분포로 재조정 시 정책 화면에서 수정 후 시뮬레이션.
+
+### B.4 표준 설계 대비 단순화·연기 (2차 이후)
+
+- **혜택 모델**: benefit_policy 재사용/채널·결제수단 제한·중복 그룹(§7.2/7.3)은 미도입 — 등급당 혜택 1행(정률할인·적립·무료배송)로 단순화. 등급 할인은 쿠폰과 같은 주문 할인 층으로 총액에서 차감(중복 허용).
+- **쿠폰 혜택**(등급 진입/정기 쿠폰팩·생일)·**상품/브랜드별 혜택**·**세그먼트**·**비용/효율 분석**·**강등 사전 알림**·**계정 통합/재가입 복원**: 2차(§17).
+- **실적 확정 시점**: 배송완료/구매확정이 아니라 **결제확정(PAID)** 에 적립(부록 A.3). 취소·환불은 상태 전이 + 원장 역분개로 정합. 부분 반품 비율 차감은 반품 모듈 도입 시.
+- **멀티몰**: 등급은 `(user_id, mall_id)` 분리, 회원은 전역(부록 A.7). 회원의 몰별 등급 행은 주문/평가 시 지연 생성.

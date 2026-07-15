@@ -4,6 +4,7 @@ const emailService = require('../services/emailService');
 const { benefitLabel } = require('../services/coupon/discountCalculator');
 const claimService = require('../services/order/claimService');
 const dealSvc = require('../services/deal/dealService');
+const membershipEval = require('../services/membership/evaluationService');
 
 exports.getDashboard = async (req, res, next) => {
     try {
@@ -91,6 +92,14 @@ exports.getDashboard = async (req, res, next) => {
             [userId, userId]
         );
 
+        // 멤버십 등급 요약(현재 등급·다음 등급까지 남은 실적). 실패해도 대시보드는 그린다.
+        let membership = null;
+        try {
+            membership = await membershipEval.getCustomerSummary(userId, req.mallId || 1);
+        } catch (e) {
+            console.error('[mypage] membership summary failed:', e.message);
+        }
+
         res.render('user/mypage/dashboard', {
             title: '마이페이지',
             user: req.user,
@@ -100,7 +109,8 @@ exports.getDashboard = async (req, res, next) => {
             couponCount: coupon_count,
             pointsBalance,
             likesCount: likes_count,
-            recentViewedCount
+            recentViewedCount,
+            membership
         });
     } catch (err) {
         next(err);

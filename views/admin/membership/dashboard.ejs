@@ -1,0 +1,84 @@
+<% if (success) { %>
+<div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800"><%= success %></div>
+<% } %>
+<% if (error) { %>
+<div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800"><%= error %></div>
+<% } %>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
+    <p class="text-xs text-gray-500 mb-1">전체 회원(등급 보유)</p>
+    <p class="text-2xl font-bold text-gray-900"><%= Number(totalMembers).toLocaleString() %></p>
+  </div>
+  <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
+    <p class="text-xs text-gray-500 mb-1">등급 고정 회원</p>
+    <p class="text-2xl font-bold text-gray-900"><%= Number(totals.locked).toLocaleString() %></p>
+  </div>
+  <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
+    <p class="text-xs text-gray-500 mb-1">활성 등급 수</p>
+    <p class="text-2xl font-bold text-gray-900"><%= grades.filter(function(g){return Number(g.is_active)===1;}).length %></p>
+  </div>
+  <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
+    <p class="text-xs text-gray-500 mb-1">마지막 평가</p>
+    <p class="text-sm font-semibold text-gray-900">
+      <% if (lastRun) { %><%= new Date(lastRun.started_at).toLocaleString('ko-KR') %><br>
+        <span class="text-xs text-gray-500">승급 <%= lastRun.upgrade_count %> · 강등 <%= lastRun.downgrade_count %> (<%= lastRun.status %>)</span>
+      <% } else { %><span class="text-gray-400">기록 없음</span><% } %>
+    </p>
+  </div>
+</div>
+
+<% if (!policy) { %>
+<div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+  활성 평가 정책이 없습니다. <a href="/admin/membership/policy" class="underline font-medium">평가 정책</a>에서 설정하세요.
+</div>
+<% } %>
+
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-8">
+  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="font-semibold text-gray-900">등급 구성 및 분포</h2>
+    <a href="/admin/membership/grades" class="text-sm text-blue-600 hover:underline">등급 관리 →</a>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50"><tr>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">순위</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">등급</th>
+        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">회원 수</th>
+        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">구성비</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">혜택 요약</th>
+        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">상태</th>
+      </tr></thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <% grades.forEach(function(g){ var pct = totalMembers>0 ? Math.round((Number(g.member_count)/totalMembers)*1000)/10 : 0; %>
+        <tr>
+          <td class="px-6 py-4 text-sm text-gray-500"><%= g.rank_order %></td>
+          <td class="px-6 py-4 text-sm font-medium">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:<%= g.color || '#9ca3af' %>"></span>
+              <%= g.grade_name %> <span class="text-xs text-gray-400">(<%= g.grade_code %>)</span>
+            </span>
+          </td>
+          <td class="px-6 py-4 text-sm text-right text-gray-900"><%= Number(g.member_count).toLocaleString() %></td>
+          <td class="px-6 py-4 text-sm text-right text-gray-500"><%= pct %>%</td>
+          <td class="px-6 py-4 text-xs text-gray-600">
+            <% if (Number(g.discount_rate)>0) { %><span class="mr-2">할인 <%= Number(g.discount_rate) %>%</span><% } %>
+            <% if (g.point_rate!=null) { %><span class="mr-2">적립 <%= g.point_rate_mode==='REPLACE'?'':'+' %><%= Number(g.point_rate) %>%</span><% } %>
+            <% if (Number(g.free_shipping)===1) { %><span class="mr-2">무료배송</span><% } else if (g.free_ship_threshold!=null) { %><span class="mr-2">무배 <%= Number(g.free_ship_threshold).toLocaleString() %>↑</span><% } %>
+          </td>
+          <td class="px-6 py-4 text-center">
+            <% if (Number(g.is_active)===1) { %><span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">사용</span>
+            <% } else { %><span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">중지</span><% } %>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="flex flex-wrap gap-2">
+  <a href="/admin/membership/policy" class="inline-flex items-center h-[38px] px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 no-underline">평가 정책 · 실행</a>
+  <a href="/admin/membership/customers" class="inline-flex items-center h-[38px] px-4 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 no-underline">회원 등급 현황</a>
+  <a href="/admin/membership/history" class="inline-flex items-center h-[38px] px-4 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 no-underline">변경·실행 이력</a>
+</div>

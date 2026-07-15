@@ -1,6 +1,7 @@
 const svc = require('../services/event/eventService');
 const { sanitize } = require('../services/display/htmlSanitizer');
 const membershipInfo = require('../services/membership/membershipInfo');
+const membershipEval = require('../services/membership/evaluationService');
 
 /*
  * 이벤트&혜택 (고객) — SSR
@@ -43,13 +44,15 @@ exports.getList = async (req, res, next) => {
         const events = await svc.list(mallId, { phase });
         const { companyName, domain } = siteMeta(res);
 
+        // 멤버십 섹션 — DB 등급이 있으면 그것을, 없으면 정적 상수로 폴백(getPublicTiers).
+        const { tiers: membershipTiers, benefits: membershipBenefits } = await membershipEval.getPublicTiers(mallId);
+
         res.render('user/event/list', {
             title: '이벤트 & 혜택',
             events,
             phase,
-            // 멤버십 섹션 — 정의는 services/membership/membershipInfo.js 한 곳에 있다.
-            membershipTiers: membershipInfo.TIERS,
-            membershipBenefits: membershipInfo.BENEFITS,
+            membershipTiers,
+            membershipBenefits,
             currentUser: req.user || null,
             seo: Object.assign({}, res.locals.seo, {
                 title: `이벤트 & 혜택 | ${companyName}`,

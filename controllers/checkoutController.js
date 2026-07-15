@@ -8,6 +8,10 @@ const {
     combinationGroup, couponableAmount, calcOrderDiscount, calcShippingDiscount,
     meetsMinOrder, benefitLabel,
 } = require('../services/coupon/discountCalculator');
+// 멤버십 등급 혜택(정률할인·추가적립·무료배송) + 실적 원장 + 즉시 승급
+const membershipBenefitService = require('../services/membership/membershipBenefitService');
+const performanceService = require('../services/membership/performanceService');
+const evaluationService = require('../services/membership/evaluationService');
 
 /*
  * ── 공동구매 연동 (docs/사이트개선/group_buy_design_and_development.md §9) ──
@@ -132,7 +136,7 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
 
         // 쿠폰·적립금·배송비는 **주문 행이 유일한 근거**다. 요청에서 읽지 않는다(배송비 문서 §1-1).
         const [[orderRow]] = await conn.query(
-            `SELECT user_id, coupon_discount, point_used, user_coupon_id, shipping_coupon_id,
+            `SELECT user_id, mall_id, coupon_discount, grade_discount, point_used, user_coupon_id, shipping_coupon_id,
                     subtotal_amount, shipping_fee, shipping_discount, total_amount
                FROM orders WHERE id = ?`,
             [orderId]
@@ -187,7 +191,14 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
             }
 
             // 적립은 상품 결제액에만 붙인다. 배송비에 적립을 주면 배송비를 내고 포인트를 버는 셈이 된다.
-            const rate = Number(global.systemSettings?.point_accumulate_rate || 5) || 5;
+            // 적립률: 주문 시점 스냅샷에 저장된 등급 유효 적립률(기본률+등급 가산/대체)을 쓴다.
+            // 스냅샷이 없으면(비회원·등급 미설정) 시스템 기본률로 폴백한다.
+            const baseRate = Number(global.systemSettings?.point_accumulate_rate || 5) || 5;
+            const [[snap]] = await conn.query(
+                'SELECT grade_point_rate FROM order_membership_benefit_snapshot WHERE order_id = ?',
+                [orderId]
+            );
+            const rate = snap && snap.grade_point_rate != null ? Number(snap.grade_point_rate) : baseRate;
             const netShipping = (Number(orderRow.shipping_fee) || 0) - (Number(orderRow.shipping_discount) || 0);
             const payAmount = Math.max(0, (Number(orderRow.total_amount) || 0) - netShipping);
             const accumulate = Math.floor((payAmount * rate) / 100);
@@ -199,6 +210,13 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
                 await conn.query(
                     'INSERT INTO point_transactions (user_id, amount, transaction_type, order_id, description) VALUES (?, ?, ?, ?, ?)',
                     [userId, accumulate, 'PURCHASE_ACCUMULATE', orderId, `구매 적립 (${rate}%)`]
+                );
+            }
+            // 스냅샷에 실제 적립액 기록(있을 때만).
+            if (snap) {
+                await conn.query(
+                    'UPDATE order_membership_benefit_snapshot SET grade_point_expected = ? WHERE order_id = ?',
+                    [accumulate, orderId]
                 );
             }
         }
@@ -228,6 +246,27 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
         }
 
         await conn.commit();
+
+        /*
+         * 멤버십 실적 적립 + 즉시 승급 (설계 §10.1). 트랜잭션 커밋 후 별도 처리한다 —
+         * evaluateCustomer 가 자체 pool 연결로 users/customer_membership 을 잠그므로, 결제
+         * 트랜잭션 안에서 돌리면 락 경합이 생긴다. best-effort: 실패해도 결제는 이미 확정됐다.
+         */
+        if (orderRow && orderRow.user_id && orderRow.mall_id) {
+            try {
+                const recognized = Math.max(0,
+                    (Number(orderRow.subtotal_amount) || 0)
+                    - (Number(orderRow.coupon_discount) || 0)
+                    - (Number(orderRow.grade_discount) || 0));
+                await performanceService.appendConfirmed(null, {
+                    userId: orderRow.user_id, mallId: orderRow.mall_id, orderId,
+                    amount: recognized, count: 1, occurredAt: new Date(),
+                });
+                await evaluationService.evaluateCustomer(orderRow.user_id, orderRow.mall_id, { immediateOnly: true });
+            } catch (e) {
+                console.error('[membership] post-paid ledger/eval failed (order ' + orderId + '):', e.message);
+            }
+        }
         return { ok: true };
     } catch (err) {
         await conn.rollback();
@@ -371,11 +410,18 @@ exports.getForm = async (req, res) => {
         receiver_detailed_address: user.detailed_address || ''
     } : {};
 
+    // 등급 혜택(표시용). 주문 생성 시 서버가 다시 계산해 확정한다 — 이 값은 총액의 근거가 아니다.
+    const gradeBenefits = req.user
+        ? await membershipBenefitService.getOrderBenefits({ userId: req.user.id, mallId: req.mallId || 1, subtotalAmount: totalAmount })
+        : { ...membershipBenefitService.ZERO };
+    const gradeDiscount = Number(gradeBenefits.discountAmount) || 0;
+
     // 화면 표시용 배송비. 주문 생성 시 서버가 다시 계산한다(§1-1) — 이 값은 총액의 근거가 아니다.
     const shipping = await calcShippingFee({
         mallId: req.mallId || 1,
         subtotalAmount: totalAmount,
         receiverZipcode: prefilled.receiver_zipcode,
+        grade: { freeShipping: gradeBenefits.freeShipping, freeShipThreshold: gradeBenefits.freeShipThreshold },
     });
 
     /*
@@ -419,6 +465,8 @@ exports.getForm = async (req, res) => {
         pointsBalance: typeof pointsBalance === 'number' ? pointsBalance : 0,
         pointMinUse: typeof pointMinUse === 'number' ? pointMinUse : 1000,
         shipping,
+        gradeBenefits,
+        gradeDiscount,
         error,
         success
     });
@@ -455,10 +503,14 @@ exports.postShippingFee = async (req, res) => {
             if (p) subtotalAmount = p.price * qty;
         }
 
+        const gradeBenefits = req.user
+            ? await membershipBenefitService.getOrderBenefits({ userId: req.user.id, mallId: req.mallId || 1, subtotalAmount })
+            : { ...membershipBenefitService.ZERO };
         const shipping = await calcShippingFee({
             mallId: req.mallId || 1,
             subtotalAmount,
             receiverZipcode: receiver_zipcode,
+            grade: { freeShipping: gradeBenefits.freeShipping, freeShipThreshold: gradeBenefits.freeShipThreshold },
         });
         return res.json({ ok: true, subtotalAmount, shipping });
     } catch (err) {
@@ -592,15 +644,26 @@ exports.postForm = async (req, res) => {
     const subtotalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
     /*
+     * 멤버십 등급 혜택 (회원만). 정률 할인·무료배송 override 를 여기서 확정한다(설계 §7, §10.4).
+     * 비회원은 무혜택(ZERO). 할인은 상품금액(subtotal) 기준이며 최소주문·최대할인 상한은 서비스가 건다.
+     */
+    const gradeBenefits = req.user
+        ? await membershipBenefitService.getOrderBenefits({ userId: req.user.id, mallId: req.mallId || 1, subtotalAmount })
+        : { ...membershipBenefitService.ZERO };
+    const gradeDiscount = Number(gradeBenefits.discountAmount) || 0;
+
+    /*
      * 배송비는 서버가 계산한다 (배송비 문서 §1-1).
      * 폼에 shipping_fee 필드를 두지 않는다 — 화면 표시값은 참고일 뿐 총액의 근거가 아니다.
      * 무료배송 판정은 쿠폰·적립금 차감 전 `subtotalAmount` 로 한다 (§1-2).
+     * 등급 무료배송(상시/문턱 override)도 여기서 반영한다.
      * 배송비 쿠폰보다 **먼저** 구해야 한다 — 배송비 할인이 배송비를 넘을 수 없기 때문이다.
      */
     const shipping = await calcShippingFee({
         mallId: req.mallId || 1,
         subtotalAmount,
         receiverZipcode: receiver_zipcode,
+        grade: { freeShipping: gradeBenefits.freeShipping, freeShipThreshold: gradeBenefits.freeShipThreshold },
     });
     const shippingFee = shipping.fee;
 
@@ -670,16 +733,16 @@ exports.postForm = async (req, res) => {
             if (reqPoint % pointMinUse !== 0) {
                 return res.redirect('/checkout?error=point_min&' + new URLSearchParams(req.query).toString());
             }
-            if (reqPoint > subtotalAmount - couponDiscount) {
+            if (reqPoint > subtotalAmount - couponDiscount - gradeDiscount) {
                 return res.redirect('/checkout?error=point_max&' + new URLSearchParams(req.query).toString());
             }
             pointUsed = reqPoint;
         }
     }
 
-    // 계산 순서는 배송비 문서 §4 와 쿠폰 문서 §9 가 같아야 한다.
-    //   subtotal − coupon − point + shipping_fee − shipping_discount = total
-    const totalAmount = Math.max(0, subtotalAmount - couponDiscount - pointUsed + shippingFee - shippingDiscount);
+    // 계산 순서는 배송비 문서 §4 와 쿠폰 문서 §9 가 같아야 한다. 등급 할인은 쿠폰과 같은 층(주문 할인)이다.
+    //   subtotal − coupon − grade − point + shipping_fee − shipping_discount = total
+    const totalAmount = Math.max(0, subtotalAmount - couponDiscount - gradeDiscount - pointUsed + shippingFee - shippingDiscount);
     const orderNumber = generateOrderNumber();
 
     const connection = await pool.getConnection();
@@ -692,24 +755,52 @@ exports.postForm = async (req, res) => {
         await connection.query(
             `INSERT INTO orders (
                 user_id, mall_id, order_number, status, subtotal_amount, shipping_fee, shipping_discount,
-                total_amount, coupon_discount, point_used, user_coupon_id, shipping_coupon_id,
+                total_amount, coupon_discount, grade_discount, point_used, user_coupon_id, shipping_coupon_id,
                 receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
                 shipping_address, shipping_message,
                 buyer_name, buyer_email, buyer_phone
             ) VALUES (?, ?, ?, 'PENDING', ?, ?, ?,
-                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?,
                 ?, ?, ?)`,
             [
                 userId, req.mallId || 1, orderNumber, subtotalAmount, shippingFee, shippingDiscount,
-                totalAmount, couponDiscount, pointUsed, userCouponId, shippingCouponId,
+                totalAmount, couponDiscount, gradeDiscount, pointUsed, userCouponId, shippingCouponId,
                 receiver_name, receiver_phone, receiver_zipcode || null, receiver_address || null, receiver_detailed_address || null,
                 shippingAddr || null, shipping_message || null,
                 isGuest ? buyer_name : null, isGuest ? buyer_email : null, isGuest ? buyer_phone : null
             ]
         );
         const orderId = (await connection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
+
+        /*
+         * 주문 등급혜택 스냅샷 (설계 §2.2). 회원·등급이 있을 때만. 주문 시점의 등급·유효 적립률을
+         * 박아 둔다 — 이후 등급이 바뀌어도 이 주문의 적립·할인 근거는 변하지 않는다.
+         * grade_point_rate 에는 결제 확정 시 그대로 쓸 **유효 적립률**(기본률+등급)을 저장한다.
+         */
+        if (req.user && gradeBenefits.gradeId) {
+            const baseRate = Number(global.systemSettings?.point_accumulate_rate || 5) || 5;
+            const effectiveRate = membershipBenefitService.effectivePointRate(baseRate, gradeBenefits);
+            const freeShipApplied = (gradeBenefits.freeShipping || gradeBenefits.freeShipThreshold != null) && shipping.isFree ? 1 : 0;
+            await connection.query(
+                `INSERT INTO order_membership_benefit_snapshot
+                    (order_id, user_id, mall_id, grade_id, grade_code_snapshot, grade_name_snapshot,
+                     grade_discount_amount, grade_point_rate, free_shipping_applied, benefit_details_json)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    orderId, req.user.id, req.mallId || 1, gradeBenefits.gradeId,
+                    gradeBenefits.gradeCode, gradeBenefits.gradeName,
+                    gradeDiscount, effectiveRate, freeShipApplied,
+                    JSON.stringify({
+                        discountRate: gradeBenefits.discountRate,
+                        pointRate: gradeBenefits.pointRate,
+                        pointRateMode: gradeBenefits.pointRateMode,
+                        baseRate,
+                    }),
+                ]
+            );
+        }
 
         /*
          * 쿠폰 점유 (C2). 같은 쿠폰을 두 개의 PENDING 주문이 물면, 먼저 결제되는 쪽만 살고

@@ -24,6 +24,7 @@
 | 테마 설정 | `develop_guide/admin/settings.md` |
 | 페이지 빌더 (섹션 18종 · 발행/롤백 · 섹션 카탈로그 · 랜딩 페이지 편집) | `develop_guide/admin/page_builder.md`, `manual/admin/page_builder.md` |
 | 쿠폰 | `develop_guide/admin/coupons.md`, `manual/admin/coupons.md` |
+| 멤버십 등급 관리 (1차 MVP — 등급·혜택·평가·결제연동·배치·스토어프론트) | `develop_guide/admin/membership.md`, `manual/admin/membership.md` (설계: `사이트개선/membership_grade_admin_design.md`) |
 | 기획전 · 전문관 | `develop_guide/admin/exhibitions.md`, `manual/admin/exhibitions.md` |
 | 이벤트 (APPLY형) | `develop_guide/admin/events.md` |
 | 공동구매 | `develop_guide/admin/group_buys.md`, `manual/admin/group_buys.md` |
@@ -69,7 +70,7 @@
 
 ### 회원 / 프로모션
 
-- **회원 등급 · 멤버십 혜택 관리** — 등급/혜택이 정적 하드코딩이다. **설계·연동 지점은 [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 로 이관**(관리자 화면·평가 정책·혜택 정책·배치 전체).
+- **회원 등급 · 멤버십 혜택 — 2차** — 1차 MVP 는 완료·이관됨(위 표 · [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 부록 B). 2차 잔여: 등급 진입/정기 쿠폰팩·생일 혜택·상품/브랜드별 혜택·고객 세그먼트·강등 사전 알림·설정형 할인 우선순위.
 - **리뷰 관리** — `reviews` 테이블은 있으나 관리자 화면이 없다.
 - **이벤트 유형 확장** — 현재 APPLY(응모)형만 참여 가능. `COUPON_PACK` · `ATTENDANCE` · `PURCHASE` 미착수.
 

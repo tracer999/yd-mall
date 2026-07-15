@@ -20,7 +20,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 
 ### 사이드바 구조 (2뎁스 · 그룹 8개)
 
-사이드바는 **그룹 행(`path IS NULL`) + 잎 메뉴** 2뎁스입니다. 현재 그룹은 8개입니다.
+사이드바는 **그룹 행(`path IS NULL`) + 잎 메뉴** 2뎁스입니다. 현재 그룹은 9개입니다.
 
 | 그룹 | 잎 메뉴 |
 |------|---------|
@@ -29,6 +29,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 | 페이지/전시 관리 | 페이지 빌더 · 배너 관리 · 기획전 관리 · 공동구매 관리 · 쇼핑라이브 관리 |
 | 상품 관리 | 상품 관리 · 상품 그룹 관리 · 베스트/랭킹 관리 · 쇼핑특가 관리 · 특가 카테고리 · 상품 추천관리 · 아울렛 관리 · 아울렛 카테고리 |
 | 프로모션 관리 | 쿠폰 관리 · 포인트 관리 · 이벤트 관리 |
+| 멤버십 관리 | 멤버십 대시보드 · 등급 관리 · 등급 평가 정책 · 회원 등급 현황 · 등급 변경·평가 이력 |
 | 고객지원 관리 | 문의 관리 · 고객센터 관리(FAQ) · 공지사항 관리 |
 | 주문/회원 관리 | 판매 관리 · 배송 관리 · 배송비 정책 · 클레임 관리 · Shopify 주문(`is_active = 0`) · 회원 관리 |
 | 운영/시스템 관리 | 운영자 관리 · 관리자 메뉴 관리 · 시스템 설정 |
@@ -78,6 +79,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 | | `/admin/lives` | 쇼핑라이브(YouTube/Vimeo 임베드 + 라이브가) | [lives.md](./lives.md) |
 | **혜택** | `/admin/coupons` | 쿠폰 발행·수동 지급·사용 내역 | [coupons.md](./coupons.md) |
 | | `/admin/points` | 포인트 지급·차감 | [points.md](./points.md) |
+| **멤버십** | `/admin/membership` | 등급·혜택·평가정책·회원현황·이력, 결제 연동·평가 배치 | [membership.md](./membership.md) |
 | **회원** | `/admin/users` | 회원 목록·상세·활성 토글·삭제 | [users.md](./users.md) |
 | | `/admin/operators` | 운영자 계정 (실효 권한: super_admin) | [operators.md](./operators.md) |
 | **고객지원** | `/admin/inquiries` | 1:1 문의 답변 | [inquiries.md](./inquiries.md) |
@@ -133,6 +135,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 ### 혜택
 21. [쿠폰 관리](./coupons.md) — 3축 구조, 발급 경로 5종, 할인 계산
 22. [포인트 관리](./points.md) — 지급·차감, 적립·사용 흐름
+22-1. [멤버십 등급 관리](./membership.md) — 등급·혜택·평가엔진(히스테리시스)·실적원장, 결제 연동·평가 배치
 
 ### 회원 · 고객지원
 23. [회원 관리](./users.md) — 목록·상세(쿠폰·포인트·주문), 활성 토글

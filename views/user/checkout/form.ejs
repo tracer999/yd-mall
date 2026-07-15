@@ -131,6 +131,11 @@
                         <span>쿠폰 할인</span>
                         <span id="couponDiscountText">- 0원</span>
                     </div>
+                    <% var _gd = (typeof gradeDiscount !== 'undefined') ? Number(gradeDiscount) : 0; %>
+                    <div id="gradeDiscountRow" class="flex justify-between text-red-600 <%= _gd > 0 ? '' : 'hidden' %>">
+                        <span><%= (typeof gradeBenefits !== 'undefined' && gradeBenefits.gradeName) ? gradeBenefits.gradeName + ' 등급 할인' : '등급 할인' %></span>
+                        <span id="gradeDiscountText">- <%= _gd.toLocaleString() %>원</span>
+                    </div>
                     <div class="flex justify-between text-red-600">
                         <span>포인트 사용</span>
                         <span id="pointDiscountText">- 0원</span>
@@ -220,6 +225,7 @@
     var totalAmount = Number('<%= totalAmount || 0 %>');
     var pointsBalance = Number('<%= pointsBalance || 0 %>');
     var pointMinUse = Number('<%= pointMinUse || 0 %>');
+    var gradeDiscount = Number('<%= (typeof gradeDiscount !== "undefined") ? gradeDiscount : 0 %>');
     let couponDiscount = 0;
     let pointDiscount = 0;
     // 표시용 배송비. 결제 총액의 근거는 서버가 주문 생성 시 다시 계산한 값이다.
@@ -305,7 +311,7 @@
 
     function useAllPoints() {
         if (!pointInput) return;
-        const maxUse = Math.min(pointsBalance, totalAmount - couponDiscount);
+        const maxUse = Math.min(pointsBalance, totalAmount - couponDiscount - gradeDiscount);
         const validMax = Math.floor(maxUse / pointMinUse) * pointMinUse;
         pointInput.value = validMax;
         updatePoints();
@@ -319,7 +325,7 @@
             alert('보유 포인트를 초과하여 사용할 수 없습니다.');
             val = pointsBalance;
         }
-        const currentTotal = totalAmount - couponDiscount;
+        const currentTotal = totalAmount - couponDiscount - gradeDiscount;
         if (val > currentTotal) val = currentTotal;
         if (val > 0 && val % pointMinUse !== 0) {
             val = Math.floor(val / pointMinUse) * pointMinUse;
@@ -382,7 +388,8 @@
         }
 
         // 무료배송 판정은 쿠폰·적립금 차감 전 상품금액 기준이다. 여기서 shippingFee 를 다시 깎지 않는다.
-        const final = Math.max(0, totalAmount - couponDiscount - pointDiscount + shippingFee - shippingDiscount);
+        // 등급 할인은 쿠폰과 같은 주문 할인 층이다(서버 계산과 동일하게 차감).
+        const final = Math.max(0, totalAmount - couponDiscount - gradeDiscount - pointDiscount + shippingFee - shippingDiscount);
         document.getElementById('finalAmountText').textContent = final.toLocaleString() + '원';
     }
 

@@ -18,6 +18,7 @@
  */
 
 const dealSvc = require('../deal/dealService');
+const performanceService = require('../membership/performanceService');
 
 const PAYMENT_CONFIRMED = new Set(['PAID', 'PREPARING', 'SHIPPED', 'DELIVERED']);
 
@@ -81,6 +82,12 @@ async function restoreOrderResources(conn, order) {
               WHERE order_id = ? OR reserved_order_id = ?`,
             [orderId, orderId]
         );
+    }
+
+    // 멤버십 실적 역분개 (설계 §10.2). 확정 적립된 실적을 되돌린다(멱등). 등급 강등은 하지 않는다 —
+    // "승급은 빠르게, 강등은 정기 평가"(§10.2). 다음 정기 평가가 강등을 판정한다.
+    if (wasPaid) {
+        await performanceService.reverseForOrder(conn, orderId);
     }
 
     // 3) 적립금 — PENDING 주문은 아직 정산되지 않았다

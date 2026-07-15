@@ -42,6 +42,7 @@ const adminTitles = {
     policies: '약관/정책 관리',
     inquiries: '문의 관리',
     menus: '관리자 메뉴',
+    membership: '멤버십 등급 관리',
     ga4: 'GA4 설정/추적'
 };
 

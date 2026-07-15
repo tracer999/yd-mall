@@ -32,7 +32,7 @@
 | # | 과제 | 현재 상태 |
 |---|---|---|
 | 1 | **이벤트 유형 확장** — `COUPON_PACK`(쿠폰팩) · `ATTENDANCE`(출석) · `PURCHASE`(구매인증) | 현재 `PARTICIPABLE_TYPES = ['APPLY']` 화이트리스트가 나머지를 차단. `event.event_type` enum 에는 값이 이미 있다 |
-| 2 | **멤버십 등급 시스템** | **설계·배경 전체를 [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 로 이관.** (요약: `membership_grade`/`user_grade` 없음, 등급·혜택은 `membershipInfo.js` 정적 상수, 구매액 집계 배치 필요) |
+| 2 | ~~**멤버십 등급 시스템**~~ | **1차 MVP 구현 완료(2026-07)** — `membership_grade` 등 9테이블 + 관리자 `/admin/membership` + 결제 연동 + 평가 배치. 설계·산출물은 [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 부록 B. |
 | 3 | **이벤트 매출 귀속** | `order_items.source_type`/`source_id` 컬럼은 존재하나 `GROUP_BUY`·`LIVE_SHOW`·`DEAL` 만 기록. **EVENT·EXHIBITION 은 미기록** |
 | 4 | **급상승 랭킹 화면** | `best_ranking.prev_rank_no` 는 배치가 저장 중. 화면만 없다 |
 

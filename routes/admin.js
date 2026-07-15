@@ -93,6 +93,8 @@ router.use('/notices', requireMenuAccess('/admin/notices'), require('./admin/not
 router.use('/inquiries', requireMenuAccess('/admin/inquiries'), require('./admin/inquiries'));
 router.use('/coupons', requireMenuAccess('/admin/coupons'), require('./admin/coupons'));
 router.use('/points', requireMenuAccess('/admin/points'), require('./admin/points'));
+// 멤버십 관리 — 등급·평가정책·혜택·회원등급현황·이력 (설계: docs/사이트개선/membership_grade_admin_design.md)
+router.use('/membership', requireMenuAccess('/admin/membership'), require('./admin/membership'));
 router.use('/uploads', requireMenuAccess('/admin/uploads'), require('./admin/uploads'));
 router.use('/menus', requireMenuAccess('/admin/menus'), require('./admin/menus'));
 router.use('/shopify-orders', requireMenuAccess('/admin/shopify-orders'), require('./admin/shopify-orders'));

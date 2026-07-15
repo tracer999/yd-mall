@@ -40,11 +40,14 @@ async function resolveZone(receiverZipcode) {
 /**
  * 배송비를 계산한다.
  *
- * @param {{mallId:number, subtotalAmount:number, receiverZipcode?:string}} args
+ * @param {{mallId:number, subtotalAmount:number, receiverZipcode?:string,
+ *          grade?:{freeShipping?:boolean, freeShipThreshold?:number|null}}} args
+ *   grade — 멤버십 등급 배송 혜택(선택). freeShipping=상시 무료, freeShipThreshold=등급별 문턱 override.
+ *           지역 할증은 등급 무료배송이어도 청구한다(규칙 3 유지).
  * @returns {Promise<{fee:number, baseFee:number, extraFee:number, zone:string|null,
  *                    isFree:boolean, freeThreshold:number|null, remainingForFree:number}>}
  */
-async function calcShippingFee({ mallId, subtotalAmount, receiverZipcode }) {
+async function calcShippingFee({ mallId, subtotalAmount, receiverZipcode, grade }) {
     const policy = await getPolicy(mallId);
     const subtotal = Math.max(0, Number(subtotalAmount) || 0);
 
@@ -52,8 +55,14 @@ async function calcShippingFee({ mallId, subtotalAmount, receiverZipcode }) {
         return { fee: 0, baseFee: 0, extraFee: 0, zone: null, isFree: true, freeThreshold: null, remainingForFree: 0 };
     }
 
-    const freeThreshold = policy.free_threshold != null ? Number(policy.free_threshold) : null;
-    const isFree = freeThreshold != null && subtotal >= freeThreshold;
+    // 등급 혜택으로 무료배송 문턱을 낮춘다. 몰 기본 문턱과 등급 override 중 낮은 값을 쓴다.
+    const policyThreshold = policy.free_threshold != null ? Number(policy.free_threshold) : null;
+    const gradeThreshold = grade && grade.freeShipThreshold != null ? Number(grade.freeShipThreshold) : null;
+    let freeThreshold = policyThreshold;
+    if (gradeThreshold != null) freeThreshold = policyThreshold != null ? Math.min(policyThreshold, gradeThreshold) : gradeThreshold;
+
+    const gradeFreeAll = !!(grade && grade.freeShipping);
+    const isFree = gradeFreeAll || (freeThreshold != null && subtotal >= freeThreshold);
     const baseFee = isFree ? 0 : Number(policy.base_fee) || 0;
 
     // 지역 할증은 무료배송이어도 청구한다.

@@ -1,0 +1,84 @@
+<% var g = grade || {}; var isEdit = !!grade; %>
+<div class="mb-6"><a href="/admin/membership/grades" class="text-sm text-gray-500 hover:text-gray-700 no-underline">← 등급 관리</a></div>
+
+<% if (error) { %><div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800"><%= error %></div><% } %>
+
+<form action="<%= isEdit ? '/admin/membership/grades/' + g.id : '/admin/membership/grades' %>" method="POST" class="space-y-8 max-w-3xl">
+
+  <section>
+    <h2 class="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b">기본 정보</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">등급명 <span class="text-red-500">*</span></label>
+        <input type="text" name="grade_name" required value="<%= g.grade_name || '' %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">등급 코드 <span class="text-red-500">*</span></label>
+        <input type="text" name="grade_code" <%= isEdit ? 'readonly' : 'required' %> value="<%= g.grade_code || '' %>" class="w-full border rounded-lg px-3 h-[38px] <%= isEdit ? 'bg-gray-100 text-gray-500' : '' %>" placeholder="BASIC / SILVER ...">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">순위 (1이 최상위)</label>
+        <input type="number" name="rank_order" value="<%= g.rank_order != null ? g.rank_order : 100 %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">노출 색상</label>
+        <input type="color" name="color" value="<%= g.color || '#9ca3af' %>" class="w-full border rounded-lg px-1 h-[38px]">
+      </div>
+      <div class="sm:col-span-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">설명</label>
+        <input type="text" name="description" value="<%= g.description || '' %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div class="sm:col-span-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">마이페이지 안내 문구</label>
+        <input type="text" name="mypage_note" value="<%= g.mypage_note || '' %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-6 mt-4">
+      <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="is_default" value="1" <%= Number(g.is_default)===1?'checked':'' %>> 기본 가입 등급</label>
+      <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" value="1" <%= (!isEdit||Number(g.is_active)===1)?'checked':'' %>> 사용</label>
+      <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="is_auto_evaluation" value="1" <%= (!isEdit||Number(g.is_auto_evaluation)===1)?'checked':'' %>> 자동 평가 대상</label>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b">등급 혜택</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">주문 정률 할인 (%)</label>
+        <input type="number" step="0.01" name="discount_rate" value="<%= g.discount_rate != null ? Number(g.discount_rate) : 0 %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">할인 최대액 (원, 비우면 무제한)</label>
+        <input type="number" name="max_discount_amount" value="<%= g.max_discount_amount != null ? g.max_discount_amount : '' %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">할인 최소 주문금액 (원)</label>
+        <input type="number" name="min_order_amount" value="<%= g.min_order_amount != null ? g.min_order_amount : 0 %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div></div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">등급 적립률 (%, 비우면 없음)</label>
+        <input type="number" step="0.01" name="point_rate" value="<%= g.point_rate != null ? Number(g.point_rate) : '' %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">적립 방식</label>
+        <select name="point_rate_mode" class="w-full border rounded-lg px-3 h-[38px]">
+          <option value="ADD" <%= g.point_rate_mode!=='REPLACE'?'selected':'' %>>기본 적립률에 가산</option>
+          <option value="REPLACE" <%= g.point_rate_mode==='REPLACE'?'selected':'' %>>기본 적립률 대체</option>
+        </select>
+      </div>
+      <div>
+        <label class="inline-flex items-center gap-2 text-sm mt-6"><input type="checkbox" name="free_shipping" value="1" <%= Number(g.free_shipping)===1?'checked':'' %>> 상시 무료배송 (지역할증 제외)</label>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">무료배송 문턱 override (원, 비우면 몰 기본)</label>
+        <input type="number" name="free_ship_threshold" value="<%= g.free_ship_threshold != null ? g.free_ship_threshold : '' %>" class="w-full border rounded-lg px-3 h-[38px]">
+      </div>
+    </div>
+  </section>
+
+  <div class="flex justify-end gap-2 pt-2">
+    <a href="/admin/membership/grades" class="inline-flex items-center h-[38px] px-4 rounded-lg text-sm bg-gray-100 text-gray-700 no-underline">취소</a>
+    <button type="submit" class="inline-flex items-center h-[38px] px-5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">저장</button>
+  </div>
+</form>
