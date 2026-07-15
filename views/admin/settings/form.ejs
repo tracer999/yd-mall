@@ -544,6 +544,16 @@
                                value="<%= (systemSettings && systemSettings.tinymce_key) || '' %>"
                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
+                    <% const aiEnabledVal = (systemSettings && String(systemSettings.ai_enabled || '').toUpperCase() === 'Y'); %>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">AI 사용</label>
+                        <p class="text-xs text-gray-500 mb-2">AI 추천 문구·SEO 메타 생성 등 AI 기능 전체를 켜고 끕니다. 미사용이거나 아래 API Key가 비어 있으면 해당 버튼이 비활성화됩니다.</p>
+                        <select name="ai_enabled"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="N" <%= aiEnabledVal ? '' : 'selected' %>>미사용 (N)</option>
+                            <option value="Y" <%= aiEnabledVal ? 'selected' : '' %>>사용 (Y)</option>
+                        </select>
+                    </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
                         <input type="text" name="openai_api_key"

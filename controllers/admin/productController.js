@@ -4,19 +4,10 @@ const path = require('path');
 const { syncProductById, syncProductsByIds, deleteProductById, isShopifySyncEnabled } = require('../../services/shopify/syncService');
 const newArrival = require('../../services/catalog/newArrival');
 const productImporter = require('../../services/catalog/productImporter');
+const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
+const productMedia = require('../../services/catalog/productMedia');
 
-const OpenAI = require('openai');
-
-const openai = (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim())
-    ? new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-        timeout: parseInt(process.env.OPENAI_TIMEOUT_MS) || 90000
-    })
-    : null;
-
-if (!openai) {
-    console.warn('OpenAI 비활성화: OPENAI_API_KEY (선택: OPENAI_MODEL, OPENAI_TIMEOUT_MS)를 설정하면 활성화됩니다.');
-}
+const { getAiStatus, getOpenAIClient } = require('../../services/ai/aiStatus');
 
 function slugify(text) {
     if (!text) return '';
@@ -77,6 +68,22 @@ async function resolveBrandName(brandCategoryId) {
     return rows.length > 0 ? rows[0].name : '';
 }
 
+/*
+ * 카테고리/브랜드 필드 한 개를 확정한다.
+ *   - 목록에서 고른 id 가 있으면 그대로 사용한다.
+ *   - id 가 없고 자유 텍스트(new_*_name)만 있으면 유사 항목을 찾아 매핑하거나
+ *     없으면 신규 생성해 그 id 를 돌려준다(taxonomyResolver).
+ *   - 둘 다 없으면 null(미분류) — 기존 동작과 동일하게 비워둘 수 있다.
+ */
+async function resolveTaxonomyField(selectedId, freeText, type, mallId) {
+    const id = selectedId ? Number(selectedId) || null : null;
+    if (id) return id;
+    const text = String(freeText || '').trim();
+    if (!text) return null;
+    const r = await taxonomyResolver.resolveOrCreateCategory({ mallId, name: text, type });
+    return r && r.id ? r.id : null;
+}
+
 async function generateUniqueSlugFromName(name, requestedSlug, excludeId) {
     const baseSource = (requestedSlug && requestedSlug.trim()) ? requestedSlug : name;
     let baseSlug = slugify(baseSource);
@@ -113,8 +120,13 @@ exports.generateAIRecommendation = async (req, res) => {
     const { name, category_name, provider } = req.body;
 
     try {
+        const aiStatus = getAiStatus();
+        if (!aiStatus.usable) {
+            return res.status(503).json({ error: aiStatus.message });
+        }
+        const openai = getOpenAIClient();
         if (!openai) {
-            return res.status(503).json({ error: 'AI Recommendation disabled: OPENAI_API_KEY not set' });
+            return res.status(503).json({ error: 'AI 클라이언트를 초기화할 수 없습니다.' });
         }
 
         const prompt = `상품명: ${name}\n카테고리: ${category_name}\n제공업체: ${provider}\n\n이 상품에 대해 소비자들이 구매해야 하는 이유와 추천 대상을 매력적으로 3줄 내외의 한국어로 작성해줘.`;
@@ -140,14 +152,20 @@ exports.generateAIRecommendation = async (req, res) => {
 // AI 메타 디스크립션 생성
 exports.generateMetaDescription = async (req, res) => {
     const { product_id } = req.body;
+    const MALL_ID = req.adminMallId || 1;
     try {
+        const aiStatus = getAiStatus();
+        if (!aiStatus.usable) {
+            return res.status(503).json({ error: aiStatus.message });
+        }
+        const openai = getOpenAIClient();
         if (!openai) {
-            return res.status(503).json({ error: 'OPENAI_API_KEY가 설정되지 않았습니다.' });
+            return res.status(503).json({ error: 'AI 클라이언트를 초기화할 수 없습니다.' });
         }
         const [rows] = await pool.query(`
             SELECT p.name, p.provider, p.price, p.short_description, p.description, c.name as category_name
-            FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ?
-        `, [product_id]);
+            FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ? AND p.mall_id = ?
+        `, [product_id, MALL_ID]);
         if (!rows.length) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
 
         const p = rows[0];
@@ -187,8 +205,9 @@ exports.generateMetaDescription = async (req, res) => {
 // 메타 디스크립션 저장
 exports.saveMetaDescription = async (req, res) => {
     const { product_id, meta_description } = req.body;
+    const MALL_ID = req.adminMallId || 1;
     try {
-        await pool.query('UPDATE products SET meta_description = ? WHERE id = ?', [meta_description || null, product_id]);
+        await pool.query('UPDATE products SET meta_description = ? WHERE id = ? AND mall_id = ?', [meta_description || null, product_id, MALL_ID]);
         res.json({ success: true });
     } catch (err) {
         console.error('Save Meta Description Error:', err);
@@ -199,14 +218,15 @@ exports.saveMetaDescription = async (req, res) => {
 // 상품 SEO 보기 (팝업용) - 실제 상품 상세 페이지에서 사용하는 SEO 로직을 그대로 사용
 exports.getProductSEOView = async (req, res) => {
     const { id } = req.params;
+    const MALL_ID = req.adminMallId || 1;
 
     try {
         const [rows] = await pool.query(`
             SELECT p.*, c.name as category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.id = ?
-        `, [id]);
+            WHERE p.id = ? AND p.mall_id = ?
+        `, [id, MALL_ID]);
 
         if (rows.length === 0) {
             return res.render('admin/products/seo_preview', {
@@ -378,7 +398,7 @@ exports.postUpdateStatus = async (req, res) => {
     const ids = Array.isArray(product_ids) ? product_ids : [product_ids];
 
     try {
-        await pool.query('UPDATE products SET status = ? WHERE id IN (?)', [status, ids]);
+        await pool.query('UPDATE products SET status = ? WHERE id IN (?) AND mall_id = ?', [status, ids, req.adminMallId || 1]);
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);
@@ -401,7 +421,7 @@ exports.postBulkSaleStartDate = async (req, res) => {
     try {
         // 빈 값이면 미지정으로 되돌린다(신상품에서 제외).
         const value = sale_start_date && String(sale_start_date).trim() ? sale_start_date : null;
-        await pool.query('UPDATE products SET sale_start_date = ? WHERE id IN (?)', [value, ids]);
+        await pool.query('UPDATE products SET sale_start_date = ? WHERE id IN (?) AND mall_id = ?', [value, ids, req.adminMallId || 1]);
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);
@@ -414,7 +434,7 @@ exports.postVisibility = async (req, res) => {
     if (!productId || !visibility) return res.status(400).json({ success: false, message: '잘못된 요청' });
     const normalized = normalizeVisibility(visibility);
     try {
-        await pool.query('UPDATE products SET visibility = ? WHERE id = ?', [normalized, productId]);
+        await pool.query('UPDATE products SET visibility = ? WHERE id = ? AND mall_id = ?', [normalized, productId, req.adminMallId || 1]);
         res.json({ success: true, visibility: normalized });
     } catch (err) {
         console.error(err);
@@ -433,8 +453,9 @@ exports.getRecommendationSearch = async (req, res) => {
             FROM products p
             WHERE (p.name LIKE ? OR p.product_code LIKE ?)
               AND p.id != ?
+              AND p.mall_id = ?
             ORDER BY p.created_at DESC LIMIT 10
-        `, [`%${q}%`, `%${q}%`, excludeId || 0]);
+        `, [`%${q}%`, `%${q}%`, excludeId || 0, req.adminMallId || 1]);
         res.json({ products: rows });
     } catch (err) {
         res.status(500).json({ products: [] });
@@ -545,17 +566,35 @@ exports.postImportUrl = async (req, res) => {
     try {
         const draft = await productImporter.importFromUrl(req.body && req.body.url);
 
-        // 브랜드는 이름만 안다. 이 몰의 BRAND 카테고리와 이름이 정확히 같으면 폼에서 자동 선택한다.
+        // 브랜드는 이름만 안다. 완전일치뿐 아니라 유사(띄어쓰기·표기 차이·초성)까지 찾아
+        // 폼에서 자동 선택한다. 여기서는 매칭만 하고 생성하지 않는다(create:false) —
+        // 신규 생성은 운영자가 [저장]을 눌러 postAdd 로 진입할 때 일어난다.
+        const _mallId = req.adminMallId || 1;
         let brandCategoryId = null;
         if (draft.brand) {
-            const [rows] = await pool.query(
-                `SELECT id FROM categories WHERE type = 'BRAND' AND mall_id = ? AND name = ? LIMIT 1`,
-                [req.adminMallId || 1, draft.brand],
-            );
-            brandCategoryId = rows.length ? rows[0].id : null;
+            const m = await taxonomyResolver.resolveOrCreateBrand({
+                mallId: _mallId, name: draft.brand, create: false,
+            });
+            brandCategoryId = m && m.id ? m.id : null;
         }
 
-        res.json({ success: true, data: Object.assign(draft, { brand_category_id: brandCategoryId }) });
+        // 카테고리도 동일하게 — 임포터가 뽑은 분류 텍스트를 이 몰의 카테고리와 유사매칭한다.
+        // (매칭만; 신규 생성은 저장 시 postAdd 에서 일어난다)
+        let categoryId = null;
+        if (draft.category) {
+            const cm = await taxonomyResolver.resolveOrCreateCategory({
+                mallId: _mallId, name: draft.category, type: 'NORMAL', create: false,
+            });
+            categoryId = cm && cm.id ? cm.id : null;
+        }
+
+        // 매칭 실패 시 폼의 "직접 입력"칸을 프리필하도록 이름도 함께 내려준다.
+        res.json({ success: true, data: Object.assign(draft, {
+            brand_category_id: brandCategoryId,
+            brand_name: draft.brand || null,
+            category_id: categoryId,
+            category_name: draft.category || null,
+        }) });
     } catch (err) {
         const status = err.statusCode || 500;
         if (status >= 500) console.error('[products] importUrl:', err.message);
@@ -597,15 +636,24 @@ exports.postAdd = async (req, res) => {
         const finalSlug = await generateUniqueSlugFromName(name, req.body.slug, null);
         const normalizedDistributionBadge = normalizeDistributionBadge(distribution_badge);
         const normalizedProductBadge = normalizeProductBadge(product_badge);
-        const normalizedBrandCategoryId = brand_category_id ? Number(brand_category_id) || null : null;
         const normalizedProductCode = (product_code && String(product_code).trim()) ? String(product_code).trim() : null;
+
+        // 카테고리·브랜드 자동 선별/생성:
+        // 목록에서 고른 id 가 있으면 그대로, 없고 자유 텍스트만 들어오면 유사 항목을
+        // 찾아 매핑하거나(없으면) 신규 생성한다. (services/catalog/taxonomyResolver)
+        const _mallId = req.adminMallId || 1;
+        const resolvedCategoryId = await resolveTaxonomyField(
+            category_id, req.body.new_category_name, 'NORMAL', _mallId);
+        const normalizedBrandCategoryId = await resolveTaxonomyField(
+            brand_category_id, req.body.new_brand_name, 'BRAND', _mallId);
+
         const resolvedBrandName = await resolveBrandName(normalizedBrandCategoryId);
         const finalProvider = resolvedBrandName || provider || null;
 
         const finalPrice = toNumber(price, 0);
         const insertEntries = [
-            ['mall_id', req.adminMallId || 1], // P5: 새 상품은 편집 중인 몰에 속한다
-            ['category_id', category_id || null],
+            ['mall_id', _mallId], // P5: 새 상품은 편집 중인 몰에 속한다
+            ['category_id', resolvedCategoryId],
             ['brand_category_id', normalizedBrandCategoryId],
             ['name', name],
             ['product_code', normalizedProductCode],
@@ -718,14 +766,26 @@ exports.postEdit = async (req, res) => {
         const finalSlug = await generateUniqueSlugFromName(name, req.body.slug, id);
         const normalizedDistributionBadge = normalizeDistributionBadge(distribution_badge);
         const normalizedProductBadge = normalizeProductBadge(product_badge);
-        const normalizedBrandCategoryId = brand_category_id ? Number(brand_category_id) || null : null;
         const normalizedProductCode = (product_code && String(product_code).trim()) ? String(product_code).trim() : null;
+
+        // 카테고리·브랜드 자동 선별/생성 (postAdd 와 동일 규칙)
+        const _mallId = req.adminMallId || 1;
+
+        // P5: 편집 중인 몰 소유 상품만 수정(크로스몰 덮어쓰기·Shopify 오발화 방지)
+        const [[_owned]] = await pool.query('SELECT id FROM products WHERE id = ? AND mall_id = ?', [id, _mallId]);
+        if (!_owned) return res.redirect('/admin/products');
+
+        const resolvedCategoryId = await resolveTaxonomyField(
+            category_id, req.body.new_category_name, 'NORMAL', _mallId);
+        const normalizedBrandCategoryId = await resolveTaxonomyField(
+            brand_category_id, req.body.new_brand_name, 'BRAND', _mallId);
+
         const resolvedBrandName = await resolveBrandName(normalizedBrandCategoryId);
         const finalProvider = resolvedBrandName || provider || null;
 
         const finalPrice = toNumber(price, 0);
         const updateEntries = [
-            ['category_id', category_id || null],
+            ['category_id', resolvedCategoryId],
             ['brand_category_id', normalizedBrandCategoryId],
             ['name', name],
             ['product_code', normalizedProductCode],
@@ -755,11 +815,11 @@ exports.postEdit = async (req, res) => {
 
         const updateSql = updateEntries.map(([column]) => `${column}=?`).join(', ');
         const updateValues = updateEntries.map(([, value]) => value);
-        updateValues.push(id);
+        updateValues.push(id, _mallId);
 
         await pool.query(`
             UPDATE products SET ${updateSql}
-            WHERE id=?
+            WHERE id=? AND mall_id=?
         `, updateValues);
 
         // Shopify 동기화 (백그라운드 — 실패해도 상품 저장에 영향 없음)
@@ -911,13 +971,14 @@ exports.getList = async (req, res) => {
 
 exports.getDetail = async (req, res) => {
     const { id } = req.params;
+    const MALL_ID = req.adminMallId || 1;
     try {
         const [rows] = await pool.query(`
             SELECT p.*, c.name as category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.id = ?
-        `, [id]);
+            WHERE p.id = ? AND p.mall_id = ?
+        `, [id, MALL_ID]);
         if (rows.length === 0) return res.redirect('/admin/products');
 
         const product = rows[0];
@@ -962,10 +1023,11 @@ exports.getDetail = async (req, res) => {
 exports.getEdit = async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.query('SELECT * FROM products WHERE id = ?', [id]);
+        const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰 스코프
+        const [rows] = await pool.query('SELECT * FROM products WHERE id = ? AND mall_id = ?', [id, _mallId]);
         if (rows.length === 0) return res.redirect('/admin/products');
 
-        const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
+        // P5: 편집 중인 몰의 카테고리만
         const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
@@ -1001,12 +1063,26 @@ exports.postUploadImage = async (req, res) => {
 
 exports.postDelete = async (req, res) => {
     const { id } = req.body;
+    const MALL_ID = req.adminMallId || 1;
     try {
+        // P5: 편집 중인 몰 소유 상품만 삭제(크로스몰 삭제·Shopify 오발화 방지)
+        const [[owned]] = await pool.query('SELECT id FROM products WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
+        if (!owned) return res.redirect('/admin/products');
+
+        // 물리 파일 경로는 삭제 전에 수집한다(product_images 가 CASCADE 로 사라지므로)
+        const mediaUrls = await productMedia.collectProductMediaUrls(Number(id));
+
         // Shopify 상품 삭제 동기화 — DB 삭제 전에 실행 (매핑 테이블 읽어야 하므로)
         await deleteProductById(Number(id))
             .catch(e => console.error(`[Shopify Sync] 상품 삭제 동기화 실패 (id=${id}): ${e.message}`));
 
-        await pool.query('DELETE FROM products WHERE id = ?', [id]);
+        await pool.query('DELETE FROM products WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
+
+        // 고아 이미지/영상 파일 정리(다른 상품이 참조하지 않는 것만). 실패해도 삭제는 성공 처리.
+        productMedia.deleteOrphanMedia(mediaUrls)
+            .then(r => { if (r.removed) console.log(`[product media] 상품 ${id} 삭제 — 파일 ${r.removed}개 정리(보존 ${r.kept})`); })
+            .catch(e => console.error(`[product media] 정리 실패 (id=${id}): ${e.message}`));
+
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);

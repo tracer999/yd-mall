@@ -79,6 +79,11 @@
                                             </option>
                                             <% }) %>
                                     </select>
+                                    <input type="text" name="new_category_name" id="new_category_name"
+                                        class="mt-1.5 w-full text-sm"
+                                        placeholder="＋ 목록에 없으면 카테고리명 직접 입력">
+                                    <p class="text-xs text-gray-500 mt-1">위 목록에서 못 고른 경우에만 입력하세요. 비슷한 카테고리가
+                                        있으면 자동으로 연결하고, 없으면 새로 만들어 저장합니다.</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">브랜드</label>
@@ -91,6 +96,11 @@
                                             </option>
                                             <% }) %>
                                     </select>
+                                    <input type="text" name="new_brand_name" id="new_brand_name"
+                                        class="mt-1.5 w-full text-sm"
+                                        placeholder="＋ 목록에 없으면 브랜드명 직접 입력">
+                                    <p class="text-xs text-gray-500 mt-1">위 목록에서 못 고른 경우에만 입력하세요. 비슷한 브랜드가
+                                        있으면 자동으로 연결하고, 없으면 새로 만들어 저장합니다.</p>
                                     <input type="hidden" name="provider"
                                         value="<%= product ? (product.provider || '') : '' %>">
                                 </div>
@@ -535,11 +545,20 @@
                                     </style>
                                 </div>
 
+                                <% const aiUsable = (typeof aiStatus !== 'undefined' && aiStatus) ? aiStatus.usable : true; %>
+                                <% const aiMessage = (typeof aiStatus !== 'undefined' && aiStatus) ? (aiStatus.message || '') : ''; %>
                                 <div id="ai-content-area"
                                     class="<%= (product && product.is_ai_recommendation) ? '' : 'hidden' %>">
+                                    <% if (!aiUsable) { %>
+                                    <div class="mb-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                                        <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
+                                        <span><%= aiMessage %></span>
+                                    </div>
+                                    <% } %>
                                     <div class="flex justify-end mb-2">
                                         <button type="button" id="generate-ai-btn"
-                                            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 bg-purple-600 text-white hover:bg-purple-700">
+                                            <%= aiUsable ? '' : 'aria-disabled="true"' %>
+                                            class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 <%= aiUsable ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed' %>">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none"
                                                 viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -813,9 +832,15 @@
     }
 
     // AI Generation
+    const AI_USABLE = <%= (typeof aiStatus !== 'undefined' && aiStatus && aiStatus.usable) ? 'true' : 'false' %>;
+    const AI_MESSAGE = <%- JSON.stringify((typeof aiStatus !== 'undefined' && aiStatus) ? (aiStatus.message || 'AI 기능을 사용할 수 없습니다.') : 'AI 기능을 사용할 수 없습니다.') %>;
     const generateAiBtn = document.getElementById('generate-ai-btn');
     if (generateAiBtn) {
         generateAiBtn.addEventListener('click', () => {
+            if (!AI_USABLE) {
+                alert(AI_MESSAGE);
+                return;
+            }
             const name = document.querySelector('input[name="name"]').value;
             const categoryObj = document.querySelector('select[name="category_id"]');
             const category_name = categoryObj.options[categoryObj.selectedIndex].text;
@@ -979,7 +1004,18 @@
                     if (setField('#price', d.price)) filled.push('판매가');
                     if (setField('#original_price', d.original_price)) filled.push('정가');
                     if (setField('input[name="stock"]', d.stock)) filled.push('재고');
-                    if (d.brand_category_id && setField('select[name="brand_category_id"]', d.brand_category_id)) filled.push('브랜드');
+                    if (d.brand_category_id && setField('select[name="brand_category_id"]', d.brand_category_id)) {
+                        filled.push('브랜드');
+                    } else if (d.brand_name) {
+                        // 매칭되는 브랜드가 없으면 이름을 "새 브랜드명" 칸에 채운다 → 저장 시 자동 생성된다.
+                        if (setField('#new_brand_name', d.brand_name)) filled.push('브랜드(신규)');
+                    }
+                    if (d.category_id && setField('select[name="category_id"]', d.category_id)) {
+                        filled.push('카테고리');
+                    } else if (d.category_name) {
+                        // 매칭되는 카테고리가 없으면 "직접 입력"칸에 채운다 → 저장 시 자동 생성된다.
+                        if (setField('#new_category_name', d.category_name)) filled.push('카테고리(신규)');
+                    }
                     if (d.description) { setEditor('short_description', d.description); filled.push('요약 설명'); }
 
                     imported.innerHTML = '';

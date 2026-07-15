@@ -253,6 +253,7 @@ async function initDB() {
         // system_settings 기본값 (INSERT IGNORE, 민감 정보는 빈값/플레이스홀더)
         const SYSTEM_SETTINGS_DEFAULTS = [
             ['tinymce_key', '', 'TinyMCE API Key'],
+            ['ai_enabled', 'N', 'AI(OpenAI) 기능 사용 여부 (Y=사용, N=미사용)'],
             ['openai_api_key', '', 'OpenAI API Key'],
             ['openai_timeout_ms', '90000', 'OpenAI 요청 타임아웃(ms)'],
             ['openai_model', 'gpt-4o-mini', '기본 OpenAI 모델'],

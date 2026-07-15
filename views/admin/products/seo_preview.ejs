@@ -70,11 +70,20 @@
           <textarea id="metaDescInput" rows="3" maxlength="160"
             class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 resize-none"
             placeholder="메타 디스크립션을 입력하세요 (최대 160자)"><%= seo.description || '' %></textarea>
+          <% const aiUsable = (typeof aiStatus !== 'undefined' && aiStatus) ? aiStatus.usable : true; %>
+          <% const aiMessage = (typeof aiStatus !== 'undefined' && aiStatus) ? (aiStatus.message || '') : ''; %>
+          <% if (!aiUsable) { %>
+          <div class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
+            <span><%= aiMessage %></span>
+          </div>
+          <% } %>
           <div class="flex items-center justify-between">
             <span class="text-xs text-gray-500"><span id="metaCharCount"><%= (seo.description || '').length %></span>/160자</span>
             <div class="flex gap-2">
               <button type="button" id="btnAiGenerate" onclick="generateAIMeta()"
-                style="background:#7c3aed; color:#fff; cursor:pointer;"
+                <%= aiUsable ? '' : 'aria-disabled="true"' %>
+                style="<%= aiUsable ? 'background:#7c3aed; color:#fff; cursor:pointer;' : 'background:#d1d5db; color:#6b7280; cursor:not-allowed;' %>"
                 class="inline-flex items-center h-[34px] px-4 text-xs font-medium rounded-md hover:opacity-90 transition gap-1">
                 <i class="bi bi-stars"></i> AI 생성
               </button>
@@ -162,7 +171,14 @@
       if (type !== 'loading') setTimeout(() => statusEl.classList.add('hidden'), 4000);
     }
 
+    const AI_USABLE = <%= (typeof aiStatus !== 'undefined' && aiStatus && aiStatus.usable) ? 'true' : 'false' %>;
+    const AI_MESSAGE = <%- JSON.stringify((typeof aiStatus !== 'undefined' && aiStatus) ? (aiStatus.message || 'AI 기능을 사용할 수 없습니다.') : 'AI 기능을 사용할 수 없습니다.') %>;
+
     async function generateAIMeta() {
+      if (!AI_USABLE) {
+        showStatus(AI_MESSAGE, 'error');
+        return;
+      }
       const btn = document.getElementById('btnAiGenerate');
       btn.disabled = true;
       btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 생성 중...';

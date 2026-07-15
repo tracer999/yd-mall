@@ -315,7 +315,7 @@ const liveRoutes = require('./routes/live');
     app.use('/boards', boardRoutes);
     app.use('/mypage', mypageRoutes);
     // /admin 이하에서는 DB 기반 관리자 메뉴를 로드
-    app.use('/admin', adminMenuMiddleware, adminRoutes);
+    app.use('/admin', adminMenuMiddleware, require('./middleware/aiStatus'), adminRoutes);
     app.use('/cart', cartRoutes);
     app.use('/checkout', checkoutRoutes);
     // /doc, /doc/manual → 매뉴얼 홈(사용자가 흔히 치는 진입 경로 별칭). /docs 는 정적 문서 서빙이라 단수 /doc 사용.
