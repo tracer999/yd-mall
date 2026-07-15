@@ -39,6 +39,7 @@
 | `performanceService.js` | 실적 원장 — `appendConfirmed`(구매확정 적립, 멱등) · `reverseForOrder`(취소 역분개, 멱등) · `aggregate`(최근 N개월 상계 집계) · `recognizedAmountOf`(A/B/C/D 산식) |
 | `evaluationService.js` | 평가 엔진 — 히스테리시스(진입/유지) 판정, `evaluateCustomer`(즉시 승급), `evaluateMall`(정기 배치·시뮬레이션), `getCustomerSummary`(마이페이지), `getPublicTiers`(공개 등급표) |
 | `membershipBenefitService.js` | 주문 등급 혜택 계산 — `getOrderBenefits`(할인액·적립률·무료배송) · `effectivePointRate` |
+| `gradeCouponService.js` | **등급 진입 쿠폰(쿠폰팩, 2차)** — 등급↔쿠폰 연결(`membership_grade_coupon`) + `issueEntryCoupons`(승급 시 자동 발급, `couponIssueService` 재사용) |
 | `membershipInfo.js` | 정적 폴백 상수(활성 등급 없을 때만) |
 
 ### 평가 로직 (히스테리시스)
@@ -79,10 +80,15 @@
 
 회원(`users`)은 몰 전역(몰 컬럼 없음)이지만 등급은 `(user_id, mall_id)` 로 분리. 몰별 등급 행은 주문·평가·조회 시 `ensureMembership` 으로 지연 생성.
 
-## 알려진 한계 (2차)
+## 2차 추가 구현 (2026-07)
+
+- **등급 진입 쿠폰(쿠폰팩)**: `membership_grade_coupon`(등급↔쿠폰, `issue_on='ENTRY'`). `membershipService.setGrade` 가 UPGRADE·MANUAL 상향 시 `gradeCouponService.issueEntryCoupons` 호출 → `couponIssueService.issueCoupon(issuedBy='EVENT', skipIfHeld)`. 관리자 등급 편집 폼에서 연결.
+- **대시보드 분석**: `membershipController.getDashboard` 가 `order_membership_benefit_snapshot` 를 집계해 등급별 최근 30일 매출·객단가·할인 비용·적립 예정액 표시.
+
+## 알려진 한계 (남은 2차)
 
 - 혜택: 등급당 1행(정률할인·적립·무료배송)으로 단순화 — 채널/결제수단 제한·중복 그룹·benefit_policy 재사용 미도입.
-- 등급 진입/정기 쿠폰팩·생일·상품/브랜드별 혜택·세그먼트·강등 사전 알림 미구현.
+- 정기(월) 쿠폰팩·생일·상품/브랜드별 혜택·세그먼트·강등 사전 알림 미구현.
 - 실적 확정 시점 = 결제확정(PAID). 부분 반품 비율 차감은 반품 모듈 도입 시.
 
 ---

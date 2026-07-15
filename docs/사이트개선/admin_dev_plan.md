@@ -70,7 +70,7 @@
 
 ### 회원 / 프로모션
 
-- **회원 등급 · 멤버십 혜택 — 2차** — 1차 MVP 는 완료·이관됨(위 표 · [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 부록 B). 2차 잔여: 등급 진입/정기 쿠폰팩·생일 혜택·상품/브랜드별 혜택·고객 세그먼트·강등 사전 알림·설정형 할인 우선순위.
+- **회원 등급 · 멤버십 혜택 — 2차** — 1차 MVP + 2차 일부(등급 진입 쿠폰팩·대시보드 비용 분석) 완료·이관됨(위 표 · [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 부록 B.5). 남은 2차: 정기(월) 쿠폰팩·생일 혜택·상품/브랜드별 혜택·고객 세그먼트·강등 사전 알림·설정형 할인 우선순위.
 - **리뷰 관리** — `reviews` 테이블은 있으나 관리자 화면이 없다.
 - **이벤트 유형 확장** — 현재 APPLY(응모)형만 참여 가능. `COUPON_PACK` · `ATTENDANCE` · `PURCHASE` 미착수.
 

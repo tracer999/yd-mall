@@ -9,6 +9,7 @@ const pool = require('../../config/db');
 const gradeService = require('../../services/membership/gradeService');
 const membershipService = require('../../services/membership/membershipService');
 const evaluationService = require('../../services/membership/evaluationService');
+const gradeCouponService = require('../../services/membership/gradeCouponService');
 
 const LAYOUT = 'layouts/admin_layout';
 function actor(req) {
@@ -32,11 +33,41 @@ exports.getDashboard = async (req, res, next) => {
             [mallId]
         );
         const totalMembers = Number(totals.members) || 0;
+
+        // 등급별 최근 30일 실적·혜택 비용 (설계 §4.1). 주문 스냅샷 기준.
+        const [analytics] = await pool.query(
+            `SELECT s.grade_id,
+                    COUNT(*) AS order_count,
+                    COALESCE(SUM(o.total_amount), 0) AS revenue,
+                    COALESCE(SUM(s.grade_discount_amount), 0) AS discount_cost,
+                    COALESCE(SUM(s.grade_point_expected), 0) AS point_cost
+               FROM order_membership_benefit_snapshot s
+               JOIN orders o ON o.id = s.order_id
+              WHERE o.mall_id = ? AND o.status = 'PAID'
+                AND o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+              GROUP BY s.grade_id`,
+            [mallId]
+        );
+        const analyticsByGrade = {};
+        let hasAnalytics = false;
+        for (const a of analytics) {
+            const orders = Number(a.order_count) || 0;
+            analyticsByGrade[a.grade_id] = {
+                orders,
+                revenue: Number(a.revenue) || 0,
+                aov: orders > 0 ? Math.round((Number(a.revenue) || 0) / orders) : 0,
+                discountCost: Number(a.discount_cost) || 0,
+                pointCost: Number(a.point_cost) || 0,
+            };
+            if (orders > 0) hasAnalytics = true;
+        }
+
         res.render('admin/membership/dashboard', {
             layout: LAYOUT,
             title: '멤버십 대시보드',
             subtitle: '등급 구성·평가 현황을 요약합니다.',
             grades, policy, totals, totalMembers, lastRun: lastRun || null,
+            analyticsByGrade, hasAnalytics,
             success: req.query.success, error: req.query.error,
         });
     } catch (e) { next(e); }
@@ -65,10 +96,12 @@ exports.getGradeForm = async (req, res, next) => {
                 return res.redirect('/admin/membership/grades?error=' + encodeURIComponent('등급을 찾을 수 없습니다.'));
             }
         }
+        const mallCoupons = await gradeCouponService.listLinkableCoupons(mallId);
+        const linkedCouponIds = grade ? await gradeCouponService.getLinkedCouponIds(grade.id) : [];
         res.render('admin/membership/grade_form', {
             layout: LAYOUT,
             title: grade ? '등급 수정' : '등급 등록',
-            grade, error: req.query.error,
+            grade, mallCoupons, linkedCouponIds, error: req.query.error,
         });
     } catch (e) { next(e); }
 };
@@ -81,14 +114,20 @@ exports.postGradeSave = async (req, res) => {
             const back = id ? `/admin/membership/grades/${id}/edit` : '/admin/membership/grades/new';
             return res.redirect(back + '?error=' + encodeURIComponent('등급명을 입력하세요.'));
         }
+        let gradeId = id;
         if (id) {
             await gradeService.updateGrade(id, req.body);
         } else {
             if (!req.body.grade_code || !String(req.body.grade_code).trim()) {
                 return res.redirect('/admin/membership/grades/new?error=' + encodeURIComponent('등급 코드를 입력하세요.'));
             }
-            await gradeService.createGrade(mallId, req.body);
+            gradeId = await gradeService.createGrade(mallId, req.body);
         }
+        // 등급 진입 쿠폰(쿠폰팩) 연결 저장. 체크박스 미선택 시 빈 배열 → 전체 해제.
+        const couponIds = req.body.entry_coupon_ids
+            ? (Array.isArray(req.body.entry_coupon_ids) ? req.body.entry_coupon_ids : [req.body.entry_coupon_ids])
+            : [];
+        await gradeCouponService.setGradeCoupons(gradeId, couponIds);
         res.redirect('/admin/membership/grades?success=' + encodeURIComponent('저장되었습니다.'));
     } catch (e) {
         const back = id ? `/admin/membership/grades/${id}/edit` : '/admin/membership/grades/new';

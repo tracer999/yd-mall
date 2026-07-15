@@ -77,6 +77,25 @@
     </div>
   </section>
 
+  <section>
+    <h2 class="text-sm font-semibold text-gray-900 mb-1 pb-2 border-b">등급 진입 시 지급 쿠폰 (쿠폰팩)</h2>
+    <p class="text-xs text-gray-500 mb-3">회원이 이 등급으로 <b>승급</b>하거나 관리자가 이 등급으로 <b>수동 상향</b>할 때 아래 쿠폰이 자동 발급됩니다. (이미 미사용 보유 중이면 건너뜀)</p>
+    <% var _linked = (typeof linkedCouponIds !== 'undefined' && linkedCouponIds) ? linkedCouponIds.map(Number) : []; %>
+    <% var _coupons = (typeof mallCoupons !== 'undefined' && mallCoupons) ? mallCoupons : []; %>
+    <% if (_coupons.length === 0) { %>
+      <p class="text-sm text-gray-400">연결할 수 있는 활성 쿠폰이 없습니다. <a href="/admin/coupons" class="text-blue-600 hover:underline">쿠폰 관리</a>에서 먼저 쿠폰을 만드세요.</p>
+    <% } else { %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto border rounded-lg p-3">
+        <% _coupons.forEach(function(c){ %>
+          <label class="inline-flex items-center gap-2 text-sm py-1">
+            <input type="checkbox" name="entry_coupon_ids" value="<%= c.id %>" <%= _linked.indexOf(Number(c.id)) >= 0 ? 'checked' : '' %>>
+            <span><%= c.name %> <span class="text-xs text-gray-400">#<%= c.id %></span></span>
+          </label>
+        <% }); %>
+      </div>
+    <% } %>
+  </section>
+
   <div class="flex justify-end gap-2 pt-2">
     <a href="/admin/membership/grades" class="inline-flex items-center h-[38px] px-4 rounded-lg text-sm bg-gray-100 text-gray-700 no-underline">취소</a>
     <button type="submit" class="inline-flex items-center h-[38px] px-5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">저장</button>

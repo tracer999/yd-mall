@@ -1047,3 +1047,12 @@ POST   /internal/membership/calculate-benefits
 - **쿠폰 혜택**(등급 진입/정기 쿠폰팩·생일)·**상품/브랜드별 혜택**·**세그먼트**·**비용/효율 분석**·**강등 사전 알림**·**계정 통합/재가입 복원**: 2차(§17).
 - **실적 확정 시점**: 배송완료/구매확정이 아니라 **결제확정(PAID)** 에 적립(부록 A.3). 취소·환불은 상태 전이 + 원장 역분개로 정합. 부분 반품 비율 차감은 반품 모듈 도입 시.
 - **멀티몰**: 등급은 `(user_id, mall_id)` 분리, 회원은 전역(부록 A.7). 회원의 몰별 등급 행은 주문/평가 시 지연 생성.
+
+### B.5 2차 추가 구현 (2026-07)
+
+MVP 이후 아래 2차 항목을 추가 구현했다.
+
+- **등급 진입 쿠폰(쿠폰팩)** — `membership_grade_coupon`(등급↔쿠폰 연결) 신설. 승급·수동 상향으로 등급에 **진입**할 때 연결 쿠폰을 자동 발급한다(기존 `couponIssueService.issueCoupon` 재사용, `issued_by='EVENT'`, `skipIfHeld` 로 재평가 중복 방지). 관리자 등급 편집 폼에서 "등급 진입 시 지급 쿠폰"으로 연결. 산출물: `services/membership/gradeCouponService.js` · `membershipService.setGrade` 훅 · `views/admin/membership/grade_form.ejs`. (강등·가입에는 미발급. 정기 쿠폰팩·생일은 여전히 2차 잔여.)
+- **멤버십 대시보드 분석** — 등급별 최근 30일 매출·주문수·객단가·**등급 할인 비용**·**적립 예정액**(주문 스냅샷 집계, §4.1). 산출물: `membershipController.getDashboard` + `views/admin/membership/dashboard.ejs`.
+
+남은 2차: 정기(월) 쿠폰팩·생일 혜택, 상품/브랜드별 등급 혜택, 고객 세그먼트, 강등 사전 알림, 설정형 할인 우선순위.

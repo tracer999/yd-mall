@@ -7,6 +7,7 @@
 
 const pool = require('../../config/db');
 const gradeService = require('./gradeService');
+const gradeCouponService = require('./gradeCouponService');
 
 /**
  * (user, mall) 등급 상태를 보장한다. 없으면 기본 등급으로 생성 + SIGNUP 이력.
@@ -114,6 +115,19 @@ async function setGrade(conn, p) {
                 p.changedBy || 'SYSTEM',
             ]
         );
+    }
+
+    /*
+     * 등급 진입 쿠폰 자동 발급 (설계 §7.1, 2차). 승급·수동 상향으로 새 등급에 진입할 때만.
+     * 강등·가입(BASIC)에는 발급하지 않는다. best-effort — 발급 실패가 등급 변경을 되돌리지 않는다.
+     * skipIfHeld 로 재평가 시 중복 발급되지 않는다.
+     */
+    if (changed && ['UPGRADE', 'MANUAL'].includes(p.changeType) && p.toGradeId) {
+        try {
+            await gradeCouponService.issueEntryCoupons(p.userId, p.toGradeId);
+        } catch (e) {
+            console.error('[membership] entry coupon issuance failed (user ' + p.userId + ', grade ' + p.toGradeId + '):', e.message);
+        }
     }
     return { fromGradeId, toGradeId: p.toGradeId, changed };
 }
