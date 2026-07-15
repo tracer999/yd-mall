@@ -218,9 +218,9 @@ exports.checkoutAll = async (req, res) => {
 
         // Orders 테이블에 주문 생성
         const [orderResult] = await connection.query(
-            `INSERT INTO orders (user_id, order_number, status, total_amount)
-             VALUES (?, ?, 'PAID', ?)` ,
-            [userId, orderNumber, totalAmount]
+            `INSERT INTO orders (user_id, mall_id, order_number, status, total_amount)
+             VALUES (?, ?, ?, 'PAID', ?)` ,
+            [userId, req.mallId || 1, orderNumber, totalAmount]
         );
         const orderId = orderResult.insertId;
 

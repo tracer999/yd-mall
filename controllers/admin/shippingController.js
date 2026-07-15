@@ -5,19 +5,23 @@ exports.getList = async (req, res) => {
     try {
         // Fetch orders that need shipping or are shipped
         const [orders] = await pool.query(`
-            SELECT 
-                o.*, 
-                s.tracking_number, 
-                s.courier_company, 
+            SELECT
+                o.*,
+                s.tracking_number,
+                s.courier_company,
                 s.status AS shipping_status,
                 u.name AS customer_name,
                 u.email AS customer_email,
                 u.picture AS customer_picture,
                 u.google_id AS customer_google_id,
-                u.kakao_id AS customer_kakao_id
-            FROM orders o 
-            LEFT JOIN shipments s ON o.id = s.order_id 
+                u.kakao_id AS customer_kakao_id,
+                m.name AS mall_name,
+                m.code AS mall_code,
+                m.is_default AS mall_is_default
+            FROM orders o
+            LEFT JOIN shipments s ON o.id = s.order_id
             LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN mall m ON o.mall_id = m.id
             WHERE o.status IN ('PAID', 'PREPARING', 'SHIPPED', 'DELIVERED')
             ORDER BY o.created_at DESC
         `);

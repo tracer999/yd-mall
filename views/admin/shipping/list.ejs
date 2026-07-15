@@ -32,6 +32,15 @@
                                 <a href="/admin/sales/<%= order.id %>">
                                     <%= order.order_number %>
                                 </a>
+                                <div class="mt-1">
+                                    <% if (order.mall_name) { %>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-[11px] font-semibold text-indigo-700 border border-indigo-100">
+                                            <i class="bi bi-shop text-[10px]"></i><%= order.mall_name %><% if (order.mall_is_default) { %> · 기본<% } %>
+                                        </span>
+                                    <% } else { %>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-[11px] font-medium text-gray-400 border border-gray-200">몰 미확인</span>
+                                    <% } %>
+                                </div>
                                 <div class="text-xs text-gray-400 mt-1">
                                     <%= new Date(order.created_at).toLocaleDateString('ko-KR') %>
                                 </div>

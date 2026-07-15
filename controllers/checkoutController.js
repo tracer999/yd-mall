@@ -691,18 +691,18 @@ exports.postForm = async (req, res) => {
 
         await connection.query(
             `INSERT INTO orders (
-                user_id, order_number, status, subtotal_amount, shipping_fee, shipping_discount,
+                user_id, mall_id, order_number, status, subtotal_amount, shipping_fee, shipping_discount,
                 total_amount, coupon_discount, point_used, user_coupon_id, shipping_coupon_id,
                 receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
                 shipping_address, shipping_message,
                 buyer_name, buyer_email, buyer_phone
-            ) VALUES (?, ?, 'PENDING', ?, ?, ?,
+            ) VALUES (?, ?, ?, 'PENDING', ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?,
                 ?, ?, ?)`,
             [
-                userId, orderNumber, subtotalAmount, shippingFee, shippingDiscount,
+                userId, req.mallId || 1, orderNumber, subtotalAmount, shippingFee, shippingDiscount,
                 totalAmount, couponDiscount, pointUsed, userCouponId, shippingCouponId,
                 receiver_name, receiver_phone, receiver_zipcode || null, receiver_address || null, receiver_detailed_address || null,
                 shippingAddr || null, shipping_message || null,

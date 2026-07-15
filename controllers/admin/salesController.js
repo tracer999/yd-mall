@@ -13,15 +13,19 @@ exports.getList = async (req, res) => {
             params.push(statusFilter);
         }
         const [orders] = await pool.query(`
-            SELECT 
-                o.*, 
-                u.name AS customer_name, 
+            SELECT
+                o.*,
+                u.name AS customer_name,
                 u.email AS customer_email,
                 u.picture AS customer_picture,
                 u.google_id AS customer_google_id,
-                u.kakao_id AS customer_kakao_id
-            FROM orders o 
-            LEFT JOIN users u ON o.user_id = u.id 
+                u.kakao_id AS customer_kakao_id,
+                m.name AS mall_name,
+                m.code AS mall_code,
+                m.is_default AS mall_is_default
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN mall m ON o.mall_id = m.id
             ${whereClause}
             ORDER BY o.created_at DESC
         `, params);
@@ -41,15 +45,19 @@ exports.getDetail = async (req, res) => {
     const { id } = req.params;
     try {
         const [orders] = await pool.query(`
-            SELECT 
-                o.*, 
-                u.name AS customer_name, 
+            SELECT
+                o.*,
+                u.name AS customer_name,
                 u.email AS customer_email,
                 u.picture AS customer_picture,
                 u.google_id AS customer_google_id,
-                u.kakao_id AS customer_kakao_id
-            FROM orders o 
-            LEFT JOIN users u ON o.user_id = u.id 
+                u.kakao_id AS customer_kakao_id,
+                m.name AS mall_name,
+                m.code AS mall_code,
+                m.is_default AS mall_is_default
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN mall m ON o.mall_id = m.id
             WHERE o.id = ?
         `, [id]);
 
