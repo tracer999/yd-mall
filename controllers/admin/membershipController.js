@@ -10,6 +10,7 @@ const gradeService = require('../../services/membership/gradeService');
 const membershipService = require('../../services/membership/membershipService');
 const evaluationService = require('../../services/membership/evaluationService');
 const gradeCouponService = require('../../services/membership/gradeCouponService');
+const membershipConfigService = require('../../services/membership/membershipConfigService');
 
 const LAYOUT = 'layouts/admin_layout';
 function actor(req) {
@@ -163,10 +164,12 @@ exports.getPolicy = async (req, res, next) => {
         const simResult = req.session.membershipSimResult || null;
         if (req.session.membershipSimResult) { delete req.session.membershipSimResult; req.session.save(() => {}); }
 
+        const stackingMode = await membershipConfigService.getStackingMode(mallId);
+
         res.render('admin/membership/policy', {
             layout: LAYOUT, title: '등급 평가 정책',
             subtitle: '실적 기준·기간·주기와 등급별 진입/유지 기준을 관리합니다.',
-            policy, grades, criteriaByGrade, simResult,
+            policy, grades, criteriaByGrade, simResult, stackingMode,
             success: req.query.success, error: req.query.error,
         });
     } catch (e) { next(e); }
@@ -226,6 +229,8 @@ exports.postPolicySave = async (req, res) => {
                 ]
             );
         }
+        // 설정형 할인 우선순위(§7.3) 저장
+        await membershipConfigService.setStackingMode(mallId, b.discount_stacking_mode);
         res.redirect('/admin/membership/policy?success=' + encodeURIComponent('정책이 저장되었습니다.'));
     } catch (e) {
         console.error('[membership] policy save', e);
@@ -368,6 +373,19 @@ exports.getHistory = async (req, res, next) => {
             layout: LAYOUT, title: '등급 변경·평가 이력',
             subtitle: '등급 변경 내역과 정기 평가 실행 결과를 확인합니다.',
             history, runs,
+        });
+    } catch (e) { next(e); }
+};
+
+/* ── 강등 예정자 (사전 안내) ────────────────────────────── */
+exports.getDowngradeCandidates = async (req, res, next) => {
+    try {
+        const mallId = req.adminMallId || 1;
+        const { policy, candidates } = await evaluationService.getDowngradeCandidates(mallId);
+        res.render('admin/membership/downgrade', {
+            layout: LAYOUT, title: '강등 예정자',
+            subtitle: '다음 정기 평가에서 유지 기준 미달로 강등될 회원입니다. 사전 안내 배치가 이메일로 통지합니다.',
+            policy, candidates,
         });
     } catch (e) { next(e); }
 };

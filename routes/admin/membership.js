@@ -27,4 +27,7 @@ router.post('/customers/lock', c.postLock);
 // 이력
 router.get('/history', c.getHistory);
 
+// 강등 예정자 (사전 안내)
+router.get('/downgrade', c.getDowngradeCandidates);
+
 module.exports = router;

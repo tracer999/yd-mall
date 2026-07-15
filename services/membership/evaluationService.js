@@ -298,6 +298,38 @@ async function getPublicTiers(mallId) {
     return { tiers, benefits: membershipInfo.BENEFITS };
 }
 
+/**
+ * 강등 예정자 식별 (설계 §14, 2차). 다음 정기 평가에서 강등될 회원 목록.
+ * is_locked 회원과 정책이 강등을 안 하는 경우는 제외한다.
+ * @returns {Promise<{policy:object|null, candidates:Array}>}
+ */
+async function getDowngradeCandidates(mallId) {
+    const policy = await getActivePolicy(mallId);
+    if (!policy || policy.downgrade_mode === 'NONE') return { policy: policy || null, candidates: [] };
+    const criteria = await getCriteria(policy.id);
+    const gradeName = new Map(criteria.map((c) => [Number(c.grade_id), c.grade_name]));
+    const [members] = await pool.query(
+        `SELECT cm.user_id, cm.current_grade_id, cm.is_locked, u.email, u.name AS user_name
+           FROM customer_membership cm JOIN users u ON u.id = cm.user_id
+          WHERE cm.mall_id = ?`,
+        [mallId]
+    );
+    const candidates = [];
+    for (const m of members) {
+        if (Number(m.is_locked) === 1) continue;
+        const d = await computeDecision(m.user_id, mallId, policy, criteria, m.current_grade_id, { immediateOnly: false });
+        if (d.decision === 'DOWNGRADE') {
+            candidates.push({
+                userId: m.user_id, email: m.email, userName: m.user_name,
+                fromGradeId: d.fromGradeId, fromGradeName: gradeName.get(Number(d.fromGradeId)) || null,
+                toGradeId: d.toGradeId, toGradeName: d.toGradeName,
+                amount: d.amount, count: d.count,
+            });
+        }
+    }
+    return { policy, candidates };
+}
+
 module.exports = {
     getActivePolicy,
     getCriteria,
@@ -308,4 +340,5 @@ module.exports = {
     nextEvaluationAt,
     getCustomerSummary,
     getPublicTiers,
+    getDowngradeCandidates,
 };

@@ -12,6 +12,7 @@ const {
 const membershipBenefitService = require('../services/membership/membershipBenefitService');
 const performanceService = require('../services/membership/performanceService');
 const evaluationService = require('../services/membership/evaluationService');
+const membershipConfigService = require('../services/membership/membershipConfigService');
 
 /*
  * ── 공동구매 연동 (docs/사이트개선/group_buy_design_and_development.md §9) ──
@@ -415,6 +416,7 @@ exports.getForm = async (req, res) => {
         ? await membershipBenefitService.getOrderBenefits({ userId: req.user.id, mallId: req.mallId || 1, subtotalAmount: totalAmount })
         : { ...membershipBenefitService.ZERO };
     const gradeDiscount = Number(gradeBenefits.discountAmount) || 0;
+    const stackingMode = req.user ? await membershipConfigService.getStackingMode(req.mallId || 1) : 'STACK';
 
     // 화면 표시용 배송비. 주문 생성 시 서버가 다시 계산한다(§1-1) — 이 값은 총액의 근거가 아니다.
     const shipping = await calcShippingFee({
@@ -467,6 +469,7 @@ exports.getForm = async (req, res) => {
         shipping,
         gradeBenefits,
         gradeDiscount,
+        stackingMode,
         error,
         success
     });
@@ -650,7 +653,7 @@ exports.postForm = async (req, res) => {
     const gradeBenefits = req.user
         ? await membershipBenefitService.getOrderBenefits({ userId: req.user.id, mallId: req.mallId || 1, subtotalAmount })
         : { ...membershipBenefitService.ZERO };
-    const gradeDiscount = Number(gradeBenefits.discountAmount) || 0;
+    let gradeDiscount = Number(gradeBenefits.discountAmount) || 0;
 
     /*
      * 배송비는 서버가 계산한다 (배송비 문서 §1-1).
@@ -719,6 +722,12 @@ exports.postForm = async (req, res) => {
                 shippingDiscount = r.discount;
                 shippingCouponId = Number(shipping_coupon_id);
             }
+        }
+
+        // 설정형 할인 우선순위(§7.3): 쿠폰 우선 모드면 주문 쿠폰 사용 시 등급 할인을 적용하지 않는다.
+        const stackingMode = await membershipConfigService.getStackingMode(req.mallId || 1);
+        if (stackingMode === 'COUPON_PRIORITY' && userCouponId && gradeDiscount > 0) {
+            gradeDiscount = 0;
         }
 
         // 3. 포인트 (상품 할인 후 남은 상품금액 기준 — 배송비는 포인트로 결제하지 않는다)

@@ -106,6 +106,19 @@
   </section>
 
   <section>
+    <h2 class="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b">혜택 적용 설정</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">등급 할인 × 쿠폰 중복</label>
+        <select name="discount_stacking_mode" class="w-full border rounded-lg px-3 h-[38px]">
+          <option value="STACK" <%= (typeof stackingMode==='undefined'||stackingMode!=='COUPON_PRIORITY')?'selected':'' %>>중복 적용 (등급 할인 + 쿠폰 함께)</option>
+          <option value="COUPON_PRIORITY" <%= (typeof stackingMode!=='undefined'&&stackingMode==='COUPON_PRIORITY')?'selected':'' %>>쿠폰 우선 (쿠폰 사용 시 등급 할인 미적용)</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section>
     <h2 class="text-sm font-semibold text-gray-900 mb-1 pb-2 border-b">등급별 진입/유지 기준</h2>
     <p class="text-xs text-gray-500 mb-3">유지 기준을 비우면 진입 기준과 동일하게 적용됩니다. (히스테리시스: 유지 &lt; 진입 권장)</p>
     <div class="overflow-x-auto">

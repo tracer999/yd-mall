@@ -1059,5 +1059,7 @@ MVP 이후 아래 2차 항목을 추가 구현했다.
   - 관리자 등급 편집 폼에서 세 시점별로 쿠폰 연결. 연결/해제가 곧 on/off. 산출물: `services/membership/gradeCouponService.js`.
 - **혜택별 사용여부 토글** — `membership_grade_benefit` 에 `discount_enabled`·`point_enabled`·`shipping_enabled` 추가. **"사용"인 혜택만 결제에 적용**된다(값이 있어도 미사용이면 미적용). `membershipBenefitService.getOrderBenefits` 가 플래그를 반영. 등급 편집 폼에 "할인/적립/배송 혜택 사용" 체크박스. (쿠폰팩·생일·정기의 on/off 는 쿠폰 연결/해제로 관리.)
 - **멤버십 대시보드 분석** — 등급별 최근 30일 매출·주문수·객단가·**등급 할인 비용**·**적립 예정액**(주문 스냅샷 집계, §4.1). `membershipController.getDashboard`.
+- **강등 사전 알림(§14)** — 다음 평가에서 강등될 회원 식별(`evaluationService.getDowngradeCandidates`, 유지 기준 미달·고정 제외) → 관리자 "강등 예정자" 화면(`/admin/membership/downgrade`) + 월 배치 `scripts/calc_membership_demotion_notice.js`(이메일 안내, 월 1회 로그 `membership_demotion_notice_log`)+크론.
+- **설정형 할인 우선순위(§7.3)** — 몰별 `membership_config.discount_stacking_mode`(STACK / COUPON_PRIORITY). COUPON_PRIORITY 면 **주문 쿠폰 사용 시 등급 할인 미적용**. 체크아웃(서버 + 폼 JS) + 관리자 평가정책 화면에 반영.
 
-남은 2차: 상품/브랜드별 등급 혜택, 고객 세그먼트, 강등 사전 알림(이메일), 설정형 할인 우선순위 엔진.
+남은 2차: 상품/브랜드별 등급 혜택, 고객 세그먼트.
