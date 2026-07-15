@@ -46,28 +46,72 @@
 
 ---
 
-## 4. 섹션 타입 (sectionRegistry.js — 13종)
+## 4. 섹션 타입 (sectionRegistry.js — 18종)
 
 | section_type | 뷰 (`views/partials/sections/`) | dataSource | 리졸버 |
 |---|---|---|---|
 | `hero` | `hero.ejs` → `hero_banner` \| `hero_showcase` | — | O (shared.heroData 전달) |
 | `value_proposition` | `value_proposition.ejs` | — | O |
 | `product_grid` | `product_grid_section.ejs` | product_group | O |
+| `best_ranking` | `product_grid_section.ejs` (재사용) | — (**`best_group`** 고정 소스) | O — 랭킹 스냅샷(`best_ranking`) |
+| `category_showcase` | `category_showcase.ejs` | — | O (최상위 카테고리 서브트리별 베스트) |
+| `kakao_cta` | `kakao_cta.ejs` | — | O (shared.kakaoUrl) |
 | `product_carousel` | `product_carousel.ejs` | product_group | O |
-| `brand_carousel` | `brand_carousel.ejs` | (categories type=BRAND 고정) | O |
-| `ranking_tabs` | `ranking_tabs.ejs` | (카테고리 탭 고정) | O — 탭 전환은 `/sections` AJAX |
+| `deal_carousel` | `deal_carousel.ejs` | — (**활성 특가**(deal) 고정 소스) | O — 특가가 없으면 섹션 스킵 |
+| `brand_carousel` | `brand_carousel.ejs` | — (categories type=BRAND 고정) | O |
+| `ranking_tabs` | `ranking_tabs.ejs` | — (**`best_group`** 고정 소스) | O — 탭 전환은 `/sections` AJAX |
 | `promotion_banner` | `promotion_banner.ejs` | banner_group | O |
 | `benefit_bento` | `benefit_bento.ejs` | product_group | O |
-| `category_showcase` | `category_showcase.ejs` | — | O (최상위 카테고리 서브트리별 베스트) |
 | `quick_menu` | `quick_menu.ejs` | — | **없음** (config_json 만으로 렌더되는 정적 섹션) |
 | `recent_product` | `recent_product.ejs` | — | O (로그인=`recent_views` / 비로그인=localStorage) |
 | `custom_html` | `custom_html.ejs` | — | O (저장·렌더 시 `htmlSanitizer` 로 새니타이즈) |
-| `kakao_cta` | `kakao_cta.ejs` | — | O (shared.kakaoUrl) |
+| `new_by_category` | `new_by_category.ejs` | — (신상품 술어) | O — 신상품 랜딩(`/new`)용 |
+| `new_by_brand` | `new_by_brand.ejs` | — (신상품 술어) | O — 신상품 랜딩(`/new`)용 |
+| `new_brand_list` | `new_brand_list.ejs` | — (신규 입점 브랜드 술어) | O — 신상품 랜딩(`/new`)용 |
+
+리졸버는 **17종**입니다 — `quick_menu` 만 없습니다.
 
 - **상품 노출 규칙(`resolvers/_shared.js`):** `status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')` + 비로그인은 `visibility = 'PUBLIC'`, 로그인은 `PUBLIC`/`MEMBER_ONLY`.
 - 새 컴포넌트를 추가할 때 `displayService.js` 는 수정하지 않습니다: 뷰 생성 → `sectionRegistry` 등록 → (필요 시) `resolvers/` 에 리졸버 추가.
 
-> 참고 — 현재 기본몰(mall 1) 홈에 시드된 섹션 순서: 히어로 → 특장점 → 베스트 상품 → MD 추천 상품 → 신상품 → 오늘의 특가 → 바로가기 → 최고의 혜택 → 진행 중인 프로모션 → 카테고리 랭킹 → 브랜드관 → 카테고리별 상품 → 최근 본 상품 → 커스텀 HTML → 카카오 상담. (데이터이므로 관리자에서 언제든 바뀝니다.)
+### 4.1 랭킹 계열 (`best_ranking` · `ranking_tabs`)
+
+- 두 섹션은 **같은 스냅샷**(`best_ranking` 테이블)을 읽습니다. 랭킹은 한 곳(`services/best/`)에서만 정의됩니다 → [best.md](./best.md).
+- 홈의 "베스트 상품"은 예전엔 상품그룹(수동 큐레이션)이었지만 지금은 **`best_ranking` 리졸버**(랭킹 스냅샷)로 전환됐습니다. `dataSource` 가 `null` 인 이유가 이것입니다 — 상품그룹이 아니라 `best_group` 을 보므로 페이지 빌더의 상품그룹 셀렉터를 쓸 수 없습니다.
+- `config_json.groupId` 가 없거나 0 이면 **그 몰의 ALL(전체) 그룹을 자동 선택**합니다. 결과가 0건이면 섹션 자체가 스킵됩니다.
+- `ranking_tabs` 의 옛 `sort` 필드는 폐기됐습니다(죽은 옵션). 순위 기준은 `best_score_config` 에 단일 정의됩니다.
+
+### 4.2 특가 캐러셀 (`deal_carousel`)
+
+- 상품그룹이 아니라 **현재 활성인 특가**(`deal` / `deal_item`)를 봅니다. 기간·시간창·요일·선착순 조건이 맞는 상품만 나오고, **특가 기간이 끝나면 섹션이 저절로 사라집니다**(스케줄러 없음 — 조회 시점 판정). → [promotions.md](./promotions.md) §쇼핑특가
+
+### 4.3 퀵메뉴 (`quick_menu`)
+
+- 항목은 URL 직접 입력이 아니라 **페이지 선택(`picker: 'linkTargets'`)** 방식입니다. 운영자가 "이동할 페이지"를 고르면 `url`·`icon`·`label` 이 자동으로 채워집니다(`services/menu/linkTargets.js` 가 **그 몰에서 실제로 열리는 페이지**만 후보로 줍니다). '직접 입력(URL)' 을 골랐을 때만 `icon` 을 손으로 넣습니다(`manualOnly`).
+
+### 4.4 주의
+
+- **`brand_carousel` 리졸버는 아직 `brand_stat` 로 전환되지 않았습니다.** `categories`(type=BRAND) LEFT JOIN `products` 의 COUNT 로 상품 수를 셉니다.
+- 레거시 `main_display_*` 는 **코드·DB 양쪽에서 제거 완료**입니다. 홈 전시는 `page`/`page_section` 이 유일한 출처입니다.
+
+> 참고 — 현재 기본몰(mall 1) 홈에 시드된 섹션 순서(15개, `page_section.sort_order`):
+> 히어로 → 특장점 → **베스트 상품(`best_ranking`)** → MD 추천 상품(`product_carousel`) → 신상품(`product_grid`) → **쇼핑특가(`deal_carousel`)** → 바로가기(`quick_menu`) → 최고의 혜택(`benefit_bento`) → 진행 중인 프로모션(`promotion_banner`) → 인기 랭킹(`ranking_tabs`) → 브랜드관(`brand_carousel`) → 카테고리별 상품(`category_showcase`) → 최근 본 상품 → 커스텀 HTML → 카카오 상담.
+> **데이터이므로 관리자에서 언제든 바뀝니다.** 문서를 믿지 말고 DB 로 확인하세요:
+> `SELECT s.sort_order, s.section_type, s.title FROM page_section s JOIN page p ON p.id = s.page_id WHERE p.mall_id = 1 AND p.page_type = 'home' ORDER BY s.sort_order;`
+
+---
+
+### 4.5 신규 몰 프로비저닝 (`services/mall/mallProvisioner.js`)
+
+새 몰을 만들면 프로비저너가 홈 섹션(`page` + `page_section`)만 만드는 게 아니라 **그 섹션이 먹을 데이터 소스까지 함께** 만듭니다.
+
+| 만드는 것 | 이유 |
+|---|---|
+| `product_group`(프리셋 섹션이 참조할 조건형 그룹, 이름으로 멱등) | 없으면 `data_source_id` 가 비어 상품 섹션이 통째로 빈 화면 |
+| `best_group`(그 몰의 `group_type='ALL'`) | 없으면 `best_ranking` 리졸버가 즉시 `null` → 베스트 섹션 스킵 |
+| `best_ranking` 초기 집계 | `best_group` 만 만들면 스냅샷이 비어 있어 첫 배치 전까지 랭킹이 안 나옴 |
+
+⚠️ 홈 섹션을 갈아끼운 뒤 **발행하지 않으면** `page_revision` 스냅샷이 옛것이라 고객 화면에 반영되지 않습니다(라이브 `page_section` 폴백은 스냅샷이 아예 없을 때만).
 
 ---
 
@@ -88,4 +132,4 @@
 
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

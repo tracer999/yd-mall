@@ -295,6 +295,26 @@ INSERT 가 실패하면 `releaseIssueSlot()` 이 `issued_count` 를 되돌립니
 - 쿠폰존(`/coupon`)은 `issue_method IN ('DOWNLOAD','CODE')` 이고 `status='ACTIVE'` 인 쿠폰만 노출합니다. 노출 대상이 0건이면 "준비 중" 랜딩으로 폴백합니다.
 - `user_coupons.issued_by` 에 `EVENT` 값이 있으나, 이벤트 모듈은 아직 쿠폰을 지급하지 않습니다(`controllers/admin/eventController.js:20`).
 
+### 14.1 ⚠️ `coupons.issued_count` 카운터 드리프트
+
+`issued_count` 는 선착순 판정(§10.1)의 **유일한 근거**인데, `user_coupons` 행 수와 어긋날 수 있습니다.
+
+- **회원 삭제.** `user_coupons.user_id` FK 가 `ON DELETE CASCADE` 라 회원을 지우면 보유 쿠폰 행이 함께 사라집니다. 그런데 **`issued_count` 는 되돌아가지 않습니다** — 저장소 어디에도 회원 삭제 시 `issued_count` 를 감산하는 코드가 없습니다. (`releaseIssueSlot()` 은 발급 트랜잭션 안에서 INSERT 가 실패했을 때만 되돌립니다.)
+- **결과:** `issue_limit` 이 걸린 선착순 쿠폰에서 같은 일이 생기면, 실제로 보유한 사람은 한도보다 적은데 **한도가 조기 소진**되어 아무도 더 받을 수 없게 됩니다.
+- **실측(2026-07-15):** 쿠폰 `id=1` 은 `issued_count = 21` 인데 실제 `user_coupons` 행은 **19건**입니다(2건 드리프트). 이 쿠폰은 현재 `issue_limit IS NULL`(무제한)이라 실무 영향은 없습니다.
+- **선착순 쿠폰을 운영하기 전에** `UPDATE coupons c SET issued_count = (SELECT COUNT(*) FROM user_coupons uc WHERE uc.coupon_id = c.id)` 로 한 번 맞추거나, 회원 삭제 경로에 감산을 넣어야 합니다.
+
+### 14.2 미착수 (3차 범위)
+
+| 항목 | 현재 상태 |
+|------|-----------|
+| 부분 취소 시 쿠폰 할인 안분 | **없음.** `order_items` 에 `coupon_discount_amount` 컬럼이 없어 품목별 할인액을 되돌릴 수 없습니다(주문 단위 전체 취소만) |
+| 다중 쿠폰 (한 주문에 3장 이상) | **없음.** `order_coupons` 테이블이 없습니다. 주문 쿠폰 1 + 배송비 쿠폰 1이 상한(§11.1) |
+| 상품 단위 쿠폰 (PRODUCT scope) | **없음.** `scope_json` 의 `include` 는 카테고리·브랜드만 (제외는 상품 id 도 가능) |
+| 쿠폰 회수(REVOKED) · 변경 이력 | 없음. 상태는 DRAFT/ACTIVE/PAUSED/ENDED 4종뿐 |
+| 반품 배송비 처리 | 없음 |
+| 장바구니 쿠폰 미리보기 | 없음. 쿠폰 선택·계산은 체크아웃에서만 |
+
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

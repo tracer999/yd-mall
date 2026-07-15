@@ -3,13 +3,35 @@
 ## 1. 개요
 
 - **Base URL:** `/admin/products`  
-- **관련 테이블:** `products` (메인), `categories` (조인/선택 — `category_id`=NORMAL, `brand_category_id`=BRAND, 테마=THEME), `product_themes` (테마 다대다), `product_images` (서브 이미지), `product_recommendations` (추천 상품)  
+- **관련 테이블:** `products` (메인), `categories` (조인/선택 — `category_id`=NORMAL, `brand_category_id`=BRAND), `product_images` (서브 이미지), `product_recommendations` (상품상세 연관상품)  
 - **컨트롤러:** `controllers/admin/productController.js`  
 - **뷰:** `views/admin/products/list.ejs`, `form.ejs`, `detail.ejs`, `seo_preview.ejs`  
 - **이미지 업로드:** `middleware/upload.js` (Multer), 필드: main_image, thumbnail_image, sub_images(최대 10), video_file, 저장 경로 `public/uploads/products/`  
 - **몰 스코프:** `/admin` 마운트 시 `middleware/adminMallContext.js` 가 `req.adminMallId`(관리자가 편집 중인 몰)를 실어준다. 목록·카테고리/브랜드 선택지·신규 상품의 `mall_id` 가 모두 이 값으로 스코프된다.
 
-> **참고:** `productController.js` 에는 `exports.getList` 가 두 번 정의되어 있고(:332, :745), 나중 정의(:745)가 실제로 쓰인다. 이 문서는 :745 기준이다.
+> **참고:** `productController.js` 에는 `exports.getList` 가 두 번 정의되어 있고(:350, :812), 나중 정의(:812)가 실제로 쓰인다. 이 문서는 :812 기준이다.
+
+### 1.1 THEME(테마) 축은 폐기됐다
+
+상품 폼의 **테마 다중선택은 제거**됐고, 컨트롤러는 `product_themes` 에 더 이상 INSERT/DELETE 하지 않는다(`productController.js:352` — "theme_category_id 는 전량 NULL 인 죽은 컬럼이라 JOIN 을 걷어냈다(THEME 축 폐기)"). 상품 목록 쿼리도 테마 JOIN 을 걷어냈다.
+
+- 옛 테마 랜딩은 전용 랜딩으로 대체됐다: `/products?category=5` → **`/best`**, `/products?category=6` → **`/new`** 로 리다이렉트한다 (`controllers/productController.js:14` `RETIRED_THEME_REDIRECTS = { 5: '/best', 6: '/new' }`, `:127`).
+- 다만 `categories` id=5(베스트 상품)·6(신규 상품)은 **DB 에 `is_active=1` 로 남아 있다.** 카테고리 관리 화면에서는 아직 보이므로, 지우거나 비활성화할 때 위 리다이렉트 대상이 사라지지 않는지 확인할 것.
+
+### 1.2 신상품 판정은 한 곳에서만 한다 — `services/catalog/newArrival.js`
+
+"신상품"의 정의가 세 벌(NEW 뱃지 / 테마 카테고리 6 / 최신순)로 갈라져 있던 것을 **단일 진실 공급원**으로 통합했다. 규칙을 바꾸려면 이 파일만 고친다.
+
+```
+신상품 =  (sale_start_date <= 오늘  AND  sale_start_date >= 오늘 − N일)
+       OR  product_badge 에 'NEW'          ← 관리자 강제 노출(기간 무관)
+```
+
+- `N` = `system_settings.new_product_days` (기본 **100**). 관리자 `/admin/sys-settings` 에서 바꾼다.
+- 앵커는 `created_at`(적재 시각)이 아니라 **`products.sale_start_date`(판매 시작일)** 다. `created_at` 으로 자르면 대량 임포트 시 몰 전체가 신상품이 된다. 미래 날짜(예약 발매)는 아직 판매 전이므로 제외된다.
+- **NEW 뱃지는 기간이 지나도 강제 노출된다.** 기간 자동 판정을 무시하는 수동 스위치다.
+- 뱃지를 DB 에 다시 써넣는(materialize) 방식이 아니라 **동적 술어**(`newProductPredicate()`)로 계산하므로, 기간이 지난 상품은 배치 없이 자동으로 빠지고 기간 설정 변경이 즉시 반영된다.
+- 신규 입점 브랜드도 같은 파일이 판정한다: `categories.onboarded_at` 이 `system_settings.new_brand_days`(기본 **180**) 이내.
 
 ---
 
@@ -23,7 +45,9 @@
 | GET | `/admin/products/detail/:id` | getDetail | 상품 상세 조회 |
 | GET | `/admin/products/edit/:id` | getEdit | 상품 수정 폼 |
 | POST | `/admin/products/edit` | postEdit | 상품 수정 처리 (multipart) |
+| POST | `/admin/products/import-url` | postImportUrl | **URL 로 상품 가져오기** — 외부 상품 상세를 읽어 등록 폼을 채운다 (JSON, DB 쓰기 없음) |
 | POST | `/admin/products/delete` | postDelete | 상품 삭제 |
+| POST | `/admin/products/sale-start-date/bulk` | postBulkSaleStartDate | **판매 시작일 일괄 지정** (신상품 판정 기준일) |
 | POST | `/admin/products/product-image-upload` | postUploadImage | 이미지 업로드 (TinyMCE/드래그용, JSON 응답) |
 | POST | `/admin/products/generate-ai-recommendation` | generateAIRecommendation | AI 추천 문구 생성 (OpenAI, JSON 응답) |
 | POST | `/admin/products/status/update` | postUpdateStatus | 판매 상태 일괄 변경 |
@@ -42,8 +66,8 @@
 
 ## 3. 목록 조회 (GET /admin/products)
 
-- **쿼리:** `products` LEFT JOIN `categories`(category_id) + LEFT JOIN `product_themes` → `categories`(테마명 GROUP_CONCAT), `WHERE p.mall_id = ?` (편집 중인 몰), `GROUP BY p.id`, `ORDER BY p.created_at DESC`, `LIMIT ? OFFSET ?`
-- **표시:** 썸네일(main_image), 상품명/공급사/카테고리·테마·뱃지, 재고(stock), 정가(original_price), 판매가(price + 할인율), 판매 상태(status), 노출관리(visibility 셀렉트), 관리(수정/삭제)
+- **쿼리:** `products` LEFT JOIN `categories`(category_id), `WHERE p.mall_id = ?` (편집 중인 몰), `ORDER BY p.created_at DESC`, `LIMIT ? OFFSET ?` — **테마 JOIN 은 폐기됐다**(§1.1)
+- **표시:** 썸네일(main_image), 상품명/공급사/카테고리·뱃지, 재고(stock), **판매시작일(sale_start_date)**, 정가(original_price), 판매가(price + 할인율), 판매 상태(status), 노출관리(visibility 셀렉트), 관리(수정/삭제)
 - **뷰 전달:** `products`, `keyword`, `filters`, `filterCategories`, `filterBrands`, `selectedCategory`, `selectedBrand`, `pagination`, `title: '상품 관리'`
 
 ### 3.1 검색·필터 (쿼리스트링)
@@ -69,15 +93,17 @@
 ### 3.3 일괄 작업
 
 - 체크박스 `product_ids[]` 선택 후 상단 버튼으로 판매중/품절/판매중지 일괄 처리 (§10)
+- **판매 시작일 일괄 지정** — 날짜 입력(`sale_start_date`) + 선택 상품 → `POST /admin/products/sale-start-date/bulk`. 빈 값으로 보내면 **NULL(미지정)로 되돌려 신상품에서 제외**한다. 대량 임포트한 상품의 신상품 노출 기준일을 한 번에 맞출 때 쓴다.
 - Shopify 동기화 버튼은 `shopifyEnabled` 일 때만 노출 (§14)
+- **CSV 일괄 업로드는 없다.** 상품은 폼으로 1건씩 등록하거나, URL 가져오기(§4.2)로 1건씩 채운다.
 
 ---
 
 ## 4. 상품 등록/수정 폼 (GET /admin/products/add, GET /admin/products/edit/:id)
 
-- **등록:** 편집 중인 몰의 카테고리(NORMAL)·테마(THEME)·브랜드(BRAND) 목록을 조회하고 `product: null` 로 폼 렌더링  
-- **수정:** `products`에서 id 조회, 없으면 `/admin/products`로 리다이렉트. 카테고리/테마/브랜드 + `product_images`(서브 이미지) + `product_themes`(선택된 테마 id) 를 붙여 폼 렌더링  
-- **뷰 전달:** `productCategories`, `themeCategories`, `brands`, `product`, `productUrlBase`(도메인 + `/products/`)
+- **등록:** 편집 중인 몰의 카테고리(NORMAL)·브랜드(BRAND) 목록을 조회하고 `product: null` 로 폼 렌더링  
+- **수정:** `products`에서 id 조회, 없으면 `/admin/products`로 리다이렉트. 카테고리/브랜드 + `product_images`(서브 이미지) 를 붙여 폼 렌더링  
+- **뷰 전달:** `productCategories`, `brands`, `product`, `productUrlBase`(도메인 + `/products/`) — **테마 선택지는 없다**(§1.1)
 
 ### 4.1 폼 필드 (form.ejs 기준)
 
@@ -91,14 +117,14 @@
 | product_code | text | - | 상품코드 (관리자 입력) |
 | slug | text | - | SEO URL 슬러그 (비우면 상품명으로 자동 생성, 중복 시 `-1`, `-2` … 부여) |
 | category_id | select | - | 상품 카테고리 (`categories.type = 'NORMAL'`) |
-| theme_categories | checkbox (다중) | - | 테마 카테고리 (`type = 'THEME'`) → `product_themes` 다대다 |
 | brand_category_id | select | - | 브랜드 (`type = 'BRAND'`) |
+| sale_start_date | date | - | **판매 시작일.** 신상품 판정의 기준 앵커(§1.2). 비우면 신상품에서 제외 (`form.ejs:116-123`) |
 | provider | text | - | 공급사. **`brand_category_id` 가 있으면 그 브랜드명이 우선 저장된다** |
 | status | select | - | ON(판매중) / OFF(판매중지) / SOLD_OUT(품절) / COMING_SOON(출시예정) / RESTOCK(재입고예정) |
 | visibility | select | - | PUBLIC(전체공개) / HIDDEN(숨김) / MEMBER_ONLY(회원전용) |
 | stock | number | - | 재고 수량 |
 | distribution_badge | select | - | ONLINE_ONLY / OFFLINE_ONLY (그 외 값은 null) |
-| product_badge | checkbox (다중) | - | BEST / NEW / RECOMMEND / DEADLINE_SALE / GREENHUB_SPECIAL (SET, CSV 로 저장) |
+| product_badge | checkbox (다중) | - | BEST / NEW / RECOMMEND / DEADLINE_SALE / GREENHUB_SPECIAL (SET, CSV 로 저장). **`NEW`** = 신상품 강제 노출(§1.2), **`RECOMMEND`** = `/recommend` 랜딩의 **MD 추천 섹션** 노출(`services/recommend/recommendService.js:170-182`) |
 | badge_expire_date | date | - | 뱃지 만료일 |
 | recommendation_ids | hidden (다중) | - | 등록 시 함께 연결할 추천 상품 (최대 8) |
 | price | text | O | 판매가 |
@@ -123,6 +149,14 @@
 - **TinyMCE 이미지 업로드:** `images_upload_handler` 가 `POST /admin/products/product-image-upload` 로 보내고 JSON `{ location: '/uploads/products/...' }` 를 받는다  
 - **업로드 용량 제한:** `MAX_UPLOAD_FILE_MB` (미설정 시 기본 **20MB**) — `middleware/upload.js`
 
+### 4.2 URL 로 상품 가져오기 (POST /admin/products/import-url)
+
+- **서비스:** `services/catalog/productImporter.js` — `importFromUrl(url)`
+- **요청:** JSON `{ url }` (등록 폼 상단의 "URL 로 가져오기")
+- **동작:** 외부 상품 상세 페이지를 읽어 상품명·가격·이미지·설명 등 **초안(draft)** 을 만들어 폼에 채운다. **DB 에 쓰지 않는다** — 운영자가 확인·수정한 뒤 평소대로 저장해야 등록된다.
+- **응답:** `{ success: true, data: { …draft, brand_category_id } }`
+- **한 번에 1건**이다. 여러 URL·CSV 를 넣는 일괄 임포트는 없다.
+
 ---
 
 ## 5. 상품 등록 처리 (POST /admin/products/add)
@@ -131,11 +165,11 @@
 - **저장 경로:** 이미지 있으면 `/uploads/products/` + 파일명, 없으면 null  
 - **slug:** `generateUniqueSlugFromName()` 로 유니크 slug 생성 (`products.slug` 는 UNIQUE)  
 - **provider:** `brand_category_id` 로 `categories`(type=BRAND) 이름을 조회해 우선 사용, 없으면 입력한 provider  
-- **INSERT 컬럼:** `mall_id`(= `req.adminMallId`), category_id, brand_category_id, name, product_code, provider, description, short_description, main_image, thumbnail_image, video_type, video_url, purchase_price, original_price, price, discount_rate, stock, status, is_ai_recommendation, ai_recommendation_content, slug, distribution_badge, product_badge, badge_expire_date, visibility  
+- **INSERT 컬럼:** `mall_id`(= `req.adminMallId`), category_id, brand_category_id, name, product_code, provider, description, short_description, main_image, thumbnail_image, video_type, video_url, purchase_price, original_price, price, discount_rate, stock, status, is_ai_recommendation, ai_recommendation_content, slug, distribution_badge, product_badge, badge_expire_date, visibility, **sale_start_date**  
 - **부수 INSERT:**
-  - `theme_categories` → `product_themes (product_id, category_id)`
   - `sub_images` → `product_images (product_id, image_url, display_order)`
   - `recommendation_ids` → `product_recommendations` (양방향, 각 상품당 최대 8)
+  - **`product_themes` 는 더 이상 쓰지 않는다** (§1.1)
 - **Shopify:** `syncProductById(productId)` 백그라운드 호출 (비활성 시 가드가 스킵)  
 - **성공 시:** `res.redirect('/admin/products')`
 - **예외:** 500 응답
@@ -147,7 +181,6 @@
 - **파라미터:** id, old_image, old_thumbnail, old_video, 그 외 폼 필드 동일  
 - **이미지:** 새 파일 있으면 `/uploads/products/` + 새 파일명으로 교체, 없으면 `old_*` 값 유지  
 - **UPDATE:** 등록과 동일 컬럼(단 `mall_id` 는 갱신하지 않음) + WHERE id  
-- **테마:** `product_themes` 를 전부 DELETE 후 재INSERT  
 - **서브 이미지:** 새 파일은 기존 개수 뒤로 append, `delete_image_ids` 는 `product_images` 에서 DELETE  
 - **Shopify:** `syncProductById(id)` 백그라운드 호출  
 - **성공 시:** `/admin/products`로 리다이렉트  
@@ -159,8 +192,8 @@
 ## 7. 상품 상세 조회 (GET /admin/products/detail/:id)
 
 - **동작:** products JOIN categories로 상품 1건 조회, 없으면 `/admin/products` 리다이렉트  
-- **추가 조회:** `product_images`(서브 이미지), `product_themes`(테마명), 해당 상품의 판매이력(`order_items` JOIN `orders`, 상태 PAID/PREPARING/SHIPPED/DELIVERED)  
-- **뷰 전달:** `product`(images·themes 포함), `productUrl`, `salesHistory`, `title: '상품 상세 정보'`
+- **추가 조회:** `product_images`(서브 이미지), 해당 상품의 판매이력(`order_items` JOIN `orders`, 상태 PAID/PREPARING/SHIPPED/DELIVERED)  
+- **뷰 전달:** `product`(images 포함), `productUrl`, `salesHistory`, `title: '상품 상세 정보'`
 
 ---
 
@@ -197,6 +230,12 @@
 ---
 
 ## 12. 추천 상품 관리 API
+
+> ### ⚠️ 이름이 같은 다른 기능 — 혼동 주의
+>
+> 이 화면의 "추천 상품"(`product_recommendations`)은 **상품 상세 페이지 하단의 연관상품**입니다. 상품 A 를 보는 고객에게 상품 B 를 함께 권하는 **상품 대 상품** 관계입니다.
+>
+> GNB 의 **추천 메뉴**(`/recommend` 랜딩, 관리 화면 `/admin/recommend-groups`, 테이블 `recommend_group`)와는 **완전히 무관한 별개 기능**입니다. 테이블도 화면도 코드도 다릅니다. `/recommend` 랜딩의 "MD 추천" 섹션은 `product_recommendations` 가 아니라 **상품의 `RECOMMEND` 뱃지**를 봅니다(`services/recommend/recommendService.js:170-182`).
 
 | 메서드 | URL | 요청 | 동작 |
 |--------|-----|------|------|
@@ -240,4 +279,25 @@
 
 ---
 
-*Last Updated: 2026-07-11*
+## 17. 고객 화면에서 이 상품이 어떻게 보이는가
+
+관리자에서 저장한 값이 고객 화면에 그대로 나가지 않는 지점이 셋 있습니다.
+
+- **가격은 쇼핑특가 리졸버를 거친다.** 상품 목록·상세·홈 섹션·기획전·랭킹·최근 본 상품 등 **표시 경로 전반**이 마지막에 `dealService.applyDeals()` 를 태웁니다. 특가가 걸린 상품은 `products.price` 가 아니라 특가가 적용된 가격으로 보입니다. 즉 관리자 폼의 판매가는 **특가가 없을 때의 가격**입니다.
+- **아울렛 상품은 일반 목록에서 빠질 수 있다.** `outlet_setting.show_in_normal_list = 0` 이면 일반 상품목록이 `outlet_product` 에 등록된 상품을 **제외**합니다(`controllers/productController.js:100-108`). "상품은 판매중인데 목록에 안 보인다"의 흔한 원인입니다.
+- **아울렛 상품 상세에는 고지 블록이 뜬다.** `outletService.getOutletInfoByProductId()` 결과(`outletInfo`)가 상세 뷰에 함께 내려갑니다(`productController.js:517-532`).
+
+---
+
+## 18. 미구현 (알고 있어야 할 것)
+
+| 항목 | 현재 상태 |
+|------|-----------|
+| 옵션 / SKU | **없음.** 상품 1행 = 판매 단위 1개. 색상·용량 같은 변형을 만들 수 없습니다 |
+| 재고 이력 · 재입고 알림 | 없음. `products.stock` 숫자 하나뿐 |
+| CSV 일괄 업로드 | 없음 (URL 가져오기는 1건씩 — §4.2) |
+| 리뷰 관리 | 없음 |
+
+---
+
+*Last Updated: 2026-07-15*

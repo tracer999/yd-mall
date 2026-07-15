@@ -12,12 +12,20 @@
 |------|--------|------|------|
 | **홈·검색** | `/`, `/search` | 메인 홈(SDUI 페이지 빌더로 조립), 통합 검색 | [home.md](./home.md) · [search.md](./search.md) |
 | **상품** | `/products` | 목록, 카테고리별, 브랜드별, 상세(slug SEO) | [products.md](./products.md) |
-| | `/brands` | 브랜드관 | [cs.md](./cs.md) |
-| **기능 메뉴** | `/best`, `/new`, `/deal/today`, `/live`, `/ranking`, `/outlet`, `/membership` | `feature_menu` 기반 기능 메뉴 (일부는 COMING_SOON 랜딩) | [../admin/storefront_menus.md](../admin/storefront_menus.md) |
+| | `/brands`, `/brands/search.json`, `/brands/:id` | 브랜드 허브(검색·색인) + **브랜드 상세관**(`?tab=home\|best\|new\|all\|benefit`) | [products.md](./products.md) |
+| **기능 메뉴** | `/best`, `/best/tab` | 베스트·랭킹(그룹×기간 탭, 탭 전환 AJAX) | [best.md](./best.md) |
+| | `/new` | 신상품 — SDUI 랜딩(`page.slug='new'`), 섹션 0건이면 상품목록 폴백 | [products.md](./products.md) |
+| | `/membership` | 멤버십 제도 소개(정적, 등급 산정 없음) | [../admin/storefront_menus.md](../admin/storefront_menus.md) |
+| | `/ranking` → **301 `/best`**, `/deal/today` → **301 `/deals`** | 구 URL 영구 이전(북마크·외부 링크 보존) | [best.md](./best.md) · [promotions.md](./promotions.md) |
 | **프로모션** | `/exhibition` | 기획전(상품 전시 랜딩) | [promotions.md](./promotions.md) |
+| | `/specialty`, `/specialty/:slug` | 전문관(`exhibition_type='SPECIALTY'` 재사용, 상세는 기획전 컨트롤러 공유) | [promotions.md](./promotions.md) |
 | | `/event` | 이벤트&혜택(APPLY 참여) | [promotions.md](./promotions.md) |
 | | `/group-buy` | 공동구매(바로구매) | [promotions.md](./promotions.md) |
 | | `/coupon` | 쿠폰존(다운로드·코드 등록) | [promotions.md](./promotions.md) |
+| | `/deals`, `/deals/:code` | 쇼핑특가 — **결제 금액에 실제 반영되는 유일한 프로모션** | [promotions.md](./promotions.md) |
+| | `/live`, `/live/:slug`, `POST /live/:slug/buy` | 쇼핑라이브(YouTube·Vimeo 임베드, 바로구매 전용) | [promotions.md](./promotions.md) |
+| | `/outlet` | 아울렛(사유·카테고리·가격대 필터) | [promotions.md](./promotions.md) |
+| | `/recommend` | 추천(4섹션, `noindex,follow`) | [promotions.md](./promotions.md) |
 | **구매** | `/cart` | 장바구니 | [cart.md](./cart.md) |
 | | `/checkout` | 주문·결제(Toss Payments REST 직접 호출) | [checkout.md](./checkout.md) |
 | **회원** | `/auth` | OAuth 로그인(Google·Kakao), 추가정보 입력, 약관 재동의 | [auth.md](./auth.md) |
@@ -34,6 +42,8 @@
 | | `/design-guide/user` | 사용자 UI 컴포넌트 프리뷰 | (개발용) |
 
 > `featureRoutes` 는 `indexRoutes` 보다 **먼저** 마운트됩니다(`app.js`). 기능 메뉴 경로가 다른 라우트에 먹히지 않게 하기 위함입니다.
+> ⚠️ 뒤집어 말하면 **`routes/feature.js` 안에 `/outlet`·`/live`·`/recommend`·`/specialty`·`/coupon`·`/group-buy` 핸들러를 두면 안 됩니다.** `featureRoutes` 가 `'/'` 에 먼저 붙기 때문에 뒤의 `app.use('/outlet', …)` 같은 전용 라우터가 영영 닿지 못합니다(각 라우트 파일 상단 주석).
+> **COMING_SOON 랜딩은 "메뉴가 미구현이라서" 뜨는 게 아닙니다.** `feature_menu` 25행은 **전부 `module_ready = 1`** 입니다. 준비중 랜딩은 ① 모듈 자체가 없는 멤버십과 ② **콘텐츠가 0건인 경우**(기획전·공동구매·전문관·추천·쇼핑특가·아울렛·쿠폰·쇼핑라이브·이벤트)에만 쓰이는 폴백입니다. → [layout.md](./layout.md) §10
 > 존재하지 않는 경로는 `views/user/404.ejs` 로 렌더됩니다.
 
 ---
@@ -55,37 +65,40 @@
    SDUI 섹션 조립(page/page_section), 히어로·팝업 배너, 미리보기
 
 5. [상품](./products.md)  
-   목록(필터·정렬·페이징·몰 스코프), 상세, 추천 상품, 최근 본 상품
+   목록(필터·정렬·페이징·몰 스코프), 신상품 판정, 상세(아울렛 고지·특가), 브랜드 상세관, 최근 본 상품
 
-6. [검색](./search.md)  
+6. [베스트/랭킹](./best.md)  
+   그룹×기간 탭, 랭킹 스냅샷·MD 픽, 배치·크론
+
+7. [검색](./search.md)  
    통합 검색, 검색 로그 기록
 
-7. [장바구니](./cart.md)  
-   담기·수정·삭제, 배송비 미리보기, 헤더 뱃지
+8. [장바구니](./cart.md)  
+   담기·수정·삭제, 배송비 게이지, 특가 적용, 헤더 뱃지
 
-8. [주문/결제](./checkout.md)  
+9. [주문/결제](./checkout.md)  
    배송비·쿠폰·포인트 계산, 서버 금액 재검증, 결제 승인·재고 검증·취소, 4축 주문 상태
 
 ### 프로모션
-9. [프로모션](./promotions.md)  
-   기획전 · 이벤트 · 공동구매 · 쿠폰존 (4모듈의 경계와 각 화면)
+10. [프로모션](./promotions.md)  
+    기획전 · 전문관 · 이벤트 · 공동구매 · 쿠폰존 · 쇼핑특가 · 쇼핑라이브 · 아울렛 · 추천 (9모듈의 경계와 각 화면)
 
 ### 마이페이지 · 고객지원
-10. [마이페이지](./mypage.md)  
+11. [마이페이지](./mypage.md)  
     주문·취소/반품 신청, 쿠폰함, 포인트, 찜, 활동, 프로필, 탈퇴
 
-11. [고객센터](./cs.md)  
-    FAQ 검색, 게시판, 브랜드관, 카카오 문의 추적
+12. [고객센터](./cs.md)  
+    FAQ 검색, 게시판, 카카오 문의 추적
 
-12. [1:1 문의](./inquiries.md)  
+13. [1:1 문의](./inquiries.md)  
     문의 목록·작성·상세
 
-13. [공지사항](./notices.md)  
+14. [공지사항](./notices.md)  
     공지 목록·상세
 
-14. [약관/정책/소개](./terms_pages.md)  
+15. [약관/정책/소개](./terms_pages.md)  
     이용약관, 개인정보 처리방침, 회사 소개, 이용안내
 
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

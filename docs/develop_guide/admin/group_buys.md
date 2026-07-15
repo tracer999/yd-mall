@@ -22,8 +22,17 @@
 - **뷰:** `views/admin/group-buys/list.ejs`, `views/admin/group-buys/edit.ejs` (등록·수정 공용) — 디렉터리명은 하이픈 `group-buys`
 - **이미지 업로드:** Multer 3종 `gb_list_thumbnail` / `gb_pc_hero_image` / `gb_mobile_hero_image` (`routes/admin/group-buys.js:27-31`). 저장 경로 `public/uploads/group-buys/` (`middleware/upload.js:28-32`, `49-50`), 이미지 MIME 만 허용, 상한 `MAX_UPLOAD_FILE_MB`(기본 20MB)
 - **권한:** `admin_menus.visible_roles = super_admin,admin,content_admin` (DB, id=46)
+- **메뉴 위치:** `admin_menus` 상 `parent_id=31` — **페이지/전시 관리** 하위입니다(기획전 관리와 같은 그룹).
 
 > **이미지 필드에 `gb_` 접두어가 붙는 이유:** multer 의 destination 이 fieldname 으로만 저장 경로를 고르는데, 접두어가 없으면 기획전의 `list_thumbnail` 과 이름이 겹쳐 같은 폴더로 섞입니다(`routes/admin/group-buys.js:21-26`).
+
+---
+
+> ### ⚠️ CRITICAL — 1인 구매 제한은 **동작하지 않습니다**
+>
+> 관리자 상품/가격 폼의 **1인 구매 제한**(`per_user_limit_quantity`, `views/admin/group-buys/edit.ejs:311`)은 입력하면 `group_buy_product` 에 **저장은 되지만**(`groupBuyController.js:431,442`), 구매 시점의 유일한 판정 지점인 `services/groupBuy/groupBuyService.js` 의 `resolveLine()`(:330-378)이 이 값을 **전혀 읽지 않습니다.** 검사하는 것은 `min_order_quantity` · `max_order_quantity` · 재고뿐입니다.
+>
+> **즉 운영자가 "1인 2개 제한"을 걸어도 고객은 몇 번이든 살 수 있습니다.** 폼에 값이 남아 있어 "제한이 걸린다"고 오인하기 쉬운 상태이니, 수량 통제가 필요하면 `max_order_quantity`(1회 주문당 최대 수량)를 쓰거나 `resolveLine()` 에 누적 구매량 검사를 구현해야 합니다.
 
 ---
 
@@ -58,7 +67,9 @@
 - `order_count` — `group_buy_participation` 중 `status IN ('PAID','CONFIRMED')` 건수
 - `revenue` — 같은 조건의 `SUM(quantity * unit_price)` (CANCELLED/REFUNDED 제외)
 
-필터: `q`(title·slug LIKE), `status`. 정렬 `g.id DESC`. 각 행은 `svc.decorate()` 로 `phase`·`progressRate`·`targetReached` 등을 붙입니다.
+필터는 **검색어 `q`(공동구매명·slug LIKE)와 상태 `status` 두 개뿐**입니다(`groupBuyController.js:118-124`). 카테고리·기간·브랜드·목표달성 필터는 **없습니다**. 정렬은 `g.id DESC` 고정. 각 행은 `svc.decorate()` 로 `phase`·`progressRate`·`targetReached` 등을 붙입니다.
+
+`order_count`·`revenue` 는 `group_buy_participation` 중 **`status IN ('PAID','CONFIRMED')` 행만** 집계합니다(CANCELLED/REFUNDED 제외 — 다만 그 두 상태를 실제로 쓰는 코드가 없다는 점은 §7 참고).
 
 ---
 
@@ -128,6 +139,9 @@
 | delivery_note | varchar(200) | |
 | view_count | int | |
 
+> **`minimum_success_quantity` · `fail_policy` 컬럼은 없습니다.** 목표 수량(`target_quantity`)은 달성률 bar 를 그리는 **표시용**일 뿐이고, 목표 미달 시 주문을 취소·환불하는 처리는 **미구현**입니다. 설계상의 목표달성형·단계별가격형(2·3차)은 착수하지 않았습니다.
+> **`group_buy_coupon` · `group_buy_notice` 테이블도 만들지 않았습니다.** 유의사항은 `group_buy.notice` TEXT 컬럼 하나로 대체합니다.
+
 ### 5.2 `group_buy_product` (대상 상품/가격)
 
 `id`, `group_buy_id`(FK CASCADE), `product_id`(FK CASCADE, **int**), `role`(**MAIN**/SUB), `sort_order`, `normal_price`(NULL 이면 products.price 사용), `group_buy_price`(**NOT NULL** — 결제 금액을 항상 이 값으로 재계산), `discount_rate`(자동 계산), `min_order_quantity`(기본 1), `max_order_quantity`(NULL=재고까지), `per_user_limit_quantity`(**2차 — 현재 검증 로직 없음**), `purchase_enabled`, `visible`
@@ -180,10 +194,25 @@
 - **주문 취소·환불이 카운터를 되돌리지 않습니다.** `group_buy_participation.status` 에 CANCELLED/REFUNDED 값이 정의돼 있지만, 저장소 전체에서 `group_buy_participation` 을 UPDATE/DELETE 하거나 `current_quantity`·`participant_count` 를 감산하는 코드는 **없습니다**(유일한 쓰기는 `recordParticipation()` 의 `INSERT IGNORE` + 카운터 증가). 즉 두 상태값은 현재 죽은 값이고, 목록의 `order_count`·`revenue` 집계만 `PAID`/`CONFIRMED` 로 걸러질 뿐입니다. 취소·환불 연동은 미구현입니다.
 - **참여 기록이 있으면 삭제 불가.** `group_buy_participation` 이 `ON DELETE CASCADE` 라 함께 지워지는데, 그 안에 결제된 주문의 출처가 들어 있어 CS 추적이 끊깁니다. `postDelete` 가 COUNT 로 차단하고 "'숨김' 으로 바꾸세요" 를 안내합니다(311-322행).
 - **몰 스코프.** `group_buy_product` 에는 `mall_id` 가 없습니다. 반드시 `findOwned(mallId, id)` 로 부모를 먼저 확인해야 합니다(15-17행).
-- **`per_user_limit_quantity` 는 저장만 됩니다(2차).** `resolveLine()` 은 `min_order_quantity`·`max_order_quantity`·재고만 검사합니다(364-369행). 1인 누적 제한은 동작하지 않습니다.
+- **⚠️ `per_user_limit_quantity` 는 저장만 되고 구매를 막지 않습니다.** 문서 상단의 CRITICAL 경고를 참고하세요. `resolveLine()`(`groupBuyService.js:330-378`)은 `min_order_quantity`·`max_order_quantity`·재고만 검사합니다.
+- **참여 기록은 재실행해도 안전합니다.** `recordParticipation()` 이 결제 확정 트랜잭션 안에서 `INSERT IGNORE`(`order_item_id` UNIQUE) 로 행을 만들고, **실제로 INSERT 된 행에 대해서만** 같은 자리에서 카운터를 올립니다. 같은 주문으로 두 번 호출돼도 중복 집계되지 않습니다.
 - **`role='MAIN'` 은 강제되지 않습니다.** 첫 상품에 자동 부여될 뿐, 일괄 저장에서 운영자가 여러 행을 MAIN 으로 만들 수 있습니다. 고객 상세는 정렬 첫 행 하나만 구매 대상으로 씁니다(`controllers/groupBuyController.js:115`).
 - **HTML 이중 새니타이즈.** `description`·`notice` 는 저장 시와 렌더 시 양쪽에서 `htmlSanitizer` 를 통과합니다.
 
+### 7.1 미구현 (알고 있어야 할 것)
+
+| 항목 | 현재 상태 |
+|------|-----------|
+| 1인 구매 제한 | **저장만 됨 — 구매를 막지 않음** (문서 상단 CRITICAL) |
+| 목표 미달 처리 | **없음.** `minimum_success_quantity`·`fail_policy` 컬럼 자체가 없음 |
+| 장바구니 담기 | **없음. 바로구매만.** `carts` 에 가격·옵션 컬럼이 없어 공동구매가를 실을 곳이 없습니다 |
+| 옵션 / SKU | 없음 (상품 단위 1행) |
+| 관리자 목록 카테고리·기간·브랜드 필터 | 없음 (검색어 + 상태뿐) |
+| 상단 배너 | 없음 |
+| 혜택 영역 (전용 쿠폰·사은품) | 없음. `group_buy_coupon` 테이블 미생성 |
+| 이벤트 로그 · 성과 통계 | 없음. 목록의 주문 수·매출 집계가 전부 |
+| 주문 취소·환불 시 카운터 복원 | 없음 (위 주의사항 참고) |
+
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

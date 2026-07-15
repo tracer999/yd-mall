@@ -10,7 +10,8 @@
 
 **관리자 사이드바** 메뉴의 순서, 이름, 경로, 아이콘, 활성 여부, 역할별 표시(`visible_roles`)를 DB에서 관리합니다. 메뉴 정의는 `adminMenu` 미들웨어(사이드바 렌더)와 `requireMenuAccess`(접근 제어)에서 사용됩니다.
 
-> **스토어프론트(고객 화면) 메뉴는 이 문서의 범위가 아닙니다.** GNB·헤더 유틸·우측 레일은 `feature_menu` / `mall_feature_menu` / `custom_menu` / `navigation_config` 로 별도 관리합니다 → [스토어프론트 메뉴](./storefront_menus.md)
+> ⚠️ **`/admin/menus` 는 관리자 사이드바 메뉴 관리이지 스토어프론트 GNB 가 아닙니다.** 고객 화면의 GNB·헤더 유틸·우측 레일은 `feature_menu` / `mall_feature_menu` / `custom_menu` / `navigation_config` 로 **완전히 별개**로 관리합니다 → [스토어프론트 메뉴](./storefront_menus.md)
+> 이름이 비슷해 두 화면을 혼동하기 쉽습니다. 여기서 메뉴를 켜고 꺼도 고객 화면은 아무것도 바뀌지 않습니다.
 
 ---
 
@@ -30,7 +31,31 @@
 - 잎 메뉴는 `parent_id` 로 그룹에 속합니다. 최상위 잎(예: 대시보드)은 그룹 없이 그대로 노출됩니다.
 - **권한(`visible_roles`)은 잎 메뉴에만 적용**합니다. 그룹 행의 `visible_roles` 는 비워 둡니다. 보이는 자식이 하나도 없는 그룹은 사이드바에서 통째로 숨겨집니다(`middleware/adminMenu.js`).
 
-현재 데이터 기준: 그룹 7개(쇼핑몰 설정 / 메뉴·카테고리 관리 / 페이지·전시 관리 / 상품 관리 / 프로모션 관리 / 주문·회원 관리 / 운영·시스템 관리) + 최상위 잎 1개(대시보드).
+### 3.1 현재 데이터 (실측)
+
+그룹 **8개** + 최상위 잎 2개(`몰 관리`, `대시보드`). `고객지원 관리`(id=49)가 뒤늦게 신설되면서 문의·FAQ·공지가 그리로 옮겨졌습니다.
+
+| id | 그룹 | display_order | 잎 메뉴 (id · path · visible_roles) |
+|----|------|---------------|--------------------------------------|
+| 29 | 쇼핑몰 설정 | 20 | 15 `/admin/site-settings` · 10 `/admin/policies` · 38 `/admin/header-settings` · 41 `/admin/theme-settings` — 모두 `super_admin,admin` |
+| 30 | 메뉴/카테고리 관리 | 30 | 2 `/admin/categories`(+`content_admin`) · 36 `/admin/feature-menus` · **57 `/admin/brands`**(+`content_admin`) · 37 `/admin/system-menus` · **56 `/admin/custom-menus`** · 40 `/admin/menu-preview` |
+| 31 | 페이지/전시 관리 | 40 | 21 `/admin/page-builder` · 4 `/admin/banners` · **44 `/admin/exhibitions`** · **46 `/admin/group-buys`** · **58 `/admin/lives`** — 모두 `super_admin,admin,content_admin` |
+| 32 | 상품 관리 | 50 | 3 `/admin/products` · 39 `/admin/product-groups` · **50 `/admin/best-groups`** · **51 `/admin/deals`** · **52 `/admin/deal-categories`** · **53 `/admin/recommend-groups`** · **54 `/admin/outlet`** · **55 `/admin/outlet/categories`** — 모두 `super_admin,admin,content_admin` |
+| 33 | 프로모션 관리 | 60 | 13 `/admin/coupons` · 14 `/admin/points`(둘 다 `super_admin,admin`) · **45 `/admin/events`**(+`content_admin`) |
+| 49 | **고객지원 관리** | 75 | 8 `/admin/inquiries`(`…,customer_admin`) · 42 `/admin/faqs`(`…,content_admin`) · 17 `/admin/notices`(`…,content_admin`) |
+| 34 | 주문/회원 관리 | 70 | 5 `/admin/sales` · 6 `/admin/shipping`(`super_admin,customer_admin`) · 47 `/admin/shipping-policy` · 48 `/admin/claims` · 20 `/admin/shopify-orders`(**`is_active = 0`**) · 7 `/admin/users` |
+| 35 | 운영/시스템 관리 | 80 | 11 `/admin/operators`(**`super_admin` 만**) · 12 `/admin/menus` · 16 `/admin/sys-settings` |
+
+**최상위 잎**
+
+| id | 이름 | path | display_order | is_active | visible_roles |
+|----|------|------|---------------|-----------|----------------|
+| 43 | 몰 관리 | `/admin/malls` | -10 (그룹보다 위) | 1 | `super_admin,admin` |
+| 1 | 대시보드 | `/admin` | 0 | **0** | `super_admin,admin,content_admin` |
+
+> **대시보드 행은 `is_active = 0`** 이라 사이드바에 렌더되지 않습니다. 라우트(`/admin`)에는 `requireMenuAccess` 가 걸려 있지 않으므로 접근은 됩니다(로고 클릭·직접 URL). 즉 이 행은 현재 접근 제어에도 사이드바에도 영향을 주지 않습니다.
+>
+> `/admin/shopify-orders`(id=20)도 `is_active = 0` 입니다. 사이드바에서 빠질 뿐 아니라 라우트에 `requireMenuAccess('/admin/shopify-orders')` 가 걸려 있어 **`admin` 외 역할은 403** 입니다(§7.2).
 
 ---
 
@@ -128,7 +153,9 @@
 - `path` 는 `requireMenuAccess` 의 조회 키입니다. **경로를 오타로 바꾸면 그 메뉴는 "정의 없음"이 되어 `admin` 외 역할이 403** 을 받습니다.
 - 그룹 행의 `visible_roles` 는 비워 두세요. 그룹에 역할을 걸어도 `adminMenu` 는 그룹의 `visible_roles` 를 검사하지 않습니다(잎에만 적용).
 - 하위 메뉴가 남아 있는 그룹은 삭제되지 않습니다(400). 먼저 자식을 다른 그룹으로 옮기거나 함께 삭제하세요.
+- **새 관리자 화면을 추가하면 `admin_menus` 행도 함께 넣어야 합니다.** `routes/admin.js` 의 `requireMenuAccess('/admin/xxx')` 는 `path` 로 행을 찾으므로, 행이 없으면 `admin`·`super_admin` 외 역할이 전부 403 을 받습니다. 최근 추가된 행(브랜드·베스트/랭킹·쇼핑특가·특가 카테고리·상품 추천관리·아울렛·아울렛 카테고리·쇼핑라이브·커스텀 메뉴)이 모두 그래서 등록되어 있습니다.
+- `/admin/outlet/categories`(id=55)처럼 **하위 경로도 별도 행**이 필요합니다. 다만 라우트 가드는 마운트 지점(`/admin/outlet`)에만 걸리므로, 이 행은 사이드바 링크 용도입니다.
 
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

@@ -6,7 +6,7 @@
 - **관련 테이블:** `page`, `page_section`, `page_revision`, `product_group`, `product_group_item`
 - **컨트롤러:** `controllers/admin/pageBuilderController.js`, `controllers/admin/productGroupController.js`, `controllers/mainController.js`(미리보기·홈 렌더), `controllers/sectionController.js`(섹션 AJAX)
 - **라우트:** `routes/admin/page-builder.js`, `routes/admin/product-groups.js`, `routes/sections.js`
-- **서비스:** `services/display/` — `sectionRegistry.js`, `displayService.js`, `pageBuilderService.js`, `productGroupService.js`, `bannerService.js`, `htmlSanitizer.js`, `resolvers/`(12종 + `_shared.js`)
+- **서비스:** `services/display/` — `sectionRegistry.js`, `displayService.js`, `pageBuilderService.js`, `productGroupService.js`, `bannerService.js`, `htmlSanitizer.js`, `resolvers/`(17종 + `_shared.js`)
 - **뷰:** `views/admin/page-builder/editor.ejs`, `views/admin/product-groups/list.ejs` · `edit.ejs`, 섹션 렌더러 `views/partials/sections/*.ejs`
 - **클라이언트 스크립트:** `public/js/admin/page-builder.js` (섹션 목록·설정폼·미리보기 iframe 제어)
 
@@ -16,7 +16,18 @@ SDUI(Server-Driven UI) 구조다. 홈 화면의 구성은 코드가 아니라 `p
 - **발행본(published)** = `page_revision.snapshot_json` (스토어프론트가 렌더)
 - 발행 전 편집은 미리보기에만 보인다. (`services/display/displayService.js` 상단 주석)
 
-> **레거시 전시관리 제거됨.** `displayController` / `/admin/display` 는 존재하지 않는다. 홈 전시 편집은 페이지 빌더 하나뿐이다.
+> **레거시 전시관리 제거됨.** `displayController` / `/admin/display` 와 `main_display_*` 테이블은 **코드·DB 양쪽에서 완전히 사라졌다**(DB 확인: `SHOW TABLES LIKE 'main_display%'` → 0건). 전시 편집은 페이지 빌더 하나뿐이다.
+
+### 1.1 홈만 편집하는 게 아니다 — 랜딩 페이지도 편집한다
+
+페이지 빌더는 `page` 테이블의 **모든 SDUI 페이지**를 편집·발행한다. 에디터 상단에 **페이지 선택기**가 있고, `?page=<id>` 로 대상을 고른다(`pageBuilderController.resolvePage`, 몰 스코프로 검증하므로 남의 몰 페이지 id 를 넣어도 열리지 않는다).
+
+| page_type | 예 | 스토어프론트 |
+|---|---|---|
+| `home` | 홈(mall 1·2·6) | `GET /` |
+| `feature` | **신상품 랜딩** (`slug='new'`, mall 1·2) | `GET /new` |
+
+예전에는 홈만 편집할 수 있었다. 그래서 랜딩(`/new`)은 발행할 방법이 없었고, 스냅샷이 없는 페이지는 라이브 `page_section` 으로 폴백해 **빌더에서 고치는 순간 스토어프론트에 반영됐다.** 지금은 모든 페이지가 발행 스냅샷을 갖는다.
 
 ---
 
@@ -28,6 +39,7 @@ SDUI(Server-Driven UI) 구조다. 홈 화면의 구성은 코드가 아니라 `p
 |--------|-----|--------|------|
 | GET | `/admin/page-builder` | `pageBuilder.getEditor` | 에디터 화면 (좌: 섹션 목록 / 중: 미리보기 iframe / 우: 설정폼) |
 | GET | `/admin/page-builder/preview` | `mainController.getHomePreview` | 작업본(draft) 미리보기 — iframe `src` |
+| GET | `/admin/page-builder/section-preview?type=` | `getSectionPreview` | **섹션 카탈로그 미리보기** — 추가하기 전에 실데이터로 렌더 (iframe `src`) |
 | POST | `/admin/page-builder/sections` | `postSectionAdd` | 섹션 추가 (JSON). body: `section_type` |
 | POST | `/admin/page-builder/sections/reorder` | `postSectionReorder` | 순서 변경 (JSON). body: `order: number[]` |
 | POST | `/admin/page-builder/sections/:id/update` | `postSectionUpdate` | 섹션 설정 저장 (JSON) |
@@ -61,9 +73,11 @@ SDUI(Server-Driven UI) 구조다. 홈 화면의 구성은 코드가 아니라 `p
 
 | 메서드 | URL | 핸들러 | 설명 |
 |--------|-----|--------|------|
-| GET | `/sections/ranking?categoryId=&sort=&limit=` | `sectionController.getRanking` | `ranking_tabs` 탭 전환용 상품 목록 (JSON) |
+| GET | `/sections/ranking?groupId=&period=&limit=` | `sectionController.getRanking` | `ranking_tabs` 탭 전환용 상품 목록 (JSON) |
 
-- 정렬은 화이트리스트(`SORT_MAP`: views/sales/newest/discount)만 허용, `limit` 상한 20. `sales` 는 판매량 컬럼 도입 전까지 `view_count` 로 대체.
+- 순위를 여기서 계산하지 않는다. 배치가 만든 **랭킹 스냅샷**(`bestRankingService`)을 읽는다 — SSR 첫 탭(`resolvers/ranking_tabs`)과 **같은 함수**를 부르므로 둘이 어긋날 수 없다.
+- `groupId` 는 요청에서 받지만 **몰 스코프로 검증**한다(남의 몰 랭킹 탭 조회 불가). 없는 그룹이면 404. `limit` 상한 20.
+- 옛 `sort` 파라미터(views/sales/newest/discount)는 폐기됐다 — `sales` 가 조회수와 같은 SQL 로 매핑된 죽은 옵션이었다. 지금은 `period`(REALTIME/DAILY/WEEKLY/MONTHLY)만 받는다.
 
 ---
 
@@ -119,29 +133,46 @@ page (page_type='home', mall_id)
 
 ## 4. 섹션 타입 (sectionRegistry.js)
 
-`services/display/sectionRegistry.js` 가 `section_type ↔ 렌더러 뷰 ↔ 관리자 설정폼` 을 1:1 로 관장한다. 총 **13종**, 이 중 리졸버가 있는 것은 **12종**(`quick_menu` 만 정적).
+`services/display/sectionRegistry.js` 가 `section_type ↔ 렌더러 뷰 ↔ 관리자 설정폼` 을 1:1 로 관장한다. 총 **18종**, 이 중 리졸버가 있는 것은 **17종**(`quick_menu` 만 정적).
 
 | section_type | 라벨 | view (`views/…`) | dataSource | 리졸버 (`services/display/resolvers/`) | config 필드 |
 |---|---|---|---|---|---|
 | `hero` | 히어로 | `partials/sections/hero` | – | `hero.js` — `shared.heroData` 주입 | 없음 |
-| `value_proposition` | 특장점 | `partials/sections/value_proposition` | – | `value_proposition.js` — `kakaoUrl`(없으면 `#`) | 없음 |
+| `value_proposition` | 특장점 | `partials/sections/value_proposition` | – | `value_proposition.js` — `kakaoUrl`(없으면 `#`) | 없음 (`fields: []` — **문구 편집 불가**) |
 | `product_grid` | 상품 그리드 | `partials/sections/product_grid_section` | `product_group` | `product_grid.js` — 그룹 해석, 0건이면 스킵 | `maxCount`(8), `columns`(4), `moreLink` |
-| `category_showcase` | 카테고리별 상품 | `partials/sections/category_showcase` | – | `category_showcase.js` — `loadHomeCategoryBests()` (최상위 카테고리 서브트리 베스트) | 없음(코드상 `productLimit`·`categoryLimit` 을 config 에서 읽음) |
+| `best_ranking` | **베스트/랭킹** | `partials/sections/product_grid_section` | – (고정 소스 `best_group`) | `best_ranking.js` — GNB `/best` 와 같은 랭킹 스냅샷 | `groupId`(0=전체), `period`(REALTIME\|DAILY\|WEEKLY\|MONTHLY), `maxCount`, `columns`, `moreLink` |
+| `category_showcase` | 카테고리별 상품 | `partials/sections/category_showcase` | – | `category_showcase.js` — `loadHomeCategoryBests()` | 없음(코드상 `productLimit`·`categoryLimit` 을 config 에서 읽음) |
 | `kakao_cta` | 카카오 상담 CTA | `partials/sections/kakao_cta` | – | `kakao_cta.js` — 카카오 채널 미설정이면 섹션 스킵 | 없음 |
 | `product_carousel` | 상품 캐러셀 | `partials/sections/product_carousel` | `product_group` | `product_carousel.js` — `product_grid` 와 같은 소스, 기본 12건 | `maxCount`(12), `columnsPerView`(4), `moreLink` |
+| `deal_carousel` | **쇼핑특가 캐러셀** | `partials/sections/deal_carousel` | – (고정 소스: 활성 특가) | `deal_carousel.js` — 기간·시간창·요일·선착순이 맞는 특가만. 특가가 없으면 **섹션 자체가 스킵** | `dealCategoryCode`(비우면 전체), `maxCount`(12), `columnsPerView`, `moreLink`(`/deals`) |
 | `brand_carousel` | 브랜드 캐러셀 | `partials/sections/brand_carousel` | – (고정 소스 `categories.type='BRAND'`) | `brand_carousel.js` — 몰 스코프, 상품 있는 브랜드만(기본) | `maxCount`(20), `columns`(6), `shape`(`rect`\|`circle`), `moreLink` |
-| `ranking_tabs` | 랭킹 탭 | `partials/sections/ranking_tabs` | – (고정 소스: 카테고리 탭) | `ranking_tabs.js` — 첫 탭만 SSR, 나머지는 `GET /sections/ranking` | `maxTabs`(6), `rankLimit`(8), `sort`(`views`\|`sales`\|`newest`\|`discount`) |
+| `ranking_tabs` | 랭킹 탭 | `partials/sections/ranking_tabs` | – (고정 소스 `best_group`) | `ranking_tabs.js` — `best_ranking` 과 **같은 스냅샷**. 탭 = `/admin/best-groups` 의 랭킹 그룹 | `maxTabs`(6), `rankLimit`(8), `period`(REALTIME\|DAILY\|WEEKLY\|MONTHLY) |
 | `promotion_banner` | 프로모션 배너 | `partials/sections/promotion_banner` | `banner_group` | `promotion_banner.js` — `bannerService.getByGroup(config.groupKey)` | `groupKey`, `maxCount`(4), `layout`(`rect`\|`vertical`), `columns`(2) |
 | `benefit_bento` | 혜택 벤토 | `partials/sections/benefit_bento` | `product_group` | `benefit_bento.js` — 대형 딜 + 썸네일 + 프로모 블록 | `dealProductId`, `maxCount`(8), `promoBlocks`(JSON `[{copy,color,url}]`) |
-| `quick_menu` | 퀵 메뉴 | `partials/sections/quick_menu` | – | **없음(정적)** — `config_json` 만으로 렌더 | `items`(repeater → `[{icon,label,url,badge}]`), `columns`(4) |
+| `quick_menu` | 퀵 메뉴 | `partials/sections/quick_menu` | – | **없음(정적)** — `config_json` 만으로 렌더 | `items`(repeater + **페이지 선택 picker**, 아래 참고), `columns`(4) |
 | `recent_product` | 최근 본 상품 | `partials/sections/recent_product` | – | `recent_product.js` — 로그인=`recent_views`, 비로그인=클라이언트 localStorage | `maxCount`(8) |
 | `custom_html` | 커스텀 HTML | `partials/sections/custom_html` | – | `custom_html.js` — 렌더 직전 새니타이즈, 비면 스킵 | `html`(textarea) |
+| `new_by_category` | **카테고리별 신상품** | `partials/sections/new_by_category` | – | `new_by_category.js` — `services/catalog/newArrival` 술어 | `maxCount`(탭별 8), `maxCategory`(6) |
+| `new_by_brand` | **브랜드별 신상품** | `partials/sections/new_by_brand` | – | `new_by_brand.js` | `maxCount`(브랜드별 6), `maxBrand`(5) |
+| `new_brand_list` | **신규 입점 브랜드** | `partials/sections/new_brand_list` | – | `new_brand_list.js` — `categories.onboarded_at` 기준 | `maxCount`(8), `productCount`(브랜드별 3) |
 
-- `dataSource` 는 `page_section.data_source_id` 가 무엇을 가리키는지 뜻한다. 값이 `product_group` 인 3종(`product_grid`, `product_carousel`, `benefit_bento`)만 에디터에 상품 그룹 셀렉트가 뜬다(`page-builder.js:105`).
+- 뒤 3종(`new_*`)은 **신상품 랜딩(`/new`, `page_type='feature'`)용**이다. 상품을 `product_group` 이 아니라 신상품 술어(`services/catalog/newArrival`)로 직접 조회한다 — 카테고리·브랜드별로 묶는 구조라 단일 그룹으로 표현할 수 없기 때문. 판정 규칙은 [`products.md`](./products.md) §1.2 참고.
+- **랭킹은 한 곳에서만 정의된다.** `best_ranking` 과 `ranking_tabs` 는 같은 랭킹 스냅샷(`best_score_config`: 판매 5 · 좋아요 3 · 조회 0)을 읽는다. 옛 `ranking_tabs.sort` 필드는 폐기됐다(`sales` 가 `views` 와 같은 SQL 로 매핑된 죽은 옵션이었다).
+- `dataSource` 는 `page_section.data_source_id` 가 무엇을 가리키는지 뜻한다. 값이 `product_group` 인 3종(`product_grid`, `product_carousel`, `benefit_bento`)만 에디터에 상품 그룹 셀렉트가 뜬다(`page-builder.js:105`). `best_ranking`·`ranking_tabs`·`deal_carousel` 은 `dataSource: null` 이고 고정 소스를 본다.
+- **`quick_menu` 는 URL 을 직접 입력하지 않는다.** `picker: 'linkTargets'` 로 **"이 몰에서 실제로 열리는 페이지" 셀렉트**가 뜨고, 고르는 즉시 `url`·`icon`·`label` 이 자동으로 채워진다(운영자는 표시 이름만 고친다). 목록에 없는 곳으로 보내려면 `직접 입력(URL)` 을 골라야 URL·아이콘 입력이 열린다. 후보 목록은 `services/menu/linkTargets.js` 가 만든다(§3.3).
+
+### 4.1 섹션 카탈로그 모달 (추가하기 전에 보고 고른다)
+
+팔레트가 라벨만 보여주던 시절엔 '혜택 벤토'·'랭킹 탭'이 무엇인지 추가해 봐야 알 수 있었다. 지금은 **각 섹션 타입을 현재 몰의 실데이터로 iframe 라이브 렌더**해 카드에 띄운다(`GET /admin/page-builder/section-preview?type=`). 스크린샷을 떠 두지 않는 이유: 테마·상품이 바뀌면 스크린샷은 그 즉시 거짓말이 된다.
+
+- config 는 레지스트리 `fields` 의 `default` 로 만든다 = **추가 직후의 실제 초기 상태**를 보여준다.
+- 운영자가 아직 아무것도 안 넣은 타입(`quick_menu`·`custom_html`·`benefit_bento` 의 프로모 블록)만 `SAMPLE_CONFIG` 예시 값으로 채우고, 뷰가 "예시 데이터" 배너를 띄운다.
+- 데이터가 0건이라 섹션이 스킵되면 `EMPTY_REASON` 이 **무엇을 채워야 하는지**를 알려준다(예: "배너 관리에 노출 중인 MAIN 배너가 없습니다").
+- 같은 진단(`displayService.diagnoseSections`)을 섹션 목록에도 붙여, 스토어프론트에 실제로 안 나오는 섹션에 `skipReason` 배지를 단다. 저장 직후에도 다시 판정해 돌려준다.
 - `promotion_banner` 의 `dataSource` 는 `'banner_group'` 이지만 실제 리졸버는 `data_source_id` 가 아니라 **`config.groupKey`(문자열)** 로 `banners.group_key` 를 조회한다.
 - `resolvers/_shared.js` 는 리졸버가 아니라 공용 헬퍼다: `P_STATUS`(전시 가능 상태 = `ON,SOLD_OUT,COMING_SOON,RESTOCK`), `visibilityClause(hasUser)`(비로그인=`PUBLIC` 만), `loadHomeCategories`, `loadHomeCategoryBests`.
 
-### 4.1 새 섹션 타입 추가 절차
+### 4.2 새 섹션 타입 추가 절차
 
 `services/display/resolvers/index.js` 주석에 명시된 절차 — `displayService.js` 는 건드리지 않는다.
 
@@ -218,14 +249,14 @@ UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로
 |---|---|---|
 | id | bigint PK | |
 | mall_id | bigint NOT NULL DEFAULT 1 | 몰 스코프 |
-| page_type | varchar(50) NOT NULL | 현재 `'home'` 만 사용 |
+| page_type | varchar(50) NOT NULL | `'home'`(홈) / `'feature'`(랜딩 — 예: `slug='new'` 신상품) |
 | slug | varchar(255) | |
 | title | varchar(200) | |
 | layout_type | varchar(100) DEFAULT 'main_basic' | `user/index` 렌더 시 `layoutType` |
 | status | varchar(30) DEFAULT 'published' | 스토어프론트는 `published` 만 조회 |
 | published_at / created_at / updated_at | datetime | |
 
-인덱스 `idx_page_mall_type (mall_id, page_type, status)`. 현재 데이터: mall 1 → page 1, mall 2 → page 4.
+인덱스 `idx_page_mall_type (mall_id, page_type, status)`. 현재 데이터(5행): mall 1 → home(1) · feature/new(5), mall 2 → home(4) · feature/new(6), mall 6 → home(9).
 
 ### `page_section` — 섹션(전시 블록 인스턴스, 작업본)
 
@@ -240,8 +271,8 @@ UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로
 | data_source_type | varchar(100) | 레지스트리 `dataSource` 복사본 |
 | data_source_id | bigint | `product_group.id` — **FK 없음** |
 | config_json | json | 섹션별 설정 |
-| visible_start_at / visible_end_at | datetime | 노출 기간 |
-| visible_on_pc / visible_on_mobile | tinyint(1) DEFAULT 1 | **저장·발행만 되고 렌더에 반영되지 않는다** (§8 참고) |
+| visible_start_at / visible_end_at | datetime | 노출 기간 — **섹션 단위 예약 노출로 실제 동작한다** |
+| visible_on_pc / visible_on_mobile | tinyint(1) DEFAULT 1 | 디바이스별 노출. **렌더에 반영된다** (§8 참고) |
 | is_active | tinyint(1) DEFAULT 1 | |
 | created_at / updated_at | datetime | |
 
@@ -295,12 +326,22 @@ UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로
 - **레지스트리에서 타입을 지우면 그 섹션은 조용히 사라진다.** `resolveSections()` 가 미등록 타입을 스킵한다. 에디터는 `isUnknownType` 으로 표시만 한다.
 - **`product_group` 을 비활성/삭제하면 참조 섹션이 빈다.** FK 가 없으므로 DB 가 막아주지 않는다 — 컨트롤러 가드가 유일한 방어선이다. 스크립트로 직접 UPDATE/DELETE 하면 가드를 우회한다.
 - **`custom_html` 은 관리자 입력이라도 신뢰하지 않는다.** 저장(`pageBuilderService.updateSection`)·렌더(`resolvers/custom_html.js`) 양쪽에서 새니타이즈한다. 허용 태그/속성/스킴은 `services/display/htmlSanitizer.js` 화이트리스트 참고(`script`·`iframe`·`on*`·`javascript:` 차단).
-- **`visible_on_pc` / `visible_on_mobile` 는 현재 아무 데도 적용되지 않는다.** 에디터 체크박스(`public/js/admin/page-builder.js:123-124`)로 켜고 끌 수 있고 `page_section` 에 저장되며 스냅샷에도 들어가지만, `displayService` 의 노출 필터는 `is_active` + 노출기간만 본다. 어떤 렌더러 EJS 도 이 값을 읽지 않는다(코드 전역 검색 기준). 디바이스별 노출 제어가 필요하면 렌더 단에 구현해야 한다.
+- **`visible_on_pc` / `visible_on_mobile` 는 이제 렌더에 반영된다.** `displayService.deviceGate()` 가 두 값을 읽어 `'all' | 'pc_only' | 'mobile_only' | 'none'` 을 판정한다(`displayService.js:62-77`). 둘 다 끄면 섹션이 아예 스킵되고, 한쪽만 켜면 **CSS 래퍼 클래스**(`yd-only-pc` / `yd-only-mobile`, `public/css/input.css`)로 감춘다. SSR 이라 UA 로 갈라 굽지 않는다(캐시·프록시가 섞인다).
 - **미리보기 몰**은 `req.adminMallId` 기준이다. 관리자가 스토어프론트를 `?mall=2` 로 보고 있어도 미리보기는 편집 중인 몰을 렌더한다. → [`malls.md`](./malls.md)
 - `ranking_tabs` 리졸버의 `loadHomeCategories(shared.hasUser)` 는 **`mallId` 를 넘기지 않아** `_shared.js` 기본값 1(건강식품관)로 카테고리를 뽑는다(`services/display/resolvers/ranking_tabs.js`). 다른 몰에서도 mall 1 카테고리 탭이 나온다.
 - `promotion_banner` 는 `banners.group_key` 로만 조회한다. 배너 관리에서 `group_key` 를 비워두면 섹션이 스킵된다. → [`banners.md`](./banners.md)
+- **미리보기와 실제 화면은 보는 데이터가 다르다.** 미리보기는 **편집 중인 몰(`req.adminMallId`)의 작업본(`page_section`)** 을 렌더하고, 스토어프론트 홈은 **발행 스냅샷(`page_revision`)** 을 렌더한다. 발행 전 편집이 스토어프론트에 안 보이는 것은 **정상**이다.
 - 관련 문서: [`malls.md`](./malls.md), [`products.md`](./products.md), [`banners.md`](./banners.md), [`categories.md`](./categories.md)
+
+### 8.1 미구현 (알고 있어야 할 것)
+
+| 항목 | 현재 상태 |
+|------|-----------|
+| 페이지 **예약 발행** | **없음.** 발행 스케줄러가 없어 발행은 항상 즉시다. 다만 **섹션 단위 예약 노출**은 동작한다(`page_section.visible_start_at` / `visible_end_at`) — 미리 만들어 두고 시각이 되면 나타나게 할 수 있다 |
+| 섹션 **드래그앤드롭** 정렬 | **없음.** 위/아래 버튼만 (`public/js/admin/page-builder.js:439-462` — `reorder(id, dir)`) |
+| 카테고리 페이지 관리 | 없음. `page.page_type` 은 `home` / `feature` 만 쓴다 |
+| 정적 정보 페이지 문구 편집 | 없음. `value_proposition` 은 `fields: []` 라 고정 문구다 — 바꾸려면 EJS 를 고쳐야 한다 |
 
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

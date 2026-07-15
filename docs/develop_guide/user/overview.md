@@ -17,16 +17,21 @@
 
 ## 2. 라우트 구조 (코드 기준)
 
-`app.js:255-280` 의 마운트 순서 그대로입니다. **기능 메뉴 라우트(`featureRoutes`)가 `indexRoutes` 보다 먼저** 마운트됩니다(`/best`, `/new`, `/deal/today` 가 `/` 핸들러에 잡히지 않도록).
+`app.js:286-321` 의 마운트 순서 그대로입니다. **기능 메뉴 라우트(`featureRoutes`)가 `indexRoutes` 보다 먼저** 마운트됩니다(`/best`, `/new`, `/deals` 가 `/` 핸들러에 잡히지 않도록).
 
 ```
 app.js
 ├── app.use('/shopify', shopifyRoutes)        → routes/shopify.js (웹훅·마켓, 현재 비활성)
 ├── app.use('/', sitemapRoutes)               → routes/sitemap.js
-├── app.use('/', featureRoutes)               → routes/feature.js  (/best, /new, /deal/today, /ranking, /outlet …)
+├── app.use('/', featureRoutes)               → routes/feature.js  (/best, /best/tab, /new, /deals, /membership,
+│                                                                   /ranking→301 /best, /deal/today→301 /deals)
 ├── app.use('/exhibition', exhibitionRoutes)  → 기획전
+├── app.use('/outlet', outletRoutes)          → 아울렛
+├── app.use('/specialty', specialtyRoutes)    → 전문관 (상세는 exhibitionController 공유)
+├── app.use('/recommend', recommendRoutes)    → 추천
 ├── app.use('/event', eventRoutes)            → 이벤트&혜택
 ├── app.use('/group-buy', groupBuyRoutes)     → 공동구매
+├── app.use('/live', liveRoutes)              → 쇼핑라이브
 ├── app.use('/coupon', couponRoutes)          → 쿠폰존(받는 곳)
 ├── app.use('/sections', sectionRoutes)       → 스토어프론트 섹션 AJAX (ranking_tabs 등)
 ├── app.use('/cs', csRoutes)                  → 고객센터
@@ -55,6 +60,7 @@ app.js
 
 - **인증 없이 접근 가능:** 대부분의 사용자 페이지(홈, 상품, 공지, 문의, 약관 등). 장바구니/결제/마이페이지는 로그인 필요 구간이 있음.
 - **Passport:** `req.user`는 로그인 시 설정되며, `res.locals.user`로 뷰에 전달됩니다.
+- ⚠️ **`/outlet`·`/live`·`/recommend`·`/specialty`·`/coupon`·`/group-buy` 는 전용 라우터입니다.** `routes/feature.js` 안에 같은 경로 핸들러를 (준비중 랜딩 용도로도) 되살리면 `featureRoutes` 가 `'/'` 에 먼저 붙기 때문에 전용 라우터가 **영영 닿지 못합니다**. 준비중 랜딩은 각 컨트롤러가 `COMING_SOON` 정의만 가져다 쓰는 방식으로 처리합니다.
 
 ---
 
@@ -69,12 +75,16 @@ app.js
 
 ## 4. 미들웨어
 
-`app.js:193-229` 의 실행 순서입니다. 스토어프론트 미들웨어는 모두 `req.mallId` 를 신뢰하므로 **`mallContext` 가 가장 먼저** 옵니다.
+`app.js:210-256` 의 실행 순서입니다. 스토어프론트 미들웨어는 모두 `req.mallId` 를 신뢰하므로 **`mallContext` 가 가장 먼저** 옵니다.
 
 ```
-액세스 로그(logs/access.log) → 전역 변수 → mallContext → siteSettings → themeData
-→ shopifyFlag → visitorLogger → pageViewLogger → menuData → cartData → seoDefaults → shopifyContext
+액세스 로그(logs/access.log) → 전역 변수 → mallContext → siteSettings → themeData → topbar
+→ shopifyFlag → visitorLogger → pageViewLogger → menuData → cartData → menuShowcase
+→ seoDefaults → shopifyContext
 ```
+
+- **topbar.js** — `res.locals.topbar = { notice, banners[], version } | null`. 콘텐츠가 0건이면 `null` 이고 헤더 톱바는 렌더되지 않습니다. `/admin` 은 쿼리 자체를 건너뜁니다.
+- **menuShowcase.js** — 요청 경로가 GNB 메뉴(`feature_menu.default_path`)와 매칭되면 그 메뉴의 쇼케이스(배너 슬라이드 + 상품 캐러셀)를 `res.locals.menuShowcase` 배열로 싣습니다. 렌더는 `main_layout` 이 `<%- body %>` **위에서** 합니다. GET·비 XHR 만 처리하고(경로 맵은 프로세스 캐시), 매칭되지 않는 경로에서는 DB 를 치지 않습니다.
 
 ### 4.1 전역 변수 (app.js)
 
@@ -84,8 +94,9 @@ app.js
 ### 4.2 mallContext.js
 
 - **역할:** 요청이 어느 몰을 보는지 해석 → `req.mallId` / `res.locals.mallId` / `res.locals.mall` / `res.locals.malls`.
-- **동작:** `?mall=<id|code>` → 세션 고정 → 없으면 기본 몰(`mall.is_default = 1`). 몰 목록은 60초 프로세스 캐시.
+- **동작:** `?mall=<id|code>` → 세션 고정(`req.session.mallId`) → 없으면 기본 몰(`mall.is_default = 1`). 활성 몰 목록(`is_active = 1`)은 **60초 프로세스 캐시**. 조회가 실패하면 `mallId = 1` 로 폴백해 화면이 죽지 않게 합니다.
 - **사용처:** 헤더 Top Bar·모바일 카테고리 레이어의 **몰 선택 셀렉트**(`res.locals.malls`).
+- 자세한 스코프 경계는 아래 §5 참고.
 
 ### 4.3 siteSettings.js
 
@@ -136,7 +147,36 @@ app.js
 
 ---
 
-## 5. 컨트롤러·뷰 매핑
+## 5. 멀티몰 (mall)
+
+`mall` 테이블은 **운영 중**입니다. 현재 3개 몰이 있습니다.
+
+| id | code | 이름 | 비고 |
+|----|------|------|------|
+| 1 | `health` | 와이디몰 건강식품관 | `is_default = 1` (기본 몰) |
+| 2 | `general` | 와이디몰 종합관 | |
+| 6 | `test_small` | 소형쇼핑몰 | 드로어형 헤더 스킨 검증용 |
+
+### 5.1 몰별로 갈라지는 것 (`mall_id` 보유)
+
+| 대상 | 테이블 |
+|------|--------|
+| 전시(SDUI) | `page`, `page_section` |
+| 데이터 소스 | `product_group`, (베스트) `best_group` |
+| 테마 | `theme` |
+| 내비게이션 | `navigation_config`, `mall_feature_menu`, `custom_menu` |
+| 사이트 설정 | `site_settings` |
+| 카테고리 | `categories` |
+
+### 5.2 ⚠️ 아직 몰로 갈라지지 않은 것
+
+- **`products` · `users` · `orders` · `carts` 에는 `mall_id` 컬럼이 없습니다.** 상품 목록의 "몰 스코프"는 `products.mall_id` 가 아니라 카테고리·상품그룹 등 **몰 스코프가 있는 축을 경유**해 걸립니다. 회원·주문·장바구니는 **전 몰 공용**입니다 — 몰을 바꿔도 같은 장바구니, 같은 주문 이력을 봅니다.
+- **`controllers/csController.js` 는 `mall_id = 1` 하드코딩**입니다(FAQ·게시판 조회 3곳). 고객센터는 아직 몰별로 갈라지지 않습니다.
+- 새 기능을 만들 때 "이건 몰별인가?" 를 먼저 정하세요. 위 두 부류가 섞이면 조용히 다른 몰의 데이터를 보여주게 됩니다.
+
+---
+
+## 6. 컨트롤러·뷰 매핑
 
 | 기능 | 컨트롤러 | 뷰 디렉터리 |
 |------|----------|-------------|
@@ -145,7 +185,9 @@ app.js
 | 약관/정책/소개 | `controllers/termsController.js` | `views/user/terms.ejs`, `privacy.ejs`, `about.ejs` |
 | 상품 | `controllers/productController.js` | `views/user/products/list.ejs`, `detail.ejs` |
 | 브랜드 | `controllers/brandController.js` | `views/user/brands/` |
-| 기능 메뉴(베스트/신상품/특가 등) | `routes/feature.js` | `views/user/products/list.ejs` 등 재사용 |
+| 베스트/랭킹 | `controllers/bestController.js` + `services/best/bestRankingService.js` | `views/user/best/` |
+| 신상품(`/new`) | `routes/feature.js` → SDUI 랜딩, 폴백은 `productController.getList` | `views/user/landing.ejs` / `products/list.ejs` |
+| 쇼핑특가 / 쇼핑라이브 / 아울렛 / 추천 / 전문관 | `dealController.js`, `liveController.js`, `outletController.js`, `recommendController.js`, `specialtyController.js` | `views/user/deals/`, `live/`, `outlet/`, `recommend/`, `specialty/` |
 | 기획전 / 이벤트 / 공동구매 / 쿠폰존 | `routes/exhibition.js`, `event.js`, `group-buy.js`, `coupon.js` | `views/user/exhibition/`, `event/`, `group-buy/`, `coupon/` |
 | 고객센터 | `controllers/csController.js` | `views/user/cs/` |
 | 공지 | `controllers/noticeController.js` | `views/user/notices/list.ejs`, `detail.ejs` |
@@ -157,22 +199,22 @@ app.js
 
 ---
 
-## 6. SDUI (홈 전시 엔진)
+## 7. SDUI (전시 엔진)
 
-홈은 컨트롤러가 화면을 고정하지 않고 **DB 에 정의된 섹션을 조립**해 렌더합니다.
+홈은 컨트롤러가 화면을 고정하지 않고 **DB 에 정의된 섹션을 조립**해 렌더합니다. 홈 전용이 아닙니다 — 신상품 랜딩(`/new`, `page.slug='new'`)도 같은 엔진을 씁니다(`views/user/landing.ejs`).
 
 - **정의:** `page`(페이지) → `page_section`(섹션 행, `section_type` + `config_json` + `sort_order`) → `page_revision`(발행 스냅샷).
-- **조립:** `services/display/displayService.js` 가 스냅샷(없으면 라이브 `page_section`)을 읽어 `sectionRegistry.js` 로 뷰를 찾고, `resolvers/` 12종이 데이터를 채웁니다.
+- **조립:** `services/display/displayService.js` 가 스냅샷(없으면 라이브 `page_section`)을 읽어 `sectionRegistry.js`(**18종**)로 뷰를 찾고, `resolvers/` **17종**이 데이터를 채웁니다(`quick_menu` 만 리졸버 없이 `config_json` 으로 렌더).
 - **렌더:** `views/user/index.ejs` 가 `sections` 배열을 순서대로 `include` 합니다.
 - 상세는 [home.md](./home.md).
 
 ---
 
-## 7. DB 연결
+## 8. DB 연결
 
 - **설정:** `config/db.js`에서 MySQL connection pool 사용.
 - **컨트롤러:** `const pool = require('../config/db');` 후 `pool.query()` 등 사용.
 
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*

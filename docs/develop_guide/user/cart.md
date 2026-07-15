@@ -15,9 +15,11 @@
 
 ## 2. 장바구니 목록 (GET /cart)
 
-- **동작:** carts + products 조인으로 해당 user_id의 장바구니 항목 조회. 수량·금액 합계 계산 후 뷰에 전달.
+- **동작:** carts + products 조인으로 해당 user_id의 장바구니 항목 조회. **`dealSvc.applyDeals(rows, { idKey: 'product_id' })` 로 활성 쇼핑특가를 반영**한 뒤 수량·금액 합계를 계산해 뷰에 전달합니다. 즉 장바구니 금액은 `products.price` 가 아니라 **특가가 반영된 가격** 기준입니다 → [promotions.md](./promotions.md) §쇼핑특가.
 - **배송비:** `services/shipping/shippingCalculator.calcShippingFee({ mallId, subtotalAmount })` 로 몰별 정책(`shipping_policy`)을 조회해 `shipping` 을 전달합니다. 배송지가 아직 없으므로 **지역 할증 없이 기본 배송비만** 계산합니다(무료배송 임박 안내용). 계산 규칙은 [주문/결제](./checkout.md) §4 참고.
 - **전달 변수:** title, items, totalQuantity, totalAmount, shipping(fee, baseFee, extraFee, zone, isFree, freeThreshold, remainingForFree), currentUser, stockError (?error=stock&max= 시 표시).
+
+> ⚠️ **장바구니에는 쿠폰 미리보기가 없습니다.** 설계상 3차 범위이며, 현재 화면에 있는 혜택 UI 는 **무료배송 게이지**(`remainingForFree`) 하나뿐입니다. 쿠폰·포인트는 주문서(`/checkout`)에서만 계산합니다 — 장바구니에 쿠폰 계산을 얹으면 주문서와 두 벌로 갈라져 반드시 어긋납니다.
 
 ---
 
@@ -45,6 +47,7 @@
 
 - **동작:** 장바구니 항목으로 주문 1건 생성(orders + order_items), status='PAID'로 저장 후 해당 사용자 장바구니 비우기(한 트랜잭션). 주문 번호 생성 규칙: ORD-YYYYMMDD-XXX(3자리 난수). 완료 후 `/cart/complete?orderNumber=...`로 리다이렉트. 장바구니가 비어 있으면 `/cart`로 리다이렉트.
 - ⚠️ **간이 경로입니다.** 결제(토스)·배송비·쿠폰·포인트·재고 차감을 전혀 거치지 않습니다. 실제 구매 흐름은 `/checkout?cart=1`([주문/결제](./checkout.md))이며, 장바구니 화면의 주문 버튼도 그쪽을 씁니다.
+- **특가 상품이 담겨 있으면 이 경로를 타지 않습니다.** 트랜잭션 진입 전에 `dealSvc.resolveForProducts()` 로 확인해 활성 특가가 하나라도 있으면 **`/checkout?cart=1` 로 리다이렉트**합니다. 이 경로에는 `products.stock` UPDATE 가 없는데(재고 미차감), 특가는 **선착순 수량을 원자적으로 소진**해야 하므로 여기서 처리하면 오버셀이 납니다.
 
 ---
 
@@ -55,4 +58,4 @@
 
 ---
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-15*
