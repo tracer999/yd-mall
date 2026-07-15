@@ -1,8 +1,8 @@
 # 커머스 백본 — 주문 · 배송 · 클레임 · 쿠폰 · 배송비
 
-> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15)
+> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15 / 완료항목 제거: 2026-07-15)
 > 완료 기능의 정본은 `docs/develop_guide/` (개발자) 와 `docs/manual/` (운영자) 입니다.
-> 완료 항목의 설계 산문·DDL·체크리스트는 삭제했습니다. 원문은 git 이력에서 확인하세요.
+> 완료·이관된 항목 표와 설계 산문·DDL·체크리스트는 목적지 문서로 이관 확인 후 삭제했습니다. 원문은 git 이력에서 확인하세요.
 >
 > **이 문서는 쿠폰 · 주문/배송/클레임 · 배송비 3개 계획서를 하나로 합친 것입니다.**
 > (구 `coupon_design_and_development.md` · `order_claim_design_and_development.md` · `shipping_fee_design_and_development.md`)
@@ -11,20 +11,6 @@
 ---
 
 ## 쿠폰
-
-### 완료되어 이관된 항목
-
-| 차수 | 항목 | 이관된 문서 |
-|---|---|---|
-| 0차 | 결제 우회 차단(총액 서버 계산) · 취소 시 쿠폰 복원 · `max_total_uses` 재검증 | `develop_guide/user/checkout.md` |
-| 1차 (D1~D13) | 다운로드 쿠폰존 `/coupon` · 쿠폰 수령 · 쿠폰 코드 등록 UI · RESERVED 30분 점유 · 쿠폰함 4상태(사용가능·사용완료·기간만료·취소) | `develop_guide/user/promotions.md` · `develop_guide/user/mypage.md` · `develop_guide/admin/coupons.md` |
-| 2차 (P1~P11) | 정률 할인 · 최대 할인액 상한 · `scope_json` 적용범위(카테고리·브랜드) · 무료배송/배송비 쿠폰 · 주문쿠폰 1장 + 배송비쿠폰 1장 · 할인 계산기 분리(`services/coupon/discountCalculator.js`) | `develop_guide/admin/coupons.md` · `develop_guide/user/checkout.md` |
-| 운영 | 쿠폰 등록·지급·통계 화면 사용법 | `manual/admin/coupons.md` |
-
-#### 원문 정정
-
-원문 §7-1 의 *"다운로드 쿠폰이 0건이라 `/coupon` 은 준비중 랜딩"* 서술은 **낡았습니다.**
-현재 `issued_by='DOWNLOAD'` 쿠폰 **5건이 ACTIVE** 이며 쿠폰존은 정상 렌더됩니다.
 
 ### 잔여 과제
 
@@ -68,14 +54,6 @@
 ---
 
 ## 주문 · 배송 · 클레임
-
-### 완료되어 이관된 항목
-
-| 차수 | 항목 | 이관된 문서 |
-|---|---|---|
-| 0차 (결함 3종) | 고객 주문 취소 500 (`cancel_reason` 컬럼 부재) · 재고 이중 복원 (`resources_restored_at` 멱등 가드) · PG 취소 API 미호출 | `develop_guide/user/mypage.md` · `develop_guide/admin/claims.md` |
-| 1차 (O1~O3) | 상태 4축 분리(`orders.status` 유지 + `payment_status`·`claim_status`·`refund_status`) · `order_status_logs` 변경 이력 · `restoreOrderResources` 멱등화 | `develop_guide/admin/claims.md` |
-| 2차 (O5~O12) | 클레임 신청/승인/거절/철회 (`order_claims`) · 환불 (`order_refunds`, Toss 취소 · `payment_key` 없으면 `method='NONE'`) · 반품 배송비 귀책 판정 · 고객 `/mypage/claims` · 관리자 `/admin/claims` | `develop_guide/admin/claims.md` · `develop_guide/user/mypage.md` · `develop_guide/user/checkout.md` · `manual/admin/claims.md` |
 
 ### 잔여 과제
 
@@ -138,29 +116,6 @@ await transition(conn, orderId,
 ---
 
 ## 배송비
-
-### 완료되어 이관된 항목
-
-**S1~S16 전부 구현·검증 완료.**
-
-| 항목 | 이관된 문서 |
-|---|---|
-| `shipping_policy` · `shipping_zipcode_zone` 테이블 · `orders.shipping_fee` | `develop_guide/admin/shipping.md` |
-| `services/shipping/shippingCalculator.js` (서버 계산 — 클라이언트에서 배송비를 받지 않는다) | `develop_guide/admin/shipping.md` |
-| 체크아웃 배송비 계산 · 주문 저장 | `develop_guide/user/checkout.md` |
-| 장바구니 무료배송 게이지 | `develop_guide/user/cart.md` |
-| 관리자 `/admin/shipping-policy` (정책 · 우편번호 대역 편집) | `develop_guide/admin/shipping.md` · `manual/admin/shipping.md` |
-| 제주·도서산간 우편번호 대역 판정 | `develop_guide/admin/shipping.md` |
-| 배송지 변경 시 배송비 재계산 (AJAX) | `develop_guide/user/checkout.md` |
-| 취소 시 배송비 환불 | `develop_guide/user/mypage.md` |
-| 배송비 쿠폰 연계 (`SHIPPING_FREE`·`SHIPPING_FIXED`, `orders.shipping_coupon_id`) | `develop_guide/admin/coupons.md` |
-
-### 핵심 규칙 (요약만 유지 — 상세는 이관 문서로)
-
-- **무료배송 판정은 쿠폰·적립금 차감 *전* 상품 금액(`subtotal_amount`) 기준.**
-- **무료배송이어도 제주·도서산간 할증은 청구한다.** (기본료만 면제)
-- 정책 행이 없으면 기본값 — 기본료 `3000` / 무료배송 기준 `50000` / 제주 `+3000` / 도서산간 `+5000`.
-- `shipping_policy.is_active = 0` 이면 배송비 **전액 0**.
 
 ### 잔여 과제
 

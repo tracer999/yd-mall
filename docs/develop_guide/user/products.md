@@ -33,6 +33,17 @@
 - ⚠️ `newProductPredicate()` 의 `sql` 조각과 `params` 는 **반드시 같은 지점에서 함께** 삽입해야 합니다. 소비처가 문자열 이어붙이기 + `params.push()` 방식이라 순서가 어긋나면 **에러 없이 조용히 틀린 결과**가 나옵니다.
 - **NEW pill 은 `views/partials/product_card.ejs` 가 단독으로 판정**합니다(`isNewProduct(product)`). 목록·상세의 `badgeMap` 중복 판정은 제거됐습니다 — 카드에 NEW 뱃지를 그리는 코드를 새로 만들지 마세요.
 
+**술어 소비처** (모두 `newProductPredicate`/`newProductOrder`/`isNewProduct` 를 재사용):
+
+| 소비처 | 용도 |
+|--------|------|
+| `controllers/productController.js` | 상품목록 `?filter=new`, 정렬 `sale_start` |
+| `views/partials/product_card.ejs` | 카드 NEW pill (`isNewProduct`) |
+| `services/display/productGroupService.js:67` | SDUI 상품그룹 섹션의 `isNew` 조건 |
+| `routes/sitemap.js:215` | **신상품 RSS 피드** (`/rss.xml`) — 예전엔 판정과 무관하게 `created_at` 최신 50건을 뿌려 화면과 어긋났습니다 |
+
+(브랜드용 `newBrandPredicate`/`isNewBrand` 소비처는 [brands.md](../admin/brands.md) 참고 — `new_brand_list` 리졸버 등.)
+
 ---
 
 ## 2. 상품 목록
@@ -42,6 +53,8 @@
 - `GET /products` — 전체 상품
 - `GET /products/category/:categoryId` — 카테고리별 상품
 - `GET /products/brand/:brandId` — 브랜드별 상품
+
+**`/new`(신상품)는 SDUI 랜딩이 우선입니다** (`routes/feature.js:53-77`). `displayService.getPageBySlug(mallId, 'new')` 로 페이지를 찾고 섹션이 1개 이상이면 `user/landing`(섹션 조립)을 렌더합니다. 랜딩이 미시드(또는 섹션 0건)일 때만 `req.featurePreset = { filter:'new', menuKey:'NEW' }` 로 아래 `getList` 목록으로 폴백합니다.
 
 기능 메뉴(`routes/feature.js`)의 신상품 폴백 화면도 같은 `getList` 를 씁니다. 이때 `req.featurePreset` 이 `filter`·`sort`·`badge`·`menuKey`·`groupId`·`capLimit` 를 주입하며, **사용자 쿼리스트링보다 우선**합니다.
 (베스트는 더 이상 `getList` 를 쓰지 않습니다 — 전용 컨트롤러입니다 → [best.md](./best.md).)
@@ -133,6 +146,13 @@
 - **URL:** `POST /products/like/:id`
 - **인증:** 로그인 필수. 비로그인 시 401 JSON.
 - **동작:** likes 테이블에 이미 있으면 DELETE(liked: false), 없으면 INSERT(liked: true). JSON 응답 `{ success, liked }`.
+
+### 5.1 브랜드 찜 토글
+
+- **URL:** `POST /likes/brand/toggle` (`routes/likes.js:16` → `likeController.toggleBrandLike`)
+- **인증:** 로그인 필수(`ensureAuthenticated`). body: `brandId`.
+- **동작:** `categories`(`type='BRAND'`) 존재 확인 후 `brand_likes(user_id, category_id)` 를 토글. JSON `{ success, liked }`. 찜 목록은 `/mypage/brand-likes`.
+- ⚠️ **몰 검증이 없습니다.** `toggleBrandLike`(`likeController.js:52-55`)는 `id`·`type='BRAND'` 만 확인하고 `mall_id` 를 보지 않아 다른 몰의 브랜드도 찜됩니다 → [brands.md](../admin/brands.md) §7.
 
 ---
 

@@ -1,8 +1,8 @@
 # 판매 프로모션 모듈 — 공동구매 · 쇼핑라이브 · 쇼핑특가
 
-> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15)
+> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15 / 완료항목 제거: 2026-07-15)
 > 완료 기능의 정본은 `docs/develop_guide/` (개발자) 와 `docs/manual/` (운영자) 입니다.
-> 완료 항목의 설계 산문·DDL·구현 순서는 삭제했습니다. 원문은 git 이력에서 확인하세요.
+> 완료·이관된 항목 표와 설계 산문·DDL·구현 순서는 목적지 문서로 이관 확인 후 삭제했습니다. 원문은 git 이력에서 확인하세요.
 >
 > **이 문서는 공동구매 · 쇼핑라이브 · 쇼핑특가 3개 계획서를 하나로 합친 것입니다.**
 > (구 `group_buy_design_and_development.md` · `live sales.md` · `shopping_deal_design.md`)
@@ -12,20 +12,6 @@
 ---
 
 ## 공동구매
-
-### 완료되어 이관된 항목
-
-1차 범위인 **단순 공동구매형** 전량이 구현·이관됐다.
-
-| 항목 | 이관된 문서 |
-|---|---|
-| 고객 `/group-buy` 목록 · 상세 · 바로구매 | `docs/develop_guide/user/promotions.md` · `docs/manual/admin/group_buys.md` |
-| 상태 2층 구조(운영 `status` + 파생 `phase`) | `docs/develop_guide/admin/group_buys.md` |
-| 카드 12항목 표기 | `docs/develop_guide/user/promotions.md` |
-| 정렬 5종 | `docs/develop_guide/user/promotions.md` |
-| 관리자 CRUD · 상품 · 참여자 관리 | `docs/develop_guide/admin/group_buys.md` · `docs/manual/admin/group_buys.md` |
-| `group_buy_participation` 결제 트랜잭션 내 기록 | `docs/develop_guide/admin/group_buys.md` |
-| 참여 이력 있는 공동구매 삭제 차단 | `docs/develop_guide/admin/group_buys.md` |
 
 ### 잔여 과제
 
@@ -49,20 +35,6 @@
 
 ## 쇼핑라이브
 
-### 완료되어 이관된 항목
-
-1차 MVP(S1~S4) 전량이 구현·이관됐다.
-
-| 항목 | 이관된 문서 |
-|---|---|
-| `live_show` 계열 4테이블 | `docs/develop_guide/admin/lives.md` |
-| 방송 상태 5종 수동 전환 | `docs/develop_guide/admin/lives.md` · `docs/manual/admin/lives.md` |
-| 영상 URL 파싱 · 호스트 화이트리스트 | `docs/develop_guide/admin/lives.md` |
-| 고객 `/live` 목록 · 상세 3탭 · 하단 고정 바로구매 바 | `docs/develop_guide/user/promotions.md` |
-| 바로구매 + checkout 재계산 + `source_type='LIVE_SHOW'` | `docs/develop_guide/user/promotions.md` |
-| 관리자 `/admin/lives` — 상품 · 쿠폰 · 공지 CRUD | `docs/develop_guide/admin/lives.md` · `docs/manual/admin/lives.md` |
-| 주문 있는 라이브 삭제 차단 | `docs/develop_guide/admin/lives.md` |
-
 ### 잔여 과제
 
 1. **홈 `live_carousel` SDUI 섹션** — 계획상 2차.
@@ -83,20 +55,6 @@
 ---
 
 ## 쇼핑특가
-
-### 완료되어 이관된 항목
-
-| 항목 | 이관된 문서 |
-|---|---|
-| 스키마 3종 (`deal_category` · `deal` · `deal_item`) | `develop_guide/admin/deals.md` |
-| read-time 활성 판정 (`dealService.ACTIVE_WHERE` — 기간·시간창·요일·선착순) · 스케줄러 없음 | `develop_guide/admin/deals.md` |
-| 동일 상품 중복 특가 우선순위 (`priority DESC, deal_price ASC, id ASC`) | `develop_guide/admin/deals.md` |
-| 유효가 리졸버 3형태 — `applyDeals` · `dealJoinSql` · `resolveForProducts` | `develop_guide/admin/deals.md` |
-| 결제 반영 (`source_type='DEAL'`) + 선착순 수량 소진 · 취소 시 복원 | `develop_guide/user/checkout.md` |
-| `/deals` · `/deals/:code` 페이지 + `/deal/today` 301 리다이렉트 + GNB `SHOPPING_DEAL` 전환 | `develop_guide/user/promotions.md` |
-| 홈 `deal_carousel` 섹션 (활성 특가 0건이면 섹션 자동 소멸) | `develop_guide/user/promotions.md` |
-| 관리자 2화면 (`/admin/deal-categories` · `/admin/deals`) + 검증 4종 | `develop_guide/admin/deals.md` · `manual/admin/deals.md` |
-| 표시 경로 retrofit 14곳 (`applyDeals` 삽입) | `develop_guide/admin/deals.md` |
 
 ### 잔여 과제
 

@@ -60,6 +60,7 @@
 | `brand_profile` | `name_en`, `alias`, `initial`, `initial_chosung`, `tagline`, `story`, `country`, `official_yn`, `shop_enabled`, `hero_image_url`, `seo_title`, `seo_description`, `seller_name`, `is_seller` | `INSERT … ON DUPLICATE KEY UPDATE` (프로필 행이 없으면 생성) |
 
 - **초성은 이름에서 파생합니다.** `initial` 은 관리자가 고른 값이 있으면 그것을, 없으면 `toInitial(name)` 을 씁니다. `initial_chosung` 은 **항상** `toChosung(name)` 으로 재계산합니다(`shared/hangul.js`).
+- **최초 백필:** 기존 브랜드의 `brand_profile` 행·`initial_chosung`·`name_en`(+ 셀러명, `onboarded_at` 추정)은 `scripts/backfill_brand_profile.js` 가 일회성으로 채웠습니다(멱등 — 이미 채워진 값은 건드리지 않음). `onboarded_at` 은 전 몰 0건이라 **"브랜드 최초 상품의 `created_at`"** 으로 추정한 값이므로 관리자가 덮어쓸 수 있습니다.
 - **`INITIAL_BUCKETS`**: ㄱ~ㅎ / A~Z / # (`shared/hangul.js`)
 - 화면 하단에 `brand_category_stat` 기준 "이 브랜드가 취급하는 카테고리" 상위 20건을 **읽기 전용**으로 보여줍니다.
 - **입점일 `categories.onboarded_at`** 은 여기와 `/admin/categories` 브랜드 탭에서 입력합니다. 신규 브랜드 판정의 유일한 앵커입니다.
@@ -163,6 +164,18 @@ score = wSales × sales_count
 `brand_stat.benefit_count > 0` 인 브랜드를 뽑아 **쿠폰·기획전·특가·공동구매를 통합**해 슬라이더로 보여줍니다. **브랜드당 1건**만 노출합니다(같은 브랜드가 슬라이더를 도배하지 않게).
 
 **기획전 브랜드 귀속:** `exhibition.brand_category_id`(선택 컬럼)를 지정하면 그 기획전이 브랜드 허브·상세관 혜택에 노출됩니다.
+
+### 5.5 SDUI 리졸버 `new_brand_list` (`services/display/resolvers/new_brand_list.js`)
+
+홈 등 SDUI 페이지에 꽂는 **신규 입점 브랜드** 섹션 리졸버입니다. 판정은 `newArrival.newBrandPredicate('c')`(= `categories.onboarded_at` 기준, 기본 180일)를 씁니다 — 브랜드 허브의 `getNewBrands`(180일 하드코딩)와 달리 **`system_settings.new_brand_days` 를 실제로 읽습니다**(§7 참고).
+
+- `config.maxCount`(기본 8, 최대 24) 브랜드를 `onboarded_at DESC` 로, 각 브랜드의 대표 상품 `config.productCount`(기본 3, 최대 6, 0이면 미노출)를 `newArrival.newProductOrder('p')` 순으로 함께 싣습니다.
+- 대표 상품은 신상품일 필요가 없습니다(갓 입점한 브랜드의 얼굴이면 됨). `type='BRAND' AND is_active=1 AND mall_id=?` 로 스코프.
+- **신규 입점 브랜드가 0곳이면 `null` 을 반환**해 섹션 렌더를 통째로 건너뜁니다. 기존 브랜드 대부분이 `onboarded_at` NULL 이라, 관리자가 입점일을 넣기 전까지 이 섹션은 비어 있습니다.
+
+### 5.6 사이트맵의 브랜드 (`routes/sitemap.js`)
+
+`/sitemap.xml` 은 **기본몰(`mall.is_default=1`)의 브랜드만** 싣습니다(`sitemap.js:33-62`). 크롤러는 세션이 없어 기본몰로 보므로, 다른 몰의 `/brands/:id` 를 실으면 기본몰에서 열리지 않는 URL 을 색인시키기 때문입니다. 기본몰의 `type='BRAND'` 전 브랜드가 `/brands/{id}`(priority 0.7)로 들어갑니다.
 
 ---
 

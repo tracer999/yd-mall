@@ -1,8 +1,8 @@
 # 기획전 · 전문관 · 추천 — 큐레이션 전시 모듈
 
-> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15)
+> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15 / 완료항목 제거: 2026-07-15)
 > 완료 기능의 정본은 `docs/develop_guide/` (개발자) 와 `docs/manual/` (운영자) 입니다.
-> 완료 항목의 설계 산문·DDL·화면 명세는 삭제했습니다. 원문은 git 이력에서 확인하세요.
+> 완료·이관된 항목 표(계획 초과 달성·GNB 정정 포함)는 목적지 문서로 이관 확인 후 삭제했습니다. 원문은 git 이력에서 확인하세요.
 >
 > **이 문서는 기획전 · (추천/전문관) 2개 계획서를 하나로 합친 것입니다.**
 > (구 `exhibition_design_and_development.md` · `recommend_specialty_design_and_development.md`)
@@ -12,25 +12,6 @@
 ---
 
 ## 기획전
-
-### 완료되어 이관된 항목
-
-| 항목 | 이관된 문서 |
-|---|---|
-| DB 3종 (`exhibition` · `exhibition_section` · `exhibition_product`) | `develop_guide/admin/exhibitions.md` |
-| 고객 목록 `/exhibition` · 상세 `/exhibition/:id` (내부 탭 · 종료 정책 · 공유) | `develop_guide/user/promotions.md` |
-| 관리자 CRUD · 섹션 편집 · 상품 매핑 | `develop_guide/admin/exhibitions.md` · `manual/admin/exhibitions.md` |
-| 기획전 0건일 때 준비중 폴백 | `develop_guide/user/promotions.md` |
-| 본문 HTML 새니타이즈 | `develop_guide/admin/exhibitions.md` |
-| 커스텀 메뉴 `EXHIBITION` 리졸버 (URL 직접입력 대신 내부 리소스 연결) | `develop_guide/admin/exhibitions.md` |
-
-#### 계획 초과 달성 (원문에 없던 것)
-
-| 항목 | 내용 |
-|---|---|
-| **전문관** | `exhibition_type = 'SPECIALTY'` 로 구현. **신규 테이블 0개** — 기존 3종을 그대로 재사용했다 |
-| **브랜드 귀속** | `exhibition.brand_category_id` 로 기획전을 브랜드에 묶는다 |
-| **쇼핑특가 연동** | 기획전 상품 카드에도 특가(`dealService.applyDeals`)가 적용된다 |
 
 ### 잔여 과제
 
@@ -48,17 +29,6 @@
 
 ## 추천 · 전문관
 
-### 완료되어 이관된 항목
-
-| 항목 | 이관된 문서 |
-|---|---|
-| 추천 랜딩 4섹션(개인화 · 그룹 · MD · 많이보는) | `docs/develop_guide/user/promotions.md` |
-| 추천 근거 문구 · 비로그인 CTA · noindex | `docs/develop_guide/user/promotions.md` |
-| 관리자 `/admin/recommend-groups` | `docs/develop_guide/admin/recommend.md` · `docs/manual/admin/recommend.md` |
-| 전문관 = `exhibition_type='SPECIALTY'` 재사용(DDL 0) | `docs/develop_guide/admin/recommend.md` |
-| `/specialty` 목록 · 상세 · 301 리다이렉트 | `docs/develop_guide/user/promotions.md` |
-| GNB 메뉴 활성화 | `docs/develop_guide/admin/recommend.md` |
-
 ### 잔여 과제
 
 1. **추천 랜딩 최상단 배너 슬롯 미구현** — 계획 §4-3 의 `group_key='menu:RECOMMEND'` 배너가 코드에 없다.
@@ -66,12 +36,6 @@
 3. **전문관 전용 상세 템플릿(CATEGORY_SHOP / BRAND_SHOP)** — 현재 전부 TAB_SHOP 으로 폴백된다. (위 [기획전](#기획전) 잔여 1번과 동일 뿌리)
 4. **개인화 고도화(주문 · 좋아요 기반) · 매거진형** — 데이터 부족으로 보류.
 5. **`recommend_group` 현재 0행** — 운영자 큐레이션이 아직 하나도 없다.
-
-### 정정
-
-GNB 슬롯 부족 해소는 계획서의 (A) · (B) 안이 아니라 **제3안**으로 처리됐다 —
-쿠폰 메뉴를 유지하고 **RANKING · MEMBERSHIP 을 `is_enabled=0` 으로 내렸다.**
-`max_gnb_items` 는 12 그대로다.
 
 ---
 

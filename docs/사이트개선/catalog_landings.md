@@ -1,8 +1,8 @@
 # 카탈로그 랜딩 — 베스트/랭킹 · 신상품 · 아울렛 · 브랜드
 
-> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15)
+> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15 / 완료항목 제거: 2026-07-15)
 > 완료 기능의 정본은 `docs/develop_guide/` (개발자) 와 `docs/manual/` (운영자) 입니다.
-> 원문의 점수 산식·스키마·배포 순서·체크리스트는 이관 후 삭제했습니다. 원문은 git 이력에서 확인하세요.
+> 완료·이관된 항목 표와 원문 정정 기록은 목적지 문서로 이관 확인 후 삭제했습니다. 원문은 git 이력에서 확인하세요.
 >
 > **이 문서는 베스트/랭킹 · 신상품 · 아울렛 · 브랜드 허브 4개 계획서를 하나로 합친 것입니다.**
 > (구 `best_ranking_design_and_development.md` · `new_arrivals_dev_plan.md` · `outlet_design_and_development.md` · `brand_hub_dev_plan.md`)
@@ -11,28 +11,6 @@
 ---
 
 ## 베스트 / 랭킹
-
-### 완료되어 이관된 항목
-
-**1차 전부 완료.** 아래가 전부 이관됐다.
-
-| 항목 | 이관된 문서 |
-|---|---|
-| 점수 산식(판매 ×5 + 좋아요 ×3 + 조회 ×0, 조회수 tie-break) · 가중치 `best_score_config` | `develop_guide/admin/best_groups.md` |
-| 기간 4종 (실시간 / 일간 / 주간 / 월간, 롤링 윈도우) | `develop_guide/admin/best_groups.md`, `develop_guide/user/best.md` |
-| 그룹 3종 (`ALL` / `CATEGORY` / `BRAND`) | `develop_guide/admin/best_groups.md` |
-| MD 픽(`best_pin`) — **조회 시점 병합**(스냅샷에 굽지 않음) | `develop_guide/admin/best_groups.md` |
-| 슬롯 통째 교체 + `prev_rank_no` 보존 | `develop_guide/admin/best_groups.md` |
-| 배치 CLI (`scripts/calc_best_ranking.js`) | `develop_guide/admin/best_groups.md` |
-| 관리자 화면 `/admin/best-groups` (집계상태·가중치·탭·MD 픽) | `develop_guide/admin/best_groups.md`, `manual/admin/best.md` |
-| 고객 화면 `/best` + 홈 `best_ranking` 섹션 전환 | `develop_guide/user/best.md` |
-
-#### 원문 정정 (원문이 틀렸다)
-
-| 원문 | 실제 |
-|---|---|
-| §9 "미실행: `migrate_best_home_section.sql` (배포 후)" | **실행 완료.** 홈에 `best_ranking` 섹션이 실재한다 (mall 1 · 2 · 6) |
-| §7 "cron 4줄 등록 (기간별로 주기가 다르다)" | **크론 1줄 + DB 스케줄 테이블(`best_ranking_schedule`)** 방식으로 대체됐다. 기간별 주기는 **관리자 화면에서 편집**한다. crontab 을 4줄로 늘리지 말 것 |
 
 ### 잔여 과제 (원문 §10 "2차")
 
@@ -66,18 +44,6 @@
 
 ## 신상품
 
-### 완료되어 이관된 항목
-
-| 항목 | 이관된 문서 |
-|---|---|
-| `products.sale_start_date` · `categories.onboarded_at` 컬럼 | `docs/develop_guide/admin/products.md` |
-| `new_product_days` · `new_brand_days` 설정 | `docs/develop_guide/admin/products.md` · `docs/manual/admin/products.md` |
-| 신상품 판정 모듈 `services/catalog/newArrival.js` | `docs/develop_guide/user/products.md` |
-| 소비처 전부(productController · sitemap RSS · productGroupService · product_card) | `docs/develop_guide/user/products.md` |
-| 관리자 상품 폼 · 목록 · 일괄 지정 | `docs/develop_guide/admin/products.md` · `docs/manual/admin/products.md` |
-| `/new` SDUI 랜딩 6섹션 + 리졸버 3종 | `docs/develop_guide/user/products.md` · `docs/manual/user/products.md` |
-| THEME 축 폐기(코드 레벨) | `docs/develop_guide/user/products.md` |
-
 ### 잔여 과제
 
 1. **관리자 브랜드 탭의 "입점일 최신순" 정렬 옵션 미구현.**
@@ -88,7 +54,7 @@
 - **THEME 카테고리 id=5 · 6 이 DB 에서 여전히 `is_active=1`** — 계획의 비활성화 처리가 미이행이다. 코드가 `/best` · `/new` 로 리다이렉트하므로 고객 노출 경로는 막혀 있으나 데이터는 남아 있다.
 - **브랜드 찜이 `mall_id` 를 검증하지 않는다** (`controllers/likeController.js`) — 상세는 이 문서 [브랜드](#브랜드) 절 참고.
 
-### 정정하여 기록
+### 현재 데이터 상태 (원문 premise 정정)
 
 원문은 "몰2는 `sale_start_date` 를 NULL 로 유지 → 몰2 신상품 0건" 이라고 적었으나,
 **실제 DB 는 전 몰 전 상품에 `sale_start_date` 가 채워져 있다.**
@@ -97,19 +63,6 @@
 ---
 
 ## 아울렛
-
-### 완료되어 이관된 항목
-
-| 항목 | 이관된 문서 |
-|---|---|
-| `outlet_product` · `outlet_setting` 테이블 | `docs/develop_guide/admin/outlet.md` |
-| `categories.type='OUTLET'` | `docs/develop_guide/admin/outlet.md` |
-| 할인 사유 7종 · 상품 등급 · 하자 고지 검증 | `docs/develop_guide/admin/outlet.md` · `docs/manual/admin/outlet.md` |
-| 관리자 `/admin/outlet` + 아울렛 카테고리 + 상품 검색 모달 | `docs/develop_guide/admin/outlet.md` · `docs/manual/admin/outlet.md` |
-| 고객 `/outlet` — 3축 필터 · 정렬 5종 | `docs/develop_guide/user/promotions.md` |
-| 상품 상세 하자 고지 블록 | `docs/develop_guide/user/promotions.md` |
-| `show_in_normal_list` 일반 목록 분리 | `docs/develop_guide/admin/outlet.md` |
-| 콘텐츠 게이트 (+ GROUP_BUY · LIVE 확장) | `docs/develop_guide/admin/outlet.md` |
 
 ### 잔여 과제
 
@@ -122,7 +75,7 @@
   그 결과 신규 몰(mall 6)은 이 3개 메뉴가 전부 `is_enabled=0` 이다.
   (원문 §7-4 의 경고가 여전히 유효하다. `mall_builder_plan.md` 의 결함 1과 동일 뿌리)
 
-### 폐기된 결정
+### 폐기된 결정 (되살리지 말 것)
 
 원문 §1-4 의 **"결정 2 — OUTLET 을 `module_ready=0` 으로 내린다"** 는 **실행되지 않았다.**
 대신 **콘텐츠 게이트**(콘텐츠가 없으면 메뉴를 자동으로 숨김)가 채택됐고, `module_ready` 는 `1` 이다.
@@ -130,20 +83,6 @@
 ---
 
 ## 브랜드
-
-### 완료되어 이관된 항목
-
-| 항목 | 이관된 문서 |
-|---|---|
-| `brand_profile` · `brand_stat` · `brand_category_stat` 테이블 | `docs/develop_guide/admin/brands.md` |
-| 백필(초성 인덱스 · 영문명) | `docs/develop_guide/admin/brands.md` |
-| 브랜드 타일 degrade(로고 없는 브랜드 처리) | `docs/develop_guide/user/products.md` |
-| 브랜드 홈 `/brands` — 검색 · 이번주 혜택 슬라이더 · 인기 폴백 사다리 · 신규 브랜드 · 카테고리별 · 초성 색인 | `docs/develop_guide/user/products.md` · `docs/manual/user/brands.md` |
-| 브랜드 상세관 5탭 | `docs/develop_guide/user/products.md` · `docs/manual/user/brands.md` |
-| 관심 브랜드 찜 | `docs/develop_guide/user/products.md` · `docs/manual/user/brands.md` |
-| 관리자 `/admin/brands` + 집계 재계산 | `docs/develop_guide/admin/brands.md` · `docs/manual/admin/brands.md` |
-| `new_brand_list` SDUI 리졸버 | `docs/develop_guide/admin/brands.md` |
-| sitemap 몰 필터 | `docs/develop_guide/admin/brands.md` |
 
 ### 잔여 과제
 

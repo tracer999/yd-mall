@@ -1,30 +1,8 @@
 # 몰 빌더 설계서 — 몰 생성 · 구성 · 디자인 관리
 
-> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15)
+> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 완료항목 제거: 2026-07-15)
 > 완료 기능의 정본은 `docs/develop_guide/` (개발자) 와 `docs/manual/` (운영자) 입니다.
-> 원문의 as-is 조사·설계 산문·DDL은 이관 후 삭제했습니다.
-
----
-
-## 완료되어 이관된 항목
-
-| P | 항목 | 이관된 문서 |
-|---|---|---|
-| P1 | 스키마 — `navigation_config.nav_mode`, `mall.preset_key` | `develop_guide/admin/malls.md` |
-| P2 | `navigationService` 공통 노드 shape + `buildSplit` / `buildUnified`, `menuData.toViewItem` 의 `children` 재귀 매핑 | `develop_guide/admin/storefront_menus.md` |
-| P3 | 헤더 디스패처 + 스킨 2종 (`_main_right_utility` / 드로어형) + 재귀 GNB 노드 파셜 | `develop_guide/user/layout.md` |
-| P4 | 프리셋 & 몰 프로비저닝 (`services/mall/presets.js`, `mallProvisioner.js`) | `develop_guide/admin/malls.md` |
-| P6 | 메뉴 미리보기 확장 (`nav_mode` 자동 분기) | `develop_guide/admin/storefront_menus.md` |
-
-**설계와 달라진 확정 사항 (구현이 정답)**
-
-| 설계서 | 실제 |
-|---|---|
-| 프리셋 키 `large_mall` / `small_mall` | **`split_gnb` / `drawer_gnb`** — 몰의 "규모" 축은 폐기했다. 상품 1만 개인 몰이 드로어형을 쓸 수도 있다 |
-| 프로비저닝 모드 `fill` / `overwrite` | **`create` / `reapply`** |
-| `mall.mall_type` 컬럼 추가 | **도입하지 않기로 확정** (§0 정정대로). 소스 오브 트루스는 `navigation_config` 다 |
-| 소형몰 인라인 스킨 `compact_inline_v1` | 만들었다가 폐기. **스킨은 2종 고정** (`main_right_utility_v1` + `compact_drawer_v1`) |
-| — | **계획 초과 달성**: 홈 섹션 데이터 소스 동반 생성 (`product_group`·`best_group` + 초기 랭킹 집계). 새 몰이 만들어지는 즉시 홈이 채워진다 |
+> 완료·이관된 항목 표와 "설계와 달라진 확정 사항" 기록은 목적지 문서(주로 `develop_guide/admin/malls.md` · `storefront_menus.md` · `develop_guide/user/layout.md`)로 이관 확인 후 삭제했습니다. 원문은 git 이력에서 확인하세요.
 
 ---
 

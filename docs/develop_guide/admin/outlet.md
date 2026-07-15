@@ -122,6 +122,8 @@ OUTLET: async (mallId) => {
 - **fail-safe:** 게이트 판정 중 예외가 나면 **숨기는 쪽**으로 갑니다(빈 메뉴를 보여주느니 메뉴가 없는 편이 낫다). 실패는 캐시하지 않습니다.
 - 게이트가 GNB 를 막아도 **직접 URL 로 들어오는 경로**는 `controllers/outletController.js` 의 0건 폴백(`COMING_SOON.outlet`)이 막습니다.
 
+> **아울렛만 게이트를 쓰는 게 아닙니다.** `CONTENT_GATES` 에는 `OUTLET` 외에 `GROUP_BUY`·`LIVE` 도 있습니다(`navigationService.js:179-180`). 다만 판정 기준이 다릅니다 — 아울렛은 상시 채널이라 `min_product_count`(기본 30) **임계치**를, 공동구매·라이브는 **"공개된 1건 이상"** 을 봅니다(`groupBuyService.hasAnyPublic`/`liveService.hasAnyPublic`). 한 건만 열려도 그 자체가 콘텐츠라서입니다. 세 게이트 모두 콘텐츠 0건이면 GNB 에서 메뉴를 조용히 숨깁니다.
+
 ---
 
 ## 6. 몰별 설정 (`outlet_setting`)

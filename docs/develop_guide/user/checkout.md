@@ -144,6 +144,8 @@
 7. **공동구매 참여 기록**: `groupBuyService.recordParticipation(conn, orderId)` — 같은 트랜잭션에서 `order_items.source_type='GROUP_BUY'` 라인을 집계합니다(유니크 키 + INSERT IGNORE 로 재실행 안전).
 8. commit. 중간에 예외가 나면 rollback 후 throw.
 
+> **쇼핑특가 선착순 소진도 이 트랜잭션 안에서 일어납니다.** `dealSvc.consumeDealQuota(conn, orderId)`(`checkoutController.js:224`)가 `order_items.source_type='DEAL'` 라인의 `deal_item.sold_qty` 를 원자적으로 소진하고, 한도를 넘으면 재고 부족과 동일하게 **rollback + Toss 결제 취소**로 갑니다 → [deals.md](../admin/deals.md) §5.2.
+
 ---
 
 ## 11. 결제 실패 (GET /checkout/fail)
@@ -186,6 +188,7 @@
 - **재고**: 결제 확정 상태(PAID·PREPARING·SHIPPED·DELIVERED)였던 주문만 `stock = stock + quantity`. PENDING 은 차감 전이라 되돌릴 것이 없습니다.
 - **쿠폰**: `used_at`·`order_id` 와 **점유(`reserved_order_id`)를 함께 해제**합니다. PENDING 주문은 점유로만 묶여 있어 order_id 만 풀면 쿠폰이 영영 잠깁니다. `system_settings.coupon_restore_on_cancel` 로 끌 수 있습니다(미설정 시 복원).
 - **적립금**: 사용분(`point_used`) 환급(`ORDER_CANCEL_RESTORE`) + 구매 적립분 회수(`ORDER_CANCEL_REVOKE`, 잔액을 음수로 만들지 않음). `point_transactions` 이력으로 중복을 막습니다.
+- **쇼핑특가 선착순 복원**: `source_type='DEAL'` 라인의 소진 수량은 `dealSvc.restoreDealQuota(conn, orderId)`(`orderCancelService.js:67`)가 `GREATEST(0, sold_qty - ?)` 로 되돌립니다. 결제 확정 시 §10 의 `consumeDealQuota` 와 짝을 이룹니다 → [deals.md](../admin/deals.md) §5.2.
 - ⚠️ PG(토스) 결제 취소 API 는 이 경로에서 호출하지 않습니다. 상태만 CANCELLED 로 바뀝니다. (결제 직후 재고 부족으로 인한 자동 취소만 §9-7 에서 토스 API 를 호출합니다.)
 
 ---

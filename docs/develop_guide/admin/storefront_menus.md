@@ -259,6 +259,8 @@
 
 `res.locals` 에 `nav`, `gnbMenus`, `categoryButton`, `rightRailMenus`, `headerUtilMenus`, `categoryTree`, `menuCategories`(THEME 카테고리 — 레거시 하위호환), `currentPath` 를 주입합니다. 조회 실패 시 예외를 삼키고 **빈 메뉴 + 카테고리 버튼 골격만** 유지해 헤더가 깨지지 않게 합니다.
 
+- `navigationService` 항목을 뷰 형태로 변환하는 것은 `toViewItem(item)`(`menuData.js:30`)입니다. `children` 을 **재귀로 매핑**(`(item.children||[]).map(toViewItem)`)해 unified GNB 의 카테고리 하위 뎁스(2·3뎁스 드롭다운)를 표현합니다. split 에서는 `children` 이 항상 빈 배열이라 기존 뷰가 그대로 돕니다. 예전엔 여기서 children 을 버려 하위 뎁스를 표현할 수단이 없었습니다.
+
 ---
 
 ## 7. 표준 URL (`routes/feature.js`)
@@ -307,6 +309,21 @@
 > `footer` · `mobile_quick` position 은 조립 코드에는 있으나 **`feature_menu` 카탈로그에 행이 없습니다.** 이 두 위치는 현재 커스텀 메뉴로만 채웁니다.
 >
 > `routes/feature.js` 는 app.js 에서 `'/'` 에 **먼저** 마운트됩니다. 여기에 `/group-buy` · `/coupon` · `/live` · `/outlet` 같은 경로를 남겨두면 뒤에 오는 전용 라우터에 요청이 영영 닿지 못합니다.
+
+### 7.3 GNB 활성화 현황 (현재 데이터)
+
+`mall_feature_menu.is_enabled` 스냅샷 (기본몰 1·종합관 2 기준). 세 몰 모두 꺼진 메뉴만 굳이 적습니다.
+
+| feature_code | is_enabled | 메모 |
+|--------------|:----------:|------|
+| RANKING | **0** (전 몰) | 베스트가 흡수 → `/ranking` 301 → `/best` |
+| MEMBERSHIP | **0** (전 몰) | GNB 대신 `/event` 하위 섹션. 라우트는 유지 |
+| COUPON | **0** (전 몰) | 라우트는 살아 있음(0건이면 준비중 폴백) |
+| SHOPPING_DEAL | 1 | 구 `TODAY_DEAL` 을 흡수 — `/deals` 랜딩(구 `/deal/today` 는 301) |
+| SPECIALTY | 1 | 전문관(`exhibition_type='SPECIALTY'`). `routes/specialty.js` — 목록 `/specialty` 전용, **상세 `/specialty/:slug` 는 `exhibitionController.getDetail` 공유**(유형 불일치 시 301) |
+| OUTLET · GROUP_BUY · LIVE | 1 | **콘텐츠 게이트** 대상(§6.2) — 켜져 있어도 콘텐츠 0건이면 숨김 |
+
+- **`max_gnb_items` 절단은 `navigationService` 가 적용**합니다 — `buildSplit`(`services/menu/navigationService.js:449`) / `buildUnified`(`:519`). 기본몰·종합관은 **12**, 소형몰(unified)은 8입니다(§8.4). unified 는 이 상한을 일반 메뉴에만 적용하고 카테고리는 자르지 않습니다.
 
 ---
 
