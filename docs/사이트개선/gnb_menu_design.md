@@ -32,7 +32,7 @@
 | # | 과제 | 현재 상태 |
 |---|---|---|
 | 1 | **이벤트 유형 확장** — `COUPON_PACK`(쿠폰팩) · `ATTENDANCE`(출석) · `PURCHASE`(구매인증) | 현재 `PARTICIPABLE_TYPES = ['APPLY']` 화이트리스트가 나머지를 차단. `event.event_type` enum 에는 값이 이미 있다 |
-| 2 | **멤버십 등급 시스템** | `user_grade` 테이블 없음. 등급·혜택은 `membershipInfo.js` **정적 상수**. 구매액 집계 배치 + `users.grade_id` 가 필요 |
+| 2 | **멤버십 등급 시스템** | **설계·배경 전체를 [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 로 이관.** (요약: `membership_grade`/`user_grade` 없음, 등급·혜택은 `membershipInfo.js` 정적 상수, 구매액 집계 배치 필요) |
 | 3 | **이벤트 매출 귀속** | `order_items.source_type`/`source_id` 컬럼은 존재하나 `GROUP_BUY`·`LIVE_SHOW`·`DEAL` 만 기록. **EVENT·EXHIBITION 은 미기록** |
 | 4 | **급상승 랭킹 화면** | `best_ranking.prev_rank_no` 는 배치가 저장 중. 화면만 없다 |
 
@@ -41,7 +41,7 @@
 - **이벤트 유형 확장 시 동시성** — 선착순은 애플리케이션 COUNT 후 INSERT 하면 초과 발급된다. 기존 APPLY 가 쓰는 조건부 UPDATE 패턴(`UPDATE event SET issued_count = issued_count + 1 WHERE id = ? AND (issue_limit IS NULL OR issued_count < issue_limit)` → `affectedRows = 0` 이면 마감)을 그대로 따를 것. 중복 참여는 `UNIQUE(event_id, user_id)` 로 DB 가 막는다.
 - **출석(ATTENDANCE)은 서버 시각 기준** — 클라이언트 날짜를 신뢰하지 말 것.
 - **쿠폰팩(COUPON_PACK) 지급** — `couponController` 의 `issued_by='ADMIN'` 경로를 재사용한다.
-- **멤버십 등급을 미룬 이유** — 주문 데이터가 없어서다(설계 시점 `orders` 21건). 구매액 기반 등급을 계산할 대상이 없으면 등급표가 전부 최하위로 나온다. 주문이 쌓인 뒤 착수한다.
+- **멤버십 등급** — 미룬 배경·연동 지점은 [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 부록 A 로 이관.
 
 ---
 

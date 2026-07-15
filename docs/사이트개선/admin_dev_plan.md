@@ -69,7 +69,7 @@
 
 ### 회원 / 프로모션
 
-- **회원 등급 · 멤버십 혜택 관리** — 등급/혜택이 정적 하드코딩이다.
+- **회원 등급 · 멤버십 혜택 관리** — 등급/혜택이 정적 하드코딩이다. **설계·연동 지점은 [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 로 이관**(관리자 화면·평가 정책·혜택 정책·배치 전체).
 - **리뷰 관리** — `reviews` 테이블은 있으나 관리자 화면이 없다.
 - **이벤트 유형 확장** — 현재 APPLY(응모)형만 참여 가능. `COUPON_PACK` · `ATTENDANCE` · `PURCHASE` 미착수.
 
