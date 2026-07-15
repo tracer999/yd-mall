@@ -1,0 +1,115 @@
+# 판매 프로모션 모듈 — 공동구매 · 쇼핑라이브 · 쇼핑특가
+
+> **이 문서는 잔여 과제만 남긴 축약본입니다.** (정리: 2026-07-15 / 통합: 2026-07-15)
+> 완료 기능의 정본은 `docs/develop_guide/` (개발자) 와 `docs/manual/` (운영자) 입니다.
+> 완료 항목의 설계 산문·DDL·구현 순서는 삭제했습니다. 원문은 git 이력에서 확인하세요.
+>
+> **이 문서는 공동구매 · 쇼핑라이브 · 쇼핑특가 3개 계획서를 하나로 합친 것입니다.**
+> (구 `group_buy_design_and_development.md` · `live sales.md` · `shopping_deal_design.md`)
+> 셋 다 체크아웃에서 `source_type`(`GROUP_BUY`·`LIVE_SHOW`·`DEAL`)을 기록하는 판매 이벤트 모듈이며,
+> 공동구매·쇼핑라이브는 **1인 구매 제한 미작동**이라는 동일 결함을 공유합니다.
+
+---
+
+## 공동구매
+
+### 완료되어 이관된 항목
+
+1차 범위인 **단순 공동구매형** 전량이 구현·이관됐다.
+
+| 항목 | 이관된 문서 |
+|---|---|
+| 고객 `/group-buy` 목록 · 상세 · 바로구매 | `docs/develop_guide/user/promotions.md` · `docs/manual/admin/group_buys.md` |
+| 상태 2층 구조(운영 `status` + 파생 `phase`) | `docs/develop_guide/admin/group_buys.md` |
+| 카드 12항목 표기 | `docs/develop_guide/user/promotions.md` |
+| 정렬 5종 | `docs/develop_guide/user/promotions.md` |
+| 관리자 CRUD · 상품 · 참여자 관리 | `docs/develop_guide/admin/group_buys.md` · `docs/manual/admin/group_buys.md` |
+| `group_buy_participation` 결제 트랜잭션 내 기록 | `docs/develop_guide/admin/group_buys.md` |
+| 참여 이력 있는 공동구매 삭제 차단 | `docs/develop_guide/admin/group_buys.md` |
+
+### 잔여 과제
+
+1. **장바구니 담기** — 현재 바로구매만 지원. `carts` 테이블에 가격 · 옵션 컬럼이 없어 공동구매가를 실을 자리가 없다.
+2. **옵션/SKU 선택** — 몰에 옵션 테이블 자체가 없다.
+3. **목표 달성형 / 단계별 가격형** — 2 · 3차 범위.
+4. **`minimum_success_quantity` · `fail_policy` 컬럼 미도입** — 목표 미달 처리 · 자동 취소 로직이 없다.
+5. **혜택 영역(전용 쿠폰 · 사은품 · 카드 혜택)** — `group_buy_coupon` 테이블 미생성.
+6. **유의사항 전용 테이블(`group_buy_notice`) 미생성** — `group_buy.notice` TEXT 컬럼 1개로 대체 중.
+7. **상단 배너 / 카테고리 필터 / 관리자 목록 필터 확장** — 관리자 목록 필터는 현재 상태 + 상품명뿐.
+8. **이벤트 로그 · 성과 통계** 미구현.
+
+### 알려진 결함
+
+- ⚠️ **`per_user_limit_quantity`(1인 구매 제한)가 작동하지 않는다.**
+  관리자 폼(`views/admin/group-buys/edit.ejs:311`)에서 값을 저장할 수는 있지만,
+  `services/groupBuy/groupBuyService.js` 의 `resolveLine()`(:330-378)이 이 값을 **읽지 않는다** — min/max 수량과 재고만 검사한다.
+  운영자가 "제한이 걸려 있다"고 오인할 수 있으므로 우선 처리 대상이다. (아래 [쇼핑라이브](#쇼핑라이브)도 동일 문제)
+
+---
+
+## 쇼핑라이브
+
+### 완료되어 이관된 항목
+
+1차 MVP(S1~S4) 전량이 구현·이관됐다.
+
+| 항목 | 이관된 문서 |
+|---|---|
+| `live_show` 계열 4테이블 | `docs/develop_guide/admin/lives.md` |
+| 방송 상태 5종 수동 전환 | `docs/develop_guide/admin/lives.md` · `docs/manual/admin/lives.md` |
+| 영상 URL 파싱 · 호스트 화이트리스트 | `docs/develop_guide/admin/lives.md` |
+| 고객 `/live` 목록 · 상세 3탭 · 하단 고정 바로구매 바 | `docs/develop_guide/user/promotions.md` |
+| 바로구매 + checkout 재계산 + `source_type='LIVE_SHOW'` | `docs/develop_guide/user/promotions.md` |
+| 관리자 `/admin/lives` — 상품 · 쿠폰 · 공지 CRUD | `docs/develop_guide/admin/lives.md` · `docs/manual/admin/lives.md` |
+| 주문 있는 라이브 삭제 차단 | `docs/develop_guide/admin/lives.md` |
+
+### 잔여 과제
+
+1. **홈 `live_carousel` SDUI 섹션** — 계획상 2차.
+2. **장바구니 담기 · Q&A** — 2차.
+3. **이벤트 로그 · 성과 대시보드** — 3차.
+
+### 알려진 결함
+
+1. ⚠️ **라이브 상품을 저장할 때마다 `per_user_limit_quantity` 가 null 로 덮어써진다.**
+   `views/admin/lives/edit.ejs` 에 해당 입력 필드가 **없는데도**
+   `controllers/admin/liveController.js`(:561, :573)는 이 컬럼을 UPDATE 문에 포함한다.
+2. ⚠️ **1인 구매 제한이 검증되지 않는다.**
+   `liveService.resolveLine()`(:468-515)이 회원 누적 구매량을 조회하지 않는다 — min/max 수량과 재고만 검사한다.
+   (위 [공동구매](#공동구매)도 동일한 문제)
+3. **라이브가에는 쇼핑특가가 겹쳐 적용되지 않는다**(`source_type='LIVE_SHOW'`).
+   라이브가를 특가보다 비싸게 잡으면 고객이 손해를 본다 — 운영 주의사항으로 유지한다.
+
+---
+
+## 쇼핑특가
+
+### 완료되어 이관된 항목
+
+| 항목 | 이관된 문서 |
+|---|---|
+| 스키마 3종 (`deal_category` · `deal` · `deal_item`) | `develop_guide/admin/deals.md` |
+| read-time 활성 판정 (`dealService.ACTIVE_WHERE` — 기간·시간창·요일·선착순) · 스케줄러 없음 | `develop_guide/admin/deals.md` |
+| 동일 상품 중복 특가 우선순위 (`priority DESC, deal_price ASC, id ASC`) | `develop_guide/admin/deals.md` |
+| 유효가 리졸버 3형태 — `applyDeals` · `dealJoinSql` · `resolveForProducts` | `develop_guide/admin/deals.md` |
+| 결제 반영 (`source_type='DEAL'`) + 선착순 수량 소진 · 취소 시 복원 | `develop_guide/user/checkout.md` |
+| `/deals` · `/deals/:code` 페이지 + `/deal/today` 301 리다이렉트 + GNB `SHOPPING_DEAL` 전환 | `develop_guide/user/promotions.md` |
+| 홈 `deal_carousel` 섹션 (활성 특가 0건이면 섹션 자동 소멸) | `develop_guide/user/promotions.md` |
+| 관리자 2화면 (`/admin/deal-categories` · `/admin/deals`) + 검증 4종 | `develop_guide/admin/deals.md` · `manual/admin/deals.md` |
+| 표시 경로 retrofit 14곳 (`applyDeals` 삽입) | `develop_guide/admin/deals.md` |
+
+### 잔여 과제
+
+원문 §8 이 **인지하고 넘긴 한계**다. 전부 금전 사고가 아니라 노출·UX 거칠기다.
+
+| # | 한계 | 내용 / 해제 조건 |
+|---|---|---|
+| 1 | **가격순 정렬에 특가 미반영** | `/products?sort=price_asc` 는 여전히 `products.price` 로 SQL 정렬한 뒤 페이지 안에서만 특가가로 덮는다. 특가 상품이 가격순 상단으로 올라오지 않는다. `dealJoinSql()` 을 기존 6개 정렬 지점에 **retrofit 하지 않았다** → *해제 조건: 없음. 필요해지면 점진 적용* |
+| 2 | **선착순 예약(reserve) 없음** | `deal_item.sold_qty` 는 **결제 확정 시점**에만 깎인다. 잔여 1개인데 여러 명이 동시에 주문서를 열면 먼저 결제한 사람만 성공하고 나머지는 결제 직후 취소(환불)된다. 재고와 동일한 동작이지만 "선착순"치고는 거칠다 → *해제 조건: 별도 예약 모듈* |
+| 3 | **`cartController.checkoutAll` 우회** | 두 번째 주문 생성 경로. 재고를 차감하지 않는 기존 결함이 있어 선착순 특가에서 오버셀 구멍이 된다. 현재는 **특가 상품이 장바구니에 있으면 정규 `/checkout?cart=1` 로 유도**하는 것으로 대응 중. 이 경로의 폐기는 별도 이슈 |
+
+#### 참고 — 유지되는 설계 제약
+
+- 자정을 넘는 시간창(22:00 ~ 익일 02:00)은 **범위 밖**이며 `daily_end_time > daily_start_time` 검증으로 강제한다.
+- 특가 × 쿠폰은 기본 **중복 적용**(특가가 기준, 쿠폰이 추가). 차단이 필요하면 쿠폰의 `scope_json.exclude.badges` 로 코드 변경 없이 운영 대응한다.
+- 공동구매 라인은 특가 리졸버가 건드리지 않는다. **공동구매가가 특가를 이긴다.**
