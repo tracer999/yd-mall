@@ -34,38 +34,85 @@
                     <h5 class="text-lg font-bold text-gray-800">회사 정보</h5>
                 </div>
                 <div class="p-6 bg-white space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">회사명</label>
-                        <input type="text"
-                            name="company_name" value="<%= settings.company_name %>" required
-                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">회사명(상호)</label>
+                            <input type="text"
+                                name="company_name" value="<%= settings.company_name || '' %>" required
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">대표자 성명</label>
+                            <input type="text"
+                                name="ceo_name" value="<%= settings.ceo_name || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">사업자 등록번호</label>
+                            <input type="text"
+                                name="business_number" value="<%= settings.business_number || '' %>"
+                                placeholder="예: 357-86-02849"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <p class="mt-1 text-xs text-gray-400">입력 시 푸터에 '사업자정보확인'(공정위 조회) 링크가 자동 노출됩니다.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">통신판매업 신고번호</label>
+                            <input type="text"
+                                name="mail_order_number" value="<%= settings.mail_order_number || '' %>"
+                                placeholder="예: 2023-서울강남-00428"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">사업자 등록번호</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">주소(사업장 소재지)</label>
                         <input type="text"
-                            name="business_number" value="<%= settings.business_number %>"
-                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">주소</label>
-                        <input type="text"
-                            name="address" value="<%= settings.address %>"
+                            name="address" value="<%= settings.address || '' %>"
+                            placeholder="예: 06170 서울특별시 강남구 봉은사로 644 (삼성동) …"
                             class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">대표 이메일</label>
                             <input type="email"
-                                name="contact_email" value="<%= settings.contact_email %>"
+                                name="contact_email" value="<%= settings.contact_email || '' %>"
                                 class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">대표 전화번호</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">고객센터 전화번호</label>
                             <input type="text"
-                                name="contact_phone" value="<%= settings.contact_phone %>"
+                                name="contact_phone" value="<%= settings.contact_phone || '' %>"
+                                placeholder="예: 080-344-5575"
                                 class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">고객센터 상담시간 안내</label>
+                        <textarea name="cs_hours" rows="3"
+                            placeholder="예)&#10;평일 10:00 - 17:00 / 12:00 - 13:00 점심시간&#10;주말 및 공휴일 휴무"
+                            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"><%= settings.cs_hours || '' %></textarea>
+                        <p class="mt-1 text-xs text-gray-400">여러 줄 입력 가능. 줄바꿈 그대로 푸터에 노출됩니다.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">개인정보 보호책임자 성명</label>
+                            <input type="text"
+                                name="privacy_officer_name" value="<%= settings.privacy_officer_name || '' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">개인정보 보호책임자 이메일</label>
+                            <input type="email"
+                                name="privacy_officer_email" value="<%= settings.privacy_officer_email || '' %>"
+                                placeholder="예: privacy@example.com"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 pt-1 border-t border-gray-100">
+                        전자상거래법·개인정보보호법상 상호·대표자·사업자등록번호·통신판매업 신고번호·주소·연락처·개인정보 보호책임자는
+                        쇼핑몰 하단(푸터)에 표시가 필요한 항목입니다.
+                    </p>
                 </div>
             </div>
 

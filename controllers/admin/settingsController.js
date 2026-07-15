@@ -133,10 +133,15 @@ exports.getSysSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
     const {
         company_name,
+        ceo_name,
         business_number,
+        mail_order_number,
         address,
         contact_email,
         contact_phone,
+        cs_hours,
+        privacy_officer_name,
+        privacy_officer_email,
         header_slogan,
         slogan,
         company_intro,
@@ -204,16 +209,20 @@ exports.updateSettings = async (req, res) => {
         // 이 몰의 행이 없으면(새 몰) 만들고, 있으면 갱신한다(mall_id 유니크).
         await pool.query(`
             INSERT INTO site_settings
-                (mall_id, company_name, logo_url, favicon_url, business_number, address, contact_email, contact_phone,
+                (mall_id, company_name, ceo_name, logo_url, favicon_url, business_number, mail_order_number,
+                 address, contact_email, contact_phone, cs_hours, privacy_officer_name, privacy_officer_email,
                  header_slogan, slogan, company_intro,
                  instagram_enabled, instagram_url, facebook_enabled, facebook_url,
                  youtube_enabled, youtube_url, kakao_channel_enabled, kakao_channel_url,
                  ga4_measurement_id, brand_main_color, brand_dark_color, brand_light_color, kakao_share_image_url)
-            VALUES (?,?,?,?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
-                company_name=VALUES(company_name), logo_url=VALUES(logo_url), favicon_url=VALUES(favicon_url),
-                business_number=VALUES(business_number), address=VALUES(address), contact_email=VALUES(contact_email),
-                contact_phone=VALUES(contact_phone), header_slogan=VALUES(header_slogan), slogan=VALUES(slogan),
+                company_name=VALUES(company_name), ceo_name=VALUES(ceo_name), logo_url=VALUES(logo_url), favicon_url=VALUES(favicon_url),
+                business_number=VALUES(business_number), mail_order_number=VALUES(mail_order_number),
+                address=VALUES(address), contact_email=VALUES(contact_email),
+                contact_phone=VALUES(contact_phone), cs_hours=VALUES(cs_hours),
+                privacy_officer_name=VALUES(privacy_officer_name), privacy_officer_email=VALUES(privacy_officer_email),
+                header_slogan=VALUES(header_slogan), slogan=VALUES(slogan),
                 company_intro=VALUES(company_intro), instagram_enabled=VALUES(instagram_enabled), instagram_url=VALUES(instagram_url),
                 facebook_enabled=VALUES(facebook_enabled), facebook_url=VALUES(facebook_url),
                 youtube_enabled=VALUES(youtube_enabled), youtube_url=VALUES(youtube_url),
@@ -224,12 +233,17 @@ exports.updateSettings = async (req, res) => {
         `, [
             MALL_ID,
             company_name,
+            ceo_name,
             logo_url,
             favicon_url,
             business_number,
+            mail_order_number,
             address,
             contact_email,
             contact_phone,
+            cs_hours,
+            privacy_officer_name,
+            privacy_officer_email,
             header_slogan,
             slogan,
             company_intro,

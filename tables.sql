@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS `categories` (
 CREATE TABLE IF NOT EXISTS `inquiries` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '문의 ID (PK)',
   `user_id` int NOT NULL COMMENT '사용자 ID (FK)',
+  `mall_id` bigint NOT NULL DEFAULT '1' COMMENT '몰 ID (조회 필터용)',
   `title` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '문의 제목',
   `content` text COLLATE utf8mb4_general_ci NOT NULL COMMENT '문의 내용',
   `answer` text COLLATE utf8mb4_general_ci COMMENT '관리자 답변',
@@ -135,6 +136,7 @@ CREATE TABLE IF NOT EXISTS `inquiries` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '작성일시',
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
+  KEY `idx_inquiries_mall` (`mall_id`,`created_at`),
   CONSTRAINT `inquiries_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='1:1 문의';
 
@@ -176,6 +178,7 @@ CREATE TABLE IF NOT EXISTS `notices` (
 CREATE TABLE IF NOT EXISTS `orders` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '주문 ID (PK)',
   `user_id` int DEFAULT NULL COMMENT '사용자 ID (FK, 비회원 주문 시 NULL)',
+  `mall_id` bigint DEFAULT NULL COMMENT '주문 발생 몰 ID (mall.id). 주문 시점의 req.mallId 기록. 과거 주문은 NULL 가능',
   `order_number` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '주문 번호',
   `status` enum('PENDING','PAID','PREPARING','SHIPPED','DELIVERED','CANCELLED','REFUNDED') COLLATE utf8mb4_general_ci DEFAULT 'PENDING' COMMENT '주문 상태',
   `subtotal_amount` int DEFAULT NULL COMMENT '쿠폰/포인트 적용 전 상품 총액',
@@ -200,6 +203,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `order_number` (`order_number`),
   KEY `orders_ibfk_1` (`user_id`),
+  KEY `idx_orders_mall` (`mall_id`),
   CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='주문 정보';
 
@@ -376,13 +380,18 @@ CREATE TABLE IF NOT EXISTS `shipments` (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS `site_settings` (
   `id` int NOT NULL DEFAULT '1' COMMENT '고정 ID (1)',
-  `company_name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '회사명',
+  `company_name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '회사명(상호)',
+  `ceo_name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '대표자 성명 (전자상거래법 표시사항)',
   `logo_url` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '로고 URL',
   `favicon_url` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '파비콘 URL',
-  `business_number` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사업자 번호',
-  `address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '주소',
+  `business_number` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사업자 등록번호',
+  `mail_order_number` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '통신판매업 신고번호 (전자상거래법 표시사항)',
+  `address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '주소(사업장 소재지)',
   `contact_email` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '대표 이메일',
-  `contact_phone` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '대표 전화번호',
+  `contact_phone` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '고객센터 전화번호',
+  `cs_hours` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '고객센터 상담시간 안내(멀티라인)',
+  `privacy_officer_name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '개인정보 보호책임자 성명 (개인정보보호법)',
+  `privacy_officer_email` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '개인정보 보호책임자 이메일 (개인정보보호법)',
   `header_slogan` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '헤더 슬로건',
   `slogan` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT '회사 슬로건',
   `company_intro` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT '회사 소개 문구',

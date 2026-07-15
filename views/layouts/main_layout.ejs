@@ -564,27 +564,88 @@
                     <% } %>
                 </div>
 
-                <!-- 우측: 회사 정보 -->
-                <div>
-                    <h3 class="text-sm font-semibold text-gray-800 mb-3">회사 정보</h3>
-                    <dl class="text-sm text-gray-500 space-y-1.5">
-                        <div class="flex gap-2">
-                            <dt class="font-medium text-gray-600 shrink-0">상호명</dt>
-                            <dd><%= siteSettings.company_name || '와이디몰' %></dd>
+                <!-- 우측: 고객센터 + 회사 정보 (전자상거래법·개인정보보호법 표시사항) -->
+                <%
+                    // 사업자정보확인 — 공정위 통신판매사업자 조회 팝업. 사업자번호(숫자만)로 링크 생성.
+                    var _bizDigits = String(siteSettings.business_number || '').replace(/[^0-9]/g, '');
+                    var _ftcUrl = _bizDigits ? ('https://www.ftc.go.kr/bizCommPop.do?wrkr_no=' + _bizDigits) : null;
+                    var _telHref = 'tel:' + String(siteSettings.contact_phone || '').replace(/[^0-9+]/g, '');
+                    // 라벨:값 한 줄. 값이 없으면 렌더하지 않는다.
+                %>
+                <div class="flex flex-col sm:flex-row gap-8 lg:gap-12">
+
+                    <!-- 고객센터 (전화가 있을 때만 노출) -->
+                    <% if (siteSettings.contact_phone) { %>
+                    <div class="shrink-0">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="inline-block h-3 w-0.5 rounded-full bg-[var(--gh-primary)]"></span>
+                            <h3 class="text-xs font-semibold tracking-wide text-gray-500">고객센터</h3>
                         </div>
-                        <div class="flex gap-2">
-                            <dt class="font-medium text-gray-600 shrink-0">대표전화</dt>
-                            <dd><%= siteSettings.contact_phone || '-' %></dd>
+                        <a href="<%= _telHref %>"
+                           class="gh-serif block text-2xl font-extrabold tracking-tight text-[var(--gh-primary)] tabular-nums hover:text-[var(--gh-primary-dark)] transition-colors">
+                            <%= siteSettings.contact_phone %>
+                        </a>
+                        <% if (siteSettings.cs_hours) { %>
+                        <div class="mt-2 text-xs leading-relaxed text-gray-400">
+                            <% siteSettings.cs_hours.split(/\r?\n/).forEach(function (line, i) { %>
+                                <% if (i) { %><br><% } %><%= line %>
+                            <% }); %>
                         </div>
-                        <div class="flex gap-2">
-                            <dt class="font-medium text-gray-600 shrink-0">이메일</dt>
-                            <dd><%= siteSettings.contact_email || '-' %></dd>
+                        <% } %>
+                        <% if (siteSettings.contact_email) { %>
+                        <a href="mailto:<%= siteSettings.contact_email %>"
+                           class="mt-3 inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-envelope"></i><%= siteSettings.contact_email %>
+                        </a>
+                        <% } %>
+                    </div>
+                    <% } %>
+
+                    <!-- 회사(사업자) 정보 -->
+                    <div class="min-w-0 sm:max-w-sm">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="inline-block h-3 w-0.5 rounded-full bg-[var(--gh-primary)]"></span>
+                            <h3 class="text-xs font-semibold tracking-wide text-gray-500">회사 정보</h3>
                         </div>
-                        <div class="flex gap-2">
-                            <dt class="font-medium text-gray-600 shrink-0">주소</dt>
-                            <dd><%= siteSettings.address || '-' %></dd>
-                        </div>
-                    </dl>
+
+                        <!-- 상호 + 대표자 -->
+                        <p class="text-sm font-semibold text-gray-700">
+                            <%= siteSettings.company_name || '와이디몰' %><% if (siteSettings.ceo_name) { %><span class="ml-2 font-normal text-gray-400">대표 <%= siteSettings.ceo_name %></span><% } %>
+                        </p>
+
+                        <!-- 법정 표시 항목: 라벨:값, 값 있을 때만 -->
+                        <dl class="mt-2.5 space-y-1.5 text-xs leading-relaxed text-gray-500">
+                            <% if (siteSettings.business_number) { %>
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <dt class="text-gray-400">사업자등록번호</dt>
+                                <dd class="tabular-nums text-gray-500"><%= siteSettings.business_number %></dd>
+                                <% if (_ftcUrl) { %>
+                                <a href="<%= _ftcUrl %>" target="_blank" rel="noopener noreferrer"
+                                   onclick="window.open(this.href,'ftcBizInfo','width=750,height=700,scrollbars=yes');return false;"
+                                   class="inline-flex items-center rounded-full border border-gray-300 px-2 py-0.5 text-[11px] text-gray-500 hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition-colors">사업자정보확인</a>
+                                <% } %>
+                            </div>
+                            <% } %>
+                            <% if (siteSettings.mail_order_number) { %>
+                            <div class="flex flex-wrap gap-x-2">
+                                <dt class="text-gray-400 shrink-0">통신판매업 신고</dt>
+                                <dd class="text-gray-500"><%= siteSettings.mail_order_number %></dd>
+                            </div>
+                            <% } %>
+                            <% if (siteSettings.address) { %>
+                            <div class="flex flex-wrap gap-x-2">
+                                <dt class="text-gray-400 shrink-0">주소</dt>
+                                <dd class="text-gray-500"><%= siteSettings.address %></dd>
+                            </div>
+                            <% } %>
+                            <% if (siteSettings.privacy_officer_name || siteSettings.privacy_officer_email) { %>
+                            <div class="flex flex-wrap gap-x-2">
+                                <dt class="text-gray-400 shrink-0">개인정보 보호책임자</dt>
+                                <dd class="text-gray-500"><%= [siteSettings.privacy_officer_name, siteSettings.privacy_officer_email].filter(Boolean).join(' · ') %></dd>
+                            </div>
+                            <% } %>
+                        </dl>
+                    </div>
                 </div>
 
             </div>
