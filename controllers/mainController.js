@@ -58,7 +58,7 @@ async function buildHomeContext(req, res) {
         heroFeature = slides.find(s => s.slot === 'FEATURE') || null;
     }
 
-    // 5. 팝업 배너
+    // 5. 팝업 배너 — 유효한 것 전부(단일 모달 안에서 슬라이드로 노출). 과도 노출 방지로 상한만 둔다.
     const [popupBannerRows] = await pool.query(`
         SELECT * FROM banners
         WHERE is_active = 1
@@ -66,9 +66,9 @@ async function buildHomeContext(req, res) {
           AND (start_date IS NULL OR start_date <= CURDATE())
           AND (end_date IS NULL OR end_date >= CURDATE())
         ORDER BY display_order ASC, id ASC
-        LIMIT 1
+        LIMIT 10
     `);
-    const popupBanner = popupBannerRows && popupBannerRows.length > 0 ? popupBannerRows[0] : null;
+    const popupBanners = Array.isArray(popupBannerRows) ? popupBannerRows : [];
 
     const siteSettings = res.locals.siteSettings || {};
     const companyName = siteSettings.company_name || '와이디몰';
@@ -112,7 +112,7 @@ async function buildHomeContext(req, res) {
         }
     };
 
-    return { shared, renderData: { title: '홈', popupBanner, seo } };
+    return { shared, renderData: { title: '홈', popupBanners, seo } };
 }
 
 // 페이지 빌더의 섹션 단건 미리보기가 같은 shared 로 리졸버를 돌리기 위해 공개한다.

@@ -39,7 +39,7 @@
 </style>
 
 <!-- ── 팝업 배너(오버레이) ── -->
-<%- include('../partials/sections/popup_banner', { popupBanner }) %>
+<%- include('../partials/sections/popup_banner', { popupBanners }) %>
 
 <!-- ── 섹션 조립 렌더 (page_section 순서대로) ── -->
 <%/* gateClass = 노출 대상(PC/모바일) 제한. 빈 문자열이면 감싸지 않는다(불필요한 div 금지). */%>
@@ -98,14 +98,15 @@
 </script>
 
 <!-- ── 팝업 스크립트 ── -->
-<% if (popupBanner) { %>
+<% if (Array.isArray(popupBanners) && popupBanners.length > 0) { %>
 <script>
 (function () {
   var overlay = document.getElementById('popup-banner-overlay');
   var closeBtn = document.getElementById('popup-banner-close');
   var hideCheckbox = document.getElementById('popup-banner-hide-today-checkbox');
   var dismissBtn = document.getElementById('popup-banner-dismiss');
-  var storageKey = 'popup_skip_<%= popupBanner.id %>';
+  // '오늘 하루 보지 않기'는 모달 단위. 배너 집합이 바뀌면 다시 뜨도록 id 조합으로 키를 만든다.
+  var storageKey = 'popup_skip_<%= popupBanners.map(function (b) { return b.id; }).join('-') %>';
   function todayKey() {
     var d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
     return d.toISOString().slice(0, 10);
@@ -124,6 +125,22 @@
     if (closeBtn) closeBtn.addEventListener('click', handleClose);
     if (dismissBtn) dismissBtn.addEventListener('click', handleClose);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) handleClose(); });
+
+    // 배너가 2장 이상이면 모달 안에서 좌우 슬라이드(캐러셀). Swiper 는 위에서 이미 로드됨.
+    var slider = overlay.querySelector('.popup-banner-swiper');
+    if (slider && typeof Swiper !== 'undefined'
+        && slider.querySelectorAll('.swiper-slide').length > 1) {
+      new Swiper(slider, {
+        loop: true,
+        autoHeight: true,
+        autoplay: { delay: 5000, disableOnInteraction: false },
+        pagination: { el: slider.querySelector('.swiper-pagination'), clickable: true },
+        navigation: {
+          nextEl: slider.querySelector('.swiper-button-next'),
+          prevEl: slider.querySelector('.swiper-button-prev')
+        }
+      });
+    }
   }
 })();
 </script>

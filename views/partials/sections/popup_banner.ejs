@@ -1,18 +1,40 @@
 <%
-  /* 팝업 배너 오버레이. locals: popupBanner (없으면 미출력). 표시 제어 스크립트는 페이지 하단에 유지. */
+  /*
+   * 팝업 배너 오버레이. locals: popupBanners (배열, 없으면 미출력).
+   * 2장 이상이면 단일 모달 안에서 좌우 슬라이드(캐러셀)로 노출한다.
+   * Swiper 초기화·표시 제어 스크립트는 페이지 하단(user/index.ejs)에 유지.
+   */
+  const _popups = Array.isArray(popupBanners) ? popupBanners : (popupBanners ? [popupBanners] : []);
 %>
-<% if (popupBanner) { %>
+<% if (_popups.length > 0) { %>
 <div id="popup-banner-overlay"
      class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 py-8">
   <div class="relative w-[520px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col">
     <button type="button" id="popup-banner-close" aria-label="닫기"
-            class="absolute top-3 right-3 z-20 text-white bg-black/45 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center shadow-lg">
+            class="absolute top-3 right-3 z-30 text-white bg-black/45 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center shadow-lg">
       <i class="bi bi-x-lg text-sm"></i>
     </button>
-    <a href="<%= popupBanner.link_url || '#' %>" class="block w-full overflow-hidden bg-black/5 relative">
-      <img src="<%= popupBanner.image_url %>" alt="<%= popupBanner.title || '이벤트 배너' %>"
-           class="w-full h-full object-contain object-center">
-    </a>
+
+    <%# 화살표·페이지네이션은 메인 히어로 슬라이더(hero_banner.ejs)와 같은 모양.
+        기본 화살표(::after 아이콘 폰트)는 CSS 로 끄고 부트스트랩 아이콘을 직접 넣는다. %>
+    <div class="swiper popup-banner-swiper yd-popup group w-full overflow-hidden bg-black/5">
+      <div class="swiper-wrapper">
+        <% _popups.forEach(function (banner) { %>
+        <div class="swiper-slide">
+          <a href="<%= banner.link_url || '#' %>" class="block w-full">
+            <img src="<%= banner.image_url %>" alt="<%= banner.title || '이벤트 배너' %>"
+                 class="w-full h-full object-contain object-center">
+          </a>
+        </div>
+        <% }); %>
+      </div>
+      <% if (_popups.length > 1) { %>
+      <div class="swiper-pagination"></div>
+      <div class="swiper-button-next"><i class="bi bi-chevron-right"></i></div>
+      <div class="swiper-button-prev"><i class="bi bi-chevron-left"></i></div>
+      <% } %>
+    </div>
+
     <div class="flex items-center justify-between gap-2 px-4 py-3 bg-white border-t border-gray-100 text-xs sm:text-sm">
       <div class="flex items-center gap-2 min-w-0 flex-shrink">
         <input type="checkbox" id="popup-banner-hide-today-checkbox"
@@ -25,4 +47,75 @@
     </div>
   </div>
 </div>
+
+<style>
+  /*
+   * 팝업 슬라이더 — 화살표/페이지네이션을 메인 히어로(hero_banner.ejs)와 같은 모양으로 맞춘다.
+   * 화살표: 기본 아이콘 폰트(::after)를 끄고 반투명 원형(글라스) + 부트스트랩 chevron.
+   * 페이지네이션: 점이 아니라 '진행 막대' — active 막대가 넓어지며 autoplay(5s)에 맞춰 흰색으로 차오른다.
+   */
+  .yd-popup .swiper-button-next::after,
+  .yd-popup .swiper-button-prev::after { display: none; }
+
+  .yd-popup .swiper-button-next,
+  .yd-popup .swiper-button-prev {
+    width: 40px; height: 40px;
+    margin-top: -20px;
+    left: auto; right: auto;
+    border-radius: 9999px;
+    background: rgba(17, 24, 39, .32);
+    border: 1px solid rgba(255, 255, 255, .40);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .22);
+    transition: background .2s ease, transform .2s ease, box-shadow .2s ease;
+  }
+  .yd-popup .swiper-button-prev { left: 10px; }
+  .yd-popup .swiper-button-next { right: 10px; }
+  .yd-popup .swiper-button-next i,
+  .yd-popup .swiper-button-prev i { font-size: 16px; line-height: 1; }
+  .yd-popup .swiper-button-next:hover,
+  .yd-popup .swiper-button-prev:hover {
+    background: rgba(17, 24, 39, .60);
+    transform: scale(1.07);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+  }
+  .yd-popup .swiper-button-next:active,
+  .yd-popup .swiper-button-prev:active { transform: scale(.96); }
+  .yd-popup .swiper-button-disabled { opacity: 0 !important; }
+
+  /* 인디케이터 — 진행 막대(히어로와 동일) */
+  .yd-popup .swiper-pagination {
+    bottom: 12px;
+    display: flex; justify-content: center; align-items: center; gap: 8px;
+  }
+  .yd-popup .swiper-pagination-bullet {
+    width: 26px; height: 4px;
+    margin: 0 !important;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, .55);
+    opacity: 1;
+    position: relative; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+    transition: width .3s ease, background .2s ease;
+  }
+  .yd-popup .swiper-pagination-bullet:hover { background: rgba(255, 255, 255, .8); }
+  .yd-popup .swiper-pagination-bullet::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 0; background: #fff; border-radius: inherit;
+  }
+  .yd-popup .swiper-pagination-bullet-active { width: 48px; }
+  .yd-popup .swiper-pagination-bullet-active::after {
+    animation: yd-popup-fill 5s linear forwards;
+  }
+  /* 키프레임은 팝업 자체에 정의한다 — 홈에 히어로 섹션이 없어도 채워짐이 동작하도록. */
+  @keyframes yd-popup-fill { from { width: 0; } to { width: 100%; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .yd-popup .swiper-pagination-bullet-active::after { animation: none; width: 100%; }
+    .yd-popup .swiper-button-next,
+    .yd-popup .swiper-button-prev { transition: none; }
+  }
+</style>
 <% } %>
