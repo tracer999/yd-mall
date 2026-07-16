@@ -1,8 +1,4 @@
-const dns = require('dns').promises;
-const net = require('net');
-const fs = require('fs');
-const path = require('path');
-const sharp = require('sharp');
+const urlIngest = require('../media/urlIngest');
 
 /*
  * 상품 URL 가져오기 (관리자 상품 등록 보조)
@@ -26,9 +22,7 @@ const sharp = require('sharp');
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 4 * 1024 * 1024;      // 상품 상세 HTML 은 보통 1MB 미만
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGES = 10;                        // 서브 이미지 업로드 상한(multer)과 같은 수
-const UPLOAD_DIR = path.join('public', 'uploads', 'products');
 
 // 브라우저 UA 를 쓴다. 기본 UA 로는 봇으로 보고 빈 페이지를 주는 몰이 많다.
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
@@ -40,41 +34,12 @@ class ImportError extends Error {
     }
 }
 
-/** 사설·루프백·링크로컬 대역. 여기로 나가는 요청은 내부망 스캔이 된다. */
-function isPrivateIp(ip) {
-    if (net.isIPv4(ip)) {
-        const [a, b] = ip.split('.').map(Number);
-        return a === 10 || a === 127 || a === 0
-            || (a === 172 && b >= 16 && b <= 31)
-            || (a === 192 && b === 168)
-            || (a === 169 && b === 254)
-            || (a === 100 && b >= 64 && b <= 127);
-    }
-    const v6 = ip.toLowerCase();
-    return v6 === '::1' || v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe80');
-}
-
-async function assertPublicUrl(raw) {
-    let url;
-    try {
-        url = new URL(String(raw || '').trim());
-    } catch {
-        throw new ImportError('URL 형식이 올바르지 않습니다.');
-    }
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        throw new ImportError('http/https URL 만 가져올 수 있습니다.');
-    }
-
-    // 호스트가 이미 IP 면 그대로, 도메인이면 DNS 로 풀어서 검사한다.
-    const addrs = net.isIP(url.hostname)
-        ? [{ address: url.hostname }]
-        : await dns.lookup(url.hostname, { all: true }).catch(() => { throw new ImportError('주소를 찾을 수 없습니다.'); });
-
-    if (addrs.some(a => isPrivateIp(a.address))) {
-        throw new ImportError('내부망 주소는 가져올 수 없습니다.');
-    }
-    return url;
-}
+/*
+ * SSRF 방어(http/https 만 + 사설·루프백 IP 차단)는 services/media/urlIngest 로 옮겼다.
+ * 여기서 재정의하면 한쪽만 고쳐지는 사고가 나므로 반드시 공통 구현을 쓴다.
+ * urlIngest.IngestError 도 statusCode 를 갖고 있어 컨트롤러의 에러 처리와 호환된다.
+ */
+const assertPublicUrl = urlIngest.assertPublicUrl;
 
 async function fetchWithLimit(url, { maxBytes, accept }) {
     const res = await fetch(url, {
@@ -337,25 +302,12 @@ async function loadNaverShopping(url) {
  * sharp 로 재인코딩한다 — 실패하면 이미지가 아니거나 손상된 것이므로 그 장만 건너뛴다.
  */
 async function downloadImages(urls, referer) {
-    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
     const saved = [];
     for (const url of urls.slice(0, MAX_IMAGES)) {
         try {
-            await assertPublicUrl(url);
-            const res = await fetch(url, {
-                headers: { 'User-Agent': UA, Referer: referer, Accept: 'image/*' },
-                redirect: 'follow',
-                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-            });
-            if (!res.ok) continue;
-
-            const buf = Buffer.from(await res.arrayBuffer());
-            if (!buf.length || buf.length > MAX_IMAGE_BYTES) continue;
-
-            const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
-            await sharp(buf).rotate().jpeg({ quality: 88 }).toFile(path.join(UPLOAD_DIR, filename));
-            saved.push('/uploads/products/' + filename);
+            // 공통 수집기 — SSRF 검사·크기 상한·sharp 재인코딩·파일명 규칙을 모두 담고 있다.
+            // 한 장이 실패해도 나머지는 계속 가져온다(초안 채우기가 목적).
+            saved.push(await urlIngest.ingestImageFromUrl(url, { dest: 'products', referer }));
         } catch (err) {
             console.error('[productImporter] 이미지 저장 실패:', url, err.message);
         }
