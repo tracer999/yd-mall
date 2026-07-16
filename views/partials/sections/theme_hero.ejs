@@ -1,0 +1,128 @@
+<%
+  /*
+   * 테마 히어로 래퍼 — config.layout 으로 표현을 가른다.
+   * locals: layout, mainSlides(hero_slide MAIN + 상품조인), feature(FEATURE 슬라이드 or null)
+   *
+   *   showcase  → hero_showcase 재사용 (상품 쇼케이스)
+   *   banner    → hero_banner 재사용 (전체폭 이미지 배너, hero_slide 를 배너 형태로 매핑)
+   *   editorial → 전용 풀블리드 마크업 (오버레이 텍스트 + 마퀴)
+   *
+   * Swiper 초기화(.mySwiperDesktop/.mySwiperMobile)는 user/index.ejs 의 initHeroSwiper 가 담당.
+   */
+  var _layout = (typeof layout !== 'undefined' && layout) ? layout : 'banner';
+  var _slides = (typeof mainSlides !== 'undefined' && mainSlides) ? mainSlides : [];
+
+  // hero_slide 한 행을 클릭 링크로 변환
+  var _href = function (s) {
+    if (s.link_url) return s.link_url;
+    if (s.slug && String(s.slug).trim()) return '/products/' + encodeURIComponent(s.slug);
+    if (s.product_id) return '/products/view/' + s.product_id;
+    return '#';
+  };
+  var _img = function (s) { return s.image_url || s.main_image || '/images/placeholder.png'; };
+%>
+
+<% if (_layout === 'showcase') { %>
+  <%- include('./hero_showcase', { mainSlides: _slides, feature: (typeof feature !== 'undefined' ? feature : null) }) %>
+
+<% } else if (_layout === 'editorial') { %>
+  <%
+    // 에디토리얼: 풀블리드 슬라이드 + 오버레이 텍스트 + 하단 마퀴
+    var _first = _slides[0] || {};
+  %>
+  <section class="yd-ed-hero relative w-full overflow-hidden bg-black">
+    <div class="swiper mySwiperDesktop yd-ed-swiper">
+      <div class="swiper-wrapper">
+        <% _slides.forEach(function (s) { %>
+          <div class="swiper-slide relative">
+            <div class="yd-ed-stage relative w-full">
+              <img src="<%= _img(s) %>" alt="<%= s.headline || '' %>" class="absolute inset-0 w-full h-full object-cover">
+              <div class="yd-ed-scrim absolute inset-0"></div>
+              <div class="relative z-10 h-full flex items-end">
+                <div class="w-full max-w-[80rem] mx-auto px-6 lg:px-10 pb-20 lg:pb-28">
+                  <div class="max-w-2xl">
+                    <% if (s.label) { %>
+                      <span class="yd-ed-eyebrow block text-white/80 text-xs md:text-sm tracking-[0.25em] uppercase mb-4"><%= s.label %></span>
+                    <% } %>
+                    <h2 class="yd-ed-title text-white font-normal leading-[1.05]"><%= s.headline || s.product_name || '' %></h2>
+                    <a href="<%= _href(s) %>" class="yd-ed-cta mt-8 inline-flex items-center gap-2 px-8 py-3.5 text-sm font-semibold tracking-wide">
+                      <span>자세히 보기</span>
+                      <i class="bi bi-arrow-right"></i>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+      <div class="swiper-pagination swiper-pagination-desktop"></div>
+      <div class="swiper-button-next swiper-button-next-desktop"><i class="bi bi-chevron-right"></i></div>
+      <div class="swiper-button-prev swiper-button-prev-desktop"><i class="bi bi-chevron-left"></i></div>
+    </div>
+
+    <%# 하단 마퀴 — 라이프스타일 무드의 무료배송/혜택 스트립 %>
+    <div class="yd-ed-marquee" aria-hidden="true">
+      <div class="yd-ed-marquee__track">
+        <% for (var i = 0; i < 8; i++) { %>
+          <span class="yd-ed-marquee__item">전 상품 무료배송&nbsp;&nbsp;·&nbsp;&nbsp;신규 회원 15% 쿠폰&nbsp;&nbsp;·&nbsp;&nbsp;당일 출고&nbsp;&nbsp;·&nbsp;&nbsp;</span>
+        <% } %>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    /* user/index.ejs 가 .mySwiperDesktop 을 모바일에서 숨기지만, 에디토리얼은 단일 스와이퍼라
+       모든 폭에서 보여야 한다. 더 높은 특이성 + !important 로 표시를 강제한다. */
+    .yd-ed-hero .yd-ed-swiper { display: block !important; width: 100%; }
+    /* 풀블리드 무대 — 데스크톱은 뷰포트를 거의 채우고, 모바일은 세로 비율을 키운다. */
+    .yd-ed-hero .yd-ed-stage { height: 88vh; min-height: 520px; max-height: 900px; }
+    @media (max-width: 640px) { .yd-ed-hero .yd-ed-stage { height: 82vh; min-height: 460px; } }
+    .yd-ed-scrim { background: linear-gradient(to top, rgba(0,0,0,.60) 0%, rgba(0,0,0,.15) 45%, rgba(0,0,0,.05) 100%); }
+    .yd-ed-title { font-family: var(--yd-font-display, serif); font-size: clamp(2.6rem, 6vw, 5.5rem); }
+    .yd-ed-eyebrow { font-family: var(--yd-font-family); }
+    .yd-ed-cta {
+      background: #fff; color: #111; border-radius: 9999px;
+      transition: transform .2s ease, background .2s ease, color .2s ease;
+    }
+    .yd-ed-cta:hover { transform: translateY(-2px); background: #111; color: #fff; }
+    /* 마퀴 스트립 */
+    .yd-ed-marquee { overflow: hidden; background: var(--gh-secondary, #f4f1ec); border-top: 1px solid rgba(0,0,0,.06); }
+    .yd-ed-marquee__track { display: inline-flex; white-space: nowrap; padding: 14px 0; animation: yd-ed-scroll 28s linear infinite; }
+    .yd-ed-marquee__item { font-family: var(--yd-font-display, serif); font-size: 1.05rem; color: #4b463f; letter-spacing: .02em; }
+    @keyframes yd-ed-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .yd-ed-marquee__track { animation: none; } }
+    /* Swiper 화살표/도트는 hero_banner 와 톤을 맞춘다 */
+    .yd-ed-swiper .swiper-button-next::after, .yd-ed-swiper .swiper-button-prev::after { display: none; }
+    .yd-ed-swiper .swiper-button-next, .yd-ed-swiper .swiper-button-prev {
+      width: 46px; height: 46px; margin-top: -23px; border-radius: 9999px;
+      background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.5);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #fff;
+    }
+    .yd-ed-swiper .swiper-button-prev-desktop { left: 32px; }
+    .yd-ed-swiper .swiper-button-next-desktop { right: 32px; }
+    .yd-ed-swiper .swiper-pagination { bottom: 20px; }
+    .yd-ed-swiper .swiper-pagination-bullet { width: 8px; height: 8px; background: rgba(255,255,255,.55); opacity: 1; }
+    .yd-ed-swiper .swiper-pagination-bullet-active { background: #fff; }
+  </style>
+
+<% } else { %>
+  <%
+    // banner: hero_slide 를 hero_banner 가 기대하는 배너 형태로 매핑(전역 banners 미사용 → 몰 격리).
+    var _banners = _slides.map(function (s) {
+      var url = _img(s);
+      return {
+        image_url: url,
+        mobile_image_url: url,
+        title: s.headline || s.product_name || '',
+        link_url: _href(s),
+        overlay_title: s.headline || '',
+        overlay_subtitle: s.label || '',
+        overlay_button_text: (s.headline || s.link_url) ? '자세히 보기' : '',
+        overlay_button_color: '',
+        overlay_align: 'LEFT'
+      };
+    });
+  %>
+  <%- include('./hero_banner', { heroBanners: _banners, mobileHeroBanners: _banners }) %>
+<% } %>

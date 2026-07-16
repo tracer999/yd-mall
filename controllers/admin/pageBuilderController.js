@@ -4,6 +4,7 @@ const builder = require('../../services/display/pageBuilderService');
 const displayService = require('../../services/display/displayService');
 const linkTargetService = require('../../services/menu/linkTargets');
 const mainController = require('../mainController');
+const presets = require('../../services/mall/presets');
 
 /*
  * 관리자 페이지 빌더 컨트롤러 (P2)
@@ -147,11 +148,15 @@ exports.getEditor = async (req, res) => {
       });
     });
 
+    // 이지 모드(테마 재선택)용 — 현재 몰의 마지막 테마 + 테마 목록.
+    const [[mallRow]] = await pool.query('SELECT preset_key FROM mall WHERE id = ?', [mallId]);
+
     res.render('admin/page-builder/editor', {
       layout: 'layouts/admin_layout',
       title: '페이지 빌더',
       subtitle: '섹션을 추가·삭제·재정렬한 뒤 발행해야 스토어프론트에 반영됩니다.',
-      page, pages, sections, palette: buildPalette(), productGroups, revisions, dirty, linkTargets
+      page, pages, sections, palette: buildPalette(), productGroups, revisions, dirty, linkTargets,
+      mallId, presetList: presets.list(), currentPreset: (mallRow && mallRow.preset_key) || presets.DEFAULT_KEY
     });
   } catch (err) {
     console.error('[pageBuilder.getEditor]', err);

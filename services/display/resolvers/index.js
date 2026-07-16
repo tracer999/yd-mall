@@ -10,6 +10,7 @@
  */
 module.exports = {
     hero: require('./hero'),
+    theme_hero: require('./theme_hero'),
     product_grid: require('./product_grid'),
     best_ranking: require('./best_ranking'),
     category_showcase: require('./category_showcase'),

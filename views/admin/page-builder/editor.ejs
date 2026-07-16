@@ -5,6 +5,55 @@
   </div>
 <% } else { %>
 
+<%
+  /* 이지 모드 / 설정 모드 탭 — 홈 페이지에서만. 이지 모드는 테마를 골라 홈을 기본 구성으로 재구성한다.
+     설정 모드는 기존 섹션 편집 UI 다. */
+  var _isHome = page.page_type === 'home';
+  var _pl = (typeof presetList !== 'undefined') ? presetList : [];
+  var _cur = (typeof currentPreset !== 'undefined') ? currentPreset : '';
+%>
+
+<% if (_isHome) { %>
+  <div class="mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
+    <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1 text-sm" role="tablist">
+      <button type="button" data-pb-tab="easy" class="pb-tab px-4 py-1.5 rounded-md font-medium text-gray-600 hover:text-gray-900">이지 모드</button>
+      <button type="button" data-pb-tab="settings" class="pb-tab px-4 py-1.5 rounded-md font-medium bg-indigo-600 text-white">설정 모드</button>
+    </div>
+    <span class="text-xs text-gray-400">이지 모드 = 테마로 메인 화면 자동 구성 · 설정 모드 = 섹션 직접 편집</span>
+  </div>
+
+  <div id="pb-pane-easy" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-2xl">
+      <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+        <h2 class="text-sm font-semibold text-gray-800">테마로 메인 화면 다시 구성</h2>
+        <p class="mt-0.5 text-xs text-gray-500">테마를 고르면 <strong>홈 섹션이 그 테마의 기본 구성(베스트·쇼핑특가·베스트 카테고리·베스트 브랜드)으로 교체·발행</strong>됩니다. 현재 홈 섹션은 삭제됩니다.</p>
+      </div>
+      <form method="POST" action="/admin/malls/<%= mallId %>/provision" class="p-5 space-y-3"
+            onsubmit="return confirm('선택한 테마의 기본 구성으로 메인 화면을 다시 만듭니다.\n현재 홈 섹션은 삭제됩니다. 계속할까요?');">
+        <input type="hidden" name="include_home" value="1">
+        <input type="hidden" name="return_to" value="page-builder">
+        <% _pl.forEach(function (p) { %>
+          <label class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50/40">
+            <input type="radio" name="preset_key" value="<%= p.key %>" <%= _cur === p.key ? 'checked' : '' %> class="mt-1 w-4 h-4 border-gray-300">
+            <span class="flex-1">
+              <span class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-900"><%= p.label %></span>
+                <% if (p.skinLabel) { %><span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100"><%= p.skinLabel %></span><% } %>
+              </span>
+              <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= p.summary %></span>
+            </span>
+          </label>
+        <% }); %>
+        <div class="flex justify-end pt-1">
+          <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700"><i class="bi bi-magic mr-1.5"></i>이 테마로 다시 구성</button>
+        </div>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<div id="pb-pane-settings">
+
 <!-- 상단 툴바 -->
 <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
   <div class="mr-auto flex items-center gap-2">
@@ -145,6 +194,32 @@
     </div>
   </div>
 </div>
+
+</div><!-- /pb-pane-settings -->
+
+<% if (typeof page !== 'undefined' && page && page.page_type === 'home') { %>
+<script>
+  (function () {
+    var tabs = document.querySelectorAll('.pb-tab');
+    var easy = document.getElementById('pb-pane-easy');
+    var settings = document.getElementById('pb-pane-settings');
+    if (!tabs.length || !easy || !settings) return;
+    function activate(which) {
+      easy.classList.toggle('hidden', which !== 'easy');
+      settings.classList.toggle('hidden', which !== 'settings');
+      tabs.forEach(function (t) {
+        var on = t.getAttribute('data-pb-tab') === which;
+        t.classList.toggle('bg-indigo-600', on);
+        t.classList.toggle('text-white', on);
+        t.classList.toggle('text-gray-600', !on);
+      });
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { activate(t.getAttribute('data-pb-tab')); });
+    });
+  })();
+</script>
+<% } %>
 
 <script id="pb-data" type="application/json">
   <%- JSON.stringify({ pageId: page.id, sections, palette, productGroups, linkTargets: (typeof linkTargets !== 'undefined' ? linkTargets : []) })

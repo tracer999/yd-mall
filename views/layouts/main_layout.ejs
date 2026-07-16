@@ -146,7 +146,15 @@
                                                                                                     const _theme = (typeof theme !== 'undefined' && theme) ? theme : null;
                                                                                                     const _themeVars = _theme ? _theme.cssVars.join('\n                                                                                                        ') : '';
                                                                                                     const _cardStyle = _theme ? _theme.cardStyle : 'shadow';
+                                                                                                    const _skin = (_theme && _theme.skin) ? _theme.skin : 'classic';
                                                                                                 %>
+                                                                                                <% if (_skin === 'editorial') { %>
+                                                                                                <%# 에디토리얼 스킨 전용 디스플레이 폰트(한글 세리프 + 라틴 디스플레이). 스킨일 때만 로드. %>
+                                                                                                <link rel="preconnect" href="https://fonts.googleapis.com">
+                                                                                                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                                                                                                <link rel="stylesheet"
+                                                                                                    href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Playfair+Display:wght@500;600;700&display=swap">
+                                                                                                <% } %>
                                                                                                 <style>
                                                                                                     :root {
                                                                                                         /* ── 테마 토큰 (theme.config_json) ── */
@@ -219,6 +227,17 @@
                                                                                                         box-shadow: none;
                                                                                                         border: none;
                                                                                                     }
+
+                                                                                                    /* ── 에디토리얼 스킨 (theme.skin === 'editorial') ── */
+                                                                                                    /* 오버레이(투명) 헤더: 헤더가 히어로 위에 겹치도록 본문을 최상단부터 시작시킨다. */
+                                                                                                    body.yd-overlay-header main.brand-page-surface { padding-top: 0; }
+                                                                                                    /* 섹션 헤딩은 디스플레이 폰트로 — 에디토리얼 무드의 핵심 차별점. */
+                                                                                                    body.yd-skin-editorial main :is(h1, h2, .yd-section-title) {
+                                                                                                        font-family: var(--yd-font-display, serif);
+                                                                                                        letter-spacing: .01em;
+                                                                                                    }
+                                                                                                    /* 카드/버튼 각을 세워 미니멀하게(테마 토큰 radius 0 과 함께). */
+                                                                                                    body.yd-skin-editorial .yd-carousel__nav { border-radius: 9999px; }
 
                                                                                                     .gh-btn-primary:hover {
                                                                                                         background-color: var(--gh-primary-dark);
@@ -435,8 +454,11 @@
      * 그대로 타야 "실제로 어떻게 보이는지"가 맞으므로 별도 레이아웃을 만들지 않고 여기서 분기한다.
      */
     const _bare = typeof isBare !== 'undefined' && isBare;
+    // 오버레이(투명) 헤더 스킨 여부 — 에디토리얼 헤더가 히어로 위에 겹친다.
+    const _overlayHeader = (typeof nav !== 'undefined' && nav && nav.config
+        && nav.config.header_layout_type === 'editorial_overlay_v1');
 %>
-<body class="flex flex-col min-h-screen yd-card-<%= _cardStyle %>">
+<body class="flex flex-col min-h-screen yd-card-<%= _cardStyle %> yd-skin-<%= _skin %><%= _overlayHeader ? ' yd-overlay-header' : '' %>">
 
 
     <!-- Header (partials/storefront/header.ejs) -->

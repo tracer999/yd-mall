@@ -1,0 +1,102 @@
+<%
+  /*
+   * 에디토리얼 오버레이 헤더 — header_layout_type='editorial_overlay_v1' (nav_mode='split')
+   *
+   * 투명 헤더가 풀블리드 히어로 위에 겹친다(body.yd-overlay-header). 스크롤이 히어로를 지나면
+   * 흰 배경으로 굳는다(하단 inline script). 데이터 계약은 다른 스킨과 동일하게 상위 locals 를 상속:
+   *   siteSettings · user · isAdmin · cartCount · gnbMenus · categoryButton · categoryTree · currentPath
+   *
+   * 카테고리 버튼/패널/백드롭은 기본형과 **같은 id** 를 써서 기존 토글 스크립트를 그대로 재사용한다.
+   */
+  const _cfg = (typeof nav !== 'undefined' && nav && nav.config) ? nav.config : {};
+  const _gnb = (typeof gnbMenus !== 'undefined' ? gnbMenus : []);
+  const _catBtn = (typeof categoryButton !== 'undefined') ? categoryButton : null;
+  const _company = (siteSettings && siteSettings.company_name) || '와이디몰';
+%>
+<header class="yd-ed-hdr absolute top-0 left-0 right-0 z-50" data-solid-after="80">
+  <div class="max-w-[80rem] mx-auto px-5 lg:px-10">
+    <div class="flex items-center h-20">
+      <!-- Logo (left) -->
+      <div class="flex-1 min-w-0">
+        <a href="/" class="inline-flex items-center gap-2 no-underline">
+          <% if (siteSettings && siteSettings.logo_url) { %>
+            <img src="<%= siteSettings.logo_url %>" alt="<%= _company %>" class="h-9 w-auto yd-ed-logo-img">
+          <% } else { %>
+            <span class="yd-ed-logo text-2xl lg:text-[1.7rem] leading-none tracking-tight"><%= _company %></span>
+          <% } %>
+        </a>
+      </div>
+
+      <!-- Center nav (PC) -->
+      <nav class="hidden md:flex items-center gap-7 yd-ed-nav" aria-label="주 메뉴">
+        <% if (_catBtn) { %>
+          <div class="relative" id="gnb-cat-wrap">
+            <button type="button" id="gnb-cat-btn" aria-expanded="false"
+              class="yd-ed-navlink inline-flex items-center gap-1.5 text-sm font-medium">
+              <i class="bi bi-grid text-base"></i><span><%= _catBtn.name %></span>
+            </button>
+            <div id="gnb-cat-panel"
+              class="hidden absolute left-1/2 -translate-x-1/2 top-full mt-3 z-50 max-w-[92vw] bg-white text-gray-800 border border-gray-200 shadow-xl rounded-lg overflow-visible">
+              <%- include('../category_panel') %>
+            </div>
+          </div>
+        <% } %>
+        <% _gnb.filter(function (m) { return m.pcVisible !== 0; }).slice(0, Number(_cfg.max_gnb_items) || 8).forEach(function (m) {
+             var active = m.href && m.href !== '#' && (typeof currentPath !== 'undefined') && currentPath === m.href; %>
+          <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
+             class="yd-ed-navlink relative text-sm font-medium <%= active ? 'is-active' : '' %>">
+            <%= m.name %>
+            <% if (m.badgeType) { %><span class="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-[var(--gh-accent)]"></span><% } %>
+          </a>
+        <% }); %>
+      </nav>
+
+      <!-- Right icons -->
+      <div class="flex-1 flex items-center justify-end gap-4 sm:gap-5 yd-ed-actions">
+        <% if (Number(_cfg.use_search_bar) !== 0) { %>
+          <a href="/search" aria-label="검색" class="yd-ed-ico"><i class="bi bi-search text-lg"></i></a>
+        <% } %>
+        <a href="<%= user ? '/mypage' : '/auth/login' %>" aria-label="<%= user ? '마이쇼핑' : '로그인' %>" class="yd-ed-ico hidden sm:inline-flex"><i class="bi bi-person text-xl"></i></a>
+        <a href="/cart" aria-label="장바구니" class="yd-ed-ico relative">
+          <i class="bi bi-bag text-lg"></i>
+          <% if (typeof cartCount !== 'undefined' && cartCount > 0) { %>
+            <span class="absolute -top-1.5 -right-1.5 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full"><%= cartCount %></span>
+          <% } %>
+        </a>
+        <% if (isAdmin) { %>
+          <a href="/admin" aria-label="관리자모드" class="yd-ed-ico"><i class="bi bi-gear text-lg"></i></a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</header>
+
+<%# 카테고리 드롭다운 백드롭 — 기본형과 동일(헤더 바깥). 기존 토글 스크립트가 같은 id 를 잡는다. %>
+<div id="gnb-cat-backdrop" class="hidden fixed inset-0 z-40 bg-black/20" aria-hidden="true"></div>
+
+<style>
+  /* 투명 → 스크롤 후 흰 배경으로 굳는다 */
+  .yd-ed-hdr { transition: background-color .3s ease, box-shadow .3s ease, color .3s ease; }
+  .yd-ed-hdr, .yd-ed-hdr .yd-ed-navlink, .yd-ed-hdr .yd-ed-ico, .yd-ed-hdr .yd-ed-logo { color: #fff; }
+  .yd-ed-logo { font-family: var(--yd-font-display, serif); font-weight: 600; }
+  .yd-ed-navlink { position: relative; opacity: .92; transition: opacity .2s ease; text-decoration: none; }
+  .yd-ed-navlink:hover, .yd-ed-navlink.is-active { opacity: 1; }
+  .yd-ed-navlink.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -6px; height: 1px; background: currentColor; }
+  .yd-ed-ico { display: inline-flex; opacity: .92; text-decoration: none; }
+  .yd-ed-ico:hover { opacity: 1; }
+  /* 히어로 위 흰 글자 가독성 */
+  body.yd-overlay-header .yd-ed-hdr:not(.is-solid) { text-shadow: 0 1px 10px rgba(0,0,0,.35); }
+  /* 굳은 상태 */
+  .yd-ed-hdr.is-solid { background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.06); text-shadow: none; }
+  .yd-ed-hdr.is-solid, .yd-ed-hdr.is-solid .yd-ed-navlink, .yd-ed-hdr.is-solid .yd-ed-ico, .yd-ed-hdr.is-solid .yd-ed-logo { color: #14110d; }
+</style>
+<script>
+  (function () {
+    var h = document.querySelector('.yd-ed-hdr');
+    if (!h) return;
+    var after = Number(h.getAttribute('data-solid-after')) || 80;
+    function onScroll() { h.classList.toggle('is-solid', window.scrollY > after); }
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+  })();
+</script>

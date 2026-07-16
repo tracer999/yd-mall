@@ -35,6 +35,19 @@ module.exports = {
     dataSource: null,
     fields: []
   },
+  /*
+   * 테마 히어로 — 몰 스코프 hero_slide 를 읽는 히어로(테마 프리셋이 배치). layout 으로 표현을 가른다.
+   * hero(전역 banners) 와 달리 몰마다 독립적이다. 슬라이드는 '히어로 슬라이드' 관리에서 등록한다.
+   */
+  theme_hero: {
+    view: 'partials/sections/theme_hero',
+    label: '테마 히어로',
+    description: '몰 전용 히어로 슬라이드(hero_slide)를 표현별로 노출한다. 상품 쇼케이스 / 이미지 배너 / 풀블리드 에디토리얼.',
+    dataSource: null,
+    fields: [
+      { key: 'layout', label: '표현', type: 'select', options: ['showcase', 'banner', 'editorial'], default: 'banner' }
+    ]
+  },
   product_grid: {
     view: 'partials/sections/product_grid_section',
     label: '상품 그리드',

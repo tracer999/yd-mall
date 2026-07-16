@@ -44,6 +44,14 @@ function isLength(v) {
 /** 카드 스타일은 열거형 */
 const CARD_STYLES = ['shadow', 'border', 'flat'];
 
+/** 스킨은 열거형 — 스토어프론트 전역 룩(body.yd-skin-*). classic=현재 디자인, editorial=풀블리드 에디토리얼 */
+const SKINS = ['classic', 'editorial'];
+
+/** 폰트 값 검증(fontFamily 와 동일 규칙) */
+function isFontValue(v) {
+    return /^[\w\s'",\-.]+$/.test(String(v)) && String(v).length <= 200;
+}
+
 function parseConfig(v) {
     if (!v) return {};
     if (typeof v === 'object') return v;
@@ -86,7 +94,16 @@ async function getActiveTheme(mallId = 1) {
         ? raw.productCardStyle
         : DEFAULTS.productCardStyle;
 
-    return { name, tokens, cardStyle, cssVars };
+    // 스킨 — 전역 룩 결정(body.yd-skin-*). TOKENS 밖에서 다뤄 테마설정 저장이 덮지 않게 한다.
+    const skin = SKINS.includes(raw.skin) ? raw.skin : 'classic';
+
+    // 디스플레이 폰트 — 에디토리얼 히어로/헤딩용. 없으면 본문 폰트로 폴백(classic 은 사실상 미사용).
+    const fontDisplay = (raw.fontDisplay != null && isFontValue(raw.fontDisplay))
+        ? String(raw.fontDisplay).trim()
+        : tokens.fontFamily;
+    cssVars.push(`--yd-font-display: ${fontDisplay};`);
+
+    return { name, tokens, cardStyle, cssVars, skin, fontDisplay };
 }
 
-module.exports = { getActiveTheme, DEFAULTS, TOKENS, CARD_STYLES, isLength };
+module.exports = { getActiveTheme, DEFAULTS, TOKENS, CARD_STYLES, SKINS, isLength };
