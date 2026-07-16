@@ -1,5 +1,23 @@
 const pool = require('./db');
 
+/**
+ * system_settings 의 숫자 설정값을 읽는다.
+ *
+ * `Number(v || fallback) || fallback` 로 쓰면 **명시적으로 저장한 0 이 fallback 으로 뒤집힌다**
+ * (설정값은 문자열이라 '0' 은 truthy → Number('0') → 0 → `0 || 5` → 5).
+ * 그래서 폴백은 **값이 없거나 숫자가 아닐 때만** 적용한다.
+ *
+ * @param {string} key system_settings.setting_key
+ * @param {number} fallback 값이 없거나 숫자가 아닐 때 쓸 기본값
+ * @returns {number}
+ */
+function getNumberSetting(key, fallback) {
+    const raw = global.systemSettings ? global.systemSettings[key] : undefined;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return fallback;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 async function loadSystemSettingsAndApplyEnv() {
     try {
         const [rows] = await pool.query('SELECT setting_key, setting_value FROM system_settings');
@@ -66,4 +84,5 @@ async function loadSystemSettingsAndApplyEnv() {
 
 module.exports = {
     loadSystemSettingsAndApplyEnv,
+    getNumberSetting,
 };

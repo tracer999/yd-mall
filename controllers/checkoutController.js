@@ -13,6 +13,11 @@ const membershipBenefitService = require('../services/membership/membershipBenef
 const performanceService = require('../services/membership/performanceService');
 const evaluationService = require('../services/membership/evaluationService');
 const membershipConfigService = require('../services/membership/membershipConfigService');
+const { getNumberSetting } = require('../config/systemSettings');
+
+// 구매 적립률(%)이 system_settings 에 아예 없을 때만 쓰는 기본값.
+// 관리자가 0 을 저장했다면 그건 "적립 없음"이라는 뜻이므로 이 값으로 덮지 않는다.
+const DEFAULT_POINT_RATE = 5;
 
 /*
  * ── 공동구매 연동 (docs/사이트개선/group_buy_design_and_development.md §9) ──
@@ -194,7 +199,7 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
             // 적립은 상품 결제액에만 붙인다. 배송비에 적립을 주면 배송비를 내고 포인트를 버는 셈이 된다.
             // 적립률: 주문 시점 스냅샷에 저장된 등급 유효 적립률(기본률+등급 가산/대체)을 쓴다.
             // 스냅샷이 없으면(비회원·등급 미설정) 시스템 기본률로 폴백한다.
-            const baseRate = Number(global.systemSettings?.point_accumulate_rate || 5) || 5;
+            const baseRate = getNumberSetting('point_accumulate_rate', DEFAULT_POINT_RATE);
             const [[snap]] = await conn.query(
                 'SELECT grade_point_rate FROM order_membership_benefit_snapshot WHERE order_id = ?',
                 [orderId]
@@ -789,7 +794,7 @@ exports.postForm = async (req, res) => {
          * grade_point_rate 에는 결제 확정 시 그대로 쓸 **유효 적립률**(기본률+등급)을 저장한다.
          */
         if (req.user && gradeBenefits.gradeId) {
-            const baseRate = Number(global.systemSettings?.point_accumulate_rate || 5) || 5;
+            const baseRate = getNumberSetting('point_accumulate_rate', DEFAULT_POINT_RATE);
             const effectiveRate = membershipBenefitService.effectivePointRate(baseRate, gradeBenefits);
             const freeShipApplied = (gradeBenefits.freeShipping || gradeBenefits.freeShipThreshold != null) && shipping.isFree ? 1 : 0;
             await connection.query(
