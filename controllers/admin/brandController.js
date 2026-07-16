@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const brandStat = require('../../services/brand/brandStatService');
 const { toInitial, toChosung, INITIAL_BUCKETS } = require('../../shared/hangul');
+const { GLOBAL_CATEGORY_MALL_ID } = require('../../services/catalog/categoryScope');
 
 /*
  * 브랜드 관리 — 브랜드 허브(/brands)의 운영 화면
@@ -25,7 +26,8 @@ exports.getList = async (req, res) => {
         const sort = ['count', 'name', 'popular', 'new'].includes(req.query.sort) ? req.query.sort : 'count';
         const page = Math.max(1, Number(req.query.page) || 1);
 
-        const where = ["c.type = 'BRAND'", 'c.mall_id = ?'];
+        // 브랜드는 글로벌 한 벌(mall 0). 잔존 몰별 브랜드도 함께 보이도록 IN.
+        const where = ["c.type = 'BRAND'", 'c.mall_id IN (0, ?)'];
         const params = [mallId];
         if (q) {
             where.push('(c.name LIKE ? OR bp.name_en LIKE ? OR bp.alias LIKE ? OR bp.initial_chosung LIKE ?)');
@@ -62,12 +64,12 @@ exports.getList = async (req, res) => {
                    tc.name AS top_category_name
               FROM categories c
               LEFT JOIN brand_profile bp ON bp.category_id = c.id
-              LEFT JOIN brand_stat s ON s.category_id = c.id
+              LEFT JOIN brand_stat s ON s.category_id = c.id AND s.mall_id = ?
               LEFT JOIN categories tc ON tc.id = s.top_category_id
              ${whereSql}
              ORDER BY ${order}
              LIMIT ? OFFSET ?
-        `, [...params, PAGE_SIZE, (cur - 1) * PAGE_SIZE]);
+        `, [mallId, ...params, PAGE_SIZE, (cur - 1) * PAGE_SIZE]);
 
         // 집계가 언제 돌았는지 — 상품 수가 실제와 어긋나 보일 때 운영자가 확인할 근거
         const [[stat]] = await pool.query(
@@ -106,12 +108,12 @@ exports.searchJson = async (req, res) => {
             SELECT c.id, c.name, c.logo_image_path, bp.name_en, s.product_count
               FROM categories c
               LEFT JOIN brand_profile bp ON bp.category_id = c.id
-              LEFT JOIN brand_stat s ON s.category_id = c.id
-             WHERE c.type = 'BRAND' AND c.mall_id = ?
+              LEFT JOIN brand_stat s ON s.category_id = c.id AND s.mall_id = ?
+             WHERE c.type = 'BRAND' AND c.mall_id IN (0, ?)
                AND (c.name LIKE ? OR bp.name_en LIKE ? OR bp.alias LIKE ? OR bp.initial_chosung LIKE ?)
              ORDER BY COALESCE(s.product_count, 0) DESC
              LIMIT 15
-        `, [mallId, like, like, like, `%${toChosung(q)}%`]);
+        `, [mallId, mallId, like, like, like, `%${toChosung(q)}%`]);
         res.json({ brands });
     } catch (err) {
         console.error('[admin/brands] 검색 실패', err);
@@ -132,9 +134,9 @@ exports.getEdit = async (req, res) => {
                    s.product_count, s.popularity_score, s.benefit_count, s.calculated_at
               FROM categories c
               LEFT JOIN brand_profile bp ON bp.category_id = c.id
-              LEFT JOIN brand_stat s ON s.category_id = c.id
-             WHERE c.id = ? AND c.type = 'BRAND' AND c.mall_id = ?
-        `, [id, mallId]);
+              LEFT JOIN brand_stat s ON s.category_id = c.id AND s.mall_id = ?
+             WHERE c.id = ? AND c.type = 'BRAND' AND c.mall_id IN (0, ?)
+        `, [mallId, id, mallId]);
         if (!brand) return res.status(404).send('Not Found');
 
         // 이 브랜드가 취급하는 카테고리 (파생값 — 읽기 전용)
@@ -204,7 +206,7 @@ exports.postUpdate = async (req, res) => {
                 seo_title = VALUES(seo_title), seo_description = VALUES(seo_description),
                 seller_name = VALUES(seller_name), is_seller = VALUES(is_seller)
         `, [
-            id, mallId,
+            id, GLOBAL_CATEGORY_MALL_ID, // 브랜드·프로필은 글로벌 한 벌(몰 삭제 시 보존)
             b.name_en?.trim() || null,
             b.alias?.trim() || null,
             initial,

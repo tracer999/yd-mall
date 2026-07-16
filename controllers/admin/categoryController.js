@@ -68,13 +68,16 @@ exports.getList = async (req, res) => {
             'SELECT * FROM categories WHERE mall_id IN (?, ?) ORDER BY display_order ASC, id ASC',
             [GLOBAL_CATEGORY_MALL_ID, MALL_ID]
         );
-        // 상품 카운트는 전 몰 통틀어(글로벌 카탈로그이므로).
+        // 카테고리·브랜드는 글로벌 한 벌이지만 **상품은 몰별**이다. 관리 화면의 상품수·"상품 있는 것만"
+        // 노출은 **편집 중인 몰(MALL_ID) 기준**으로 집계한다(전 몰 통합 아님).
         const [counts] = await pool.query(
-            'SELECT p.category_id, COUNT(*) AS n FROM products p WHERE p.category_id IS NOT NULL GROUP BY p.category_id'
+            'SELECT p.category_id, COUNT(*) AS n FROM products p WHERE p.mall_id = ? AND p.category_id IS NOT NULL GROUP BY p.category_id',
+            [MALL_ID]
         );
         const productCountBy = new Map(counts.map(c => [c.category_id, c.n]));
         const [brandCounts] = await pool.query(
-            'SELECT p.brand_category_id, COUNT(*) AS n FROM products p WHERE p.brand_category_id IS NOT NULL GROUP BY p.brand_category_id'
+            'SELECT p.brand_category_id, COUNT(*) AS n FROM products p WHERE p.mall_id = ? AND p.brand_category_id IS NOT NULL GROUP BY p.brand_category_id',
+            [MALL_ID]
         );
         const brandCountBy = new Map(brandCounts.map(c => [c.brand_category_id, c.n]));
 
@@ -444,6 +447,19 @@ exports.postDelete = async (req, res) => {
         if (childCount > 0) {
             return redirectWithError(res, activeTab,
                 `하위 카테고리 ${childCount}개가 있어 삭제할 수 없습니다. 먼저 하위 카테고리를 옮기거나 삭제하세요.`);
+        }
+
+        /*
+         * 카테고리·브랜드는 글로벌 한 벌이고 products FK 는 ON DELETE SET NULL 이다.
+         * 관리 화면 상품수는 "현재 몰" 기준이라 0 으로 보여도 **타몰 상품이 참조 중일 수 있다**.
+         * 그대로 지우면 전 몰의 참조가 조용히 NULL 로 풀린다 → 전 몰 통틀어 참조가 있으면 삭제를 막는다.
+         */
+        const [[{ n: refCount }]] = await pool.query(
+            'SELECT COUNT(*) AS n FROM products WHERE category_id = ? OR brand_category_id = ?', [nodeId, nodeId]
+        );
+        if (refCount > 0) {
+            return redirectWithError(res, activeTab,
+                `이 카테고리를 참조하는 상품이 (다른 몰 포함) ${refCount}개 있어 삭제할 수 없습니다. 먼저 상품의 카테고리를 옮기세요.`);
         }
 
         // Shopify 컬렉션 삭제 — DB 삭제 전에 (shopify_collection_id 를 읽어야 하므로).

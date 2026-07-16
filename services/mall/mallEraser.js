@@ -15,6 +15,11 @@ const pool = require('../../config/db');
  *   - categories    → 자기참조 parent_id 및 상품의 category_id 는 SET NULL
  *                      (상품은 이미 앞에서 지운 뒤라 무해).
  *
+ * ⭐ 글로벌 카탈로그는 보존한다: 카테고리·브랜드(categories NORMAL·BRAND = mall_id 0)와
+ *    brand_profile, 네이버 동기화 마스터(naver_brand·naver_category·naver_taxonomy_*)는
+ *    전 몰 공통이라 몰 삭제 대상이 아니다. 아래 categories DELETE 는 `mall_id = <대상몰>` 만
+ *    지우므로(대상 ≠ 0) 글로벌 행(mall 0)은 건드리지 않는다. THEME/OUTLET 등 몰별 타입만 삭제.
+ *
  * 순서 제약(딱 하나): deal → deal_category 가 RESTRICT 라 deal 을 먼저 지운다.
  * FK CHECK 는 반드시 켜둔 채로 순서대로 지운다 — 끄면 CASCADE 가 돌지 않아
  * mall_id 없는 자식(deal_item·user_coupons 등)이 오히려 고아가 된다.
@@ -31,7 +36,10 @@ const MALL_SCOPED_TABLES = [
     'deal',            // deal_item CASCADE. deal_category 보다 먼저(RESTRICT)
     'deal_category',
     'best_ranking', 'best_pin', 'best_group', 'best_ranking_run', 'best_score_config',
-    'brand_category_stat', 'brand_stat', 'brand_profile',
+    // brand_category_stat·brand_stat = 몰별 집계(파생) → 몰 삭제 시 함께 정리.
+    // brand_profile 은 여기서 뺐다 — 브랜드가 글로벌 한 벌(mall 0)이 되면서 프로필도 글로벌
+    // 마스터(네이버 동기화·편집 데이터)라 몰 삭제와 무관하게 보존한다.
+    'brand_category_stat', 'brand_stat',
     'coupons',         // user_coupons·coupon_download·event_coupon·live_show_coupon CASCADE
     'event', 'exhibition', 'group_buy', 'live_show',
     'faq', 'faq_category',
