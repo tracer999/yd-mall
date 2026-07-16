@@ -70,20 +70,31 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                                    <select name="category_id">
+
+                                    <%# 제출용 원본 select — 숨기고 종속 셀렉트가 값을 채운다(기존 JS 호환) %>
+                                    <select name="category_id" id="category_id_select" class="hidden">
                                         <option value="">선택하세요</option>
                                         <% (productCategories || []).forEach(c=> { %>
                                             <option value="<%= c.id %>" <%=product && product.category_id===c.id
-                                                ? 'selected' : '' %>>
-                                                <%= c.name %>
-                                            </option>
-                                            <% }) %>
+                                                ? 'selected' : '' %>><%= c.name %></option>
+                                        <% }) %>
                                     </select>
+
+                                    <%# 단계별(뎁스) 종속 셀렉트박스 — 1단계 고르면 2단계가, 2단계 고르면 3단계가 채워진다 %>
+                                    <div id="cat-cascade" class="flex flex-col sm:flex-row gap-2">
+                                        <select id="cat-lv-1" class="cat-lv w-full text-sm" data-lv="1"><option value="">1단계 선택</option></select>
+                                        <select id="cat-lv-2" class="cat-lv w-full text-sm" data-lv="2" disabled><option value="">2단계</option></select>
+                                        <select id="cat-lv-3" class="cat-lv w-full text-sm" data-lv="3" disabled><option value="">3단계</option></select>
+                                    </div>
+
                                     <input type="text" name="new_category_name" id="new_category_name"
                                         class="mt-1.5 w-full text-sm"
-                                        placeholder="＋ 목록에 없으면 카테고리명 직접 입력">
-                                    <p class="text-xs text-gray-500 mt-1">위 목록에서 못 고른 경우에만 입력하세요. 비슷한 카테고리가
-                                        있으면 자동으로 연결하고, 없으면 새로 만들어 저장합니다.</p>
+                                        placeholder="＋ 목록에 없으면 경로로 입력 (예: 여성신발>부츠/워커>미들부츠)">
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        기존 카테고리는 위 단계별 선택으로 고릅니다. 없으면 아래 칸에
+                                        <b>대>중>소</b> 경로(구분자 <code>&gt;</code>)로 입력하면 <b>단계별로 자동 생성</b>됩니다(최대 3단계).
+                                    </p>
+                                    <script id="cat-tree-data" type="application/json"><%- JSON.stringify((productCategories || []).map(function(c){ return { id: c.id, name: c.name, parent_id: c.parent_id, depth: c.depth }; })) %></script>
 
                                     <!-- 네이버 카테고리 리소스 검색 — 선택하면 위 "직접 입력"칸을 채운다(taxonomyResolver 경로 재사용) -->
                                     <div class="mt-2 relative" id="naver-cat-widget">
@@ -588,6 +599,10 @@
                             </div>
 
                             <div class="flex justify-end gap-3 mt-8">
+                                <% if (product) { %>
+                                    <a href="/admin/products/options/<%= product.id %>"
+                                        class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline min-w-[120px] mr-auto">옵션·SKU 관리</a>
+                                <% } %>
                                 <a href="/admin/products"
                                     class="inline-flex items-center justify-center h-[50px] px-6 text-base font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline min-w-[120px]">취소</a>
                                 <button type="submit"
@@ -1092,12 +1107,16 @@
         function hideResults() { results.classList.add('hidden'); results.innerHTML = ''; }
 
         function pick(item) {
-            // 자유입력 칸을 네이버 리프명으로 채운다 → 저장 시 taxonomyResolver 가
-            // 몰 카테고리를 생성/매핑한다. 셀렉트는 비워 자유입력 경로를 태운다.
-            if (freeText) freeText.value = item.name || '';
-            if (categorySelect) categorySelect.value = '';
-            hidden.value = item.naver_category_id || '';
-            search.value = item.whole_category_name || item.name || '';
+            // 네이버 전체 경로(대>중>소>세) 중 우리 몰 최대 3단계(마지막)만 자유입력 칸에 넣는다
+            // → 저장 시 taxonomyResolver 가 계층을 단계별로 생성/매핑한다. 대분류는 자동 생략.
+            var whole = item.whole_category_name || item.name || '';
+            var segs = whole.split('>').map(function (s) { return s.trim(); }).filter(Boolean);
+            var pathText = segs.length > 3 ? segs.slice(segs.length - 3).join('>') : segs.join('>');
+            if (freeText) freeText.value = pathText || item.name || '';
+            // 기존 카테고리 선택은 비운다(자유입력 경로로 새로 만들/매핑). 캐스케이드도 리셋된다.
+            if (categorySelect) { categorySelect.value = ''; categorySelect.dispatchEvent(new Event('change')); }
+            hidden.value = item.naver_category_id || '';   // 네이버 카테고리 ID 는 상품에 별도 저장(매핑용)
+            search.value = whole || item.name || '';
             hideResults();
         }
 
@@ -1150,4 +1169,75 @@
             if (widget && !widget.contains(e.target)) hideResults();
         });
     });
+</script>
+
+<!-- 카테고리 단계별(뎁스) 종속 셀렉트박스 -->
+<script>
+    (function () {
+        var el = document.getElementById('cat-tree-data');
+        var hiddenSel = document.getElementById('category_id_select');
+        if (!el || !hiddenSel) return;
+        var tree = [];
+        try { tree = JSON.parse(el.textContent || '[]'); } catch (e) { tree = []; }
+        var byId = {};
+        tree.forEach(function (c) { byId[c.id] = c; });
+        function childrenOf(pid) {
+            return tree.filter(function (c) { return (pid == null) ? (c.parent_id == null) : (String(c.parent_id) === String(pid)); });
+        }
+        var sels = [document.getElementById('cat-lv-1'), document.getElementById('cat-lv-2'), document.getElementById('cat-lv-3')];
+        if (sels.some(function (s) { return !s; })) return;
+        var PH = ['1단계 선택', '2단계', '3단계'];
+
+        function fillOptions(sel, parentId, placeholder) {
+            sel.innerHTML = '';
+            var o0 = document.createElement('option'); o0.value = ''; o0.textContent = placeholder; sel.appendChild(o0);
+            childrenOf(parentId).forEach(function (c) {
+                var o = document.createElement('option'); o.value = String(c.id); o.textContent = c.name; sel.appendChild(o);
+            });
+        }
+        function clearFrom(idx) { // idx 이상 레벨 비우기
+            for (var i = idx; i < 3; i++) { sels[i].innerHTML = '<option value="">' + PH[i] + '</option>'; sels[i].disabled = (i > 0); sels[i].value = ''; }
+        }
+        function deepest() { for (var i = 2; i >= 0; i--) { if (sels[i].value) return sels[i].value; } return ''; }
+        function syncHidden() { hiddenSel.value = deepest(); } // 이벤트 미발생(무한루프 방지)
+
+        sels.forEach(function (sel, idx) {
+            sel.addEventListener('change', function () {
+                clearFrom(idx + 1);
+                if (idx < 2 && sel.value) {
+                    var kids = childrenOf(sel.value);
+                    if (kids.length) { fillOptions(sels[idx + 1], sel.value, PH[idx + 1]); sels[idx + 1].disabled = false; }
+                }
+                syncHidden();
+            });
+        });
+
+        function chainOf(id) { var out = []; var cur = byId[id]; while (cur) { out.unshift(cur); cur = (cur.parent_id != null) ? byId[cur.parent_id] : null; } return out; }
+        function preselect(id) {
+            fillOptions(sels[0], null, PH[0]); sels[0].disabled = false;
+            clearFrom(1);
+            if (!id || !byId[id]) { syncHidden(); return; }
+            var chain = chainOf(id).slice(-3);
+            if (chain[0]) {
+                sels[0].value = String(chain[0].id);
+                var k1 = childrenOf(chain[0].id); if (k1.length) { fillOptions(sels[1], chain[0].id, PH[1]); sels[1].disabled = false; }
+            }
+            if (chain[1]) {
+                sels[1].value = String(chain[1].id);
+                var k2 = childrenOf(chain[1].id); if (k2.length) { fillOptions(sels[2], chain[1].id, PH[2]); sels[2].disabled = false; }
+            }
+            if (chain[2]) sels[2].value = String(chain[2].id);
+            syncHidden();
+        }
+
+        // 초기 렌더: 1단계 채우고, 편집이면 기존 category_id 로 체인 프리필
+        fillOptions(sels[0], null, PH[0]); sels[0].disabled = false;
+        if (hiddenSel.value) preselect(hiddenSel.value);
+
+        // 외부 JS(네이버 pick 리셋·URL 가져오기 매칭)가 hidden 을 바꾸면 캐스케이드 동기화
+        hiddenSel.addEventListener('change', function () {
+            if (hiddenSel.value) preselect(hiddenSel.value);
+            else { fillOptions(sels[0], null, PH[0]); sels[0].disabled = false; clearFrom(1); }
+        });
+    })();
 </script>

@@ -100,21 +100,24 @@ function bestScoreAgainst(query, names) {
     return best;
 }
 
-/** 신규 카테고리/브랜드를 가드 경유해 최상위로 생성한다.
+/** 신규 카테고리/브랜드를 가드 경유해 생성한다. parentId 지정 시 그 아래 자식으로(계층 생성).
  *  pcVisible/mobileVisible 기본 1(노출). "미분류" 폴백만 0(고객 숨김)으로 만든다. */
-async function createCategory({ mallId, name, type, conn = pool, pcVisible = 1, mobileVisible = 1 }) {
-    // parentId=null → depth 1 (assertDepthAllowed 가 DB 조회 없이 1 반환)
-    const depth = await depthGuard.assertDepthAllowed({ parentId: null, conn });
+async function createCategory({ mallId, name, type, conn = pool, pcVisible = 1, mobileVisible = 1, parentId = null }) {
+    // parentId=null → depth 1. 지정 시 부모.depth+1 (뎁스 상한 초과면 DepthLimitError)
+    const depth = await depthGuard.assertDepthAllowed({ parentId, conn });
 
+    // 순번은 형제(같은 부모) 기준으로 매긴다.
     const [[{ next_order }]] = await conn.query(
-        'SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM categories WHERE type = ? AND mall_id = ?',
-        [type, mallId]
+        parentId == null
+            ? 'SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM categories WHERE type = ? AND mall_id = ? AND parent_id IS NULL'
+            : 'SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM categories WHERE type = ? AND mall_id = ? AND parent_id = ?',
+        parentId == null ? [type, mallId] : [type, mallId, parentId]
     );
 
     const [result] = await conn.query(
         `INSERT INTO categories (mall_id, name, display_order, type, parent_id, depth, is_active, pc_visible, mobile_visible)
-         VALUES (?, ?, ?, ?, NULL, ?, 1, ?, ?)`,
-        [mallId, name, next_order, type, depth, pcVisible ? 1 : 0, mobileVisible ? 1 : 0]
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        [mallId, name, next_order, type, parentId, depth, pcVisible ? 1 : 0, mobileVisible ? 1 : 0]
     );
     const id = result.insertId;
 
@@ -177,6 +180,57 @@ async function resolveOrCreateCategory({ mallId, name, type = 'NORMAL', create =
     return await createCategory({ mallId, name: trimmed, type, conn });
 }
 
+/** 같은 부모 아래 형제 중 이름이 일치(정규화 기준)하는 카테고리 id. 없으면 null. */
+async function findChildByName({ mallId, type, parentId, name, conn = pool }) {
+    const norm = normalizeName(name);
+    if (!norm) return null;
+    const [rows] = await conn.query(
+        parentId == null
+            ? 'SELECT id, name FROM categories WHERE type = ? AND mall_id = ? AND parent_id IS NULL'
+            : 'SELECT id, name FROM categories WHERE type = ? AND mall_id = ? AND parent_id = ?',
+        parentId == null ? [type, mallId] : [type, mallId, parentId]
+    );
+    for (const r of rows) if (normalizeName(r.name) === norm) return r.id;
+    return null;
+}
+
+/**
+ * "대>중>소" 경로 텍스트로 카테고리 계층을 단계별 생성/매핑한다.
+ *
+ * - 구분자는 '>' 만. ("부츠/워커" 의 '/' 는 이름 그대로 보존)
+ * - 각 단계는 같은 부모 아래 동일 이름이 있으면 재사용, 없으면 생성(depthGuard 경유).
+ * - 몰 최대 뎁스(navigation_config, 기본 3)를 초과하면 **앞쪽(대분류)을 잘라** 마지막 N단계만 만든다
+ *   (네이버 4단계 → 우리 3단계. 가장 구체적인 리프를 우선 보존).
+ *
+ * @returns {Promise<{id:number|null, name:string, created:boolean}|null>} 리프 카테고리
+ */
+async function resolveOrCreatePath({ mallId, path, type = 'NORMAL', conn = pool }) {
+    let segments = String(path || '').split('>').map((s) => s.trim()).filter(Boolean);
+    if (!segments.length) return null;
+    if (segments.length === 1) {
+        // 단일 이름은 기존 퍼지 매칭 경로(최상위) 재사용
+        return await resolveOrCreateCategory({ mallId, name: segments[0], type, conn });
+    }
+
+    const maxDepth = await depthGuard.getCategoryMaxDepth(mallId);
+    if (segments.length > maxDepth) segments = segments.slice(segments.length - maxDepth); // 앞(대분류) 자르기
+
+    let parentId = null;
+    let leaf = null;
+    for (const name of segments) {
+        let id = await findChildByName({ mallId, type, parentId, name, conn });
+        let created = false;
+        if (!id) {
+            const c = await createCategory({ mallId, name, type, conn, parentId });
+            id = c.id;
+            created = true;
+        }
+        leaf = { id, name, created };
+        parentId = id;
+    }
+    return leaf;
+}
+
 /** 브랜드(type='BRAND') 자동 선별/생성 — resolveOrCreateCategory 의 브랜드 특화 래퍼. */
 function resolveOrCreateBrand({ mallId, name, create = true, conn = pool }) {
     return resolveOrCreateCategory({ mallId, name, type: 'BRAND', create, conn });
@@ -208,6 +262,7 @@ async function getUncategorizedCategoryId({ mallId, conn = pool }) {
 
 module.exports = {
     resolveOrCreateCategory,
+    resolveOrCreatePath,
     resolveOrCreateBrand,
     createCategory,
     getUncategorizedCategoryId,

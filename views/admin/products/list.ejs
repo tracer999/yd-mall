@@ -300,6 +300,7 @@
                             <td class="px-3 py-4 whitespace-nowrap text-center text-sm font-medium">
                                 <div class="flex flex-col items-center gap-1">
                                     <a href="/admin/products/edit/<%= p.id %>" class="inline-flex items-center justify-center w-full h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
+                                    <a href="/admin/products/options/<%= p.id %>" class="inline-flex items-center justify-center w-full h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline">옵션·SKU</a>
                                     <form action="/admin/products/delete" method="POST" class="w-full" onsubmit="return confirm('「<%= p.name %>」 상품을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.');">
                                         <input type="hidden" name="id" value="<%= p.id %>">
                                         <button type="submit" class="inline-flex items-center justify-center w-full h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>

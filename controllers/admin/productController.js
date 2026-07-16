@@ -83,7 +83,10 @@ async function resolveTaxonomyField(selectedId, freeText, type, mallId, fallback
     if (id) return id;
     const text = String(freeText || '').trim();
     if (text) {
-        const r = await taxonomyResolver.resolveOrCreateCategory({ mallId, name: text, type });
+        // '대>중>소' 경로면 계층을 단계별로 생성/매핑(NORMAL 만). 브랜드는 계층 없음.
+        const r = (type === 'NORMAL' && text.includes('>'))
+            ? await taxonomyResolver.resolveOrCreatePath({ mallId, path: text, type })
+            : await taxonomyResolver.resolveOrCreateCategory({ mallId, name: text, type });
         if (r && r.id) return r.id;
     }
     if (fallbackUncategorized && type === 'NORMAL') {
@@ -545,7 +548,7 @@ exports.postReorderRecommendations = async (req, res) => {
 exports.getAdd = async (req, res) => {
     try {
         const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
-        const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);
         const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
         const domain = domainFromSettings.replace(/\/$/, '');
@@ -1094,7 +1097,7 @@ exports.getEdit = async (req, res) => {
         if (rows.length === 0) return res.redirect('/admin/products');
 
         // P5: 편집 중인 몰의 카테고리만
-        const [productCategories] = await pool.query("SELECT id, name, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);
         const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
 
