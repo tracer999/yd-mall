@@ -182,3 +182,4 @@
 | 4 복합상품 | ✅ 완료 | (미커밋) | `compositeService.js`(구성 CRUD·가용수량 파생·구성검색), 관리자 세트·묶음 편집기(`/admin/products/composite/:id`), skuService 차감/복원이 복합상품 구성 SKU 처리. e2e PASS: 세트 구매 qty2→구성 −2/−4, 대표 SKU 미차감, 복원 대칭 |
 | 5 카테고리 옵션 | ✅ 완료 | (미커밋) | 표준 옵션 사전 시드(3몰×8옵션), `categoryOptionService`(매핑·조상 상속), 관리자 카테고리 옵션 관리 화면, 옵션 편집기 "카테고리 추천 옵션 불러오기" 프리필. e2e PASS: 저장→프리필 반환(색상5·사이즈4), 상속 PASS |
 | 6 폐기(감사) | ✅ 완료 | (미커밋) | 감사 결과: 런타임 재고 쓰기 전부 `product_sku` 경유(skuService), `products.stock`은 단일 대표 SKU **미러**로만(is_default 가드). 기존 직접쓰기(checkout:166·cancel:64) 제거됨. Shopify 웹훅만 논외. products.price/stock/purchase_price = 읽기폴백·미러(신규 쓰기 없음). 컬럼 물리삭제 안 함(설계 방침) |
+| 7 메뉴 분리 | ✅ 완료 | (미커밋) | 설계 §31. 기본상품(SINGLE/OPTION)=`상품관리`, 파생상품(BUNDLE/SET/GIFT_SET/BUILD_SET)=신규 `세트·기획상품`(/admin/derived-products) 메뉴 분리. 목록·신규생성·구성편집(compose)·가드삭제. 기본 목록에서 파생 제외, 상세의 세트버튼 제거, composite 라우트 이동. e2e PASS |

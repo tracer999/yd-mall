@@ -8,7 +8,10 @@
                 <span class="ml-2 text-xs text-gray-400">현재 가용수량 <b id="availQty"><%= availableQty %></b>세트</span>
             </p>
         </div>
-        <a href="/admin/products/edit/<%= product.id %>" class="text-sm text-gray-500 hover:text-gray-800">← 상품 편집으로</a>
+        <div class="flex items-center gap-3">
+            <a href="/admin/products/edit/<%= product.id %>" class="text-sm text-gray-500 hover:text-gray-800">기본정보 수정</a>
+            <a href="/admin/derived-products" class="text-sm text-gray-500 hover:text-gray-800">← 세트·기획상품 목록</a>
+        </div>
     </div>
 
     <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-6">
@@ -99,7 +102,7 @@
     async function doSearch() {
         const q = document.getElementById('searchInput').value.trim();
         if (!q) return;
-        const resp = await fetch('/admin/products/composite/' + PRODUCT_ID + '/search?q=' + encodeURIComponent(q));
+        const resp = await fetch('/admin/derived-products/' + PRODUCT_ID + '/compose/search?q=' + encodeURIComponent(q));
         const data = await resp.json();
         searchResults.innerHTML = '';
         if (!data.results || !data.results.length) {
@@ -129,7 +132,7 @@
         const type = document.getElementById('typeSelect').value;
         saveMsg.textContent = '저장 중...'; saveMsg.className = 'text-sm text-gray-500';
         try {
-            const resp = await fetch('/admin/products/composite/' + PRODUCT_ID, {
+            const resp = await fetch('/admin/derived-products/' + PRODUCT_ID + '/compose', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type, components }),
             });

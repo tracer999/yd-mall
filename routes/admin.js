@@ -51,6 +51,8 @@ router.use('/header-settings', requireMenuAccess('/admin/header-settings'), requ
 // 스토어프론트 메뉴 조립 결과 미리보기 (B7)
 router.use('/menu-preview', requireMenuAccess('/admin/menu-preview'), require('./admin/menu-preview'));
 router.use('/products', requireMenuAccess('/admin/products'), require('./admin/products'));
+// 세트·기획상품(파생상품) — 기본상품과 분리된 별도 메뉴 (설계 §31)
+router.use('/derived-products', requireMenuAccess('/admin/derived-products'), require('./admin/derived-products'));
 router.use('/banners', requireMenuAccess('/admin/banners'), require('./admin/banners'));
 router.use('/page-builder', requireMenuAccess('/admin/page-builder'), require('./admin/page-builder'));
 // 페이지 빌더 섹션의 데이터 소스가 되는 상품 그룹 (B6)

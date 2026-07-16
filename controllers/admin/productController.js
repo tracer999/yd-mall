@@ -928,7 +928,8 @@ exports.getList = async (req, res) => {
         const brandId = Number(req.query.brandId) > 0 ? Number(req.query.brandId) : null;
 
         // 몰 필터는 항상 건다. keyword 유무와 무관하게 다른 몰 상품이 섞이면 안 된다.
-        let whereClause = 'WHERE p.mall_id = ?';
+        // 파생상품(세트·묶음·기획)은 별도 메뉴(/admin/derived-products)에서 관리 — 기본상품만 노출(설계 §31).
+        let whereClause = "WHERE p.mall_id = ? AND p.product_type IN ('SINGLE','OPTION')";
         const queryParams = [MALL_ID];
         if (keyword) {
             whereClause += ` AND (p.name LIKE ? OR p.provider LIKE ? OR c.name LIKE ?)`;
@@ -943,8 +944,9 @@ exports.getList = async (req, res) => {
             whereClause += ' AND p.visibility = ?';
             queryParams.push(visibility);
         }
-        if (stock === 'in') whereClause += ' AND p.stock > 0';
-        else if (stock === 'out') whereClause += ' AND (p.stock IS NULL OR p.stock = 0)';
+        // 재고 필터는 SKU 기준(옵션상품은 products.stock 이 stale). 재고 있는 SKU 가 하나라도 있으면 '재고 있음'.
+        if (stock === 'in') whereClause += ' AND EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
+        else if (stock === 'out') whereClause += ' AND NOT EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
 
         // 선택한 카테고리가 다른 몰이면 서브트리가 비고, 결과는 0건이 된다(크로스몰 차단).
         let categoryIds = [];
@@ -974,6 +976,32 @@ exports.getList = async (req, res) => {
             ORDER BY p.created_at DESC
             LIMIT ? OFFSET ?
         `, [...queryParams, perPage, offset]);
+
+        /*
+         * 목록 표기용 SKU 집계(현재 페이지 상품만 1쿼리). 옵션상품은 products.stock/price 가
+         * 부정확하므로 SKU 기준으로 재고합·판매가 범위를 뽑아 뷰가 정확히 그린다(설계 §31.4).
+         *  - eff_stock: 판매 가능 재고 = 해당 상품 전 SKU 재고합(단일=대표 SKU, 옵션=옵션 SKU 합)
+         *  - price_min/max: SKU 판매가 범위(옵션상품이면 "min~max" 로 표기)
+         */
+        if (products.length) {
+            const ids = products.map((p) => p.id);
+            const [aggs] = await pool.query(
+                `SELECT product_id,
+                        COALESCE(SUM(stock), 0) AS eff_stock,
+                        MIN(price) AS price_min, MAX(price) AS price_max,
+                        COUNT(*) AS sku_count
+                   FROM product_sku WHERE product_id IN (?) GROUP BY product_id`,
+                [ids]
+            );
+            const aggMap = new Map(aggs.map((a) => [a.product_id, a]));
+            for (const p of products) {
+                const a = aggMap.get(p.id);
+                p.eff_stock = a ? Number(a.eff_stock) : (p.stock || 0);
+                p.price_min = a && a.price_min != null ? Number(a.price_min) : (p.price || 0);
+                p.price_max = a && a.price_max != null ? Number(a.price_max) : (p.price || 0);
+                p.sku_count = a ? Number(a.sku_count) : 0;
+            }
+        }
 
         // 선택 레이어용 목록 — 카테고리는 트리(들여쓰기), 브랜드는 검색으로 좁혀 고른다.
         const [filterCategories] = await pool.query(

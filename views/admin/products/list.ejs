@@ -215,6 +215,11 @@
                                 </div>
                                 <div class="text-sm text-gray-500"><%= p.provider %></div>
                                 <div class="mt-1 flex gap-1">
+                                    <% if (p.product_type === 'OPTION') { %>
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">옵션 <%= p.sku_count %>종</span>
+                                    <% } else { %>
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-100 text-slate-600">단일</span>
+                                    <% } %>
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
                                         <%= p.category_name || '미지정' %>
                                     </span>
@@ -238,7 +243,8 @@
                                 <% } %>
                             </td>
                             <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <%= p.stock.toLocaleString() %>
+                                <%# 재고는 SKU 기준(옵션=옵션 SKU 재고합). products.stock 은 stale 할 수 있어 안 쓴다. %>
+                                <%= (typeof p.eff_stock === 'number' ? p.eff_stock : p.stock).toLocaleString() %>
                             </td>
                             <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-400 text-right">
                                 <% if (p.original_price && p.original_price > p.price) { %>
@@ -248,9 +254,14 @@
                                 <% } %>
                             </td>
                             <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
-                                <%= (p.price || 0).toLocaleString() %>원
-                                <% if (p.discount_rate > 0) { %>
-                                    <div class="text-[10px] text-red-500"><%= p.discount_rate %>%↓</div>
+                                <%# 옵션상품은 SKU 판매가 범위(min~max), 단일은 단가. %>
+                                <% if (p.product_type === 'OPTION' && typeof p.price_min === 'number' && p.price_min !== p.price_max) { %>
+                                    <%= p.price_min.toLocaleString() %>~<%= p.price_max.toLocaleString() %>원
+                                <% } else { %>
+                                    <%= (typeof p.price_min === 'number' ? p.price_min : (p.price || 0)).toLocaleString() %>원
+                                    <% if (p.discount_rate > 0) { %>
+                                        <div class="text-[10px] text-red-500"><%= p.discount_rate %>%↓</div>
+                                    <% } %>
                                 <% } %>
                             </td>
                             <%# 판매시작일 + 신상품 여부. 판정 규칙은 services/catalog/newArrival 한 곳에만 있다. %>

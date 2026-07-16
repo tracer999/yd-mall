@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const productController = require('../../controllers/admin/productController');
 const productOptionController = require('../../controllers/admin/productOptionController');
-const productCompositeController = require('../../controllers/admin/productCompositeController');
 const categoryOptionController = require('../../controllers/admin/categoryOptionController');
 const upload = require('../../middleware/upload');
 
@@ -50,10 +49,7 @@ router.get('/options/:id', productOptionController.getEditor);
 router.get('/options/:id/recommended', productOptionController.getRecommended);
 router.post('/options/:id', express.json(), productOptionController.postSave);
 
-// 복합상품(세트·묶음·기획) 구성
-router.get('/composite/:id', productCompositeController.getEditor);
-router.get('/composite/:id/search', productCompositeController.searchComponents);
-router.post('/composite/:id', express.json(), productCompositeController.postSave);
+// (세트·묶음 구성은 /admin/derived-products/:id/compose 로 이동 — 설계 §31)
 
 // 상품 SEO
 router.get('/seo/view/:id', productController.getProductSEOView);
