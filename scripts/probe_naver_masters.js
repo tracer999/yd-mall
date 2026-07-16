@@ -70,17 +70,19 @@ async function main() {
         return { status: res.status, json, text };
     }
 
+    // 성공한 첫 변형의 {path, json} 반환(없으면 null)
     async function probe(label, paths) {
         console.log('\n══════════ ' + label + ' ══════════');
         for (const p of paths) {
             const r = await GET(p);
             if (r.status === 200) {
                 console.log(`✅ ${p} → 200`);
-                console.log('   구조:', JSON.stringify(summarize(r.json), null, 0).slice(0, 700));
-                return; // 성공한 첫 변형에서 멈춤(파라미터명 확정)
+                console.log('   구조:', JSON.stringify(summarize(r.json), null, 0).slice(0, 800));
+                return { path: p, json: r.json };
             }
             console.log(`✗ ${p} → ${r.status} ${r.text.slice(0, 160)}`);
         }
+        return null;
     }
 
     // 속성 조회용 리프 카테고리
@@ -88,6 +90,7 @@ async function main() {
     const catId = cat ? cat.naver_category_id : '50000151';
     const kw = encodeURIComponent(KEYWORD);
 
+    // 1) 브랜드 조회 — 브랜드명 검색
     await probe('브랜드 조회 /v1/product-brands (검색어=' + KEYWORD + ')', [
         `/v1/product-brands?brandName=${kw}`,
         `/v1/product-brands?name=${kw}`,
@@ -97,13 +100,7 @@ async function main() {
         `/v1/product-brands`,
     ]);
 
-    await probe('제조사 조회 /v1/product-manufacturers (검색어=' + KEYWORD + ')', [
-        `/v1/product-manufacturers?manufacturerName=${kw}`,
-        `/v1/product-manufacturers?name=${kw}`,
-        `/v1/product-manufacturers?searchKeyword=${kw}`,
-        `/v1/product-manufacturers?keyword=${kw}`,
-    ]);
-
+    // 2) 카탈로그(모델) 조회 — 모델명 검색
     await probe('모델 조회 /v1/product-models (검색어=' + KEYWORD + ')', [
         `/v1/product-models?modelName=${kw}`,
         `/v1/product-models?name=${kw}`,
@@ -111,12 +108,37 @@ async function main() {
         `/v1/product-models?keyword=${kw}`,
     ]);
 
-    await probe('카테고리별 속성 /v1/product-attributes (categoryId=' + catId + ')', [
+    // 3) 카테고리별 속성 조회
+    const attrRes = await probe('카테고리별 속성 /v1/product-attributes (categoryId=' + catId + ')', [
         `/v1/product-attributes?categoryId=${catId}`,
         `/v1/product-attributes?leafCategoryId=${catId}`,
         `/v1/product-attributes?categoryIds=${catId}`,
         `/v1/product-attributes/${catId}`,
         `/v1/product-attributes`,
+    ]);
+
+    // 4) 카테고리별 속성값 조회 — 위 속성 응답에서 속성 id 를 뽑아 시도
+    let attrId = null;
+    if (attrRes && attrRes.json) {
+        const list = Array.isArray(attrRes.json) ? attrRes.json
+            : (attrRes.json.contents || attrRes.json.data || attrRes.json.attributes || attrRes.json.list || []);
+        const first = Array.isArray(list) ? list[0] : null;
+        if (first) {
+            // 흔한 속성 id 필드명 후보에서 값 추출
+            for (const k of ['attributeSeq', 'attributeId', 'attributeNo', 'id', 'seq', 'no']) {
+                if (first[k] != null) { attrId = first[k]; break; }
+            }
+            console.log('   → 속성값 조회에 쓸 속성 id 후보:', attrId, '(속성 첫 항목 키:', Object.keys(first).join(','), ')');
+        }
+    }
+    const aId = attrId != null ? encodeURIComponent(attrId) : '';
+    await probe('카테고리별 속성값 /v1/product-attributes/attribute-values', [
+        `/v1/product-attributes/attribute-values?categoryId=${catId}&attributeSeq=${aId}`,
+        `/v1/product-attributes/attribute-values?categoryId=${catId}&attributeId=${aId}`,
+        `/v1/product-attributes/attribute-values?attributeSeq=${aId}`,
+        `/v1/product-attributes/attribute-values?attributeId=${aId}`,
+        `/v1/product-attributes/attribute-values?categoryId=${catId}`,
+        `/v1/product-attributes/attribute-values`,
     ]);
 
     console.log('\n── 참고: 위 성공 응답의 필드명/리스트키/페이징 여부로 naver_* 테이블 컬럼과 요청 파라미터를 확정한다.');
