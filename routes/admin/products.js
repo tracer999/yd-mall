@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const productController = require('../../controllers/admin/productController');
+const productOptionController = require('../../controllers/admin/productOptionController');
+const productCompositeController = require('../../controllers/admin/productCompositeController');
+const categoryOptionController = require('../../controllers/admin/categoryOptionController');
 const upload = require('../../middleware/upload');
 
 router.get('/', productController.getList);
@@ -36,6 +39,21 @@ router.get('/recommendations/:productId', productController.getRecommendations);
 router.post('/recommendations/add', express.json(), productController.postAddRecommendation);
 router.post('/recommendations/remove', express.json(), productController.postRemoveRecommendation);
 router.post('/recommendations/reorder', express.json(), productController.postReorderRecommendations);
+
+// 카테고리 추천 옵션 템플릿
+router.get('/category-options', categoryOptionController.getEditor);
+router.get('/category-options/:categoryId', categoryOptionController.getEditor);
+router.post('/category-options/:categoryId', express.json(), categoryOptionController.postSave);
+
+// 옵션·SKU 관리 (옵션상품)
+router.get('/options/:id', productOptionController.getEditor);
+router.get('/options/:id/recommended', productOptionController.getRecommended);
+router.post('/options/:id', express.json(), productOptionController.postSave);
+
+// 복합상품(세트·묶음·기획) 구성
+router.get('/composite/:id', productCompositeController.getEditor);
+router.get('/composite/:id/search', productCompositeController.searchComponents);
+router.post('/composite/:id', express.json(), productCompositeController.postSave);
 
 // 상품 SEO
 router.get('/seo/view/:id', productController.getProductSEOView);

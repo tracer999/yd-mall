@@ -327,6 +327,92 @@
                                                     </div>
                                                 <% } %>
 
+                                                <!-- ===== 구매 패널 (SKU/옵션) ===== -->
+                                                <% const _hasOptions = (typeof productOptions !== 'undefined' && productOptions && productOptions.length > 0); %>
+                                                <% if (isPurchasable || _hasOptions) { %>
+                                                <div id="purchasePanel" class="border border-gray-200 rounded-2xl p-5 mb-6 bg-white"
+                                                     data-is-option="<%= _hasOptions ? '1' : '0' %>">
+                                                    <% if (_hasOptions) { %>
+                                                        <div class="space-y-3 mb-4">
+                                                            <% productOptions.forEach(function(opt, oi){ %>
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-1"><%= opt.option_name %></label>
+                                                                    <select class="opt-select w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-oi="<%= oi %>">
+                                                                        <option value="">선택하세요</option>
+                                                                        <% (opt.values||[]).forEach(function(v){ %>
+                                                                            <option value="<%= v.id %>"><%= v.value_name %></option>
+                                                                        <% }) %>
+                                                                    </select>
+                                                                </div>
+                                                            <% }) %>
+                                                        </div>
+                                                        <div id="skuSummary" class="text-sm text-gray-500 mb-4">옵션을 선택하세요.</div>
+                                                    <% } %>
+
+                                                    <div class="flex items-baseline justify-between mb-4">
+                                                        <span class="text-sm text-gray-500">판매가</span>
+                                                        <span id="panelPrice" class="text-2xl font-bold text-gray-900"><%= Number(product.price||0).toLocaleString() %>원</span>
+                                                    </div>
+
+                                                    <form id="add-to-cart-form" action="/cart/add" method="post">
+                                                        <input type="hidden" name="product_id" value="<%= product.id %>">
+                                                        <input type="hidden" name="sku_id" id="selectedSkuId" value="">
+                                                        <div class="flex items-center justify-between mb-4">
+                                                            <span class="text-sm text-gray-500">수량</span>
+                                                            <div class="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
+                                                                <button type="button" class="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-50" onclick="changeOrderQuantity(-1)"><i class="bi bi-dash"></i></button>
+                                                                <input id="orderQuantity" name="quantity" type="number" min="1" value="1"
+                                                                       max="<%= availableStock %>" data-max="<%= availableStock %>"
+                                                                       class="w-14 text-center text-sm border-0 focus:ring-0 focus:outline-none" />
+                                                                <button type="button" class="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-50" onclick="changeOrderQuantity(1)"><i class="bi bi-plus"></i></button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex flex-col gap-2">
+                                                            <button type="submit" id="addCartBtn" class="w-full py-3 rounded-xl border border-gray-900 text-gray-900 font-semibold hover:bg-gray-50 transition">장바구니 담기</button>
+                                                            <button type="button" id="buyNowBtn" onclick="goToCheckout()" class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-700 transition">바로구매</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                                <script id="sku-data" type="application/json"><%- JSON.stringify({ options: (typeof productOptions !== 'undefined' && productOptions) || [], skus: (typeof productSkus !== 'undefined' && productSkus) || [] }).replace(/</g, '\\u003c') %></script>
+                                                <script>
+                                                (function(){
+                                                    var el = document.getElementById('sku-data');
+                                                    var panel = document.getElementById('purchasePanel');
+                                                    if(!el || !panel || panel.dataset.isOption !== '1') return; // 단일상품은 서버가 대표 SKU 해석
+                                                    var data = JSON.parse(el.textContent);
+                                                    var selectedSkuInput = document.getElementById('selectedSkuId');
+                                                    var priceEl = document.getElementById('panelPrice');
+                                                    var summaryEl = document.getElementById('skuSummary');
+                                                    var qtyInput = document.getElementById('orderQuantity');
+                                                    var addBtn = document.getElementById('addCartBtn');
+                                                    var buyBtn = document.getElementById('buyNowBtn');
+                                                    var selects = [].slice.call(panel.querySelectorAll('.opt-select'));
+
+                                                    function setEnabled(on){
+                                                        [addBtn, buyBtn].forEach(function(b){ if(b){ b.disabled = !on; b.classList.toggle('opacity-40', !on); b.classList.toggle('cursor-not-allowed', !on); } });
+                                                    }
+                                                    setEnabled(false);
+
+                                                    function resolve(){
+                                                        var ids = selects.map(function(s){ return s.value; });
+                                                        if(ids.some(function(v){ return !v; })){ summaryEl.textContent='옵션을 선택하세요.'; selectedSkuInput.value=''; setEnabled(false); return; }
+                                                        var idset = ids.map(Number);
+                                                        var sku = data.skus.find(function(s){
+                                                            return s.valueIds && s.valueIds.length===idset.length && idset.every(function(id){ return s.valueIds.indexOf(id)>=0; });
+                                                        });
+                                                        if(!sku){ summaryEl.textContent='해당 옵션 조합은 판매하지 않습니다.'; selectedSkuInput.value=''; setEnabled(false); return; }
+                                                        selectedSkuInput.value = sku.id;
+                                                        if(priceEl) priceEl.textContent = Number(sku.price).toLocaleString()+'원';
+                                                        var stock = Math.max(0, sku.stock||0);
+                                                        if(qtyInput){ qtyInput.max = stock; qtyInput.dataset.max = stock; if((parseInt(qtyInput.value,10)||1) > stock) qtyInput.value = stock>0?1:1; }
+                                                        if(sku.status==='OFF' || stock<=0){ summaryEl.textContent='선택하신 옵션은 품절입니다.'; setEnabled(false); }
+                                                        else { summaryEl.textContent='재고 '+stock.toLocaleString()+'개'; setEnabled(true); }
+                                                    }
+                                                    selects.forEach(function(s){ s.addEventListener('change', resolve); });
+                                                })();
+                                                </script>
+                                                <% } %>
+
                                                 <!-- Delivery Info -->
                                                 <div
                                                     class="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm hidden">
@@ -359,7 +445,7 @@
                                                                     onclick="changeOrderQuantity(-1)">
                                                                     <i class="bi bi-dash"></i>
                                                                 </button>
-                                                                <input id="orderQuantity" name="quantity" type="number"
+                                                                <input id="orderQuantityLegacy" name="quantity" type="number"
                                                                     min="1" max="<%= availableStock %>" value="1"
                                                                     class="w-12 text-center text-sm border-0 focus:ring-0 focus:outline-none"
                                                                     data-max="<%= availableStock %>" />
@@ -846,7 +932,9 @@
                                     alert('수량을 1개 이상 선택해 주세요.');
                                     return;
                                 }
-                                const redirectUrl = '/checkout?product_id=<%= product.id %>&quantity=' + qty;
+                                const _skuEl = document.getElementById('selectedSkuId');
+                                const _skuParam = (_skuEl && _skuEl.value) ? '&sku_id=' + encodeURIComponent(_skuEl.value) : '';
+                                const redirectUrl = '/checkout?product_id=<%= product.id %>&quantity=' + qty + _skuParam;
                                 const proceed = () => {
                                     location.href = redirectUrl;
                                 };

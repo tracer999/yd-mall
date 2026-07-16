@@ -6,6 +6,7 @@ const newArrival = require('../../services/catalog/newArrival');
 const productImporter = require('../../services/catalog/productImporter');
 const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
 const productMedia = require('../../services/catalog/productMedia');
+const skuService = require('../../services/catalog/skuService');
 
 const { getAiStatus, getOpenAIClient } = require('../../services/ai/aiStatus');
 
@@ -406,6 +407,8 @@ exports.postUpdateStatus = async (req, res) => {
 
     try {
         await pool.query('UPDATE products SET status = ? WHERE id IN (?) AND mall_id = ?', [status, ids, req.adminMallId || 1]);
+        // 대표 SKU on/off 동기화 (생명주기는 products.status 가 유지)
+        await skuService.syncDefaultSkuStatus(ids, status);
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);
@@ -703,6 +706,16 @@ exports.postAdd = async (req, res) => {
 
         const productId = result.insertId;
 
+        // 대표 SKU 생성/동기화 (모든 상품은 is_default SKU 1행을 가진다 — 설계 §26.2)
+        await skuService.syncDefaultSkuFromProduct(productId, {
+            mall_id: _mallId,
+            price: finalPrice,
+            stock: toNumber(stock, 0),
+            purchase_price: toNumber(purchase_price, 0),
+            status,
+            sku_code: normalizedProductCode,
+        });
+
         // Shopify 동기화 (백그라운드 — 실패해도 상품 저장에 영향 없음)
         syncProductById(productId).then(r => {
             console.log(`[Shopify Sync] 신규 상품 동기화 완료: product_id=${productId}, action=${r.action}`);
@@ -836,6 +849,16 @@ exports.postEdit = async (req, res) => {
             UPDATE products SET ${updateSql}
             WHERE id=? AND mall_id=?
         `, updateValues);
+
+        // 대표 SKU 동기화 (전환기: products → 대표 SKU 단방향)
+        await skuService.syncDefaultSkuFromProduct(Number(id), {
+            mall_id: _mallId,
+            price: finalPrice,
+            stock: toNumber(stock, 0),
+            purchase_price: toNumber(purchase_price, 0),
+            status,
+            sku_code: normalizedProductCode,
+        });
 
         // Shopify 동기화 (백그라운드 — 실패해도 상품 저장에 영향 없음)
         syncProductById(Number(id)).then(r => {

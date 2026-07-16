@@ -1,0 +1,98 @@
+<div class="max-w-3xl mx-auto py-6 px-4">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-xl font-bold text-gray-900">카테고리 추천 옵션 템플릿</h1>
+        <a href="/admin/products" class="text-sm text-gray-500 hover:text-gray-800">← 상품 목록</a>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-6">
+        카테고리별로 <b>상품 등록 시 추천할 옵션</b>을 지정합니다(강제 아님). 상위 카테고리 옵션은 하위로 상속됩니다.
+        상품 등록 화면(옵션·SKU 관리)에서 <b>[카테고리 추천 옵션 불러오기]</b> 로 프리필됩니다.
+    </div>
+
+    <!-- 카테고리 선택 -->
+    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+        <select id="catSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <% categories.forEach(function(c){ %>
+                <option value="<%= c.id %>" <%= (c.id === categoryId) ? 'selected' : '' %>>
+                    <%= c.depth > 1 ? '— '.repeat(c.depth - 1) : '' %><%= c.name %>
+                </option>
+            <% }) %>
+        </select>
+    </div>
+
+    <% if (inherited && inherited.length) { %>
+    <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
+        <div class="text-sm font-medium text-gray-600 mb-2">상위 카테고리에서 상속됨 (읽기 전용)</div>
+        <div class="flex flex-wrap gap-2">
+            <% inherited.forEach(function(o){ %>
+                <span class="px-2 py-1 rounded bg-white border border-gray-200 text-xs text-gray-600"><%= o.option_name %></span>
+            <% }) %>
+        </div>
+    </div>
+    <% } %>
+
+    <!-- 옵션 지정 -->
+    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-gray-500 border-b">
+                    <th class="py-2 pr-3">옵션</th>
+                    <th class="py-2 px-2 w-20 text-center">사용</th>
+                    <th class="py-2 px-2 w-20 text-center">추천</th>
+                    <th class="py-2 px-2 w-20 text-center">필수</th>
+                    <th class="py-2 px-2 w-20 text-center">하위상속</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% dictionary.forEach(function(d){ const cur = ownMap.get(d.id); %>
+                <tr class="opt-row border-b" data-def="<%= d.id %>">
+                    <td class="py-2 pr-3 text-gray-800"><%= d.option_name %> <span class="text-gray-400 text-xs">(<%= d.option_code %>)</span></td>
+                    <td class="py-2 px-2 text-center"><input type="checkbox" class="c-use" <%= cur ? 'checked' : '' %>></td>
+                    <td class="py-2 px-2 text-center"><input type="checkbox" class="c-rec" <%= (cur ? cur.is_recommended : 1) ? 'checked' : '' %>></td>
+                    <td class="py-2 px-2 text-center"><input type="checkbox" class="c-req" <%= (cur && cur.is_required) ? 'checked' : '' %>></td>
+                    <td class="py-2 px-2 text-center"><input type="checkbox" class="c-inh" <%= (cur ? cur.inherit_to_children : 1) ? 'checked' : '' %>></td>
+                </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <button type="button" id="saveBtn" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-700">저장</button>
+        <span id="saveMsg" class="text-sm"></span>
+    </div>
+</div>
+
+<script>
+(function () {
+    var CATEGORY_ID = <%= categoryId || 'null' %>;
+    document.getElementById('catSelect').addEventListener('change', function () {
+        location.href = '/admin/products/category-options/' + this.value;
+    });
+    document.getElementById('saveBtn').addEventListener('click', async function () {
+        if (!CATEGORY_ID) return;
+        var options = [].slice.call(document.querySelectorAll('.opt-row'))
+            .filter(function (r) { return r.querySelector('.c-use').checked; })
+            .map(function (r) {
+                return {
+                    option_definition_id: Number(r.dataset.def),
+                    is_recommended: r.querySelector('.c-rec').checked,
+                    is_required: r.querySelector('.c-req').checked,
+                    inherit_to_children: r.querySelector('.c-inh').checked,
+                    allow_custom_value: true,
+                };
+            });
+        var msg = document.getElementById('saveMsg');
+        msg.textContent = '저장 중...'; msg.className = 'text-sm text-gray-500';
+        try {
+            var resp = await fetch('/admin/products/category-options/' + CATEGORY_ID, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ options: options }),
+            });
+            var data = await resp.json();
+            msg.textContent = data.ok ? ('저장됨 (' + data.count + '개 옵션)') : (data.message || '실패');
+            msg.className = data.ok ? 'text-sm text-green-600' : 'text-sm text-red-600';
+        } catch (e) { msg.textContent = '오류: ' + e.message; msg.className = 'text-sm text-red-600'; }
+    });
+})();
+</script>

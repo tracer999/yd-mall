@@ -19,6 +19,7 @@
 
 const dealSvc = require('../deal/dealService');
 const performanceService = require('../membership/performanceService');
+const skuService = require('../catalog/skuService');
 
 const PAYMENT_CONFIRMED = new Set(['PAID', 'PREPARING', 'SHIPPED', 'DELIVERED']);
 
@@ -54,15 +55,10 @@ async function restoreOrderResources(conn, order) {
     );
     if (claimed.affectedRows === 0) return false;
 
-    // 1) 재고
+    // 1) 재고 — SKU 기준 복원(차감과 대칭). 대표 SKU 면 products.stock 미러도 함께 되돌린다.
+    //    멱등 가드(resources_restored_at)가 위에서 첫 실행을 보장하므로 중복 가산은 없다.
     if (wasPaid) {
-        const [items] = await conn.query(
-            'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
-            [orderId]
-        );
-        for (const item of items) {
-            await conn.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
-        }
+        await skuService.restoreStockForOrder(conn, orderId);
 
         // 특가 선착순 수량도 되돌린다. 소진은 결제 확정(PAID) 때만 일어나므로 wasPaid 안에 둔다.
         await dealSvc.restoreDealQuota(conn, orderId);

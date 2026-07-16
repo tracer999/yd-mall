@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
 const dealSvc = require('../services/deal/dealService');
+const skuService = require('../services/catalog/skuService');
 
 // 장바구니 조회
 exports.getCart = async (req, res) => {
@@ -68,11 +69,18 @@ exports.addToCart = async (req, res) => {
     try {
         const [[product]] = await pool.query('SELECT stock FROM products WHERE id = ? AND status = "ON"', [productId]);
         if (!product) return res.redirect('back');
-        const stock = (product.stock != null && product.stock >= 0) ? product.stock : 0;
 
+        // 판매 SKU 확정: 옵션상품이면 선택 SKU, 아니면 대표 SKU. 재고는 SKU 기준.
+        const selectedSkuId = parseInt(req.body.sku_id, 10) || null;
+        const sku = await skuService.resolveSkuForLine(productId, selectedSkuId);
+        if (!sku) return res.redirect('back');
+        const skuId = sku.id;
+        const stock = (sku.stock != null && sku.stock >= 0) ? sku.stock : 0;
+
+        // 같은 SKU 라인만 합친다(옵션이 다르면 별도 라인).
         const [existingRows] = await pool.query(
-            'SELECT id, quantity FROM carts WHERE user_id = ? AND product_id = ?',
-            [userId, productId]
+            'SELECT id, quantity FROM carts WHERE user_id = ? AND product_id = ? AND sku_id <=> ?',
+            [userId, productId, skuId]
         );
 
         const newQty = existingRows.length > 0 ? existingRows[0].quantity + qty : qty;
@@ -87,8 +95,8 @@ exports.addToCart = async (req, res) => {
             );
         } else {
             await pool.query(
-                'INSERT INTO carts (user_id, product_id, quantity) VALUES (?, ?, ?)',
-                [userId, productId, qty]
+                'INSERT INTO carts (user_id, product_id, sku_id, quantity) VALUES (?, ?, ?, ?)',
+                [userId, productId, skuId, qty]
             );
         }
 
@@ -173,7 +181,7 @@ exports.checkoutAll = async (req, res) => {
     try {
         // 장바구니 아이템 조회
         const [cartRows] = await connection.query(
-            `SELECT c.id AS cart_id, c.quantity,
+            `SELECT c.id AS cart_id, c.quantity, c.sku_id,
                     p.id AS product_id, p.name, p.price
              FROM carts c
              JOIN products p ON c.product_id = p.id
@@ -230,9 +238,9 @@ exports.checkoutAll = async (req, res) => {
             const price = item.price || 0;
             const lineTotal = quantity * price;
             await connection.query(
-                `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity, total_price)
-                 VALUES (?, ?, ?, ?, ?, ?)` ,
-                [orderId, item.product_id, item.name, price, quantity, lineTotal]
+                `INSERT INTO order_items (order_id, product_id, sku_id, product_name, product_price, quantity, total_price)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)` ,
+                [orderId, item.product_id, item.sku_id || null, item.name, price, quantity, lineTotal]
             );
         }
 

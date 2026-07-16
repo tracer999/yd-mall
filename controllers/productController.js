@@ -3,6 +3,8 @@ const navigationService = require('../services/menu/navigationService');
 const newArrival = require('../services/catalog/newArrival');
 const dealSvc = require('../services/deal/dealService');
 const outletService = require('../services/outlet/outletService');
+const optionService = require('../services/catalog/optionService');
+const compositeService = require('../services/catalog/compositeService');
 
 /**
  * 폐기된 THEME 카테고리 → 대체 기능 메뉴.
@@ -402,6 +404,18 @@ exports.getDetail = async (req, res) => {
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
         product.images = images;
 
+        // 옵션상품이면 옵션·SKU 를 실어 상세페이지 옵션 선택 UI 를 그린다(설계 §26.5·26.6).
+        let productOptions = [];
+        let productSkus = [];
+        if (product.product_type === 'OPTION') {
+            const os = await optionService.getProductOptionsAndSkus(id);
+            productOptions = os.options;
+            productSkus = os.skus;
+        } else if (compositeService.COMPOSITE_TYPES.includes(product.product_type)) {
+            // 복합상품 대표 SKU 는 재고를 보유하지 않는다. 표시·구매수량은 구성에서 파생한 가용수량을 쓴다(설계 §20).
+            product.stock = await compositeService.getAvailableQty(id);
+        }
+
         // 활성 특가 반영 — SEO/JSON-LD 의 offerPrice 도 특가가를 쓰도록 여기서 먼저 덮는다.
         await dealSvc.applyDeals([product]);
 
@@ -559,7 +573,9 @@ exports.getDetail = async (req, res) => {
             stockError: req.query.error === 'stock' ? req.query.max : null,
             recommendedProducts,
             shopifyMapping,
-            outletInfo
+            outletInfo,
+            productOptions,
+            productSkus
         });
     } catch (err) {
         console.error(err);

@@ -13,6 +13,8 @@ const membershipBenefitService = require('../services/membership/membershipBenef
 const performanceService = require('../services/membership/performanceService');
 const evaluationService = require('../services/membership/evaluationService');
 const membershipConfigService = require('../services/membership/membershipConfigService');
+const skuService = require('../services/catalog/skuService');
+const optionService = require('../services/catalog/optionService');
 const { getNumberSetting } = require('../config/systemSettings');
 
 // 구매 적립률(%)이 system_settings 에 아예 없을 때만 쓰는 기본값.
@@ -112,20 +114,8 @@ function generateOrderNumber() {
  * @returns {{ ok: boolean, productName?: string, available?: number }}
  */
 async function validateStockForOrder(orderId) {
-    const [items] = await pool.query(
-        `SELECT oi.product_id, oi.product_name, oi.quantity, p.stock
-         FROM order_items oi
-         JOIN products p ON p.id = oi.product_id
-         WHERE oi.order_id = ?`,
-        [orderId]
-    );
-    for (const item of items) {
-        const available = (item.stock != null && item.stock >= 0) ? item.stock : 0;
-        if (item.quantity > available) {
-            return { ok: false, productName: item.product_name, available };
-        }
-    }
-    return { ok: true };
+    // 재고 검증은 SKU 기준(order_items.sku_id, 없으면 대표 SKU 폴백). 차감 로직과 동일 소스여야 한다.
+    return skuService.validateStockForOrder(pool, orderId);
 }
 
 /**
@@ -148,24 +138,11 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
             [orderId]
         );
 
-        const [items] = await conn.query(
-            'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
-            [orderId]
-        );
-        for (const item of items) {
-            const [[row]] = await conn.query(
-                'SELECT stock FROM products WHERE id = ? FOR UPDATE',
-                [item.product_id]
-            );
-            const stock = (row && row.stock != null && row.stock >= 0) ? row.stock : 0;
-            if (item.quantity > stock) {
-                await conn.rollback();
-                return { ok: false };
-            }
-            await conn.query(
-                'UPDATE products SET stock = stock - ? WHERE id = ?',
-                [item.quantity, item.product_id]
-            );
+        // 재고 차감: SKU 기준(FOR UPDATE). 대표 SKU 면 products.stock 미러도 함께 깎인다.
+        const deduct = await skuService.deductStockForOrder(conn, orderId);
+        if (!deduct.ok) {
+            await conn.rollback();
+            return { ok: false };
         }
 
         await conn.query(
@@ -580,7 +557,7 @@ exports.postForm = async (req, res) => {
     let items = [];
     if (cart === '1' && req.user) {
         const [rows] = await pool.query(
-            `SELECT c.quantity, ${PRODUCT_SCOPE_COLS}, p.stock
+            `SELECT c.quantity, c.sku_id, ${PRODUCT_SCOPE_COLS}, p.stock
              FROM carts c JOIN products p ON c.product_id = p.id
              WHERE c.user_id = ? AND p.status = 'ON'`,
             [req.user.id]
@@ -591,7 +568,7 @@ exports.postForm = async (req, res) => {
             if (qty > stock) {
                 return res.redirect(`/cart?error=stock&product=${r.product_id}&max=${stock}`);
             }
-            items.push({ ...toScopeItem(r), quantity: qty });
+            items.push({ ...toScopeItem(r), quantity: qty, sku_id: r.sku_id || null });
         }
     } else if (group_buy_id && product_id && quantity) {
         // 주문서를 거치지 않고 이 POST 를 직접 두드릴 수 있으므로 여기서도 다시 검증한다.
@@ -622,20 +599,37 @@ exports.postForm = async (req, res) => {
     } else if (product_id && quantity) {
         const pid = parseInt(product_id, 10);
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
+        const selectedSkuId = parseInt(req.body.sku_id, 10) || null;
         const [rows] = await pool.query(
             `SELECT ${PRODUCT_SCOPE_COLS}, p.stock, p.slug FROM products p WHERE p.id = ? AND p.status = 'ON'`, [pid]
         );
         if (rows.length === 0) return res.redirect('/products');
         const p = rows[0];
-        const stock = (p.stock != null && p.stock >= 0) ? p.stock : 0;
+        // 옵션상품이면 선택 SKU 재고로, 아니면 대표 SKU(=products.stock) 로 조기 검증.
+        const preSku = await skuService.resolveSkuForLine(pid, selectedSkuId);
+        const stock = preSku ? Math.max(0, preSku.stock || 0) : ((p.stock != null && p.stock >= 0) ? p.stock : 0);
         if (qty > stock) {
             const path = p.slug ? `/products/${encodeURIComponent(p.slug)}` : `/products/view/${pid}`;
             return res.redirect(`${path}?error=stock&max=${stock}`);
         }
-        items = [{ ...toScopeItem(p), quantity: qty }];
+        items = [{ ...toScopeItem(p), quantity: qty, sku_id: selectedSkuId }];
     }
 
     if (items.length === 0) return res.redirect('/products');
+
+    /*
+     * 각 라인의 판매 SKU 를 확정한다(설계 §26.2). base 가격을 SKU 기준으로 맞춰,
+     * 옵션상품(SKU별 가격 상이)에서도 표시가=청구가가 유지된다.
+     * deal/group_buy/live 오버라이드(source_type)는 그대로 얹힌다.
+     */
+    for (const it of items) {
+        const sku = await skuService.resolveSkuForLine(it.product_id, it.sku_id || null);
+        if (!sku) return res.redirect('/products');
+        it.sku_id = sku.id;
+        if (!it.source_type) it.price = sku.price;
+        // 옵션 SKU 면 조합 라벨을 주문 스냅샷에 남긴다(단일상품 대표 SKU 는 null).
+        if (!sku.is_default) it.option_snapshot = await optionService.getSkuOptionLabel(sku.id);
+    }
 
     /*
      * 특가 적용 — 결제 금액이 확정되는 지점이다(설계 §5.1).
@@ -835,10 +829,12 @@ exports.postForm = async (req, res) => {
         for (const item of items) {
             const lineTotal = item.price * item.quantity;
             // source_type/source_id 는 nullable — 일반 주문에는 NULL 이 들어간다(§9-1).
+            // sku_id: 유효 판매 SKU. option_snapshot: 옵션 조합 텍스트(단일상품은 NULL).
             await connection.query(
-                `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity, total_price, source_type, source_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [orderId, item.product_id, item.name, item.price, item.quantity, lineTotal,
+                `INSERT INTO order_items (order_id, product_id, sku_id, product_name, option_snapshot, product_price, quantity, total_price, source_type, source_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [orderId, item.product_id, item.sku_id || null, item.name, item.option_snapshot || null,
+                    item.price, item.quantity, lineTotal,
                     item.source_type || null, item.source_id || null]
             );
         }

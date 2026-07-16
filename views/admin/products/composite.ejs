@@ -1,0 +1,153 @@
+<div class="max-w-4xl mx-auto py-6 px-4">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-xl font-bold text-gray-900">복합상품 구성 (세트·묶음·기획)</h1>
+            <p class="text-sm text-gray-500 mt-1">
+                <span class="font-medium"><%= product.name %></span>
+                <span class="ml-2 px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600" id="typeBadge"><%= product.product_type %></span>
+                <span class="ml-2 text-xs text-gray-400">현재 가용수량 <b id="availQty"><%= availableQty %></b>세트</span>
+            </p>
+        </div>
+        <a href="/admin/products/edit/<%= product.id %>" class="text-sm text-gray-500 hover:text-gray-800">← 상품 편집으로</a>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-6">
+        기존 SKU 를 구성으로 묶어 하나의 판매상품을 만듭니다. 이 상품의 재고는 <b>보유하지 않고 구성 SKU 에서 파생</b>됩니다(대표 SKU stock_managed=0).
+        주문 시 구성 SKU 가 <b>수량×구성수량</b>만큼 차감됩니다. 구성을 모두 비우고 저장하면 단일상품으로 돌아갑니다.
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+            <label class="text-sm font-medium text-gray-700">유형</label>
+            <select id="typeSelect" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                <% const _typeLabel = { BUNDLE:'묶음(동일계열)', SET:'세트(서로 다른 상품)', GIFT_SET:'선물세트', BUILD_SET:'선택형 세트' }; %>
+                <% compositeTypes.forEach(function(t){ %>
+                    <option value="<%= t %>" <%= (product.product_type === t) ? 'selected' : '' %>><%= _typeLabel[t] || t %></option>
+                <% }) %>
+            </select>
+        </div>
+
+        <!-- 구성 SKU 검색 -->
+        <div class="mb-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1">구성 SKU 추가</label>
+            <div class="flex gap-2">
+                <input id="searchInput" type="text" placeholder="상품명 또는 SKU코드 검색" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <button type="button" id="searchBtn" class="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm hover:bg-gray-700">검색</button>
+            </div>
+            <div id="searchResults" class="mt-2 border border-gray-100 rounded-lg divide-y hidden"></div>
+        </div>
+    </div>
+
+    <!-- 구성 목록 -->
+    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+        <h2 class="font-semibold text-gray-900 mb-3">구성 목록</h2>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-gray-500 border-b">
+                    <th class="py-2 pr-3">구성 SKU</th>
+                    <th class="py-2 px-2 w-24">구성수량</th>
+                    <th class="py-2 px-2 w-24">재고</th>
+                    <th class="py-2 px-2 w-16"></th>
+                </tr>
+            </thead>
+            <tbody id="compBody">
+                <tr id="compEmpty"><td colspan="4" class="py-6 text-center text-gray-400">구성 SKU 를 검색해 추가하세요.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <button type="button" id="saveBtn" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-700">저장</button>
+        <span id="saveMsg" class="text-sm"></span>
+    </div>
+</div>
+
+<script>
+(function () {
+    const PRODUCT_ID = <%= product.id %>;
+    const initComponents = <%- JSON.stringify(components || []) %>;
+    const compBody = document.getElementById('compBody');
+    const searchResults = document.getElementById('searchResults');
+    const saveMsg = document.getElementById('saveMsg');
+
+    function labelOf(name, optionLabel, skuCode) {
+        return name + (optionLabel ? ' · ' + optionLabel : '') + (skuCode ? ' [' + skuCode + ']' : '');
+    }
+
+    function addComponent(c) {
+        // 중복 방지
+        if (compBody.querySelector('.comp-row[data-sku="' + c.sku_id + '"]')) return;
+        const empty = document.getElementById('compEmpty'); if (empty) empty.remove();
+        const tr = document.createElement('tr');
+        tr.className = 'comp-row border-b';
+        tr.dataset.sku = c.sku_id;
+        tr.innerHTML =
+            '<td class="py-2 pr-3 text-gray-800">' + labelOf(c.name, c.option_label, c.sku_code) + '</td>' +
+            '<td class="py-2 px-2"><input type="number" min="1" value="' + (c.quantity || 1) + '" class="comp-qty border rounded px-2 py-1 w-full" /></td>' +
+            '<td class="py-2 px-2 text-gray-500">' + (c.stock != null ? c.stock : '-') + '</td>' +
+            '<td class="py-2 px-2"><button type="button" class="rm text-red-500 hover:text-red-700 text-xs">삭제</button></td>';
+        tr.querySelector('.rm').addEventListener('click', () => { tr.remove(); if (!compBody.querySelector('.comp-row')) resetEmpty(); });
+        compBody.appendChild(tr);
+    }
+    function resetEmpty() {
+        compBody.innerHTML = '<tr id="compEmpty"><td colspan="4" class="py-6 text-center text-gray-400">구성 SKU 를 검색해 추가하세요.</td></tr>';
+    }
+
+    // 검색
+    document.getElementById('searchBtn').addEventListener('click', doSearch);
+    document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+    async function doSearch() {
+        const q = document.getElementById('searchInput').value.trim();
+        if (!q) return;
+        const resp = await fetch('/admin/products/composite/' + PRODUCT_ID + '/search?q=' + encodeURIComponent(q));
+        const data = await resp.json();
+        searchResults.innerHTML = '';
+        if (!data.results || !data.results.length) {
+            searchResults.innerHTML = '<div class="p-3 text-sm text-gray-400">검색 결과 없음</div>';
+        } else {
+            data.results.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'p-2 flex items-center justify-between hover:bg-gray-50 cursor-pointer text-sm';
+                div.innerHTML = '<span>' + labelOf(r.product_name, r.option_label, r.sku_code) + ' <span class="text-gray-400">재고 ' + r.stock + '</span></span><span class="text-indigo-600 text-xs">+ 추가</span>';
+                div.addEventListener('click', () => addComponent({ sku_id: r.sku_id, name: r.product_name, option_label: r.option_label, sku_code: r.sku_code, stock: r.stock, quantity: 1 }));
+                searchResults.appendChild(div);
+            });
+        }
+        searchResults.classList.remove('hidden');
+    }
+
+    function readComponents() {
+        return [...compBody.querySelectorAll('.comp-row')].map(r => ({
+            sku_id: Number(r.dataset.sku),
+            quantity: parseInt(r.querySelector('.comp-qty').value, 10) || 1,
+        }));
+    }
+
+    // 저장
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+        const components = readComponents();
+        const type = document.getElementById('typeSelect').value;
+        saveMsg.textContent = '저장 중...'; saveMsg.className = 'text-sm text-gray-500';
+        try {
+            const resp = await fetch('/admin/products/composite/' + PRODUCT_ID, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, components }),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                saveMsg.textContent = '저장됨 (' + data.type + ' · 구성 ' + data.componentCount + ')';
+                saveMsg.className = 'text-sm text-green-600';
+                document.getElementById('typeBadge').textContent = data.type;
+            } else { saveMsg.textContent = data.message || '저장 실패'; saveMsg.className = 'text-sm text-red-600'; }
+        } catch (e) { saveMsg.textContent = '오류: ' + e.message; saveMsg.className = 'text-sm text-red-600'; }
+    });
+
+    // 초기 렌더
+    if (initComponents.length) {
+        initComponents.forEach(c => addComponent({
+            sku_id: c.component_sku_id, name: c.component_product_name, option_label: c.option_label,
+            sku_code: c.sku_code, stock: c.sku_stock, quantity: c.quantity,
+        }));
+    }
+})();
+</script>
