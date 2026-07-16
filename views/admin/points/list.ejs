@@ -1,3 +1,18 @@
+<%
+    /*
+     * 거래유형 라벨. point_transactions.transaction_type enum 6종을 모두 담는다.
+     * 예전에는 삼항 체인이라 미등록 유형(주문취소 2종)이 전부 '관리자차감'으로 표시됐다.
+     * enum 에 유형을 추가하면 여기에도 반드시 추가할 것.
+     */
+    const TX_LABELS = {
+        PURCHASE_ACCUMULATE: '구매적립',
+        PURCHASE_USE: '구매사용',
+        ADMIN_GRANT: '관리자지급',
+        ADMIN_DEDUCT: '관리자차감',
+        ORDER_CANCEL_RESTORE: '취소환급',
+        ORDER_CANCEL_REVOKE: '적립회수',
+    };
+%>
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
     <p class="text-sm text-gray-500">포인트 지급·차감 내역을 확인하고 정산합니다.</p>
     <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
@@ -37,10 +52,9 @@
         <label class="block text-xs font-medium text-gray-600 mb-1">거래유형</label>
         <select name="transaction_type">
             <option value="">전체</option>
-            <option value="PURCHASE_ACCUMULATE" <%= filters && filters.transaction_type === 'PURCHASE_ACCUMULATE' ? 'selected' : '' %>>구매적립</option>
-            <option value="PURCHASE_USE" <%= filters && filters.transaction_type === 'PURCHASE_USE' ? 'selected' : '' %>>구매사용</option>
-            <option value="ADMIN_GRANT" <%= filters && filters.transaction_type === 'ADMIN_GRANT' ? 'selected' : '' %>>관리자지급</option>
-            <option value="ADMIN_DEDUCT" <%= filters && filters.transaction_type === 'ADMIN_DEDUCT' ? 'selected' : '' %>>관리자차감</option>
+            <% Object.entries(TX_LABELS).forEach(function (pair) { %>
+                <option value="<%= pair[0] %>" <%= filters && filters.transaction_type === pair[0] ? 'selected' : '' %>><%= pair[1] %></option>
+            <% }); %>
         </select>
     </div>
     <button type="submit" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700">검색</button>
@@ -103,7 +117,7 @@
                     <%= t.amount >= 0 ? '+' : '' %><%= Number(t.amount).toLocaleString() %>P
                 </td>
                 <td class="px-6 py-4 text-sm text-gray-500">
-                    <%= t.transaction_type === 'PURCHASE_ACCUMULATE' ? '구매적립' : t.transaction_type === 'PURCHASE_USE' ? '구매사용' : t.transaction_type === 'ADMIN_GRANT' ? '관리자지급' : '관리자차감' %>
+                    <%= TX_LABELS[t.transaction_type] || t.transaction_type %>
                 </td>
                 <td class="px-6 py-4 text-sm text-gray-500"><%= t.description || '-' %></td>
                 <td class="px-6 py-4 text-sm text-gray-500"><%= Number(t.points_balance || 0).toLocaleString() %>P</td>
