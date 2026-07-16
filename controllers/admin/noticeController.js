@@ -34,16 +34,17 @@ function decodeHtmlEntities(value) {
 
 exports.getList = async (req, res) => {
     try {
+        const MALL_ID = req.adminMallId || 1;
         const type = req.query.type;
-        let query = 'SELECT * FROM notices';
-        let queryParams = [];
+        const where = ['mall_id = ?'];
+        const queryParams = [MALL_ID];
 
         if (type && (type === 'NOTICE' || type === 'GUIDE')) {
-            query += ' WHERE type = ?';
+            where.push('type = ?');
             queryParams.push(type);
         }
 
-        query += ' ORDER BY importance DESC, created_at DESC';
+        const query = `SELECT * FROM notices WHERE ${where.join(' AND ')} ORDER BY importance DESC, created_at DESC`;
 
         const [notices] = await pool.query(query, queryParams);
 
@@ -69,21 +70,25 @@ exports.getCreate = (req, res) => {
 };
 
 exports.postCreate = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     const { title, content, importance, type } = req.body;
     const normalizedContent = decodeHtmlEntities(content);
 
     try {
         if (importance) {
-            // 상단 고정 개수 제한 (3개)
-            const [[{ count }]] = await pool.query('SELECT COUNT(*) as count FROM notices WHERE importance = 1');
+            // 상단 고정 개수 제한 (3개) — 몰마다 따로 센다.
+            const [[{ count }]] = await pool.query(
+                'SELECT COUNT(*) as count FROM notices WHERE mall_id = ? AND importance = 1',
+                [MALL_ID]
+            );
             if (count >= 3) {
                 return res.send('<script>alert("상단 고정은 최대 3개까지만 가능합니다.");history.back();</script>');
             }
         }
 
         await pool.query(
-            'INSERT INTO notices (title, content, importance, type) VALUES (?, ?, ?, ?)',
-            [title, normalizedContent, importance ? 1 : 0, type || 'NOTICE']
+            'INSERT INTO notices (mall_id, title, content, importance, type) VALUES (?, ?, ?, ?, ?)',
+            [MALL_ID, title, normalizedContent, importance ? 1 : 0, type || 'NOTICE']
         );
         res.redirect('/admin/notices');
     } catch (err) {
@@ -93,10 +98,12 @@ exports.postCreate = async (req, res) => {
 };
 
 exports.getDetail = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     const { id } = req.params;
 
     try {
-        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ?', [id]);
+        // mall_id 를 함께 걸어 다른 몰의 공지는 열리지 않게 한다.
+        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
         if (rows.length === 0) return res.redirect('/admin/notices');
 
         const notice = rows[0];
@@ -114,10 +121,11 @@ exports.getDetail = async (req, res) => {
 };
 
 exports.getEdit = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     const { id } = req.params;
 
     try {
-        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ?', [id]);
+        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
         if (rows.length === 0) return res.redirect('/admin/notices');
 
         const notice = rows[0];
@@ -136,22 +144,26 @@ exports.getEdit = async (req, res) => {
 };
 
 exports.postEdit = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     const { id } = req.params;
     const { title, content, importance, type } = req.body;
     const normalizedContent = decodeHtmlEntities(content);
 
     try {
         if (importance) {
-            // 상단 고정 개수 제한 (3개) - 현재 글 제외
-            const [[{ count }]] = await pool.query('SELECT COUNT(*) as count FROM notices WHERE importance = 1 AND id != ?', [id]);
+            // 상단 고정 개수 제한 (3개) — 몰마다 따로 세고, 현재 글은 제외한다.
+            const [[{ count }]] = await pool.query(
+                'SELECT COUNT(*) as count FROM notices WHERE mall_id = ? AND importance = 1 AND id != ?',
+                [MALL_ID, id]
+            );
             if (count >= 3) {
                 return res.send('<script>alert("상단 고정은 최대 3개까지만 가능합니다.");history.back();</script>');
             }
         }
 
         await pool.query(
-            'UPDATE notices SET title = ?, content = ?, importance = ?, type = ? WHERE id = ?',
-            [title, normalizedContent, importance ? 1 : 0, type || 'NOTICE', id]
+            'UPDATE notices SET title = ?, content = ?, importance = ?, type = ? WHERE id = ? AND mall_id = ?',
+            [title, normalizedContent, importance ? 1 : 0, type || 'NOTICE', id, MALL_ID]
         );
         res.redirect('/admin/notices');
     } catch (err) {
@@ -161,10 +173,11 @@ exports.postEdit = async (req, res) => {
 };
 
 exports.postDelete = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
     const { id } = req.body;
 
     try {
-        await pool.query('DELETE FROM notices WHERE id = ?', [id]);
+        await pool.query('DELETE FROM notices WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
         res.redirect('/admin/notices');
     } catch (err) {
         console.error(err);

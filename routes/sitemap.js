@@ -84,9 +84,10 @@ async function generateSitemap() {
         links.push(entry);
     });
 
-    // 5. 공지사항
+    // 5. 공지사항 — 카테고리와 마찬가지로 이 사이트맵이 대상으로 삼은 몰의 것만 싣는다.
     const [notices] = await pool.query(
-        "SELECT id, created_at FROM notices ORDER BY created_at DESC LIMIT 50"
+        "SELECT id, created_at FROM notices WHERE mall_id = ? ORDER BY created_at DESC LIMIT 50",
+        [mallId]
     );
     notices.forEach(n => {
         links.push({

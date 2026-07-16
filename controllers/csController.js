@@ -49,15 +49,18 @@ async function getNoticeColumns() {
         hasType: names.includes('type'),
         hasIsDeleted: names.includes('is_deleted'),
         hasImportance: names.includes('importance'),
+        hasMallId: names.includes('mall_id'),
     };
     return noticeColsCache;
 }
 
-async function loadNotices(limit = NOTICE_LIMIT) {
-    const { hasType, hasIsDeleted, hasImportance } = await getNoticeColumns();
+async function loadNotices(mallId, limit = NOTICE_LIMIT) {
+    const { hasType, hasIsDeleted, hasImportance, hasMallId } = await getNoticeColumns();
 
     const where = [];
     const params = [];
+    // 공지는 몰마다 따로다 — 보고 있는 몰의 것만 싣는다.
+    if (hasMallId) { where.push('mall_id = ?'); params.push(mallId || 1); }
     if (hasType) { where.push('type = ?'); params.push('NOTICE'); }
     if (hasIsDeleted) where.push('is_deleted = 0');
 
@@ -80,7 +83,7 @@ async function loadNotices(limit = NOTICE_LIMIT) {
  */
 exports.getIndex = async (req, res, next) => {
     try {
-        const [categories, notices] = await Promise.all([loadCategories(), loadNotices()]);
+        const [categories, notices] = await Promise.all([loadCategories(), loadNotices(req.mallId)]);
 
         const [best] = await pool.query(`
             SELECT f.id, f.question, f.answer, f.view_count, c.name AS category_name
@@ -126,7 +129,7 @@ exports.getFaq = async (req, res, next) => {
             params.push(`%${keyword}%`, `%${keyword}%`);
         }
 
-        const [categories, notices] = await Promise.all([loadCategories(), loadNotices()]);
+        const [categories, notices] = await Promise.all([loadCategories(), loadNotices(req.mallId)]);
         const [rows] = await pool.query(`
             SELECT f.id, f.question, f.answer, f.view_count, c.name AS category_name
             FROM faq f

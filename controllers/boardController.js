@@ -5,7 +5,8 @@ async function getNoticeColumnInfo() {
     const names = new Set(columns.map((c) => c.Field));
     return {
         hasType: names.has('type'),
-        hasIsDeleted: names.has('is_deleted')
+        hasIsDeleted: names.has('is_deleted'),
+        hasMallId: names.has('mall_id')
     };
 }
 
@@ -27,10 +28,15 @@ exports.getList = async (req, res, next) => {
             return res.status(404).render('user/404', { title: '페이지를 찾을 수 없습니다' });
         }
 
-        const { hasType, hasIsDeleted } = await getNoticeColumnInfo();
+        const { hasType, hasIsDeleted, hasMallId } = await getNoticeColumnInfo();
         const where = [];
         const params = [];
 
+        // 공지는 몰마다 따로다 — 보고 있는 몰의 것만 싣는다.
+        if (hasMallId) {
+            where.push('mall_id = ?');
+            params.push(req.mallId || 1);
+        }
         if (hasType) {
             where.push('type = ?');
             params.push(dbType);
@@ -75,13 +81,17 @@ exports.getList = async (req, res, next) => {
 exports.getDetail = async (req, res, next) => {
     try {
         const { type, id } = req.params;
-        const { hasType, hasIsDeleted } = await getNoticeColumnInfo();
+        const { hasType, hasIsDeleted, hasMallId } = await getNoticeColumnInfo();
         const dbType = type === 'guide' ? 'GUIDE' : 'NOTICE';
-
-        await pool.query('UPDATE notices SET view_count = view_count + 1 WHERE id = ?', [id]);
+        const mallId = req.mallId || 1;
 
         const where = ['id = ?'];
         const params = [id];
+        // 공지는 몰마다 따로다 — 다른 몰의 글은 조회수도 올리지 않고 404 로 보낸다.
+        if (hasMallId) {
+            where.push('mall_id = ?');
+            params.push(mallId);
+        }
         if (hasType) {
             where.push('type = ?');
             params.push(dbType);
@@ -89,6 +99,11 @@ exports.getDetail = async (req, res, next) => {
         if (hasIsDeleted) {
             where.push('is_deleted = 0');
         }
+
+        await pool.query(
+            `UPDATE notices SET view_count = view_count + 1 WHERE ${where.join(' AND ')}`,
+            params
+        );
 
         const [[post]] = await pool.query(`SELECT * FROM notices WHERE ${where.join(' AND ')}`, params);
         if (!post) return res.status(404).render('user/404', { title: '게시물을 찾을 수 없습니다' });

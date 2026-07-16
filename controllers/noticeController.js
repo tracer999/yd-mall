@@ -34,7 +34,11 @@ function decodeHtmlEntities(value) {
 
 exports.getList = async (req, res) => {
     try {
-        const [notices] = await pool.query('SELECT * FROM notices ORDER BY importance DESC, created_at DESC');
+        // 손님이 보고 있는 몰의 공지만 — 다른 몰 공지가 섞이면 안 된다.
+        const [notices] = await pool.query(
+            'SELECT * FROM notices WHERE mall_id = ? ORDER BY importance DESC, created_at DESC',
+            [req.mallId || 1]
+        );
 
         const siteSettings = res.locals.siteSettings || {};
         const companyName = siteSettings.company_name || '와이디몰';
@@ -64,10 +68,11 @@ exports.getList = async (req, res) => {
 
 exports.getDetail = async (req, res) => {
     const id = req.params.id;
+    const mallId = req.mallId || 1;
     try {
-        await pool.query('UPDATE notices SET view_count = view_count + 1 WHERE id = ?', [id]);
-        
-        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ?', [id]);
+        await pool.query('UPDATE notices SET view_count = view_count + 1 WHERE id = ? AND mall_id = ?', [id, mallId]);
+
+        const [rows] = await pool.query('SELECT * FROM notices WHERE id = ? AND mall_id = ?', [id, mallId]);
         if (rows.length === 0) {
             return res.status(404).render('user/404', {
                 title: '공지사항을 찾을 수 없습니다',

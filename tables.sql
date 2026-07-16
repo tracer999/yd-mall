@@ -162,13 +162,15 @@ CREATE TABLE IF NOT EXISTS `likes` (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS `notices` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '공지 ID (PK)',
+  `mall_id` bigint NOT NULL DEFAULT '1' COMMENT '소속 몰 (몰마다 공지가 따로다)',
   `title` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '공지 제목',
   `content` text COLLATE utf8mb4_general_ci NOT NULL COMMENT '공지 내용',
   `importance` int DEFAULT '0' COMMENT '중요도 (0:일반,1:중요)',
   `type` varchar(50) DEFAULT 'NOTICE' COMMENT '공지 타입',
   `view_count` int DEFAULT '0' COMMENT '조회수',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '작성일시',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_notices_mall_type` (`mall_id`,`type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='공지사항';
 
 
