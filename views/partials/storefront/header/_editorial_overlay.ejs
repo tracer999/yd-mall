@@ -99,6 +99,22 @@
   /* 굳은 상태 */
   .yd-ed-hdr.is-solid { background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.06); text-shadow: none; }
   .yd-ed-hdr.is-solid, .yd-ed-hdr.is-solid .yd-ed-navlink, .yd-ed-hdr.is-solid .yd-ed-ico, .yd-ed-hdr.is-solid .yd-ed-logo { color: #14110d; }
+
+  /*
+   * 풀블리드 히어로가 없는 페이지(상품목록·상세·마이페이지…) — 겹칠 대상이 없다.
+   * 투명·absolute 로 두면 흰 배경에 흰 글자라 헤더가 통째로 사라지고 본문이 그 밑으로 파고든다.
+   * → 처음부터 흰 배경 sticky 로 둔다(레이아웃이 body.yd-overlay-header 를 안 붙인 경우).
+   */
+  body:not(.yd-overlay-header) .yd-ed-hdr {
+    position: sticky;
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(0,0,0,.06);
+    text-shadow: none;
+  }
+  body:not(.yd-overlay-header) .yd-ed-hdr,
+  body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-navlink,
+  body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-ico,
+  body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-logo { color: #14110d; }
 </style>
 <script>
   (function () {

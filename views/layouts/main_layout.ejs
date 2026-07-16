@@ -434,6 +434,24 @@
                                                                                                     }
                                                                                                 </style>
 
+    <%
+      /*
+       * 모바일 하단 시스템 바(홈·카테고리·장바구니·마이)를 낼지.
+       *
+       * **드로어를 가진 스킨에서는 내지 않는다.** 하단바의 항목이 이미 헤더(장바구니)와
+       * 햄버거 드로어(홈·카테고리·마이·고객센터)에 들어가 있어, 함께 띄우면 같은 링크가
+       * 두 벌 뜨고 카테고리 진입점도 둘이 된다.
+       *   compact_drawer_v1    드로어형 (테마 1·2 통합형)
+       *   editorial_overlay_v1 에디토리얼 (테마 3) — 헤더에 [☰] 가 생기면서 같은 조건이 됐다
+       * → 하단바는 기본형(main_right_utility_v1 = 테마 1·2 분리형)에서만 나온다.
+       *
+       * 아래 본문 여백과 include 가 이 값을 같이 봐야 한다. 여백만 남기면 모바일 화면
+       * 밑에 4rem 짜리 빈 칸이 생긴다.
+       */
+      const DRAWER_HEADER_SKINS = ['compact_drawer_v1', 'editorial_overlay_v1'];
+      const _showBottomNav = !(typeof nav !== 'undefined' && nav && nav.config
+          && DRAWER_HEADER_SKINS.includes(nav.config.header_layout_type));
+    %>
     <%#
       모바일 하단 시스템 바(fixed)가 본문·푸터 마지막 줄을 가리지 않게 여백을 준다.
       main 이 아니라 body 에 준다 — 푸터가 main 바깥이라 main 에만 주면 푸터가 가려진다.
@@ -441,10 +459,12 @@
       실제 바 높이 = ul(h-16 = 4rem) + border-top(1px) + 노치 여백(env(safe-area-inset-bottom)).
       pb-16(64px) 만으로는 테두리 1px 과 노치(iPhone 최대 34px)가 모자란다.
     %>
+    <% if (_showBottomNav) { %>
     <style>
       :root { --yd-mbnav-h: calc(4rem + 1px + env(safe-area-inset-bottom, 0px)); }
       @media (max-width: 767.98px) { body { padding-bottom: var(--yd-mbnav-h); } }
     </style>
+    <% } %>
 </head>
 
 <%
@@ -454,9 +474,22 @@
      * 그대로 타야 "실제로 어떻게 보이는지"가 맞으므로 별도 레이아웃을 만들지 않고 여기서 분기한다.
      */
     const _bare = typeof isBare !== 'undefined' && isBare;
-    // 오버레이(투명) 헤더 스킨 여부 — 에디토리얼 헤더가 히어로 위에 겹친다.
+
+    /*
+     * 오버레이(투명) 헤더 — 에디토리얼 헤더가 풀블리드 히어로 위에 겹친다.
+     *
+     * **스킨만 보고 켜면 안 된다.** 히어로가 없는 페이지(상품목록·상세·마이페이지…)까지 켜지면
+     *   ① 흰 배경 위에 흰 로고·아이콘이 얹혀 헤더가 통째로 안 보이고
+     *   ② body.yd-overlay-header 가 main 의 padding-top 을 0 으로 만들어 본문이 헤더 밑으로 파고든다
+     * (= 페이지 제목과 로고가 겹쳐 보인다).
+     *
+     * 그래서 **이 페이지가 실제로 에디토리얼 히어로를 그렸을 때만** 켠다. body 는 레이아웃이
+     * 받을 시점에 이미 렌더된 문자열이라 여기서 확인할 수 있다 — 컨트롤러마다 플래그를
+     * 넘기게 하면 새 페이지가 생길 때마다 빠뜨린다.
+     */
     const _overlayHeader = (typeof nav !== 'undefined' && nav && nav.config
-        && nav.config.header_layout_type === 'editorial_overlay_v1');
+        && nav.config.header_layout_type === 'editorial_overlay_v1'
+        && typeof body === 'string' && body.indexOf('yd-ed-hero') !== -1);
 %>
 <body class="flex flex-col min-h-screen yd-card-<%= _cardStyle %> yd-skin-<%= _skin %><%= _overlayHeader ? ' yd-overlay-header' : '' %>">
 
@@ -500,18 +533,8 @@
         <%- include('../partials/storefront/right_utility') %>
     <% } %>
 
-    <%
-        /*
-         * 모바일 하단 시스템 바 + 카테고리 전체 레이어 (md:hidden)
-         *
-         * 드로어형 스킨(compact_drawer_v1)에서는 **내지 않는다.** 하단바의 내용(홈·카테고리·
-         * 장바구니·마이)이 이미 헤더(장바구니)와 햄버거 드로어(홈·카테고리·마이·고객센터)에
-         * 들어가 있어서, 함께 띄우면 같은 링크가 화면에 두 벌 뜨고 카테고리 진입점도 둘이 된다.
-         */
-        const _drawerSkin = (typeof nav !== 'undefined' && nav && nav.config
-            && nav.config.header_layout_type === 'compact_drawer_v1');
-    %>
-    <% if (!_bare && !_drawerSkin) { %>
+    <%# 모바일 하단 시스템 바 + 카테고리 전체 레이어 (md:hidden). 노출 조건은 <head> 의 _showBottomNav. %>
+    <% if (!_bare && _showBottomNav) { %>
     <%- include('../partials/storefront/mobile_bottom_nav') %>
     <% } %>
 
