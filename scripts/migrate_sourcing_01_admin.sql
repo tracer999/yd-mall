@@ -59,12 +59,12 @@ CREATE TABLE IF NOT EXISTS mall_channel_credential (
 --    최상위 그룹은 parent_id IS NULL + path IS NULL (기존 그룹들과 동일 구조).
 --    admin_menus 에 행이 없으면 requireMenuAccess 가 라우트를 막는다.
 --    UNIQUE 제약이 없으므로 WHERE NOT EXISTS 로 재실행 가드.
---    display_order=66 : 멤버십(65)과 주문/회원(70) 사이. (원하면 조정)
+--    display_order=25 : 쇼핑몰 관리(20)와 메뉴/카테고리 관리(30) 사이 — 쇼핑몰 관리 바로 아래. (원하면 조정)
 -- ---------------------------------------------------------------------------
 INSERT INTO admin_menus (name, path, icon_class, display_order, parent_id, is_active, visible_roles)
 SELECT * FROM (SELECT
     '외부몰 연동' AS name, NULL AS path, 'bi bi-box-arrow-in-down-right' AS icon_class,
-    66 AS display_order, NULL AS parent_id, 1 AS is_active,
+    25 AS display_order, NULL AS parent_id, 1 AS is_active,
     'super_admin,admin' AS visible_roles
 ) AS t
 WHERE NOT EXISTS (
