@@ -39,4 +39,10 @@ router.get('/publish', requireMenuAccess('/admin/sourcing/publish'), c.getPublis
 router.get('/channel-import', requireMenuAccess('/admin/sourcing/channel-import'), c.getChannelImport);
 router.get('/sync', requireMenuAccess('/admin/sourcing/sync'), c.getSync);
 
+// 네이버 카테고리 리소스 — 현황·수동수집·스케줄 + 상품폼 검색 API
+router.get('/naver-taxonomy', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.getNaverTaxonomy);
+router.post('/naver-taxonomy/refresh', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverTaxonomyRefresh);
+router.post('/naver-taxonomy/schedule', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverTaxonomySchedule);
+router.get('/naver-taxonomy/search', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.getNaverCategorySearch);
+
 module.exports = router;

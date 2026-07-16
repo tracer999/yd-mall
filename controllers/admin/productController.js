@@ -615,7 +615,8 @@ exports.postAdd = async (req, res) => {
         video_type, video_url,
         purchase_price, original_price, price, discount_rate, stock, status, sale_start_date,
         is_ai_recommendation, ai_recommendation_content,
-        distribution_badge, product_badge, badge_expire_date, visibility
+        distribution_badge, product_badge, badge_expire_date, visibility,
+        naver_category_id, naver_brand_id
     } = req.body;
 
     /*
@@ -662,6 +663,9 @@ exports.postAdd = async (req, res) => {
             ['mall_id', _mallId], // P5: 새 상품은 편집 중인 몰에 속한다
             ['category_id', resolvedCategoryId],
             ['brand_category_id', normalizedBrandCategoryId],
+            // 등록 근거 네이버 참조 ID(있을 때만). 몰 카테고리 매핑과 별개의 추적값.
+            ['naver_category_id', (naver_category_id && String(naver_category_id).trim()) ? String(naver_category_id).trim() : null],
+            ['naver_brand_id', (naver_brand_id && String(naver_brand_id).trim()) ? String(naver_brand_id).trim() : null],
             ['name', name],
             ['product_code', normalizedProductCode],
             ['provider', finalProvider],
@@ -747,7 +751,8 @@ exports.postEdit = async (req, res) => {
         purchase_price, original_price, price, discount_rate, stock, status, sale_start_date,
         video_type, video_url, old_image, old_thumbnail, old_video,
         is_ai_recommendation, ai_recommendation_content,
-        distribution_badge, product_badge, badge_expire_date, visibility
+        distribution_badge, product_badge, badge_expire_date, visibility,
+        naver_category_id, naver_brand_id
     } = req.body;
 
     // Handle Images
@@ -794,6 +799,9 @@ exports.postEdit = async (req, res) => {
         const updateEntries = [
             ['category_id', resolvedCategoryId],
             ['brand_category_id', normalizedBrandCategoryId],
+            // 등록 근거 네이버 참조 ID(있을 때만). 몰 카테고리 매핑과 별개의 추적값.
+            ['naver_category_id', (naver_category_id && String(naver_category_id).trim()) ? String(naver_category_id).trim() : null],
+            ['naver_brand_id', (naver_brand_id && String(naver_brand_id).trim()) ? String(naver_brand_id).trim() : null],
             ['name', name],
             ['product_code', normalizedProductCode],
             ['provider', finalProvider],

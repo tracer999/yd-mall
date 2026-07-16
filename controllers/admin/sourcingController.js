@@ -10,9 +10,11 @@
 
 const pool = require('../../config/db');
 const cred = require('../../services/sourcing/credential');
-const { CHANNEL_META, validateConnection } = require('../../services/sourcing/adapters');
+const { CHANNEL_META, validateConnection, resolveCredentialChannel } = require('../../services/sourcing/adapters');
+const naverTaxonomy = require('../../services/sourcing/naverTaxonomySync');
 
 const BASE = '/admin/sourcing/connections';
+const NAVER_BASE = '/admin/sourcing/naver-taxonomy';
 
 function isProviderReq(req) {
     return !!(req.session && req.session.admin && req.session.admin.role === 'super_admin');
@@ -58,7 +60,8 @@ exports.postConnectionSave = async (req, res) => {
     try {
         await cred.saveCredential(mallId, {
             id: Number(req.body.id) || null,
-            channel: req.body.channel,
+            // 도매매처럼 도매꾹과 키를 공유하는 채널은 원본 채널로 접어 저장한다.
+            channel: resolveCredentialChannel(req.body.channel),
             accountLabel: req.body.account_label,
             clientId: req.body.client_id,
             secret: req.body.secret,
@@ -170,3 +173,74 @@ exports.getSync = placeholder(
     '"가져오기" 버튼으로 재고·주문을 그 시점에 조회·동기화합니다. (1차, 배치 없음)',
     'Phase 3~5에서 구현됩니다.'
 );
+
+// ---------------------------------------------------------------------------
+// 네이버 카테고리 리소스 — 수집 현황 · 수동 수집 · 스케줄
+// 설계: docs/사이트개선/네이버_카테고리_리소스_설계.md
+//
+// ⚠ 여기서 수집한 네이버 카테고리는 "참조 리소스"다. 몰 categories 에 자동
+//   반영하지 않는다. 상품 등록 화면에서 검색·선택될 때 taxonomyResolver 가
+//   그걸 근거로 몰 카테고리를 생성/매핑한다.
+// ---------------------------------------------------------------------------
+
+exports.getNaverTaxonomy = async (req, res) => {
+    try {
+        const status = await naverTaxonomy.getStatus();
+        res.render('admin/sourcing/naver_taxonomy', {
+            layout: 'layouts/admin_layout',
+            title: '외부몰 연동 · 네이버 카테고리 리소스',
+            subtitle: '네이버 스마트스토어 전체 카테고리를 주기 수집해 상품 등록 시 참고합니다. (몰 카테고리에 자동 반영되지 않음)',
+            status,
+            saved: req.query.saved === '1',
+            msg: req.query.msg || '',
+            error: req.query.error || '',
+        });
+    } catch (e) {
+        res.status(500).render('admin/sourcing/naver_taxonomy', {
+            layout: 'layouts/admin_layout',
+            title: '외부몰 연동 · 네이버 카테고리 리소스',
+            subtitle: '',
+            status: null,
+            saved: false,
+            msg: '',
+            error: e.message,
+        });
+    }
+};
+
+// 수동 수집 — 오래 걸릴 수 있어 백그라운드로 던지고 즉시 리다이렉트한다.
+// 진행/결과는 naver_taxonomy_sync_log(화면 하단)에 남는다.
+exports.postNaverTaxonomyRefresh = async (req, res) => {
+    naverTaxonomy.syncCategories({ triggerBy: 'MANUAL' })
+        .then((r) => console.log('[naver-taxonomy] 수동 수집 결과:', JSON.stringify(r)))
+        .catch((e) => console.error('[naver-taxonomy] 수동 수집 실패:', e.message));
+    res.redirect(`${NAVER_BASE}?msg=` + encodeURIComponent('수집을 시작했습니다. 잠시 후 새로고침해 결과를 확인하세요.'));
+};
+
+exports.postNaverTaxonomySchedule = async (req, res) => {
+    try {
+        const enabled = (req.body.enabled === '1' || req.body.enabled === 'on') ? 1 : 0;
+        let hours = Number(req.body.interval_hours);
+        if (!Number.isFinite(hours) || hours < 1) hours = 24;
+        if (hours > 24 * 30) hours = 24 * 30; // 상한 30일
+        await pool.query(
+            `INSERT INTO naver_taxonomy_schedule (id, enabled, interval_hours)
+             VALUES (1, ?, ?)
+             ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), interval_hours = VALUES(interval_hours)`,
+            [enabled, hours]
+        );
+        res.redirect(`${NAVER_BASE}?saved=1`);
+    } catch (e) {
+        res.redirect(`${NAVER_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+// 상품 등록 폼 autocomplete — 활성 리프 카테고리 검색(JSON).
+exports.getNaverCategorySearch = async (req, res) => {
+    try {
+        const rows = await naverTaxonomy.searchLeafCategories(req.query.q, req.query.limit);
+        res.json({ success: true, data: rows });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+};

@@ -1,0 +1,133 @@
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+    <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
+  </div>
+
+  <% if (msg) { %>
+    <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800"><%= msg %></div>
+  <% } %>
+  <% if (saved) { %>
+    <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">저장되었습니다.</div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800"><%= error %></div>
+  <% } %>
+
+  <% if (!status) { %>
+    <div class="bg-white shadow-sm rounded-lg p-10 text-center text-sm text-gray-500">현황을 불러오지 못했습니다.</div>
+  <% } else { %>
+
+    <% if (!status.hasActiveCredential) { %>
+      <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+        <i class="bi bi-exclamation-triangle mr-1"></i>
+        ACTIVE 상태의 네이버 스마트스토어 자격증명이 없습니다.
+        <a href="/admin/sourcing/connections" class="underline font-medium">공급처/채널 연결</a>
+        에서 client_id / client_secret 를 입력하고 <b>[검증]</b> 을 눌러 ACTIVE 로 만든 뒤 수집하세요.
+      </div>
+    <% } %>
+
+    <!-- 적재 통계 -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white shadow-sm rounded-lg p-4">
+        <div class="text-xs text-gray-500">전체 적재</div>
+        <div class="mt-1 text-2xl font-bold text-gray-900"><%= (status.counts.total || 0).toLocaleString() %></div>
+      </div>
+      <div class="bg-white shadow-sm rounded-lg p-4">
+        <div class="text-xs text-gray-500">활성(현재 수집분)</div>
+        <div class="mt-1 text-2xl font-bold text-gray-900"><%= (status.counts.active_total || 0).toLocaleString() %></div>
+      </div>
+      <div class="bg-white shadow-sm rounded-lg p-4">
+        <div class="text-xs text-gray-500">활성 리프(선택가능)</div>
+        <div class="mt-1 text-2xl font-bold text-emerald-700"><%= (status.counts.active_leaf || 0).toLocaleString() %></div>
+      </div>
+      <div class="bg-white shadow-sm rounded-lg p-4">
+        <div class="text-xs text-gray-500">마지막 수집</div>
+        <div class="mt-1 text-sm font-medium text-gray-700">
+          <%= status.counts.last_fetched_at ? new Date(status.counts.last_fetched_at).toLocaleString('ko-KR') : '없음' %>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <!-- 수동 수집 -->
+      <div class="bg-white shadow-sm rounded-lg p-5">
+        <h2 class="text-sm font-semibold text-gray-900 mb-2">지금 수집</h2>
+        <p class="text-xs text-gray-500 mb-4">네이버 커머스 API 로 전체 카테고리를 즉시 다시 가져옵니다. 몰 카테고리에는 반영되지 않습니다.</p>
+        <form method="post" action="/admin/sourcing/naver-taxonomy/refresh">
+          <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+            <i class="bi bi-arrow-repeat"></i> 지금 수집
+          </button>
+        </form>
+      </div>
+
+      <!-- 스케줄 -->
+      <div class="bg-white shadow-sm rounded-lg p-5">
+        <h2 class="text-sm font-semibold text-gray-900 mb-2">자동 수집 주기</h2>
+        <p class="text-xs text-gray-500 mb-4">크론(<code>naver_taxonomy_cron.sh</code>)이 5분마다 확인해 주기가 되면 수집합니다.</p>
+        <form method="post" action="/admin/sourcing/naver-taxonomy/schedule" class="space-y-3">
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="enabled" value="1" <%= status.schedule && status.schedule.enabled ? 'checked' : '' %>>
+            자동 수집 사용
+          </label>
+          <div class="flex items-center gap-2 text-sm text-gray-700">
+            주기
+            <input type="number" name="interval_hours" min="1" max="720" step="1"
+              value="<%= status.schedule ? status.schedule.interval_hours : 24 %>"
+              class="w-24 border rounded px-2 py-1 text-sm">
+            시간마다 (24=하루 1회)
+          </div>
+          <div class="text-xs text-gray-500">
+            마지막 실행:
+            <%= status.schedule && status.schedule.last_run_at ? new Date(status.schedule.last_run_at).toLocaleString('ko-KR') : '없음' %>
+            <% if (status.schedule && status.schedule.last_status) { %> · <%= status.schedule.last_status %><% } %>
+          </div>
+          <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-black">
+            저장
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 최근 수집 로그 -->
+    <div class="bg-white shadow-sm rounded-lg p-5">
+      <h2 class="text-sm font-semibold text-gray-900 mb-3">최근 수집 로그</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-gray-500 border-b">
+              <th class="py-2 pr-4">시작</th>
+              <th class="py-2 pr-4">종류</th>
+              <th class="py-2 pr-4">트리거</th>
+              <th class="py-2 pr-4">상태</th>
+              <th class="py-2 pr-4">수집</th>
+              <th class="py-2 pr-4">비활성</th>
+              <th class="py-2">메시지</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!status.logs || !status.logs.length) { %>
+              <tr><td colspan="7" class="py-4 text-center text-gray-400">수집 이력이 없습니다.</td></tr>
+            <% } else { status.logs.forEach(function(l) { %>
+              <tr class="border-b last:border-0">
+                <td class="py-2 pr-4 whitespace-nowrap text-gray-600"><%= new Date(l.started_at).toLocaleString('ko-KR') %></td>
+                <td class="py-2 pr-4"><%= l.resource %></td>
+                <td class="py-2 pr-4"><%= l.trigger_by %></td>
+                <td class="py-2 pr-4">
+                  <% var cls = l.status === 'SUCCESS' ? 'text-emerald-700' : (l.status === 'FAILED' ? 'text-red-600' : 'text-gray-500'); %>
+                  <span class="font-medium <%= cls %>"><%= l.status %></span>
+                </td>
+                <td class="py-2 pr-4 text-gray-600"><%= l.total_count == null ? '-' : l.total_count.toLocaleString() %></td>
+                <td class="py-2 pr-4 text-gray-600"><%= l.deactivated_count == null ? '-' : l.deactivated_count %></td>
+                <td class="py-2 text-gray-500"><%= l.message || '' %></td>
+              </tr>
+            <% }); } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  <% } %>
+</div>

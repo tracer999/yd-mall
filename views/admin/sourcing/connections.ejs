@@ -85,7 +85,7 @@
           <tr>
             <th class="text-left px-4 py-2">채널</th>
             <th class="text-left px-4 py-2">계정</th>
-            <th class="text-left px-4 py-2">client_id</th>
+            <th class="text-left px-4 py-2">client_id / API Key</th>
             <th class="text-left px-4 py-2">시크릿</th>
             <th class="text-left px-4 py-2">상태</th>
             <th class="text-left px-4 py-2">최근 확인</th>
@@ -129,14 +129,14 @@
   <div class="bg-white shadow-sm rounded-lg mb-6">
     <div class="px-6 py-4 border-b border-gray-200">
       <h5 class="text-lg font-bold text-gray-800">계정 추가 / 수정</h5>
-      <p class="text-xs text-gray-400 mt-1">같은 채널+계정이름으로 저장하면 기존 값이 갱신됩니다. 시크릿을 비우면 기존 시크릿이 유지됩니다.</p>
+      <p class="text-xs text-gray-400 mt-1">채널을 고르면 그 채널에 필요한 칸만 나타납니다. 같은 채널+계정이름으로 저장하면 기존 값이 갱신되고, 시크릿을 비우면 기존 시크릿이 유지됩니다.</p>
     </div>
     <form action="/admin/sourcing/connections/save" method="POST" class="p-6 space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-gray-600 mb-1">채널</label>
-          <select name="channel" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
-            <% Object.keys(chans).forEach(function (k) { %>
+          <select name="channel" id="ch-select" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+            <% Object.keys(chans).forEach(function (k) { if (chans[k].hidden) return; %>
               <option value="<%= k %>"><%= chans[k].label %></option>
             <% }); %>
           </select>
@@ -145,18 +145,21 @@
           <label class="block text-sm text-gray-600 mb-1">계정 이름</label>
           <input type="text" name="account_label" value="기본" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
         </div>
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">client_id / API Key</label>
-          <input type="text" name="client_id" autocomplete="off" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <div class="sm:col-span-2">
+          <p id="ch-help" class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2"></p>
         </div>
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">client_secret / 시크릿</label>
-          <input type="password" name="secret" autocomplete="new-password" placeholder="변경 시에만 입력"
+        <div id="fld-clientid">
+          <label id="lbl-clientid" for="in-clientid" class="block text-sm text-gray-600 mb-1">client_id / API Key</label>
+          <input type="text" id="in-clientid" name="client_id" autocomplete="off" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        </div>
+        <div id="fld-secret">
+          <label id="lbl-secret" for="in-secret" class="block text-sm text-gray-600 mb-1">client_secret / 시크릿</label>
+          <input type="password" id="in-secret" name="secret" autocomplete="new-password" placeholder="변경 시에만 입력"
                  class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
         </div>
-        <div class="sm:col-span-2">
-          <label class="block text-sm text-gray-600 mb-1">부가 설정(JSON, 선택) — 스토어채널ID·반품지코드 등</label>
-          <input type="text" name="extra_json" placeholder='{"channelId":"..."}'
+        <div class="sm:col-span-2" id="fld-extra">
+          <label id="lbl-extra" for="in-extra" class="block text-sm text-gray-600 mb-1">부가 설정(JSON, 선택)</label>
+          <input type="text" id="in-extra" name="extra_json" placeholder='{"channelId":"..."}'
                  class="w-full rounded-md border border-gray-300 text-sm px-3 py-2 font-mono">
         </div>
       </div>
@@ -187,3 +190,41 @@
   <% } %>
 
 </div>
+
+<script type="application/json" id="ch-meta"><%- JSON.stringify(chans).replace(/</g, '\\u003c') %></script>
+<script>
+  /* 채널마다 필요한 자격증명이 달라서, 고른 채널에 해당하는 칸만 남긴다. */
+  (function () {
+    var meta = document.getElementById('ch-meta');
+    var sel = document.getElementById('ch-select');
+    if (!meta || !sel) return;
+    var META = JSON.parse(meta.textContent);
+
+    var fields = [
+      { box: 'fld-clientid', label: 'lbl-clientid', input: 'in-clientid',
+        on: function (m) { return !!m.needsClientId; },
+        text: function (m) { return m.clientIdLabel || 'client_id / API Key'; } },
+      { box: 'fld-secret', label: 'lbl-secret', input: 'in-secret',
+        on: function (m) { return !!m.needsSecret; },
+        text: function (m) { return (m.secretLabel || 'client_secret') + ' — 변경 시에만 입력'; } },
+      { box: 'fld-extra', label: 'lbl-extra', input: 'in-extra',
+        on: function (m) { return !!m.extraHint; },
+        text: function (m) { return '부가 설정(JSON, 선택) — ' + (m.extraHint || ''); } }
+    ];
+
+    function apply() {
+      var m = META[sel.value] || {};
+      document.getElementById('ch-help').textContent = m.help || '';
+      fields.forEach(function (f) {
+        var on = f.on(m);
+        document.getElementById(f.box).style.display = on ? '' : 'none';
+        if (on) document.getElementById(f.label).textContent = f.text(m);
+        // 숨긴 칸은 값을 비운다 — 채널을 바꿔가며 입력한 값이 딸려 저장되지 않게.
+        else document.getElementById(f.input).value = '';
+      });
+    }
+
+    sel.addEventListener('change', apply);
+    apply();
+  })();
+</script>
