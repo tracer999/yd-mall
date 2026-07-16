@@ -266,17 +266,53 @@
       </div>
 
       <div class="flex items-center gap-4">
-        <%# 편집 대상 몰 선택기 (P5). 몰이 2개 이상일 때만 노출. adminMallContext 가 adminMalls·adminMallId 주입. %>
-        <% if (typeof adminMalls !== 'undefined' && adminMalls && adminMalls.length > 1) { %>
-          <form method="GET" action="" class="flex items-center gap-1.5" title="관리자가 편집 중인 몰">
-            <i class="bi bi-shop text-gray-400"></i>
-            <select name="adminMall" onchange="this.form.submit()"
-              class="text-sm font-semibold text-gray-700 bg-amber-50 border border-amber-200 rounded-lg pl-2 pr-7 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
-              <% adminMalls.forEach(function (m) { %>
-                <option value="<%= m.id %>" <%= Number(adminMallId) === Number(m.id) ? 'selected' : '' %>><%= m.name %></option>
-              <% }); %>
-            </select>
-          </form>
+        <%# 편집 대상 몰 표시 + 전환기 (P5). adminMallContext 가 adminMalls·adminMallId·adminMall 주입.
+            현재 편집 몰을 항상 크게 노출하고, 몰이 2개 이상일 때만 버튼으로 선택 레이어(팝오버)를 연다. %>
+        <% if (typeof adminMall !== 'undefined' && adminMall) {
+             const _mallCount = (typeof adminMalls !== 'undefined' && adminMalls) ? adminMalls.length : 0;
+             const _switchable = _mallCount > 1; %>
+          <div class="relative" data-admin-mall>
+            <% if (_switchable) { %>
+              <button type="button" data-admin-mall-toggle
+                title="편집 중인 몰 — 클릭해 전환"
+                class="flex items-center gap-2 pl-3 pr-2.5 py-1.5 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200">
+                <i class="bi bi-shop text-amber-600 text-base"></i>
+                <span class="flex flex-col items-start leading-tight text-left">
+                  <span class="text-[10px] font-semibold text-amber-600 uppercase tracking-wide">편집 몰</span>
+                  <span class="text-sm font-bold text-amber-900 max-w-[10rem] truncate"><%= adminMall.name %></span>
+                </span>
+                <i class="bi bi-chevron-down text-amber-500 text-xs ml-0.5 transition-transform duration-200" data-admin-mall-chevron></i>
+              </button>
+
+              <div data-admin-mall-panel
+                class="hidden absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                <div class="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                  <p class="text-xs font-semibold text-gray-500">편집할 몰 선택</p>
+                </div>
+                <ul class="py-1 max-h-80 overflow-y-auto">
+                  <% adminMalls.forEach(function (m) { const _cur = Number(adminMallId) === Number(m.id); %>
+                    <li>
+                      <a href="?adminMall=<%= m.id %>"
+                        class="flex items-center gap-2.5 px-4 py-2.5 text-sm no-underline transition-colors <%= _cur ? 'bg-amber-50 text-amber-900 font-bold' : 'text-gray-700 hover:bg-gray-50' %>">
+                        <i class="bi bi-shop <%= _cur ? 'text-amber-500' : 'text-gray-400' %>"></i>
+                        <span class="flex-1 truncate"><%= m.name %></span>
+                        <% if (_cur) { %><i class="bi bi-check-lg text-amber-600 text-base"></i><% } %>
+                      </a>
+                    </li>
+                  <% }); %>
+                </ul>
+              </div>
+            <% } else { %>
+              <div title="편집 중인 몰"
+                class="flex items-center gap-2 pl-3 pr-3 py-1.5 bg-amber-50 border border-amber-300 rounded-lg">
+                <i class="bi bi-shop text-amber-600 text-base"></i>
+                <span class="flex flex-col items-start leading-tight text-left">
+                  <span class="text-[10px] font-semibold text-amber-600 uppercase tracking-wide">편집 몰</span>
+                  <span class="text-sm font-bold text-amber-900 max-w-[10rem] truncate"><%= adminMall.name %></span>
+                </span>
+              </div>
+            <% } %>
+          </div>
         <% } %>
 
         <%# 매뉴얼 바로가기 — 몰 선택기 옆. 몰 빌더 가이드·관리자/사용자 매뉴얼 열람 %>
@@ -395,6 +431,32 @@
     });
 
     sidebarOverlay.addEventListener("click", closeSidebar);
+
+    // 편집 몰 선택 팝오버 (헤더) — 버튼 클릭 토글 + 바깥 클릭/ESC 닫기
+    (function () {
+      var wrap = document.querySelector('[data-admin-mall]');
+      if (!wrap) return;
+      var toggle = wrap.querySelector('[data-admin-mall-toggle]');
+      var panel = wrap.querySelector('[data-admin-mall-panel]');
+      var chevron = wrap.querySelector('[data-admin-mall-chevron]');
+      if (!toggle || !panel) return;
+
+      function setOpen(open) {
+        panel.classList.toggle('hidden', !open);
+        if (chevron) chevron.classList.toggle('rotate-180', open);
+      }
+
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setOpen(panel.classList.contains('hidden'));
+      });
+      document.addEventListener('click', function (e) {
+        if (!wrap.contains(e.target)) setOpen(false);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') setOpen(false);
+      });
+    })();
   </script>
   <!-- Add simple fade-in animation for content -->
   <style>
