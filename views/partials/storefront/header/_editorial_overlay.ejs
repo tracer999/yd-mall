@@ -51,25 +51,35 @@
         <% }); %>
       </nav>
 
-      <!-- Right icons -->
+      <%#
+        우측 아이콘 — 장바구니 · 사람 · 검색 · [☰] 순(참조 구조 docs/사이트개선/capture/thema2_mo.png).
+        검색과 햄버거는 드로어를 연다: 검색은 드로어 안 검색폼에 포커스까지 준다(./_drawer 스크립트).
+        입력창을 헤더에도 두면 드로어 안 폼과 두 벌이 되므로 진입점만 둔다.
+      %>
       <div class="flex-1 flex items-center justify-end gap-4 sm:gap-5 yd-ed-actions">
-        <% if (Number(_cfg.use_search_bar) !== 0) { %>
-          <a href="/search" aria-label="검색" class="yd-ed-ico"><i class="bi bi-search text-lg"></i></a>
-        <% } %>
-        <a href="<%= user ? '/mypage' : '/auth/login' %>" aria-label="<%= user ? '마이쇼핑' : '로그인' %>" class="yd-ed-ico hidden sm:inline-flex"><i class="bi bi-person text-xl"></i></a>
+        <a href="<%= user ? '/mypage' : '/auth/login' %>" aria-label="<%= user ? '마이쇼핑' : '로그인' %>" class="yd-ed-ico"><i class="bi bi-person text-xl"></i></a>
         <a href="/cart" aria-label="장바구니" class="yd-ed-ico relative">
           <i class="bi bi-bag text-lg"></i>
           <% if (typeof cartCount !== 'undefined' && cartCount > 0) { %>
             <span class="absolute -top-1.5 -right-1.5 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full"><%= cartCount %></span>
           <% } %>
         </a>
-        <% if (isAdmin) { %>
-          <a href="/admin" aria-label="관리자모드" class="yd-ed-ico"><i class="bi bi-gear text-lg"></i></a>
+        <% if (Number(_cfg.use_search_bar) !== 0) { %>
+          <button type="button" id="yd-dw-search" aria-label="검색" class="yd-ed-ico"><i class="bi bi-search text-lg"></i></button>
         <% } %>
+        <% if (isAdmin) { %>
+          <a href="/admin" aria-label="관리자모드" class="yd-ed-ico hidden md:inline-flex"><i class="bi bi-gear text-lg"></i></a>
+        <% } %>
+        <%# 햄버거 — PC 는 가운데 메뉴가 있으므로 모바일에서만. 없으면 모바일에 메뉴 진입점이 사라진다. %>
+        <button type="button" id="yd-dw-open" aria-expanded="false" aria-controls="yd-drawer" aria-label="전체 메뉴 열기"
+                class="yd-ed-ico md:hidden"><i class="bi bi-list text-2xl"></i></button>
       </div>
     </div>
   </div>
 </header>
+
+<%# 전체 메뉴 드로어 — 드로어형 스킨과 공용. <header> 바깥이어야 백드롭이 헤더를 덮지 않는다. %>
+<%- include('./_drawer') %>
 
 <%# 카테고리 드롭다운 백드롭 — 기본형과 동일(헤더 바깥). 기존 토글 스크립트가 같은 id 를 잡는다. %>
 <div id="gnb-cat-backdrop" class="hidden fixed inset-0 z-40 bg-black/20" aria-hidden="true"></div>

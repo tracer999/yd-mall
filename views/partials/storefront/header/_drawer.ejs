@@ -1,0 +1,316 @@
+<%
+  /*
+   * 전체 메뉴 드로어 (좌측 슬라이드) — 헤더 스킨 공용.
+   *
+   * 원래 _compact_drawer 안에 박혀 있어 드로어형 스킨에서만 쓸 수 있었다. 에디토리얼 스킨은
+   * 모바일에 메뉴 진입점이 아예 없었으므로(가운데 메뉴가 hidden md:flex) 여기로 뽑아 공유한다.
+   *
+   * 여는 버튼은 각 스킨이 자기 헤더에 둔다 — id="yd-dw-open" 이기만 하면 아래 스크립트가 잡는다.
+   * 드로어 자체는 <header> **바깥**에 있어야 한다: header 가 z-50 으로 stacking context 를 만들어
+   * 안에 두면 fixed 백드롭이 헤더까지 덮는다.
+   *
+   * 상위 locals(gnbMenus · headerUtilMenus · user · cartCount · siteSettings · nav)만 쓰고
+   * 스킨별 지역변수에 기대지 않는다 — 어느 스킨에서 include 해도 그대로 돈다.
+   */
+  const _dwGnb = (typeof gnbMenus !== 'undefined' && Array.isArray(gnbMenus)) ? gnbMenus : [];
+  const _dwCfg = (typeof nav !== 'undefined' && nav && nav.config) ? nav.config : {};
+  const _dwUseSearch = Number(_dwCfg.use_search_bar) !== 0;
+
+  const _dwCs = (() => {
+    const list = (typeof headerUtilMenus !== 'undefined' && Array.isArray(headerUtilMenus)) ? headerUtilMenus : [];
+    return list.find((m) => m.featureCode === 'HEADER_CS') || null;
+  })();
+
+  const _dwIsCat = (m) => m.kind === 'category';
+  const _dwCatNodes = _dwGnb.filter(_dwIsCat);
+  const _dwMenuNodes = _dwGnb.filter((m) => !_dwIsCat(m));
+
+  const _dwLoggedIn = (typeof user !== 'undefined') && !!user;
+  const _dwName = _dwLoggedIn ? (user.name || user.nickname || user.username || '회원') : '';
+  const _dwCart = (typeof cartCount !== 'undefined' && Number(cartCount) > 0) ? Number(cartCount) : 0;
+
+  const _dwNoticeTxt = (typeof drawerNotice !== 'undefined' && drawerNotice)
+        ? drawerNotice
+        : ((siteSettings && siteSettings.drawer_notice) || '');
+  const _dwBannerImg  = (siteSettings && siteSettings.drawer_banner_image) || '';
+  const _dwBannerHref = (siteSettings && siteSettings.drawer_banner_link) || '';
+  const _dwHours      = (siteSettings && siteSettings.business_hours) || '';
+%>
+<div id="yd-dw-backdrop" class="hidden fixed inset-0 z-[60] bg-black/40" aria-hidden="true"></div>
+
+<%#
+  열림/닫힘은 Tailwind 유틸(-translate-x-full)이 아니라 아래 .yd-dw CSS 로 한다.
+  Tailwind v4 의 translate 유틸은 `transform` 이 아니라 **`translate` 속성**을 쓰기 때문에,
+  transform 으로 여는 규칙과 서로 덮지 못해 드로어가 화면 밖에 머문다.
+%>
+<aside id="yd-drawer" class="yd-dw fixed top-0 left-0 z-[70] h-full w-[320px] max-w-[86vw] bg-white shadow-2xl flex flex-col"
+       role="dialog" aria-modal="true" aria-label="전체 메뉴" aria-hidden="true">
+
+    <%# ── 1. 회원 헤더: 로그인 상태 + 닫기 ─────────────────────────────── %>
+    <div class="yd-dw__head">
+        <p class="yd-dw__greet">
+            <% if (_dwLoggedIn) { %>
+                <strong><%= _dwName %></strong>님, 환영합니다.
+            <% } else { %>
+                로그인이 필요합니다.
+            <% } %>
+        </p>
+        <button type="button" id="yd-dw-close" aria-label="메뉴 닫기" class="yd-dw__close">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+
+    <%# ── 2. 회원 액션 3분할 ─────────────────────────────────────────── %>
+    <nav class="yd-dw__auth" aria-label="회원 메뉴">
+        <% if (_dwLoggedIn) { %>
+            <a href="/" class="yd-dw__authbtn">홈</a>
+            <a href="/mypage" class="yd-dw__authbtn">마이쇼핑</a>
+            <a href="/auth/logout" class="yd-dw__authbtn">로그아웃</a>
+        <% } else { %>
+            <a href="/auth/login" class="yd-dw__authbtn">로그인</a>
+            <a href="/auth/signup" class="yd-dw__authbtn">회원가입</a>
+            <a href="/mypage" class="yd-dw__authbtn">마이쇼핑</a>
+        <% } %>
+    </nav>
+
+    <%# ── 3. 쇼핑 요약 타일 ──────────────────────────────────────────── %>
+    <nav class="yd-dw__stats" aria-label="쇼핑 요약">
+        <a href="/mypage/likes" class="yd-dw__stat"><i class="bi bi-heart"></i><span>관심상품</span></a>
+        <a href="/cart" class="yd-dw__stat">
+            <span class="yd-dw__staticon">
+                <i class="bi bi-bag"></i>
+                <% if (_dwCart > 0) { %><em class="yd-dw__dot"><%= _dwCart %></em><% } %>
+            </span>
+            <span>장바구니</span>
+        </a>
+        <a href="/mypage/orders" class="yd-dw__stat"><i class="bi bi-receipt"></i><span>주문조회</span></a>
+    </nav>
+
+    <!-- 검색 (use_search_bar=0 이면 통째로 빠진다) -->
+    <% if (_dwUseSearch) { %>
+        <form action="/search" method="get" role="search" class="yd-dw__search">
+            <div class="flex items-center gap-2 border-b border-gray-300 pb-1.5">
+                <input type="text" name="q" id="yd-dw-q" autocomplete="off" placeholder="검색어를 입력해주세요"
+                       class="flex-1 min-w-0 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none">
+                <button type="submit" aria-label="검색" class="text-gray-500 hover:text-[var(--gh-primary)]">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+        </form>
+    <% } %>
+
+    <%# ── 스크롤 영역: 알림/배너 슬롯 + 카테고리 섹션 + 메뉴 섹션 ─────────── %>
+    <div class="yd-dw__scroll flex-1 overflow-y-auto">
+
+        <% if (_dwBannerImg || _dwNoticeTxt) { %>
+            <div class="yd-dw__notice">
+                <% if (_dwBannerImg) { %>
+                    <a href="<%= _dwBannerHref || '#' %>" class="yd-dw__banner"<%- _dwBannerHref ? '' : ' aria-disabled="true"' %>>
+                        <img src="<%= _dwBannerImg %>" alt="메뉴 배너" loading="lazy">
+                    </a>
+                <% } %>
+                <% if (_dwNoticeTxt) { %>
+                    <p class="yd-dw__noticetext"><i class="bi bi-megaphone" aria-hidden="true"></i><span><%= _dwNoticeTxt %></span></p>
+                <% } %>
+            </div>
+        <% } %>
+
+        <%# 카테고리 섹션 (하위 뎁스는 [+] 아코디언). split 스킨에서 include 하면 카테고리는
+            별도 버튼/패널이 담당하므로 여기엔 비어 있을 수 있다 — 그때는 섹션 자체를 내지 않는다. %>
+        <% if (_dwCatNodes.length) { %>
+            <section class="yd-dw__section" aria-label="카테고리">
+                <h2 class="yd-dw__sectitle">카테고리</h2>
+                <ul class="yd-dw__list">
+                    <% _dwCatNodes.forEach(function (m) { %>
+                        <%- include('./_drawer_node', { node: m, depth: 1 }) %>
+                    <% }); %>
+                </ul>
+            </section>
+        <% } %>
+
+        <% if (_dwMenuNodes.length) { %>
+            <section class="yd-dw__section" aria-label="메뉴">
+                <h2 class="yd-dw__sectitle">메뉴</h2>
+                <ul class="yd-dw__list">
+                    <% _dwMenuNodes.forEach(function (m) { %>
+                        <%- include('./_drawer_node', { node: m, depth: 1 }) %>
+                    <% }); %>
+                </ul>
+            </section>
+        <% } %>
+
+        <% if (!_dwGnb.length) { %>
+            <p class="yd-dw__empty">등록된 메뉴가 없습니다.</p>
+        <% } %>
+    </div>
+
+    <%# ── 고객센터 (하단 고정) — 값이 있을 때만 ─────────────────────────── %>
+    <% if (siteSettings.contact_phone || siteSettings.contact_email || _dwHours || _dwCs) { %>
+        <div class="yd-dw__cs">
+            <p class="yd-dw__cstitle">고객센터</p>
+            <% if (siteSettings.contact_phone) { %>
+                <a href="tel:<%= siteSettings.contact_phone %>" class="yd-dw__tel"><%= siteSettings.contact_phone %></a>
+            <% } %>
+            <% if (_dwHours) { %>
+                <p class="yd-dw__hours"><%= _dwHours %></p>
+            <% } %>
+            <% if (_dwCs || siteSettings.contact_email) { %>
+                <div class="yd-dw__cslinks">
+                    <% if (_dwCs) { %><a href="<%= _dwCs.href %>"><%= _dwCs.name %></a><% } %>
+                    <% if (siteSettings.contact_email) { %><a href="mailto:<%= siteSettings.contact_email %>"><%= siteSettings.contact_email %></a><% } %>
+                </div>
+            <% } %>
+        </div>
+    <% } %>
+</aside>
+
+<style>
+  .yd-dw { transform: translateX(-100%); transition: transform .3s cubic-bezier(.16,1,.3,1); }
+  .yd-dw.is-open { transform: translateX(0); }
+  @media (prefers-reduced-motion: reduce) { .yd-dw { transition: none; } }
+
+  /* 1. 회원 헤더 — 로그인 상태 + 닫기 */
+  .yd-dw__head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 1rem 1.25rem .5rem; }
+  .yd-dw__greet { font-size: .9375rem; color: #374151; }
+  .yd-dw__greet strong { color: #111827; font-weight: 700; }
+  .yd-dw__close {
+    flex: 0 0 auto; width: 2.25rem; height: 2.25rem; margin-right: -.25rem;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 9999px; color: #9ca3af; transition: color .15s, background-color .15s;
+  }
+  .yd-dw__close:hover { color: #374151; background: #f9fafb; }
+
+  /* 2. 회원 액션 3분할 */
+  .yd-dw__auth { margin: 0 1.25rem; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid #e5e7eb; border-radius: .5rem; overflow: hidden; }
+  .yd-dw__authbtn { padding: .625rem .25rem; text-align: center; font-size: .8125rem; color: #374151; border-left: 1px solid #e5e7eb; transition: color .15s, background-color .15s; }
+  .yd-dw__authbtn:first-child { border-left: 0; }
+  .yd-dw__authbtn:hover { background: #f9fafb; color: var(--gh-primary); }
+
+  /* 3. 쇼핑 요약 타일 */
+  .yd-dw__stats { margin: .75rem 1.25rem 0; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #f3f4f6; }
+  .yd-dw__stat { display: flex; flex-direction: column; align-items: center; gap: .3125rem; padding: .75rem .25rem; font-size: 11px; color: #6b7280; transition: color .15s; }
+  .yd-dw__stat i { font-size: 1.25rem; color: #4b5563; transition: color .15s; }
+  .yd-dw__stat:hover, .yd-dw__stat:hover i { color: var(--gh-primary); }
+  .yd-dw__staticon { position: relative; display: inline-flex; }
+  .yd-dw__dot {
+    position: absolute; top: -.375rem; right: -.5rem; min-width: 1rem; height: 1rem; padding: 0 .1875rem;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gh-accent); color: #fff; font-size: 9px; font-weight: 800; font-style: normal; border-radius: 9999px;
+  }
+
+  /* 검색 폼 */
+  .yd-dw__search { padding: 1rem 1.25rem; }
+
+  /* 4. 알림·배너 슬롯 */
+  .yd-dw__notice { padding: 0 1.25rem 1rem; }
+  .yd-dw__banner { display: block; border-radius: .5rem; overflow: hidden; }
+  .yd-dw__banner img { display: block; width: 100%; height: auto; }
+  .yd-dw__noticetext {
+    display: flex; align-items: flex-start; gap: .375rem; margin-top: .5rem;
+    padding: .625rem .75rem; background: #f9fafb; border-radius: .5rem; font-size: .8125rem; color: #4b5563;
+  }
+  .yd-dw__noticetext i { color: var(--gh-primary); margin-top: .125rem; }
+
+  /* 5·6. 섹션 (카테고리 / 메뉴) */
+  .yd-dw__section { padding: .25rem 1.25rem .5rem; }
+  .yd-dw__section + .yd-dw__section { border-top: 1px solid #f3f4f6; margin-top: .25rem; padding-top: .5rem; }
+  .yd-dw__sectitle { font-size: .75rem; font-weight: 700; letter-spacing: .02em; color: #9ca3af; padding: .5rem 0 .125rem; }
+  .yd-dw__empty { padding: 1.5rem 1.25rem; font-size: .875rem; color: #9ca3af; }
+
+  /* 7. 고객센터 (하단) */
+  .yd-dw__cs { border-top: 1px solid #e5e7eb; padding: 1rem 1.25rem 1.25rem; }
+  .yd-dw__cstitle { font-size: .75rem; font-weight: 700; color: #9ca3af; }
+  .yd-dw__tel { display: block; margin-top: .25rem; font-size: 1.5rem; font-weight: 800; letter-spacing: -.01em; color: #111827; }
+  .yd-dw__tel:hover { color: var(--gh-primary); }
+  .yd-dw__hours { margin-top: .375rem; font-size: .75rem; line-height: 1.5; color: #6b7280; white-space: pre-line; }
+  .yd-dw__cslinks { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .75rem; }
+  .yd-dw__cslinks a { font-size: .75rem; color: #6b7280; transition: color .15s; }
+  .yd-dw__cslinks a:hover { color: var(--gh-primary); }
+
+  .yd-dw__row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+
+  .yd-dw__link { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: .375rem; padding: .625rem 0; text-align: left; }
+  .yd-dw__link--top { font-size: .9375rem; color: #1f2937; }
+  .yd-dw__link--sub { font-size: .875rem; color: #6b7280; }
+  .yd-dw__link:hover { color: var(--gh-primary); }
+  .yd-dw__link.is-active { color: var(--gh-primary); font-weight: 700; }
+
+  /* 하위 목록은 좌측 라인으로 계층을 보인다(들여쓰기만으로는 3뎁스에서 구분이 흐려진다) */
+  .yd-dw__sub { border-left: 1px solid #f3f4f6; margin-left: .125rem; padding-left: .5rem; }
+
+  /* 항목명 = 아코디언 토글. 캐럿은 접힘 ▾ / 펼침 ▴ 로 회전한다 */
+  .yd-dw__caret { font-size: .75rem; color: #9ca3af; transition: transform .2s; }
+  .yd-dw__name[aria-expanded="true"] .yd-dw__caret { transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) { .yd-dw__caret { transition: none; } }
+
+  /* 행 끝의 [>] — 하위가 있는 메뉴에서 해당 메뉴로 가는 유일한 진입점 */
+  .yd-dw__go {
+    flex: 0 0 auto; width: 2rem; height: 2rem;
+    display: flex; align-items: center; justify-content: center;
+    color: #9ca3af; border-radius: 9999px; transition: color .15s, background-color .15s;
+  }
+  .yd-dw__go:hover { color: var(--gh-primary); background: #f9fafb; }
+
+  .yd-dw__badge {
+    font-size: 9px; font-weight: 800; line-height: 1;
+    padding: 2px 3px; border-radius: 3px; color: #fff;
+  }
+  .yd-dw__badge.is-new  { background: var(--gh-primary); }
+  .yd-dw__badge.is-hot  { background: #ef4444; }
+  .yd-dw__badge.is-sale { background: #f59e0b; }
+
+  /* 드로어가 열린 동안 본문 스크롤을 잠근다 */
+  body.yd-dw-locked { overflow: hidden; }
+</style>
+
+<script>
+  (function () {
+    var drawer  = document.getElementById('yd-drawer');
+    var openBtn = document.getElementById('yd-dw-open');
+    var closeBtn= document.getElementById('yd-dw-close');
+    var backdrop= document.getElementById('yd-dw-backdrop');
+    if (!drawer || !openBtn) return;
+
+    function setOpen(open) {
+      drawer.classList.toggle('is-open', open);
+      drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+      if (backdrop) backdrop.classList.toggle('hidden', !open);
+      openBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      document.body.classList.toggle('yd-dw-locked', open);
+      if (open && closeBtn) closeBtn.focus();
+      else openBtn.focus();
+    }
+
+    openBtn.addEventListener('click', function () { setOpen(true); });
+    if (closeBtn) closeBtn.addEventListener('click', function () { setOpen(false); });
+    if (backdrop) backdrop.addEventListener('click', function () { setOpen(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && drawer.classList.contains('is-open')) setOpen(false);
+    });
+
+    /*
+     * 검색 아이콘(있는 스킨만) → 드로어를 열고 검색창에 포커스. 검색 전용 오버레이를 따로 만들면
+     * 드로어 안 검색폼과 두 벌이 된다 — 입력창은 한 곳만 둔다.
+     */
+    var searchBtn = document.getElementById('yd-dw-search');
+    if (searchBtn) {
+      searchBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        setOpen(true);
+        var q = document.getElementById('yd-dw-q');
+        if (q) setTimeout(function () { q.focus(); }, 320);
+      });
+    }
+
+    // 아코디언 — 항목명(<button.yd-dw__name>)을 누르면 그 행 다음의 <ul.yd-dw__sub> 를 펼친다.
+    // 해당 메뉴로 이동하는 링크는 행 끝의 [>](a.yd-dw__go) 다: 상위 카테고리로 갈 방법이 사라지면 안 된다.
+    drawer.addEventListener('click', function (e) {
+      var btn = e.target.closest('.yd-dw__name');
+      if (!btn) return;
+      var sub = btn.parentElement.nextElementSibling;
+      if (!sub || !sub.classList.contains('yd-dw__sub')) return;
+      var open = sub.classList.toggle('hidden') === false;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  })();
+</script>
