@@ -20,6 +20,9 @@ async function resolve({ shared, config, locals }) {
 
     const [slides] = await pool.query(`
         SELECT hs.id, hs.slot, hs.label, hs.headline, hs.image_url, hs.link_url, hs.sort_order,
+               hs.media_type, hs.mobile_image_url, hs.video_webm_url, hs.video_mp4_url,
+               hs.mobile_video_webm_url, hs.mobile_video_mp4_url,
+               hs.embed_id, hs.poster_url, hs.autoplay, hs.muted, hs.loop_play, hs.preload,
                p.id AS product_id, p.name AS product_name, p.slug, p.main_image,
                p.price, p.original_price, p.discount_rate, p.status, p.stock, p.provider
           FROM hero_slide hs

@@ -69,6 +69,37 @@ const CLASSIC_NAV = {
     use_search_bar: 1,
 };
 
+/*
+ * 메뉴 구성 방식 — 테마와 **독립된 축**이다.
+ *
+ * 테마는 룩(색·폰트·홈 섹션)을 정하고, 이 축은 GNB 를 어떻게 조립할지를 정한다.
+ * 예전에는 테마가 헤더 스킨까지 고정해 통합형(드로어)을 고를 방법이 아예 없었다.
+ *
+ * header_layout_type 과 nav_mode 는 **반드시 짝**이어야 한다(짝이 어긋나면 "드로어 헤더인데
+ * 카테고리가 메뉴 목록에 없는" 조합이 나온다). 그래서 여기서 함께 정한다 —
+ * 같은 규칙을 Header 설정(controllers/admin/headerSettingsController.js)도 쓴다.
+ */
+const MENU_MODES = [
+    {
+        key: 'split',
+        label: '카테고리 분리형',
+        summary: '상단에 [☰ 카테고리] 버튼을 두고 그 옆에 일반 메뉴를 한 줄로 놓습니다. 카테고리는 버튼을 누르면 3단 드롭다운 패널로 열립니다.',
+    },
+    {
+        key: 'unified',
+        label: '통합형 (드로어)',
+        summary: '헤더에는 [☰]·로고·장바구니만 두고 메뉴 전체를 좌측 슬라이드 드로어에 담습니다. 카테고리 1뎁스가 일반 메뉴와 같은 목록에 놓이고 하위는 [+] 로 펼칩니다.',
+    },
+];
+
+const DEFAULT_MENU_MODE = 'split';
+
+/* 통합형은 어느 테마에서든 드로어 헤더를 쓴다 — 드로어 스킨이 하나뿐이라 그렇다. */
+const CLASSIC_HEADER_BY_MENU_MODE = {
+    split: 'main_right_utility_v1',
+    unified: 'compact_drawer_v1',
+};
+
 const FEATURE_MENUS = [
     'CATEGORY', 'SHOPPING_DEAL', 'BEST', 'NEW_PRODUCT',
     'EVENT', 'EXHIBITION', 'BRAND', 'SPECIALTY',
@@ -85,6 +116,7 @@ const PRESETS = {
         summary: '현재 기본 디자인. 최상단에 상품을 크게 돌리는 상품 쇼케이스 히어로가 놓이고, 그 아래 베스트·쇼핑특가·베스트 카테고리·베스트 브랜드 캐러셀이 자동 배치됩니다.',
         skinLabel: '상품형',
         navigation: CLASSIC_NAV,
+        headerLayoutByMenuMode: CLASSIC_HEADER_BY_MENU_MODE,
         featureMenus: FEATURE_MENUS,
         theme: CLASSIC_THEME,
         homeSections: [
@@ -105,6 +137,7 @@ const PRESETS = {
         summary: '현재 기본 디자인. 최상단에 전체폭 이미지 배너 슬라이드가 놓이고, 그 아래 베스트·쇼핑특가·베스트 카테고리·베스트 브랜드 캐러셀이 자동 배치됩니다.',
         skinLabel: '배너형',
         navigation: CLASSIC_NAV,
+        headerLayoutByMenuMode: CLASSIC_HEADER_BY_MENU_MODE,
         featureMenus: FEATURE_MENUS,
         theme: CLASSIC_THEME,
         homeSections: [
@@ -133,6 +166,11 @@ const PRESETS = {
             category_max_depth: 3,
             use_mega_menu: 0,
             use_search_bar: 1,
+        },
+        /* 분리형일 때만 오버레이 헤더를 쓴다. 통합형을 고르면 드로어 헤더가 되어 투명 오버레이는 포기한다. */
+        headerLayoutByMenuMode: {
+            split: 'editorial_overlay_v1',
+            unified: 'compact_drawer_v1',
         },
         featureMenus: FEATURE_MENUS,
         theme: {
@@ -171,4 +209,27 @@ function list() {
     return Object.values(PRESETS);
 }
 
-module.exports = { PRESETS, DEFAULT_KEY, get, list, isValidKey };
+/** 유효한 메뉴 구성 방식인가 */
+function isValidMenuMode(mode) {
+    return MENU_MODES.some((m) => m.key === String(mode || ''));
+}
+
+/** 관리자 폼의 메뉴 구성 방식 라디오 목록용 */
+function menuModeList() {
+    return MENU_MODES;
+}
+
+/**
+ * 프리셋 + 메뉴 구성 방식 → navigation_config 에 넣을 값.
+ * header_layout_type 과 nav_mode 를 항상 짝으로 맞춘다.
+ */
+function resolveNavigation(preset, menuMode) {
+    const mode = isValidMenuMode(menuMode) ? String(menuMode) : DEFAULT_MENU_MODE;
+    const layout = (preset.headerLayoutByMenuMode || CLASSIC_HEADER_BY_MENU_MODE)[mode];
+    return { ...preset.navigation, nav_mode: mode, header_layout_type: layout };
+}
+
+module.exports = {
+    PRESETS, DEFAULT_KEY, get, list, isValidKey,
+    MENU_MODES, DEFAULT_MENU_MODE, menuModeList, isValidMenuMode, resolveNavigation,
+};

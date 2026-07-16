@@ -34,11 +34,17 @@ function cleanStr(v, max) {
     return s.length > max ? s.slice(0, max) : s;
 }
 
-/** 이미지 경로 검증 — 비었거나 /images/ 로 시작해야 한다. */
+/** 자산 경로 검증 — 비었거나 /images/ 로 시작해야 한다. (영상도 public/images 에 둔다 — /uploads 는 배포에 안 실림) */
 function validImagePath(p) {
     const s = String(p || '').trim();
     if (!s) return true;
     return s.startsWith('/images/');
+}
+
+/** 빈 문자열은 NULL 로 — 경로 컬럼에 '' 가 들어가면 렌더가 빈 src 를 낸다. */
+function pathOrNull(v, max = 255) {
+    const s = cleanStr(v, max);
+    return s === '' ? null : s;
 }
 
 exports.getSamples = async (req, res) => {
@@ -54,7 +60,9 @@ exports.getSamples = async (req, res) => {
                     badge, main_image, deal_price, is_new, display_order, is_active
                FROM sample_product ORDER BY display_order, id`);
         const [heroes] = await pool.query(
-            `SELECT id, slot, product_key, label, headline, image_path, sort_order, is_active
+            `SELECT id, slot, product_key, label, headline, image_path, sort_order, is_active,
+                    media_type, mobile_image_path, video_webm_path, video_mp4_path,
+                    mobile_video_webm_path, mobile_video_mp4_path, poster_path
                FROM sample_hero_slide ORDER BY slot, sort_order, id`);
 
         res.render('admin/service/samples', {
@@ -79,6 +87,9 @@ exports.postSaveSamples = async (req, res) => {
         // 이미지 경로 사전 검증(하나라도 어긋나면 저장 안 함 — 납품본 이미지 깨짐 방지)
         const allImages = [
             ...toArray(req.body.cat_image), ...toArray(req.body.prod_image), ...toArray(req.body.hero_image),
+            ...toArray(req.body.hero_mobile_image), ...toArray(req.body.hero_poster),
+            ...toArray(req.body.hero_video_webm), ...toArray(req.body.hero_video_mp4),
+            ...toArray(req.body.hero_mo_video_webm), ...toArray(req.body.hero_mo_video_mp4),
         ];
         const bad = allImages.find((p) => !validImagePath(p));
         if (bad !== undefined) {
@@ -136,17 +147,31 @@ exports.postSaveSamples = async (req, res) => {
         const hLabels = toArray(req.body.hero_label);
         const hHeadlines = toArray(req.body.hero_headline);
         const hImages = toArray(req.body.hero_image);
+        const hMobileImages = toArray(req.body.hero_mobile_image);
+        const hMediaTypes = toArray(req.body.hero_media_type);
+        const hWebms = toArray(req.body.hero_video_webm);
+        const hMp4s = toArray(req.body.hero_video_mp4);
+        const hMoWebms = toArray(req.body.hero_mo_video_webm);
+        const hMoMp4s = toArray(req.body.hero_mo_video_mp4);
+        const hPosters = toArray(req.body.hero_poster);
         const hOrders = toArray(req.body.hero_order);
         const hActive = new Set(toArray(req.body.hero_active).map(String));
         for (let i = 0; i < hIds.length; i++) {
             const id = toInt(hIds[i]);
             if (!id) continue;
+            const mediaType = hMediaTypes[i] === 'VIDEO' ? 'VIDEO' : 'IMAGE';
             await conn.query(
-                `UPDATE sample_hero_slide SET label = ?, headline = ?, image_path = ?, sort_order = ?, is_active = ?
+                `UPDATE sample_hero_slide
+                    SET label = ?, headline = ?, media_type = ?, image_path = ?, mobile_image_path = ?,
+                        video_webm_path = ?, video_mp4_path = ?,
+                        mobile_video_webm_path = ?, mobile_video_mp4_path = ?, poster_path = ?,
+                        sort_order = ?, is_active = ?
                   WHERE id = ?`,
                 [cleanStr(hLabels[i], 50) || null, cleanStr(hHeadlines[i], 200) || null,
-                 cleanStr(hImages[i], 255) || null, toInt(hOrders[i]),
-                 hActive.has(String(id)) ? 1 : 0, id]);
+                 mediaType, pathOrNull(hImages[i]), pathOrNull(hMobileImages[i]),
+                 pathOrNull(hWebms[i]), pathOrNull(hMp4s[i]),
+                 pathOrNull(hMoWebms[i]), pathOrNull(hMoMp4s[i]), pathOrNull(hPosters[i]),
+                 toInt(hOrders[i]), hActive.has(String(id)) ? 1 : 0, id]);
         }
 
         await conn.commit();

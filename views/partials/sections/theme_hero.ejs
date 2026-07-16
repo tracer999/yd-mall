@@ -33,10 +33,12 @@
   <section class="yd-ed-hero relative w-full overflow-hidden bg-black">
     <div class="swiper mySwiperDesktop yd-ed-swiper">
       <div class="swiper-wrapper">
-        <% _slides.forEach(function (s) { %>
+        <% _slides.forEach(function (s, _i) { %>
           <div class="swiper-slide relative">
             <div class="yd-ed-stage relative w-full">
-              <img src="<%= _img(s) %>" alt="<%= s.headline || '' %>" class="absolute inset-0 w-full h-full object-cover">
+              <%- include('./hero_media', {
+                    media: s, img: _img(s), alt: (s.headline || ''),
+                    cls: 'absolute inset-0 w-full h-full object-cover', mobile: false, eager: _i === 0 }) %>
               <div class="yd-ed-scrim absolute inset-0"></div>
               <div class="relative z-10 h-full flex items-end">
                 <div class="w-full max-w-[80rem] mx-auto px-6 lg:px-10 pb-20 lg:pb-28">
@@ -70,6 +72,17 @@
       </div>
     </div>
   </section>
+
+  <script>
+    /* 모션 최소화를 켠 사용자에게는 배너 영상을 자동재생하지 않는다. CSS 로는 재생을 못 막는다. */
+    (function () {
+      if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      document.querySelectorAll('video[data-hero-video]').forEach(function (v) {
+        v.removeAttribute('autoplay');
+        v.pause();
+      });
+    })();
+  </script>
 
   <style>
     /* user/index.ejs 가 .mySwiperDesktop 을 모바일에서 숨기지만, 에디토리얼은 단일 스와이퍼라
@@ -112,8 +125,10 @@
     var _banners = _slides.map(function (s) {
       var url = _img(s);
       return {
+        // 원본 슬라이드를 그대로 넘긴다 — hero_media 가 여기서 영상 여부를 판단한다.
+        media: s,
         image_url: url,
-        mobile_image_url: url,
+        mobile_image_url: s.mobile_image_url || url,
         title: s.headline || s.product_name || '',
         link_url: _href(s),
         overlay_title: s.headline || '',

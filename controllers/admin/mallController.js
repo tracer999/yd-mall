@@ -37,6 +37,11 @@ function pickPreset(raw) {
     return presets.isValidKey(raw) ? String(raw) : presets.DEFAULT_KEY;
 }
 
+/** 폼에서 온 메뉴 구성 방식(분리형/통합형)을 화이트리스트로 검증한다. */
+function pickMenuMode(raw) {
+    return presets.isValidMenuMode(raw) ? String(raw) : presets.DEFAULT_MENU_MODE;
+}
+
 /*
  * 기본몰인데 코드를 비워 두면 서버가 자동 부여한다.
  *
@@ -114,6 +119,10 @@ async function renderForm(res, mall, extra = {}) {
         mall,
         presetList: presets.list(),
         defaultPresetKey: presets.DEFAULT_KEY,
+        // 메뉴 구성 방식(분리형/통합형) — 테마와 독립된 축이다.
+        menuModeList: presets.menuModeList(),
+        // 기존 몰이면 지금 쓰는 방식을 고른 상태로 보여준다(재적용이 조용히 바꾸지 않게).
+        currentMenuMode: presets.isValidMenuMode(mall.nav_mode) ? mall.nav_mode : presets.DEFAULT_MENU_MODE,
         // 마지막으로 적용한 스킨(프리셋) 이름. 한 번도 적용한 적 없으면 null.
         presetLabel: mall.preset_key && presets.isValidKey(mall.preset_key)
             ? presets.get(mall.preset_key).label
@@ -221,6 +230,7 @@ exports.postAdd = async (req, res) => {
     try {
         await mallProvisioner.provisionMall(newMallId, presetKey, {
             mode: 'create',
+            menuMode: pickMenuMode(req.body.menu_mode),
             actor: (req.session.admin && req.session.admin.username) || 'admin',
         });
     } catch (err) {
@@ -291,12 +301,15 @@ exports.postProvision = async (req, res) => {
         const result = await mallProvisioner.provisionMall(id, presetKey, {
             mode: 'reapply',
             includeHome,
+            // 폼이 안 보내면 provisionMall 이 이 몰의 현재 방식을 유지한다.
+            menuMode: presets.isValidMenuMode(req.body.menu_mode) ? req.body.menu_mode : undefined,
             actor: (req.session.admin && req.session.admin.username) || 'admin',
         });
 
+        const menuLabel = (presets.menuModeList().find((m) => m.key === result.menuMode) || {}).label || result.menuMode;
         const note = result.homeReplaced
-            ? `테마 '${result.preset.label}' 적용 완료 — 홈 섹션을 교체하고 발행했습니다(rev.${result.revisionNo}).`
-            : `테마 '${result.preset.label}' 적용 완료 — 내비·메뉴·테마를 되돌렸습니다(홈 섹션은 유지).`;
+            ? `테마 '${result.preset.label}' · 메뉴 '${menuLabel}' 적용 완료 — 홈 섹션을 교체하고 발행했습니다(rev.${result.revisionNo}).`
+            : `테마 '${result.preset.label}' · 메뉴 '${menuLabel}' 적용 완료 — 내비·메뉴·테마를 되돌렸습니다(홈 섹션은 유지).`;
         // 페이지 빌더 이지 모드에서 왔으면 빌더로 되돌린다.
         const dest = req.body.return_to === 'page-builder' ? '/admin/page-builder' : `/admin/malls/${id}`;
         res.redirect(`${dest}?notice=` + encodeURIComponent(note));

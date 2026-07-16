@@ -127,7 +127,9 @@
               <th class="py-2 px-3 w-20">상품키</th>
               <th class="py-2 px-3">라벨</th>
               <th class="py-2 px-3">헤드라인</th>
-              <th class="py-2 px-3">이미지 경로</th>
+              <th class="py-2 px-3 w-24">미디어</th>
+              <th class="py-2 px-3">이미지 · 모바일 경로</th>
+              <th class="py-2 px-3">영상 경로 (WebM · MP4 · 포스터)</th>
               <th class="py-2 px-3 w-16">순서</th>
               <th class="py-2 px-3 w-16">사용</th>
               <th class="py-2 px-3 w-16"></th>
@@ -135,7 +137,7 @@
           </thead>
           <tbody>
             <% if (!heroes || !heroes.length) { %>
-              <tr><td colspan="8" class="py-6 text-center text-gray-400">샘플 슬라이드가 없습니다.</td></tr>
+              <tr><td colspan="10" class="py-6 text-center text-gray-400">샘플 슬라이드가 없습니다.</td></tr>
             <% } else { heroes.forEach(function(h){ %>
               <tr class="border-b last:border-0">
                 <td class="py-2 px-3">
@@ -145,7 +147,31 @@
                 <td class="py-2 px-3 font-mono text-xs text-gray-500"><%= h.product_key || '-' %></td>
                 <td class="py-2 px-3"><input type="text" name="hero_label" value="<%= h.label || '' %>" class="w-full text-sm"></td>
                 <td class="py-2 px-3"><input type="text" name="hero_headline" value="<%= h.headline || '' %>" class="w-full text-sm min-w-40"></td>
-                <td class="py-2 px-3"><input type="text" name="hero_image" value="<%= h.image_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="/images/sample/banners/..."></td>
+                <%# FEATURE(우측 카드)는 이미지만 허용 — DB CHECK(chk_shs_media_main_only)와 같은 규칙을 화면에서도 막는다.
+                    disabled 인 select 는 전송되지 않으므로 hidden 으로 값을 채워 행 순서를 맞춘다. %>
+                <td class="py-2 px-3">
+                  <select name="hero_media_type" class="w-full text-xs" <%= h.slot === 'FEATURE' ? 'disabled' : '' %>>
+                    <option value="IMAGE" <%= h.media_type === 'IMAGE' ? 'selected' : '' %>>이미지</option>
+                    <option value="VIDEO" <%= h.media_type === 'VIDEO' ? 'selected' : '' %>>영상</option>
+                  </select>
+                  <% if (h.slot === 'FEATURE') { %>
+                    <input type="hidden" name="hero_media_type" value="IMAGE">
+                    <span class="text-[10px] text-gray-400">MAIN 만 영상</span>
+                  <% } %>
+                </td>
+                <td class="py-2 px-3 space-y-1">
+                  <input type="text" name="hero_image" value="<%= h.image_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="/images/sample/banners/… (정지 이미지)">
+                  <input type="text" name="hero_mobile_image" value="<%= h.mobile_image_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="모바일 이미지(선택) — 영상이어도 모바일은 이걸로">
+                </td>
+                <%# 모바일 폴백 순서: 모바일 영상 → 모바일 이미지 → 데스크톱 영상. 가로 영상을 모바일에
+                    그대로 쓰면 좌우가 잘리므로 세로(1080×1920) 영상을 따로 둔다. %>
+                <td class="py-2 px-3 space-y-1">
+                  <input type="text" name="hero_video_webm" value="<%= h.video_webm_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="PC .webm (먼저 시도됨)">
+                  <input type="text" name="hero_video_mp4" value="<%= h.video_mp4_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="PC .mp4 (호환 폴백)">
+                  <input type="text" name="hero_mo_video_webm" value="<%= h.mobile_video_webm_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="모바일 세로 .webm (선택)">
+                  <input type="text" name="hero_mo_video_mp4" value="<%= h.mobile_video_mp4_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="모바일 세로 .mp4 (선택)">
+                  <input type="text" name="hero_poster" value="<%= h.poster_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="포스터(비면 이미지 경로 사용)">
+                </td>
                 <td class="py-2 px-3"><input type="number" name="hero_order" value="<%= h.sort_order %>" class="w-16 text-sm"></td>
                 <td class="py-2 px-3"><input type="checkbox" name="hero_active" value="<%= h.id %>" <%= h.is_active ? 'checked' : '' %> class="w-4 h-4"></td>
                 <td class="py-2 px-3">

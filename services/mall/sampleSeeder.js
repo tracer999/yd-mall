@@ -38,7 +38,10 @@ async function loadResources() {
                 price, original_price, badge, main_image, deal_price, is_new
            FROM sample_product WHERE is_active = 1 ORDER BY display_order, id`);
     const [heroes] = await pool.query(
-        `SELECT slot, product_key, label, headline, image_path, sort_order
+        `SELECT slot, product_key, label, headline, image_path, sort_order,
+                media_type, mobile_image_path, video_webm_path, video_mp4_path,
+                mobile_video_webm_path, mobile_video_mp4_path,
+                embed_id, poster_path, autoplay, muted, loop_play, preload
            FROM sample_hero_slide WHERE is_active = 1 ORDER BY slot, sort_order, id`);
     return { categories, brands, products, heroes };
 }
@@ -157,14 +160,23 @@ async function seedSampleData(mallId) {
 
         // 5) 히어로 슬라이드(hero_slide) — theme_hero 가 몰 스코프로 읽는다.
         //    product_key 가 실제로 시딩된 상품일 때만 넣는다(FK · 링크 정합성).
+        //    리소스의 *_path 를 hero_slide 의 *_url 로 옮겨 담는다(영상 배너 포함).
         let heroCount = 0;
         for (const h of heroes) {
             const productId = prodIdByKey[h.product_key];
             if (!productId) continue;
             await conn.query(
-                `INSERT INTO hero_slide (mall_id, slot, product_id, label, headline, image_url, link_url, sort_order, is_active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-                [id, h.slot, productId, h.label, h.headline, h.image_path,
+                `INSERT INTO hero_slide
+                   (mall_id, slot, media_type, product_id, label, headline,
+                    image_url, mobile_image_url, video_webm_url, video_mp4_url,
+                    mobile_video_webm_url, mobile_video_mp4_url,
+                    embed_id, poster_url, autoplay, muted, loop_play, preload,
+                    link_url, sort_order, is_active)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+                [id, h.slot, h.media_type || 'IMAGE', productId, h.label, h.headline,
+                 h.image_path, h.mobile_image_path, h.video_webm_path, h.video_mp4_path,
+                 h.mobile_video_webm_path, h.mobile_video_mp4_path,
+                 h.embed_id, h.poster_path, h.autoplay, h.muted, h.loop_play, h.preload,
                  `/products/sm${id}-${h.product_key}`, h.sort_order]);
             heroCount++;
         }

@@ -225,7 +225,7 @@ async function applyHome(conn, mallId, mallCode, mallName, sections, overwrite, 
  *
  * @param {number} mallId
  * @param {string} presetKey  presets.js 의 키
- * @param {{ mode?: 'create'|'reapply', includeHome?: boolean, actor?: string }} opts
+ * @param {{ mode?: 'create'|'reapply', includeHome?: boolean, actor?: string, menuMode?: 'split'|'unified' }} opts
  * @returns {Promise<{ preset, created: boolean, homeReplaced: boolean, revisionNo: number|null }>}
  */
 async function provisionMall(mallId, presetKey, opts = {}) {
@@ -242,6 +242,21 @@ async function provisionMall(mallId, presetKey, opts = {}) {
     const [[mall]] = await pool.query('SELECT id, code, name FROM mall WHERE id = ?', [id]);
     if (!mall) throw new Error(`provisionMall: 몰 ${id} 을(를) 찾을 수 없습니다.`);
 
+    /*
+     * 메뉴 구성 방식(분리형/통합형). 지정이 없으면
+     *   - 재적용: 이 몰이 지금 쓰는 방식을 유지한다. 안 그러면 통합형으로 쓰던 몰이 재적용 한 번에
+     *     조용히 분리형으로 되돌아간다.
+     *   - 신규:   기본값(분리형).
+     */
+    let menuMode = opts.menuMode;
+    if (!presets.isValidMenuMode(menuMode)) {
+        const [[cur]] = await pool.query('SELECT nav_mode FROM navigation_config WHERE mall_id = ? LIMIT 1', [id]);
+        menuMode = (mode === 'reapply' && cur && presets.isValidMenuMode(cur.nav_mode))
+            ? cur.nav_mode
+            : presets.DEFAULT_MENU_MODE;
+    }
+    const navigation = presets.resolveNavigation(preset, menuMode);
+
     // 메뉴 행 생성은 기존 장치에 맡긴다(트랜잭션 밖 — 멱등하고 pool 을 쓴다).
     await featureMenuSync.ensureMallFeatureMenus(id);
 
@@ -250,7 +265,7 @@ async function provisionMall(mallId, presetKey, opts = {}) {
     try {
         await conn.beginTransaction();
 
-        await applyNavigationConfig(conn, id, preset.navigation, overwrite);
+        await applyNavigationConfig(conn, id, navigation, overwrite);
         await applyFeatureMenus(conn, id, preset.featureMenus);
         await applyTheme(conn, id, preset.theme, mall.name, overwrite);
         await applySiteSettings(conn, id, mall.name);
@@ -305,7 +320,7 @@ async function provisionMall(mallId, presetKey, opts = {}) {
     themeData.invalidate(id);
     navigationService.invalidateContentGate(id);
 
-    return { preset, created: mode === 'create', homeReplaced: home.replaced, revisionNo };
+    return { preset, menuMode, created: mode === 'create', homeReplaced: home.replaced, revisionNo };
 }
 
 module.exports = {

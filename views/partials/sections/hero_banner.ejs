@@ -23,10 +23,13 @@
   <% if (heroBanners.length > 0) { %>
     <div class="swiper mySwiperDesktop group hidden sm:block">
       <div class="swiper-wrapper">
-        <% heroBanners.forEach(banner => { %>
+        <% heroBanners.forEach((banner, _i) => { %>
           <div class="swiper-slide relative">
             <div class="w-full relative aspect-[1920/600]">
-              <img src="<%= banner.image_url %>" alt="<%= banner.title %>" class="w-full h-full object-cover block">
+              <%# banner.media 가 있으면 영상, 없으면 예전대로 이미지. 전역 banners 는 media 가 없어 그대로 이미지다. %>
+              <%- include('./hero_media', {
+                    media: banner.media || null, img: banner.image_url, alt: banner.title,
+                    cls: 'w-full h-full object-cover block', mobile: false, eager: _i === 0 }) %>
 
               <%# 슬라이드 전체 링크는 <a> 오버레이로 건다. 인라인 onclick 이면 스와이프 도중의
                   짧은 드래그까지 클릭으로 처리돼 배너로 튕겨 나간다(= "슬라이더가 안 먹는다"). %>
@@ -75,14 +78,15 @@
     <% if (mobileHeroBanners.length > 0) { %>
       <div class="swiper mySwiperMobile group block sm:hidden">
         <div class="swiper-wrapper">
-          <% mobileHeroBanners.forEach(banner => { %>
+          <% mobileHeroBanners.forEach((banner, _i) => { %>
             <div class="swiper-slide relative">
               <%# 고정 비율(aspect) 컨테이너 + object-contain 조합은 등록된 이미지 비율이 컨테이너와
                   다를 때 위아래에 흰 레터박스를 남긴다(= "헤더와 떨어져 보임"). 모바일은 이미지가
                   높이를 정하게 두고(h-auto), Swiper 의 autoHeight 가 슬라이드 높이를 따라간다. %>
               <div class="w-full relative">
-                <img src="<%= banner.mobile_image_url %>" alt="<%= banner.title %>"
-                     class="w-full h-auto block align-top">
+                <%- include('./hero_media', {
+                      media: banner.media || null, img: banner.mobile_image_url, alt: banner.title,
+                      cls: 'w-full h-auto block align-top', mobile: true, eager: _i === 0 }) %>
 
                 <a href="<%= banner.link_url || '#' %>" class="absolute inset-0 z-10" aria-label="<%= banner.title %>"></a>
 
@@ -131,6 +135,17 @@
     </div>
   <% } %>
 </section>
+
+<script>
+  /* 모션 최소화를 켠 사용자에게는 배너 영상을 자동재생하지 않는다. CSS 로는 재생을 못 막는다. */
+  (function () {
+    if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document.querySelectorAll('video[data-hero-video]').forEach(function (v) {
+      v.removeAttribute('autoplay');
+      v.pause();
+    });
+  })();
+</script>
 
 <style>
   /* 사진 위 흰 글자의 가독성 — 배경이 밝은 이미지일 수 있으므로 그림자로 확보한다(스크림을 깔면 이미지가 죽는다). */
