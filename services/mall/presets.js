@@ -167,10 +167,17 @@ const PRESETS = {
             use_mega_menu: 0,
             use_search_bar: 1,
         },
-        /* 분리형일 때만 오버레이 헤더를 쓴다. 통합형을 고르면 드로어 헤더가 되어 투명 오버레이는 포기한다. */
+        /*
+         * 통합형이어도 오버레이 헤더를 유지한다 — 투명 오버레이 + 풀블리드가 이 테마의 정체성이라,
+         * 드로어 스킨으로 바꾸면 "테마 3을 골랐는데 테마 3이 아닌" 화면이 된다.
+         *
+         * 이래도 깨지지 않는 이유: 통합형에서 buildUnified 가 categoryButton 을 null 로 주고,
+         * 이 스킨은 `if (_catBtn)` 일 때만 카테고리 버튼을 그린다. 즉 카테고리는 가운데 메뉴에
+         * 합쳐지고 버튼은 사라진다 — 중복이 생기지 않는다.
+         */
         headerLayoutByMenuMode: {
             split: 'editorial_overlay_v1',
-            unified: 'compact_drawer_v1',
+            unified: 'editorial_overlay_v1',
         },
         featureMenus: FEATURE_MENUS,
         theme: {

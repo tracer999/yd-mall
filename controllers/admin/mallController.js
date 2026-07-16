@@ -144,7 +144,15 @@ exports.getNew = async (req, res) => {
 
 exports.getEdit = async (req, res) => {
     try {
-        const [[mall]] = await pool.query('SELECT * FROM mall WHERE id = ?', [req.params.id]);
+        /*
+         * navigation_config 를 조인한다 — 폼의 '메뉴 구성 방식'이 지금 값을 고른 채로 떠야 한다.
+         * mall 만 읽으면 nav_mode 가 undefined 라 통합형으로 쓰던 몰이 매번 분리형으로 보인다.
+         */
+        const [[mall]] = await pool.query(`
+            SELECT m.*, n.header_layout_type, n.nav_mode
+              FROM mall m
+              LEFT JOIN navigation_config n ON n.mall_id = m.id
+             WHERE m.id = ?`, [req.params.id]);
         if (!mall) return res.redirect('/admin/malls?error=' + encodeURIComponent('몰을 찾을 수 없습니다.'));
         await renderForm(res, mall, {
             saved: req.query.saved === '1',
