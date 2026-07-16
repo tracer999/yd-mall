@@ -35,8 +35,8 @@ module.exports = async (req, res, next) => {
         );
         res.locals.siteSettings = rows[0] || Object.assign({}, HARD_DEFAULT);
 
-        // 카테고리는 글로벌 한 벌 — 사이드바엔 "이 몰에 상품이 있는(유효)" 것만.
-        const _valid = await categoryScope.validCategoryIdSet(mallId);
+        // 카테고리는 글로벌 한 벌 — 사이드바엔 "이 몰에 상품이 있는(유효)" 것에서 몰별 숨김을 뺀 것.
+        const _valid = await categoryScope.visibleCategoryIdSet(mallId);
         const [_allCats] = await pool.query(
             'SELECT id, name FROM categories WHERE mall_id IN (0, ?) ORDER BY display_order ASC', [mallId]
         );

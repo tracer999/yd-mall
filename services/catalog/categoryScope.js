@@ -35,4 +35,40 @@ async function validCategoryIdSet(mallId, { brand = false } = {}) {
     return set;
 }
 
-module.exports = { GLOBAL_CATEGORY_MALL_ID, validCategoryIdSet };
+/**
+ * 몰별 "숨김" override 집합(mall_category_visibility, hidden=1).
+ * 스토어프론트 노출 = valid MINUS hidden. 카테고리·브랜드 공용(둘 다 categories.id).
+ * @param {number} mallId
+ * @returns {Promise<Set<number>>}
+ */
+async function hiddenCategoryIdSet(mallId) {
+    const set = new Set();
+    try {
+        const [rows] = await pool.query(
+            'SELECT category_id FROM mall_category_visibility WHERE mall_id = ? AND hidden = 1',
+            [mallId]
+        );
+        for (const r of rows) set.add(r.category_id);
+    } catch (e) {
+        // 테이블 미생성 등 — 숨김 없음으로 폴백(전환 안전).
+        if (e.code !== 'ER_NO_SUCH_TABLE') console.error('[categoryScope] hiddenCategoryIdSet:', e.message);
+    }
+    return set;
+}
+
+/**
+ * 스토어프론트에 실제로 노출할 카테고리/브랜드 id 집합 = valid − hidden.
+ * @param {number} mallId
+ * @param {{brand?:boolean}} opts
+ * @returns {Promise<Set<number>>}
+ */
+async function visibleCategoryIdSet(mallId, { brand = false } = {}) {
+    const [valid, hidden] = await Promise.all([
+        validCategoryIdSet(mallId, { brand }),
+        hiddenCategoryIdSet(mallId),
+    ]);
+    for (const id of hidden) valid.delete(id);
+    return valid;
+}
+
+module.exports = { GLOBAL_CATEGORY_MALL_ID, validCategoryIdSet, hiddenCategoryIdSet, visibleCategoryIdSet };

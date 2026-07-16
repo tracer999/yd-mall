@@ -291,10 +291,10 @@ exports.getList = async (req, res) => {
         const [products] = await pool.query(query, params);
         // 활성 특가를 read-time 으로 덮어쓴다. SELECT 절을 못 건드려서(카운트 쿼리가 문자열 치환) 후처리다.
         await dealSvc.applyDeals(products);
-        // 카테고리/브랜드는 글로벌 한 벌. 스토어프론트는 "이 몰에 상품이 있는(유효)" 것만 노출한다
-        // (products 기준 파생). 사이드바는 평면 목록이라 최상위(depth 1)만.
-        const _validCat = await categoryScope.validCategoryIdSet(mallId);
-        const _validBrand = await categoryScope.validCategoryIdSet(mallId, { brand: true });
+        // 카테고리/브랜드는 글로벌 한 벌. 스토어프론트는 "이 몰에 상품이 있는(유효)" 것에서
+        // 몰별 숨김(mall_category_visibility)을 뺀 것만 노출한다. 사이드바는 평면 목록이라 최상위(depth 1)만.
+        const _validCat = await categoryScope.visibleCategoryIdSet(mallId);
+        const _validBrand = await categoryScope.visibleCategoryIdSet(mallId, { brand: true });
         const [_allCats] = await pool.query(
             "SELECT * FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) AND is_active = 1 AND depth = 1 ORDER BY display_order ASC",
             [mallId]

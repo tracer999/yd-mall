@@ -2,7 +2,7 @@ const pool = require('../../config/db');
 const { syncCategoryById, deleteCategoryFromShopify } = require('../../services/shopify/categorySync');
 const depthGuard = require('../../services/tree/depthGuard');
 const newArrival = require('../../services/catalog/newArrival');
-const { GLOBAL_CATEGORY_MALL_ID } = require('../../services/catalog/categoryScope');
+const { GLOBAL_CATEGORY_MALL_ID, validCategoryIdSet, hiddenCategoryIdSet } = require('../../services/catalog/categoryScope');
 // 카테고리·브랜드는 글로벌 한 벌. 관리 화면은 몰 스코핑 없이 글로벌 카탈로그를 다룬다.
 // 상품 카운트(상품 있는 것만 노출)는 전 몰 통틀어 센다.
 
@@ -83,6 +83,16 @@ exports.getList = async (req, res) => {
 
         const nameById = new Map(categories.map(c => [c.id, c.name]));
 
+        // 몰별 표시 override — "이 몰(MALL_ID)에서 유효한(상품 있는) 카테고리/브랜드"만 토글 대상.
+        // hidden(mall_category_visibility) 이면 그 몰 스토어프론트에서 숨김.
+        const [mallValidCat, mallValidBrand, mallHidden] = await Promise.all([
+            validCategoryIdSet(MALL_ID),
+            validCategoryIdSet(MALL_ID, { brand: true }),
+            hiddenCategoryIdSet(MALL_ID),
+        ]);
+        const [[mallRow]] = await pool.query('SELECT name FROM mall WHERE id = ?', [MALL_ID]).catch(() => [[null]]);
+        const currentMallName = (mallRow && mallRow.name) || `몰 ${MALL_ID}`;
+
         // 부모 후보(parentOptions)를 노드마다 만들면 O(n^3) 이다(노드별 flattenTree + descendantIds).
         // 브랜드가 1354개인 mall 2 에서 응답이 18MB/70초로 터져 잘린 HTML 이 나갔다.
         // → 트리는 type 당 1회만 만들고, 부모 후보는 type 당 1벌(addParentOptions)을 뷰가
@@ -101,12 +111,16 @@ exports.getList = async (req, res) => {
                 childCountBy.set(r.parent_id, (childCountBy.get(r.parent_id) || 0) + 1);
             }
 
+            const mallValid = type === 'BRAND' ? mallValidBrand : mallValidCat;
             byType[type] = tree.map(node => Object.assign({}, node, {
                 // NORMAL 은 category_id, BRAND 는 brand_category_id 기준 카운트
                 productCount: (type === 'BRAND' ? brandCountBy : productCountBy).get(node.id) || 0,
                 childCount: childCountBy.get(node.id) || 0,
                 // select 초기 렌더용 — 현재 부모 1개만 option 으로 찍는다.
                 parentName: node.parent_id ? (nameById.get(node.parent_id) || '') : '',
+                // 몰별 표시 토글용. validForMall=이 몰에 상품이 있어 애초에 노출되는가, hiddenForMall=override 로 숨김.
+                validForMall: mallValid.has(node.id),
+                hiddenForMall: mallHidden.has(node.id),
             }));
         }
 
@@ -191,6 +205,7 @@ exports.getList = async (req, res) => {
             error: req.query.error || '',
             saved: req.query.saved === '1',
             showEmpty,
+            currentMallName,
         });
     } catch (err) {
         console.error('[category] getList:', err.message);
@@ -369,6 +384,41 @@ exports.postVisibility = async (req, res) => {
         res.status(500).send('Server Error');
     } finally {
         conn.release();
+    }
+};
+
+/**
+ * POST /admin/categories/mall-visibility — 몰별 표시 override 토글(1건).
+ *
+ * 카테고리·브랜드는 글로벌 한 벌이라 is_active/pc/mo 는 전역이다. 이건 그와 별개로
+ * "이 몰(req.adminMallId) 스토어프론트에서 이 카테고리를 숨긴다"만 담는다.
+ *   visible=1 → override 제거(기본 노출 복귀)  /  visible=0 → hidden=1 upsert
+ * 표시여부는 내비/사이드바 노출에만 영향(직접 URL 은 막지 않음).
+ *
+ * body: category_id, visible(체크박스 쌍 → toBool), active_tab
+ */
+exports.postMallVisibility = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const activeTab = normalizeTab(req.body.active_tab);
+    const categoryId = Number(req.body.category_id);
+    const visible = toBool(req.body.visible);
+    try {
+        if (!Number.isInteger(categoryId) || categoryId <= 0) {
+            return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
+        }
+        if (visible) {
+            await pool.query('DELETE FROM mall_category_visibility WHERE mall_id = ? AND category_id = ?', [mallId, categoryId]);
+        } else {
+            await pool.query(
+                'INSERT INTO mall_category_visibility (mall_id, category_id, hidden) VALUES (?, ?, 1) ' +
+                'ON DUPLICATE KEY UPDATE hidden = 1',
+                [mallId, categoryId]
+            );
+        }
+        res.redirect(`/admin/categories?tab=${activeTab}&saved=1`);
+    } catch (err) {
+        console.error('[category] postMallVisibility:', err.message);
+        res.status(500).send('Server Error');
     }
 };
 
