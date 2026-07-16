@@ -57,7 +57,7 @@ const toJs = (v) => JSON.stringify(v)
     </div>
 <% } %>
 
-<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">
+<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6 flex items-center justify-between">
     <nav class="-mb-px flex space-x-8" aria-label="Tabs">
         <% TABS.forEach(tab => { %>
             <button onclick="switchTab('<%= tab.key %>')" id="tab-<%= tab.key %>" type="button"
@@ -66,6 +66,12 @@ const toJs = (v) => JSON.stringify(v)
             </button>
         <% }) %>
     </nav>
+    <%# 상품 있는 카테고리/브랜드만 노출(기본). 빈 항목 관리 시 토글 (설계 §10-3) %>
+    <% const _te = (typeof showEmpty !== 'undefined' && showEmpty); %>
+    <a href="?tab=<%= activeTab %><%= _te ? '' : '&showEmpty=1' %>"
+       class="text-xs px-3 py-1.5 rounded-lg border <%= _te ? 'border-gray-300 bg-white text-gray-600' : 'border-indigo-200 bg-indigo-50 text-indigo-700' %> hover:bg-gray-50 no-underline self-center">
+        <%= _te ? '상품 있는 것만 보기' : '빈 항목 포함 보기' %>
+    </a>
 </div>
 
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

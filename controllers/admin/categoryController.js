@@ -65,6 +65,11 @@ exports.getList = async (req, res) => {
             'SELECT p.category_id, COUNT(*) AS n FROM products p WHERE p.category_id IS NOT NULL AND p.mall_id = ? GROUP BY p.category_id', [MALL_ID]
         );
         const productCountBy = new Map(counts.map(c => [c.category_id, c.n]));
+        // 브랜드는 products.brand_category_id 로 센다(카테고리 축과 별개).
+        const [brandCounts] = await pool.query(
+            'SELECT p.brand_category_id, COUNT(*) AS n FROM products p WHERE p.brand_category_id IS NOT NULL AND p.mall_id = ? GROUP BY p.brand_category_id', [MALL_ID]
+        );
+        const brandCountBy = new Map(brandCounts.map(c => [c.brand_category_id, c.n]));
 
         const maxDepth = await depthGuard.getCategoryMaxDepth(MALL_ID);
         const maxParent = maxDepth - 1; // 부모가 될 수 있는 최대 depth
@@ -90,11 +95,34 @@ exports.getList = async (req, res) => {
             }
 
             byType[type] = tree.map(node => Object.assign({}, node, {
-                productCount: productCountBy.get(node.id) || 0,
+                // NORMAL 은 category_id, BRAND 는 brand_category_id 기준 카운트
+                productCount: (type === 'BRAND' ? brandCountBy : productCountBy).get(node.id) || 0,
                 childCount: childCountBy.get(node.id) || 0,
                 // select 초기 렌더용 — 현재 부모 1개만 option 으로 찍는다.
                 parentName: node.parent_id ? (nameById.get(node.parent_id) || '') : '',
             }));
+        }
+
+        /*
+         * "상품 있는 것만 노출" (설계 §10-3·4). 빈 카테고리/브랜드는 숨긴다.
+         * 단 트리라서 **자손에 상품이 있으면 조상은 보존**(경로 유지). ?showEmpty=1 이면 전체.
+         * NORMAL·BRAND 에만 적용(THEME 은 기존대로).
+         */
+        const showEmpty = req.query.showEmpty === '1';
+        if (!showEmpty) {
+            const parentOf = new Map(categories.map(c => [c.id, c.parent_id || null]));
+            for (const type of ['NORMAL', 'BRAND']) {
+                if (!byType[type]) continue;
+                const cnt = type === 'BRAND' ? brandCountBy : productCountBy;
+                const keep = new Set();
+                for (const node of byType[type]) {
+                    if ((cnt.get(node.id) || 0) > 0) {
+                        let cur = node.id;
+                        while (cur && !keep.has(cur)) { keep.add(cur); cur = parentOf.get(cur); }
+                    }
+                }
+                byType[type] = byType[type].filter(n => keep.has(n.id));
+            }
         }
 
         const nextDisplayOrder = {};
@@ -155,6 +183,7 @@ exports.getList = async (req, res) => {
             newBrandDays: newArrival.newBrandDays(),
             error: req.query.error || '',
             saved: req.query.saved === '1',
+            showEmpty,
         });
     } catch (err) {
         console.error('[category] getList:', err.message);
