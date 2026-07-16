@@ -97,7 +97,7 @@ async function resolveTarget(mallId, linkType, rawTarget) {
 
     const wantType = linkType === 'BRAND' ? 'BRAND' : 'NORMAL';
     const [[row]] = await pool.query(
-        'SELECT id FROM categories WHERE id = ? AND mall_id = ? AND is_active = 1 AND type = ? LIMIT 1',
+        'SELECT id FROM categories WHERE id = ? AND mall_id IN (0, ?) AND is_active = 1 AND type = ? LIMIT 1',
         [id, mallId, wantType]
     );
     return row ? id : null;

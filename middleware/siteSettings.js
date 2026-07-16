@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const categoryScope = require('../services/catalog/categoryScope');
 const { getMalls } = require('./mallContext');
 
 /*
@@ -34,11 +35,12 @@ module.exports = async (req, res, next) => {
         );
         res.locals.siteSettings = rows[0] || Object.assign({}, HARD_DEFAULT);
 
-        // 카테고리도 몰 스코프 — 전역으로 두면 상품목록 사이드바에 다른 몰 카테고리가 샌다.
-        const [categories] = await pool.query(
-            'SELECT id, name FROM categories WHERE mall_id = ? ORDER BY display_order ASC', [mallId]
+        // 카테고리는 글로벌 한 벌 — 사이드바엔 "이 몰에 상품이 있는(유효)" 것만.
+        const _valid = await categoryScope.validCategoryIdSet(mallId);
+        const [_allCats] = await pool.query(
+            'SELECT id, name FROM categories WHERE mall_id IN (0, ?) ORDER BY display_order ASC', [mallId]
         );
-        res.locals.categories = categories || [];
+        res.locals.categories = _allCats.filter((c) => _valid.has(c.id));
         next();
     } catch (err) {
         console.error('Site Settings Middleware Error:', err);

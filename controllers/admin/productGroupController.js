@@ -207,11 +207,11 @@ exports.getList = async (req, res) => {
 /** 편집 화면(신규/수정 공용) */
 async function renderForm(res, group, mallId, extra = {}) {
     const [categories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order, id", [mallId]
+        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
     );
     // 수동 선택 팝업의 브랜드 필터용 — 상품의 brand_category_id 는 type='BRAND' 카테고리를 가리킨다.
     const [brands] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order, id", [mallId]
+        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
     );
 
     let items = [];

@@ -242,10 +242,10 @@ async function renderForm(res, deal, mallId, extra = {}) {
 
     // 상품 조회 팝업 필터 (product-groups 와 동일)
     const [productCategories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order, id", [mallId]
+        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
     );
     const [brands] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order, id", [mallId]
+        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
     );
 
     res.render('admin/deals/form', Object.assign({

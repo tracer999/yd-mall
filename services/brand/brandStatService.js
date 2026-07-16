@@ -18,7 +18,7 @@ const NEW_DAYS = 30;
 /** 카테고리 id → 루트 카테고리 id */
 async function buildRootMap(mallId) {
     const [cats] = await pool.query(
-        'SELECT id, parent_id FROM categories WHERE mall_id = ? AND type = ?', [mallId, 'NORMAL']
+        'SELECT id, parent_id FROM categories WHERE mall_id IN (0, ?) AND type = ?', [mallId, 'NORMAL']
     );
     const parentOf = new Map(cats.map(c => [c.id, c.parent_id]));
     const rootOf = new Map();
@@ -110,7 +110,7 @@ async function recalcMall(mallId) {
     const wView = (cfg?.weight_view ?? 0) || 1;
 
     const [brands] = await pool.query(
-        'SELECT id FROM categories WHERE type = ? AND mall_id = ?', ['BRAND', mallId]
+        'SELECT id FROM categories WHERE type = ? AND mall_id IN (0, ?)', ['BRAND', mallId]
     );
     if (!brands.length) return { brands: 0 };
 

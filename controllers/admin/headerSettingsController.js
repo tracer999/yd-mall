@@ -79,7 +79,7 @@ async function loadConfig(mallId) {
 
 /** 현재 카테고리 데이터의 최대 depth (없으면 1) */
 async function currentMaxCategoryDepth(mallId) {
-    const [[r]] = await pool.query('SELECT COALESCE(MAX(depth), 1) AS d FROM categories WHERE mall_id = ?', [mallId]);
+    const [[r]] = await pool.query('SELECT COALESCE(MAX(depth), 1) AS d FROM categories WHERE mall_id IN (0, ?)', [mallId]);
     return Number(r.d) || 1;
 }
 

@@ -37,7 +37,7 @@ async function generateSitemap() {
 
     // 2. 카테고리 페이지
     const [categories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY display_order ASC",
+        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY display_order ASC",
         [mallId]
     );
     categories.forEach(cat => {
@@ -50,7 +50,7 @@ async function generateSitemap() {
 
     // 3. 브랜드 상세관
     const [brands] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC",
+        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order ASC",
         [mallId]
     );
     brands.forEach(brand => {

@@ -167,7 +167,7 @@ exports.postUpdate = async (req, res) => {
     const conn = await pool.getConnection();
     try {
         const [[owned]] = await conn.query(
-            "SELECT id, name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id = ?", [id, mallId]
+            "SELECT id, name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id IN (0, ?)", [id, mallId]
         );
         if (!owned) return res.status(404).send('Not Found');
 

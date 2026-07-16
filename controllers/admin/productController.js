@@ -548,8 +548,8 @@ exports.postReorderRecommendations = async (req, res) => {
 exports.getAdd = async (req, res) => {
     try {
         const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
-        const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);
-        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);
+        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order ASC, id ASC", [_mallId]);
         const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
         const domain = domainFromSettings.replace(/\/$/, '');
         const productUrlBase = domain + '/products/';
@@ -901,7 +901,7 @@ exports.postEdit = async (req, res) => {
 async function categorySubtreeIds(mallId, categoryId) {
     const [rows] = await pool.query(`
         WITH RECURSIVE sub AS (
-            SELECT id FROM categories WHERE id = ? AND mall_id = ?
+            SELECT id FROM categories WHERE id = ? AND mall_id IN (0, ?)
             UNION ALL
             SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
         )
@@ -1097,8 +1097,8 @@ exports.getEdit = async (req, res) => {
         if (rows.length === 0) return res.redirect('/admin/products');
 
         // P5: 편집 중인 몰의 카테고리만
-        const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id = ? ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);
-        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC", [_mallId]);
+        const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);
+        const [brands] = await pool.query("SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order ASC, id ASC", [_mallId]);
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
 
         rows[0].images = images;

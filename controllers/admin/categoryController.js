@@ -2,6 +2,9 @@ const pool = require('../../config/db');
 const { syncCategoryById, deleteCategoryFromShopify } = require('../../services/shopify/categorySync');
 const depthGuard = require('../../services/tree/depthGuard');
 const newArrival = require('../../services/catalog/newArrival');
+const { GLOBAL_CATEGORY_MALL_ID } = require('../../services/catalog/categoryScope');
+// 카테고리·브랜드는 글로벌 한 벌. 관리 화면은 몰 스코핑 없이 글로벌 카탈로그를 다룬다.
+// 상품 카운트(상품 있는 것만 노출)는 전 몰 통틀어 센다.
 
 /*
  * 카테고리 관리 (B1 — 트리 + 최대 3뎁스)
@@ -60,14 +63,18 @@ function flattenTree(rows, parentId = null, depth = 1, out = []) {
 exports.getList = async (req, res) => {
     const MALL_ID = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
     try {
-        const [categories] = await pool.query('SELECT * FROM categories WHERE mall_id = ? ORDER BY display_order ASC, id ASC', [MALL_ID]);
+        // 글로벌 카탈로그(NORMAL·BRAND=mall 0). THEME 등 잔존 몰별 타입도 함께 보이도록 IN.
+        const [categories] = await pool.query(
+            'SELECT * FROM categories WHERE mall_id IN (?, ?) ORDER BY display_order ASC, id ASC',
+            [GLOBAL_CATEGORY_MALL_ID, MALL_ID]
+        );
+        // 상품 카운트는 전 몰 통틀어(글로벌 카탈로그이므로).
         const [counts] = await pool.query(
-            'SELECT p.category_id, COUNT(*) AS n FROM products p WHERE p.category_id IS NOT NULL AND p.mall_id = ? GROUP BY p.category_id', [MALL_ID]
+            'SELECT p.category_id, COUNT(*) AS n FROM products p WHERE p.category_id IS NOT NULL GROUP BY p.category_id'
         );
         const productCountBy = new Map(counts.map(c => [c.category_id, c.n]));
-        // 브랜드는 products.brand_category_id 로 센다(카테고리 축과 별개).
         const [brandCounts] = await pool.query(
-            'SELECT p.brand_category_id, COUNT(*) AS n FROM products p WHERE p.brand_category_id IS NOT NULL AND p.mall_id = ? GROUP BY p.brand_category_id', [MALL_ID]
+            'SELECT p.brand_category_id, COUNT(*) AS n FROM products p WHERE p.brand_category_id IS NOT NULL GROUP BY p.brand_category_id'
         );
         const brandCountBy = new Map(brandCounts.map(c => [c.brand_category_id, c.n]));
 
@@ -224,7 +231,8 @@ exports.postAdd = async (req, res) => {
         // 부모.depth + 1 > 최대뎁스 → DepthLimitError
         const depth = await depthGuard.assertDepthAllowed({ parentId, conn });
 
-        const MALL_ID = req.adminMallId || 1; // P5: 새 카테고리는 편집 중인 몰에 속한다
+        // NORMAL·BRAND 는 글로벌(mall 0). THEME/OUTLET 만 편집 중인 몰에 속한다.
+        const MALL_ID = (allowedType === 'THEME' || allowedType === 'OUTLET') ? (req.adminMallId || 1) : GLOBAL_CATEGORY_MALL_ID;
         let nextOrder = Number.parseInt(display_order, 10);
         if (Number.isNaN(nextOrder)) {
             const [rows] = await conn.query(
@@ -275,7 +283,7 @@ exports.postEdit = async (req, res) => {
     const conn = await pool.getConnection();
     try {
         // P5: 편집 중인 몰 소유 카테고리만 수정(크로스몰 덮어쓰기 방지)
-        const [[current]] = await conn.query('SELECT parent_id FROM categories WHERE id = ? AND mall_id = ?', [nodeId, MALL_ID]);
+        const [[current]] = await conn.query('SELECT parent_id FROM categories WHERE id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]);
         if (!current) return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
 
         const parentChanged = (current.parent_id || null) !== newParentId;
@@ -296,7 +304,7 @@ exports.postEdit = async (req, res) => {
             `UPDATE categories
              SET name = ?, display_order = ?, type = ?, logo_image_path = ?, onboarded_at = ?, description = ?, parent_id = ?,
                  is_active = ?, pc_visible = ?, mobile_visible = ?
-             WHERE id = ? AND mall_id = ?`,
+             WHERE id = ? AND mall_id IN (0, ?)`,
             [name, display_order, allowedType, logoPath, onboardedAt, description, newParentId,
              toBool(req.body.is_active), toBool(req.body.pc_visible), toBool(req.body.mobile_visible), nodeId, MALL_ID]
         );
@@ -349,7 +357,7 @@ exports.postVisibility = async (req, res) => {
         for (const id of ids) {
             await conn.query(
                 `UPDATE categories SET is_active = ?, pc_visible = ?, mobile_visible = ?
-                  WHERE id = ? AND mall_id = ?`,
+                  WHERE id = ? AND mall_id IN (0, ?)`,
                 [on(req.body.active, id), on(req.body.pc, id), on(req.body.mo, id), id, mallId],
             );
         }
@@ -372,7 +380,7 @@ exports.postDelete = async (req, res) => {
 
     try {
         // P5: 편집 중인 몰 소유 카테고리만 삭제(크로스몰 삭제·Shopify 오발화 방지)
-        const [[owned]] = await pool.query('SELECT id FROM categories WHERE id = ? AND mall_id = ?', [nodeId, MALL_ID]);
+        const [[owned]] = await pool.query('SELECT id FROM categories WHERE id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]);
         if (!owned) return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
 
         /*
@@ -381,7 +389,7 @@ exports.postDelete = async (req, res) => {
          * → 하위 카테고리가 있으면 삭제를 막는다.
          */
         const [[{ n: childCount }]] = await pool.query(
-            'SELECT COUNT(*) AS n FROM categories WHERE parent_id = ? AND mall_id = ?', [nodeId, MALL_ID]
+            'SELECT COUNT(*) AS n FROM categories WHERE parent_id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]
         );
         if (childCount > 0) {
             return redirectWithError(res, activeTab,
@@ -393,7 +401,7 @@ exports.postDelete = async (req, res) => {
         await deleteCategoryFromShopify(nodeId)
             .catch(e => console.error(`[Shopify] 카테고리 컬렉션 삭제 실패 (id=${nodeId}): ${e.message}`));
 
-        await pool.query('DELETE FROM categories WHERE id = ? AND mall_id = ?', [nodeId, MALL_ID]);
+        await pool.query('DELETE FROM categories WHERE id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]);
         res.redirect(`/admin/categories?tab=${activeTab}`);
     } catch (err) {
         console.error('[category] postDelete:', err.message);

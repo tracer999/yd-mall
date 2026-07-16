@@ -5,6 +5,7 @@ const dealSvc = require('../services/deal/dealService');
 const outletService = require('../services/outlet/outletService');
 const optionService = require('../services/catalog/optionService');
 const compositeService = require('../services/catalog/compositeService');
+const categoryScope = require('../services/catalog/categoryScope');
 
 /**
  * 폐기된 THEME 카테고리 → 대체 기능 메뉴.
@@ -186,7 +187,7 @@ exports.getList = async (req, res) => {
         if (selectedBrandId) {
             // P5 몰 스코프 — 다른 몰 브랜드 id 로 접근하면 제목만 그 브랜드로 바뀌고 목록은 0건이 된다.
             const [brandRows] = await pool.query(
-                "SELECT id, name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id = ?",
+                "SELECT id, name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id IN (0, ?)",
                 [selectedBrandId, mallId]
             );
             if (brandRows.length > 0) {
@@ -290,16 +291,20 @@ exports.getList = async (req, res) => {
         const [products] = await pool.query(query, params);
         // 활성 특가를 read-time 으로 덮어쓴다. SELECT 절을 못 건드려서(카운트 쿼리가 문자열 치환) 후처리다.
         await dealSvc.applyDeals(products);
-        // P5 몰 스코프 — 없으면 사이드바에 다른 몰 카테고리·브랜드가 섞인다.
-        // 사이드바는 평면 목록이므로 최상위(depth 1)만 올린다. 하위는 카테고리 패널이 담당.
-        const [categories] = await pool.query(
-            "SELECT * FROM categories WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1 AND depth = 1 ORDER BY display_order ASC",
+        // 카테고리/브랜드는 글로벌 한 벌. 스토어프론트는 "이 몰에 상품이 있는(유효)" 것만 노출한다
+        // (products 기준 파생). 사이드바는 평면 목록이라 최상위(depth 1)만.
+        const _validCat = await categoryScope.validCategoryIdSet(mallId);
+        const _validBrand = await categoryScope.validCategoryIdSet(mallId, { brand: true });
+        const [_allCats] = await pool.query(
+            "SELECT * FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) AND is_active = 1 AND depth = 1 ORDER BY display_order ASC",
             [mallId]
         );
-        const [brands] = await pool.query(
-            "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id = ? ORDER BY display_order ASC, id ASC",
+        const categories = _allCats.filter((c) => _validCat.has(c.id));
+        const [_allBrands] = await pool.query(
+            "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order ASC, id ASC",
             [mallId]
         );
+        const brands = _allBrands.filter((b) => _validBrand.has(b.id));
 
         const siteSettings = res.locals.siteSettings || {};
         const companyName = siteSettings.company_name || '와이디몰';

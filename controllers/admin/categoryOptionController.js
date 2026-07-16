@@ -11,7 +11,7 @@ exports.getEditor = async (req, res) => {
     const mallId = req.adminMallId || 1;
     try {
         const [categories] = await pool.query(
-            "SELECT id, name, depth, parent_id FROM categories WHERE mall_id = ? AND type = 'NORMAL' ORDER BY parent_id IS NULL DESC, parent_id, display_order, id",
+            "SELECT id, name, depth, parent_id FROM categories WHERE mall_id IN (0, ?) AND type = 'NORMAL' ORDER BY parent_id IS NULL DESC, parent_id, display_order, id",
             [mallId]
         );
         const dictionary = await categoryOptionService.getOptionDictionary(mallId);
@@ -47,7 +47,7 @@ exports.postSave = async (req, res) => {
     const mallId = req.adminMallId || 1;
     const categoryId = Number(req.params.categoryId);
     try {
-        const [[cat]] = await pool.query('SELECT id FROM categories WHERE id = ? AND mall_id = ?', [categoryId, mallId]);
+        const [[cat]] = await pool.query('SELECT id FROM categories WHERE id = ? AND mall_id IN (0, ?)', [categoryId, mallId]);
         if (!cat) return res.status(404).json({ ok: false, message: '카테고리를 찾을 수 없습니다.' });
 
         const conn = await pool.getConnection();

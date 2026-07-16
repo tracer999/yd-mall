@@ -1,6 +1,9 @@
 const pool = require('../../config/db');
 const depthGuard = require('../tree/depthGuard');
 const { toChosung, toInitial } = require('../../shared/hangul');
+const { GLOBAL_CATEGORY_MALL_ID } = require('./categoryScope');
+// 카테고리·브랜드는 글로벌 한 벌(설계 §글로벌화). 이 파일은 NORMAL/BRAND 전용이라
+// 넘어온 mallId 를 무시하고 글로벌 sentinel 로 강제한다.
 
 /*
  * 카테고리·브랜드 자동 선별/생성 엔진 (Standard 트랙 — AI 불필요)
@@ -103,6 +106,7 @@ function bestScoreAgainst(query, names) {
 /** 신규 카테고리/브랜드를 가드 경유해 생성한다. parentId 지정 시 그 아래 자식으로(계층 생성).
  *  pcVisible/mobileVisible 기본 1(노출). "미분류" 폴백만 0(고객 숨김)으로 만든다. */
 async function createCategory({ mallId, name, type, conn = pool, pcVisible = 1, mobileVisible = 1, parentId = null }) {
+    mallId = GLOBAL_CATEGORY_MALL_ID;
     // parentId=null → depth 1. 지정 시 부모.depth+1 (뎁스 상한 초과면 DepthLimitError)
     const depth = await depthGuard.assertDepthAllowed({ parentId, conn });
 
@@ -153,6 +157,7 @@ async function createCategory({ mallId, name, type, conn = pool, pcVisible = 1, 
  *          name 이 비면 null. create=false 이고 매칭 실패면 {id:null,...}.
  */
 async function resolveOrCreateCategory({ mallId, name, type = 'NORMAL', create = true, conn = pool }) {
+    mallId = GLOBAL_CATEGORY_MALL_ID;
     const trimmed = String(name || '').trim();
     if (!trimmed) return null;
 
@@ -182,6 +187,7 @@ async function resolveOrCreateCategory({ mallId, name, type = 'NORMAL', create =
 
 /** 같은 부모 아래 형제 중 이름이 일치(정규화 기준)하는 카테고리 id. 없으면 null. */
 async function findChildByName({ mallId, type, parentId, name, conn = pool }) {
+    mallId = GLOBAL_CATEGORY_MALL_ID;
     const norm = normalizeName(name);
     if (!norm) return null;
     const [rows] = await conn.query(
@@ -205,6 +211,7 @@ async function findChildByName({ mallId, type, parentId, name, conn = pool }) {
  * @returns {Promise<{id:number|null, name:string, created:boolean}|null>} 리프 카테고리
  */
 async function resolveOrCreatePath({ mallId, path, type = 'NORMAL', conn = pool }) {
+    mallId = GLOBAL_CATEGORY_MALL_ID;
     let segments = String(path || '').split('>').map((s) => s.trim()).filter(Boolean);
     if (!segments.length) return null;
     if (segments.length === 1) {
@@ -247,6 +254,7 @@ function resolveOrCreateBrand({ mallId, name, create = true, conn = pool }) {
  * @returns {Promise<number>} 미분류 카테고리 id
  */
 async function getUncategorizedCategoryId({ mallId, conn = pool }) {
+    mallId = GLOBAL_CATEGORY_MALL_ID;
     const [[existing]] = await conn.query(
         "SELECT id FROM categories WHERE mall_id = ? AND type = 'NORMAL' AND name = ? LIMIT 1",
         [mallId, UNCATEGORIZED_NAME]

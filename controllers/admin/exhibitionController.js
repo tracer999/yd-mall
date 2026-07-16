@@ -68,7 +68,7 @@ async function findOwned(mallId, id) {
 async function resolveOwnedBrandId(mallId, brandCategoryId) {
     if (!brandCategoryId) return null;
     const [[row]] = await pool.query(
-        "SELECT id FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id = ?",
+        "SELECT id FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id IN (0, ?)",
         [brandCategoryId, mallId]
     );
     return row ? brandCategoryId : null;
@@ -170,7 +170,7 @@ async function renderForm(req, res, exhibition, extra = {}) {
     let ownedBrandName = null;
     if (exhibition.brand_category_id) {
         const [[b]] = await pool.query(
-            "SELECT name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id = ?",
+            "SELECT name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id IN (0, ?)",
             [exhibition.brand_category_id, exhibition.mall_id]
         );
         ownedBrandName = b?.name || null;

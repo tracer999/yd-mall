@@ -143,7 +143,7 @@ exports.getAdd = async (req, res) => {
         const currentMenuKey = menuTargets.some(t => t.key === requested) ? requested : '';
 
         const [categories] = await pool.query(
-            'SELECT id, name, type FROM categories WHERE mall_id = ? ORDER BY display_order ASC, id ASC',
+            'SELECT id, name, type FROM categories WHERE mall_id IN (0, ?) ORDER BY display_order ASC, id ASC',
             [req.adminMallId || 1]
         );
         res.render('admin/banners/form', {
@@ -293,7 +293,7 @@ exports.getEdit = async (req, res) => {
         const currentMenuKey = isMenuBanner ? banner.group_key.slice('menu:'.length) : '';
 
         const [categories] = await pool.query(
-            'SELECT id, name, type FROM categories WHERE mall_id = ? ORDER BY display_order ASC, id ASC',
+            'SELECT id, name, type FROM categories WHERE mall_id IN (0, ?) ORDER BY display_order ASC, id ASC',
             [req.adminMallId || 1]
         );
         res.render('admin/banners/form', {
