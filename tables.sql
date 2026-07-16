@@ -1563,3 +1563,42 @@ CREATE TABLE IF NOT EXISTS `membership_config` (
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`mall_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='몰별 멤버십 운영 설정';
+
+-- =============================================================================
+-- 서비스 관리 (몰 빌더 제공자 전용) — scripts/migrate_service_management_tables.js
+--   service_plan       판매 등급(플랜)별 기능 entitlement
+--   delivery_customer  납품 고객(테넌트) 레지스트리
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `service_plan` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `plan_code` varchar(50) NOT NULL COMMENT '등급 코드(고정 식별자)',
+  `name` varchar(100) NOT NULL COMMENT '등급명',
+  `description` varchar(255) DEFAULT NULL,
+  `max_submalls` int NOT NULL DEFAULT '1' COMMENT '서브몰 생성 가능 개수 (0=불가)',
+  `feat_naver_store` tinyint(1) NOT NULL DEFAULT '0' COMMENT '네이버 스토어 연동 여부',
+  `feat_wholesale` tinyint(1) NOT NULL DEFAULT '0' COMMENT '도매(도매꾹·온채널) 연동 여부',
+  `feat_ai_generation` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'AI 자동생성 가능 여부',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_service_plan_code` (`plan_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='판매 등급(플랜)별 기능 entitlement';
+
+CREATE TABLE IF NOT EXISTS `delivery_customer` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(150) NOT NULL COMMENT '납품 고객(업체)명',
+  `contact_name` varchar(100) DEFAULT NULL,
+  `contact_email` varchar(255) DEFAULT NULL,
+  `contact_phone` varchar(50) DEFAULT NULL,
+  `plan_id` bigint DEFAULT NULL COMMENT '배정 판매 등급(service_plan.id)',
+  `delivered_at` date DEFAULT NULL COMMENT '납품일',
+  `memo` varchar(500) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_delivery_customer_plan` (`plan_id`),
+  CONSTRAINT `fk_delivery_customer_plan` FOREIGN KEY (`plan_id`) REFERENCES `service_plan` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='납품 고객(테넌트) 레지스트리';

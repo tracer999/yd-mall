@@ -14,6 +14,9 @@ router.get('/logout', authController.logout);
 router.use(adminAuth); // Apply middleware to all routes below
 // 관리자 편집 몰 컨텍스트 (P5) — 인증된 관리자 요청에만. req.adminMallId 주입.
 router.use(require('../middleware/adminMallContext'));
+// 외부몰 연동 — 몰별 사용여부(유료) 주입 + 미사용 몰의 '외부몰 연동' 대메뉴 숨김.
+// adminMallContext(req.adminMallId)·adminMenu(res.locals.adminMenuTree) 이후에 마운트.
+router.use(require('../middleware/sourcingFlag').injectSourcingFlag);
 
 // 로그인 후 최초 진입 화면은 첫 번째 접근 가능 메뉴(기본: 몰 관리)로 보낸다.
 // 대시보드는 /admin/dashboard 로 분리되어 '운영/시스템 관리' 하위 메뉴로 접근한다.
@@ -98,5 +101,9 @@ router.use('/membership', requireMenuAccess('/admin/membership'), require('./adm
 router.use('/uploads', requireMenuAccess('/admin/uploads'), require('./admin/uploads'));
 router.use('/menus', requireMenuAccess('/admin/menus'), require('./admin/menus'));
 router.use('/shopify-orders', requireMenuAccess('/admin/shopify-orders'), require('./admin/shopify-orders'));
+// 외부몰 연동(도매꾹·온채널 → 빌더 → 스마트스토어). 화면 가드는 서브라우트 내부(사용여부 + 메뉴권한).
+router.use('/sourcing', require('./admin/sourcing'));
+// 서비스 관리(몰 빌더 제공자 전용) — 배포·포팅 / 등급별 기능 설정. 화면 단위 가드는 서브라우트 내부.
+router.use('/service', require('./admin/service'));
 
 module.exports = router;
