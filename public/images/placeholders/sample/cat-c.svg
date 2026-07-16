@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+<defs><linearGradient id="g749872835" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#c9a05b"/><stop offset="1" stop-color="#a8763a"/></linearGradient></defs>
+<rect width="240" height="240" fill="url(#g749872835)"/>
+<text x="50%" y="52%" fill="#ffffff" font-family="'Nanum Myeongjo',serif" font-size="34" font-weight="700" text-anchor="middle" dominant-baseline="middle" letter-spacing="1">푸드</text>
+
+</svg>

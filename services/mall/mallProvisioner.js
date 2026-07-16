@@ -208,11 +208,13 @@ async function applyHome(conn, mallId, mallCode, mallName, sections, overwrite, 
     for (const s of sections) {
         // 데이터 소스를 여기서 물려 준다. 안 물리면 리졸버가 0건을 보고 섹션을 통째로 버린다.
         const groupId = s.group ? (groupIdByKey[s.group] || null) : null;
+        // 프리셋이 섹션별 초기 설정을 지정하면 config_json 으로 심는다(테마 히어로 옵션 등).
+        const cfg = s.config && Object.keys(s.config).length ? JSON.stringify(s.config) : null;
         await conn.query(`
             INSERT INTO page_section
               (page_id, section_type, position, title, sort_order, data_source_type, data_source_id, config_json, is_active)
-            VALUES (?, ?, 'main_content', ?, ?, ?, ?, NULL, 1)`,
-            [pageId, s.type, s.title || null, sortOrder++, groupId ? 'product_group' : null, groupId]);
+            VALUES (?, ?, 'main_content', ?, ?, ?, ?, ?, 1)`,
+            [pageId, s.type, s.title || null, sortOrder++, groupId ? 'product_group' : null, groupId, cfg]);
     }
 
     return { pageId, replaced };

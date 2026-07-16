@@ -3,6 +3,7 @@ const mallContext = require('../../middleware/mallContext');
 const presets = require('../../services/mall/presets');
 const mallProvisioner = require('../../services/mall/mallProvisioner');
 const mallEraser = require('../../services/mall/mallEraser');
+const sampleSeeder = require('../../services/mall/sampleSeeder');
 
 /*
  * 몰 관리 (P5 관리자편 Phase 2 · 몰 빌더 P4) — `mall` 정의 테이블 CRUD + 프리셋 프로비저닝
@@ -158,6 +159,7 @@ exports.postAdd = async (req, res) => {
     const name = String(req.body.name || '').trim();
     const presetKey = pickPreset(req.body.preset_key);
     const wantDefault = !!req.body.is_default;
+    const wantSample = !!req.body.seed_sample;
     let code = normalizeCode(req.body.code);
 
     const conn = await pool.getConnection();
@@ -196,6 +198,20 @@ exports.postAdd = async (req, res) => {
     }
 
     mallContext.invalidate();
+
+    /*
+     * 샘플 데이터는 프로비저닝 **이전에** 심는다.
+     * provisionMall 이 트랜잭션 직후 베스트 랭킹을 집계(calculateAllPeriods)하는데,
+     * 샘플 상품이 그 전에 있어야 첫 스냅샷에 잡혀 베스트 캐러셀이 바로 뜬다.
+     * 실패해도 몰은 살린다(빈 몰로 만들어지고, 사용자가 상품을 직접 등록하면 된다).
+     */
+    if (wantSample) {
+        try {
+            await sampleSeeder.seedSampleData(newMallId);
+        } catch (err) {
+            console.error('[mall] 샘플 데이터 시딩 실패:', err.message);
+        }
+    }
 
     /*
      * 프로비저닝은 몰 생성 트랜잭션 **밖**에서 돈다.
@@ -279,9 +295,11 @@ exports.postProvision = async (req, res) => {
         });
 
         const note = result.homeReplaced
-            ? `프리셋 '${result.preset.label}' 적용 완료 — 홈 섹션을 교체하고 발행했습니다(rev.${result.revisionNo}).`
-            : `프리셋 '${result.preset.label}' 적용 완료 — 내비·메뉴·테마를 되돌렸습니다(홈 섹션은 유지).`;
-        res.redirect(`/admin/malls/${id}?notice=` + encodeURIComponent(note));
+            ? `테마 '${result.preset.label}' 적용 완료 — 홈 섹션을 교체하고 발행했습니다(rev.${result.revisionNo}).`
+            : `테마 '${result.preset.label}' 적용 완료 — 내비·메뉴·테마를 되돌렸습니다(홈 섹션은 유지).`;
+        // 페이지 빌더 이지 모드에서 왔으면 빌더로 되돌린다.
+        const dest = req.body.return_to === 'page-builder' ? '/admin/page-builder' : `/admin/malls/${id}`;
+        res.redirect(`${dest}?notice=` + encodeURIComponent(note));
     } catch (err) {
         console.error('[mall] postProvision:', err.message);
         res.redirect(`/admin/malls/${id}?error=` + encodeURIComponent(`프리셋 적용 실패: ${err.message}`));

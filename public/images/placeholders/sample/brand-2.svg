@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="220" viewBox="0 0 420 220">
+<defs><linearGradient id="g494214878" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#3a4550"/><stop offset="1" stop-color="#22303a"/></linearGradient></defs>
+<rect width="420" height="220" fill="url(#g494214878)"/>
+<text x="50%" y="46%" fill="#ffffff" font-family="'Nanum Myeongjo',serif" font-size="31" font-weight="700" text-anchor="middle" dominant-baseline="middle" letter-spacing="1">DAILY·LOG</text>
+<text x="50%" y="60%" fill="rgba(255,255,255,.82)" font-family="sans-serif" font-size="16" text-anchor="middle" dominant-baseline="middle" letter-spacing="3">BRAND</text>
+</svg>

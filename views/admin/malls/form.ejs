@@ -95,10 +95,10 @@
     <% if (isNew) { %>
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-          <h2 class="text-sm font-semibold text-gray-800">헤더 · GNB 스킨</h2>
+          <h2 class="text-sm font-semibold text-gray-800">테마 선택 <span class="text-gray-400 font-normal">(이지 모드)</span></h2>
           <p class="mt-0.5 text-xs text-gray-500">
-            이 몰의 <strong>메뉴 구조</strong>를 정합니다. 저장하면 스킨에 맞춰 <strong>GNB 메뉴 · 헤더 정책 · 테마 · 메인 화면 골격</strong>이 함께 채워집니다.
-            상품 수와는 무관하며, 나중에 <a href="/admin/header-settings" class="text-indigo-600 hover:underline">Header 설정</a>에서 바꿀 수 있습니다.
+            테마를 고르면 그에 맞는 <strong>디자인 · 헤더 · 메인 화면(베스트·쇼핑특가·베스트 카테고리·베스트 브랜드 캐러셀)</strong>이 자동으로 구성됩니다.
+            생성 후 <a href="/admin/page-builder" class="text-indigo-600 hover:underline">페이지 빌더(설정 모드)</a>에서 자유롭게 더하거나 바꿀 수 있습니다.
           </p>
         </div>
         <div class="p-5 space-y-3">
@@ -108,14 +108,23 @@
                      <%= currentPreset === p.key ? 'checked' : '' %>
                      class="mt-1 w-4 h-4 border-gray-300">
               <span class="flex-1">
-                <span class="block text-sm font-semibold text-gray-900"><%= p.label %></span>
-                <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= p.summary %></span>
-                <span class="mt-1.5 block text-[11px] text-gray-400 font-mono">
-                  nav_mode=<%= p.navigation.nav_mode %> · GNB <%= p.featureMenus.length %>개 · 홈 섹션 <%= p.homeSections.length %>개
+                <span class="flex items-center gap-2">
+                  <span class="text-sm font-semibold text-gray-900"><%= p.label %></span>
+                  <% if (p.skinLabel) { %><span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100"><%= p.skinLabel %></span><% } %>
                 </span>
+                <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= p.summary %></span>
               </span>
             </label>
           <% }); %>
+
+          <%# 샘플 데이터 — 갓 만든 몰은 상품이 없어 메인이 비므로, 최소 샘플을 함께 심어 바로 확인. %>
+          <label class="mt-2 flex items-start gap-2.5 p-3 rounded-lg border border-emerald-200 bg-emerald-50/40 cursor-pointer">
+            <input type="checkbox" name="seed_sample" value="1" checked class="mt-0.5 w-4 h-4 rounded border-emerald-300">
+            <span class="text-xs text-emerald-900 leading-relaxed">
+              <strong>샘플 데이터 포함</strong> — 카테고리 3 · 브랜드 2 · 상품 6 · 특가 1 을 함께 만들어
+              <strong>생성 직후 메인 화면이 바로 뜨게</strong> 합니다. 최소한만 넣으므로 상품 관리에서 쉽게 지우거나 바꿀 수 있습니다.
+            </span>
+          </label>
         </div>
       </div>
     <% } %>

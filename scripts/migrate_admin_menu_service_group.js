@@ -52,6 +52,9 @@ const MALL_LEAVES = [
 const SERVICE_LEAVES = [
     { path: '/admin/service/porting', name: '배포·포팅 관리', icon: 'bi bi-box-seam', order: 10 },
     { path: '/admin/service/features', name: '등급별 기능 설정', icon: 'bi bi-toggles', order: 20 },
+    // 몰 생성 시 새 몰로 복제되는 샘플 리소스(sample_category/product/hero_slide) 편집.
+    // 몰과 무관한 전역 데이터 = 몰들을 가로지르는 제어판 성격이라 여기에 둔다.
+    { path: '/admin/service/samples', name: '샘플 데이터 관리', icon: 'bi bi-collection', order: 30 },
 ];
 
 // --reset 시 되돌릴 원래 상태 (운영/시스템 관리 그룹으로 복귀 / 몰 관리는 최상위 잎)
@@ -177,7 +180,7 @@ async function reset(conn) {
     }
 
     // 서비스 전용 신설 잎/그룹 제거.
-    await conn.query("DELETE FROM admin_menus WHERE path IN ('/admin/service/porting', '/admin/service/features')");
+    await conn.query("DELETE FROM admin_menus WHERE path IN ('/admin/service/porting', '/admin/service/features', '/admin/service/samples')");
     for (const g of [SERVICE_GROUP, MALL_GROUP]) {
         const id = await findGroupId(conn, g);
         if (id) {

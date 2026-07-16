@@ -1,0 +1,169 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+    <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
+  </div>
+
+  <% if (saved) { %>
+    <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">저장되었습니다. 다음에 생성되는 몰부터 적용됩니다.</div>
+  <% } %>
+  <% if (msg) { %>
+    <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800"><%= msg %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800"><%= error %></div>
+  <% } %>
+
+  <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 space-y-1">
+    <div><i class="bi bi-info-circle mr-1"></i> <b>이미 만들어진 몰에는 영향이 없습니다.</b> 여기서 바꾼 값은 <b>앞으로 생성될 몰</b>에만 복제됩니다.</div>
+    <div><i class="bi bi-image mr-1"></i> 이미지 경로는 반드시 <code>/images/...</code> 로 시작해야 합니다. <code>/uploads/...</code> 는 <code>.gitignore</code> 라 <b>납품본에서 깨집니다.</b> 파일은 <code>public/images/sample/</code> 에 두세요.</div>
+  </div>
+
+  <form method="post" action="/admin/service/samples">
+
+    <!-- ========== 카테고리 + 브랜드 ========== -->
+    <section class="mb-8">
+      <h2 class="text-lg font-semibold text-gray-900 mb-3"><i class="bi bi-diagram-3 text-emerald-600 mr-1"></i> 샘플 카테고리 · 브랜드</h2>
+      <div class="bg-white shadow-sm rounded-lg overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-gray-500 border-b bg-gray-50">
+              <th class="py-2 px-3">구분</th>
+              <th class="py-2 px-3">키</th>
+              <th class="py-2 px-3">이름</th>
+              <th class="py-2 px-3">이미지 경로</th>
+              <th class="py-2 px-3 w-20">순서</th>
+              <th class="py-2 px-3 w-16">사용</th>
+              <th class="py-2 px-3 w-16"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% const allCats = (categories || []).concat(brands || []); %>
+            <% if (!allCats.length) { %>
+              <tr><td colspan="7" class="py-6 text-center text-gray-400">샘플 카테고리가 없습니다.</td></tr>
+            <% } else { allCats.forEach(function(c){ %>
+              <tr class="border-b last:border-0">
+                <td class="py-2 px-3">
+                  <span class="inline-block px-2 py-0.5 rounded text-xs <%= c.type === 'BRAND' ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700' %>">
+                    <%= c.type === 'BRAND' ? '브랜드' : '카테고리' %>
+                  </span>
+                  <input type="hidden" name="cat_id" value="<%= c.id %>">
+                </td>
+                <td class="py-2 px-3 font-mono text-xs text-gray-500"><%= c.sample_key %></td>
+                <td class="py-2 px-3"><input type="text" name="cat_name" value="<%= c.name %>" class="w-full text-sm"></td>
+                <td class="py-2 px-3"><input type="text" name="cat_image" value="<%= c.image_path || '' %>" class="w-full text-sm font-mono text-xs" placeholder="/images/sample/..."></td>
+                <td class="py-2 px-3"><input type="number" name="cat_order" value="<%= c.display_order %>" class="w-16 text-sm"></td>
+                <td class="py-2 px-3"><input type="checkbox" name="cat_active" value="<%= c.id %>" <%= c.is_active ? 'checked' : '' %> class="w-4 h-4"></td>
+                <td class="py-2 px-3">
+                  <button type="submit" formaction="/admin/service/samples/category/<%= c.id %>/delete" formnovalidate
+                    class="text-xs text-red-600 hover:underline" onclick="return confirm('이 샘플을 삭제할까요? 저장하지 않은 변경은 사라집니다.')">삭제</button>
+                </td>
+              </tr>
+            <% }); } %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== 상품 ========== -->
+    <section class="mb-8">
+      <h2 class="text-lg font-semibold text-gray-900 mb-3"><i class="bi bi-box-seam text-amber-600 mr-1"></i> 샘플 상품</h2>
+      <div class="bg-white shadow-sm rounded-lg overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-gray-500 border-b bg-gray-50">
+              <th class="py-2 px-3">키</th>
+              <th class="py-2 px-3">분류/브랜드</th>
+              <th class="py-2 px-3">상품명</th>
+              <th class="py-2 px-3 w-24">판매가</th>
+              <th class="py-2 px-3 w-24">정가</th>
+              <th class="py-2 px-3 w-24">특가</th>
+              <th class="py-2 px-3 w-24">뱃지</th>
+              <th class="py-2 px-3">이미지 경로</th>
+              <th class="py-2 px-3 w-16">신상</th>
+              <th class="py-2 px-3 w-16">순서</th>
+              <th class="py-2 px-3 w-16">사용</th>
+              <th class="py-2 px-3 w-16"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!products || !products.length) { %>
+              <tr><td colspan="12" class="py-6 text-center text-gray-400">샘플 상품이 없습니다.</td></tr>
+            <% } else { products.forEach(function(p){ %>
+              <tr class="border-b last:border-0">
+                <td class="py-2 px-3 font-mono text-xs text-gray-500">
+                  <%= p.sample_key %><input type="hidden" name="prod_id" value="<%= p.id %>">
+                </td>
+                <td class="py-2 px-3 text-xs text-gray-500"><%= p.category_key %><% if (p.brand_key) { %> / <%= p.brand_key %><% } %></td>
+                <td class="py-2 px-3"><input type="text" name="prod_name" value="<%= p.name %>" class="w-full text-sm min-w-40"></td>
+                <td class="py-2 px-3"><input type="number" name="prod_price" value="<%= p.price %>" class="w-24 text-sm"></td>
+                <td class="py-2 px-3"><input type="number" name="prod_original" value="<%= p.original_price == null ? p.price : p.original_price %>" class="w-24 text-sm"></td>
+                <td class="py-2 px-3"><input type="number" name="prod_deal" value="<%= p.deal_price == null ? '' : p.deal_price %>" class="w-24 text-sm" placeholder="없음"></td>
+                <td class="py-2 px-3"><input type="text" name="prod_badge" value="<%= p.badge || '' %>" class="w-24 text-sm" placeholder="BEST"></td>
+                <td class="py-2 px-3"><input type="text" name="prod_image" value="<%= p.main_image || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="/images/sample/products/..."></td>
+                <td class="py-2 px-3"><input type="checkbox" name="prod_new" value="<%= p.id %>" <%= p.is_new ? 'checked' : '' %> class="w-4 h-4"></td>
+                <td class="py-2 px-3"><input type="number" name="prod_order" value="<%= p.display_order %>" class="w-16 text-sm"></td>
+                <td class="py-2 px-3"><input type="checkbox" name="prod_active" value="<%= p.id %>" <%= p.is_active ? 'checked' : '' %> class="w-4 h-4"></td>
+                <td class="py-2 px-3">
+                  <button type="submit" formaction="/admin/service/samples/product/<%= p.id %>/delete" formnovalidate
+                    class="text-xs text-red-600 hover:underline" onclick="return confirm('이 샘플 상품을 삭제할까요?')">삭제</button>
+                </td>
+              </tr>
+            <% }); } %>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-2 text-xs text-gray-400">특가에 값을 넣으면 그 상품이 샘플 특가전에 포함됩니다. 특가 상품이 하나도 없으면 특가전 자체를 만들지 않습니다.</p>
+    </section>
+
+    <!-- ========== 히어로 슬라이드 ========== -->
+    <section class="mb-8">
+      <h2 class="text-lg font-semibold text-gray-900 mb-3"><i class="bi bi-images text-indigo-600 mr-1"></i> 샘플 슬라이더 (히어로)</h2>
+      <div class="bg-white shadow-sm rounded-lg overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-gray-500 border-b bg-gray-50">
+              <th class="py-2 px-3 w-24">슬롯</th>
+              <th class="py-2 px-3 w-20">상품키</th>
+              <th class="py-2 px-3">라벨</th>
+              <th class="py-2 px-3">헤드라인</th>
+              <th class="py-2 px-3">이미지 경로</th>
+              <th class="py-2 px-3 w-16">순서</th>
+              <th class="py-2 px-3 w-16">사용</th>
+              <th class="py-2 px-3 w-16"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!heroes || !heroes.length) { %>
+              <tr><td colspan="8" class="py-6 text-center text-gray-400">샘플 슬라이드가 없습니다.</td></tr>
+            <% } else { heroes.forEach(function(h){ %>
+              <tr class="border-b last:border-0">
+                <td class="py-2 px-3">
+                  <span class="inline-block px-2 py-0.5 rounded text-xs <%= h.slot === 'FEATURE' ? 'bg-gray-100 text-gray-600' : 'bg-indigo-50 text-indigo-700' %>"><%= h.slot %></span>
+                  <input type="hidden" name="hero_id" value="<%= h.id %>">
+                </td>
+                <td class="py-2 px-3 font-mono text-xs text-gray-500"><%= h.product_key || '-' %></td>
+                <td class="py-2 px-3"><input type="text" name="hero_label" value="<%= h.label || '' %>" class="w-full text-sm"></td>
+                <td class="py-2 px-3"><input type="text" name="hero_headline" value="<%= h.headline || '' %>" class="w-full text-sm min-w-40"></td>
+                <td class="py-2 px-3"><input type="text" name="hero_image" value="<%= h.image_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="/images/sample/banners/..."></td>
+                <td class="py-2 px-3"><input type="number" name="hero_order" value="<%= h.sort_order %>" class="w-16 text-sm"></td>
+                <td class="py-2 px-3"><input type="checkbox" name="hero_active" value="<%= h.id %>" <%= h.is_active ? 'checked' : '' %> class="w-4 h-4"></td>
+                <td class="py-2 px-3">
+                  <button type="submit" formaction="/admin/service/samples/hero/<%= h.id %>/delete" formnovalidate
+                    class="text-xs text-red-600 hover:underline" onclick="return confirm('이 샘플 슬라이드를 삭제할까요?')">삭제</button>
+                </td>
+              </tr>
+            <% }); } %>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-2 text-xs text-gray-400">MAIN = 중앙 슬라이더, FEATURE = 우측 카드. 상품키가 시딩된 샘플 상품과 일치할 때만 슬라이드가 만들어집니다.</p>
+    </section>
+
+    <div class="flex justify-end">
+      <button type="submit" class="rounded-md bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-black">
+        전체 저장
+      </button>
+    </div>
+  </form>
+</div>
