@@ -108,37 +108,34 @@ async function main() {
         `/v1/product-models?keyword=${kw}`,
     ]);
 
-    // 3) 카테고리별 속성 조회
-    const attrRes = await probe('카테고리별 속성 /v1/product-attributes (categoryId=' + catId + ')', [
-        `/v1/product-attributes?categoryId=${catId}`,
-        `/v1/product-attributes?leafCategoryId=${catId}`,
-        `/v1/product-attributes?categoryIds=${catId}`,
-        `/v1/product-attributes/${catId}`,
-        `/v1/product-attributes`,
-    ]);
+    // 리프 패션 카테고리(속성이 풍부) 우선
+    const [[fcat]] = await pool.query("SELECT naver_category_id FROM naver_category WHERE is_leaf=1 AND whole_category_name LIKE '%미들부츠%' LIMIT 1");
+    const leafCat = fcat ? fcat.naver_category_id : catId;
 
-    // 4) 카테고리별 속성값 조회 — 위 속성 응답에서 속성 id 를 뽑아 시도
-    let attrId = null;
-    if (attrRes && attrRes.json) {
-        const list = Array.isArray(attrRes.json) ? attrRes.json
-            : (attrRes.json.contents || attrRes.json.data || attrRes.json.attributes || attrRes.json.list || []);
-        const first = Array.isArray(list) ? list[0] : null;
-        if (first) {
-            // 흔한 속성 id 필드명 후보에서 값 추출
-            for (const k of ['attributeSeq', 'attributeId', 'attributeNo', 'id', 'seq', 'no']) {
-                if (first[k] != null) { attrId = first[k]; break; }
-            }
-            console.log('   → 속성값 조회에 쓸 속성 id 후보:', attrId, '(속성 첫 항목 키:', Object.keys(first).join(','), ')');
-        }
-    }
-    const aId = attrId != null ? encodeURIComponent(attrId) : '';
-    await probe('카테고리별 속성값 /v1/product-attributes/attribute-values', [
-        `/v1/product-attributes/attribute-values?categoryId=${catId}&attributeSeq=${aId}`,
-        `/v1/product-attributes/attribute-values?categoryId=${catId}&attributeId=${aId}`,
-        `/v1/product-attributes/attribute-values?attributeSeq=${aId}`,
-        `/v1/product-attributes/attribute-values?attributeId=${aId}`,
+    // 3) 카테고리별 속성값 먼저 — 실제 attributeSeq 확보 (categoryId 만으로 전량)
+    const valRes = await probe('카테고리별 속성값 /v1/product-attributes/attribute-values (categoryId=' + leafCat + ')', [
+        `/v1/product-attributes/attribute-values?categoryId=${leafCat}`,
         `/v1/product-attributes/attribute-values?categoryId=${catId}`,
-        `/v1/product-attributes/attribute-values`,
+    ]);
+    let seq = null;
+    if (valRes && Array.isArray(valRes.json) && valRes.json[0]) {
+        seq = valRes.json[0].attributeSeq;
+        console.log('   → 확보한 attributeSeq:', seq, '| 값 항목 키:', Object.keys(valRes.json[0]).join(','));
+        // 전체 속성값을 attributeSeq 로 그룹 요약
+        const bySeq = {};
+        for (const v of valRes.json) { (bySeq[v.attributeSeq] = bySeq[v.attributeSeq] || []).push(v.minAttributeValue); }
+        console.log('   → 속성(seq)별 값 미리보기:', JSON.stringify(Object.fromEntries(Object.entries(bySeq).map(([k, arr]) => [k, arr.slice(0, 4)]))).slice(0, 500));
+    }
+    const sq = seq != null ? encodeURIComponent(seq) : '';
+
+    // 4) 속성 메타(이름) — 여러 경로/파라미터 시도 (seq 포함)
+    await probe('카테고리별 속성(이름 메타) /v1/product-attributes', [
+        `/v1/product-attributes?categoryId=${leafCat}`,
+        `/v1/product-attributes?categoryId=${leafCat}&attributeSeq=${sq}`,
+        `/v1/product-attributes?attributeSeq=${sq}`,
+        `/v1/product-attributes/${sq}`,
+        `/v1/product-attributes/attributes?categoryId=${leafCat}`,
+        `/v1/product-attributes?categoryId=${leafCat}&page=1&size=10`,
     ]);
 
     console.log('\n── 참고: 위 성공 응답의 필드명/리스트키/페이징 여부로 naver_* 테이블 컬럼과 요청 파라미터를 확정한다.');
