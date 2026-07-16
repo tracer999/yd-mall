@@ -16,12 +16,14 @@
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
   <div class="mb-6">
+    <div class="mb-3 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
+      <i class="bi bi-shop text-lg text-indigo-600"></i>
+      <span class="text-sm font-medium text-indigo-700">현재 편집 몰</span>
+      <span class="text-lg font-bold text-indigo-900"><%= (adminMall && adminMall.name) || ('mall #' + adminMallId) %></span>
+    </div>
     <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
     <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
-    <p class="mt-1 text-xs text-gray-400">현재 편집 몰:
-      <strong><%= (adminMall && adminMall.name) || ('mall #' + adminMallId) %></strong>
-      — 자격증명·설정은 이 몰 기준으로 저장됩니다.
-    </p>
+    <p class="mt-1 text-xs text-gray-400">자격증명·설정은 위 편집 몰 기준으로 저장됩니다.</p>
   </div>
 
   <% if (saved) { %>
