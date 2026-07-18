@@ -3,8 +3,6 @@
   const _f  = typeof filters !== 'undefined' ? filters : { status:'', visibility:'', stock:'', categoryId:null, brandId:null };
   const _cats   = typeof filterCategories !== 'undefined' ? filterCategories : [];
   const _brands = typeof filterBrands !== 'undefined' ? filterBrands : [];
-  const _selCat   = typeof selectedCategory !== 'undefined' ? selectedCategory : null;
-  const _selBrand = typeof selectedBrand   !== 'undefined' ? selectedBrand   : null;
   const _hasFilter = !!(_kw || _f.status || _f.visibility || _f.stock || _f.categoryId || _f.brandId);
 
   /* 페이지네이션·개수변경 링크가 필터를 잃지 않도록 현재 필터를 전부 실어 나른다. */
@@ -21,34 +19,19 @@
     return params.toString();
   };
 
-  /* 카테고리 365개·브랜드 1354개는 select 로 못 쓴다 → 선택 레이어에서 검색해 고른다. */
+  /* 카테고리(3뎁스 캐스케이드)·브랜드 셀렉트 옵션 데이터를 안전하게 JS 로 넘긴다. */
   const toJs = (v) => JSON.stringify(v)
     .replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
-
-  /* 같은 이름의 카테고리가 여러 부모 밑에 있다(예: 티셔츠 = 여성패션/남성패션).
-     이름만 보여주면 고를 수 없으므로 "여성패션 > 티셔츠" 전체 경로를 함께 넘긴다. */
-  const _catById = new Map(_cats.map(c => [c.id, c]));
-  const _catPath = (c) => {
-    const names = [c.name];
-    let cur = c.parent_id, guard = 0;
-    while (cur && guard++ < 10) {
-      const parent = _catById.get(cur);
-      if (!parent) break;
-      names.unshift(parent.name);
-      cur = parent.parent_id;
-    }
-    return names.join(' > ');
-  };
 
   const STATUS_LABELS = { ON:'판매중', OFF:'판매중지', SOLD_OUT:'품절', COMING_SOON:'출시예정', RESTOCK:'재입고예정' };
   const VIS_LABELS = { PUBLIC:'전체공개', HIDDEN:'숨김', MEMBER_ONLY:'회원전용' };
 %>
 <form action="/admin/products" method="GET" class="mb-4 rounded-lg border border-gray-200 bg-white p-4">
     <input type="hidden" name="perPage" value="<%= pagination.perPage %>">
+    <%# 카테고리는 3뎁스 캐스케이드 셀렉트가 이 hidden 을 갱신해 제출한다(값: id | 'none' | ''). %>
     <input type="hidden" name="categoryId" id="filter-category-id" value="<%= _f.categoryId || '' %>">
-    <input type="hidden" name="brandId" id="filter-brand-id" value="<%= _f.brandId || '' %>">
 
     <div class="flex flex-wrap items-end gap-3">
         <div class="flex-1 min-w-[220px]">
@@ -86,28 +69,24 @@
             </select>
         </div>
 
-        <div class="w-52">
-            <label class="block mb-1 text-xs font-medium text-gray-500">카테고리</label>
+        <div>
+            <label class="block mb-1 text-xs font-medium text-gray-500">카테고리 (대 / 중 / 소분류)</label>
             <div class="flex items-center gap-1">
-                <button type="button" onclick="openPickerModal('category')" id="filter-category-btn"
-                    class="flex-1 h-[38px] px-3 text-sm text-left truncate border border-gray-300 rounded-md bg-white hover:bg-gray-50">
-                    <%= _selCat ? _catPath(_selCat) : '전체' %>
-                </button>
-                <button type="button" onclick="clearPicker('category')" title="선택 해제"
-                    class="h-[38px] px-2 text-sm text-gray-400 hover:text-gray-700 <%= _f.categoryId ? '' : 'hidden' %>" id="filter-category-clear">✕</button>
+                <select id="filter-cat-1" class="w-32 h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white"></select>
+                <select id="filter-cat-2" class="w-32 h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white"></select>
+                <select id="filter-cat-3" class="w-32 h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white"></select>
             </div>
         </div>
 
         <div class="w-52">
             <label class="block mb-1 text-xs font-medium text-gray-500">브랜드</label>
-            <div class="flex items-center gap-1">
-                <button type="button" onclick="openPickerModal('brand')" id="filter-brand-btn"
-                    class="flex-1 h-[38px] px-3 text-sm text-left truncate border border-gray-300 rounded-md bg-white hover:bg-gray-50">
-                    <%= _selBrand ? _selBrand.name : '전체' %>
-                </button>
-                <button type="button" onclick="clearPicker('brand')" title="선택 해제"
-                    class="h-[38px] px-2 text-sm text-gray-400 hover:text-gray-700 <%= _f.brandId ? '' : 'hidden' %>" id="filter-brand-clear">✕</button>
-            </div>
+            <select name="brandId" id="filter-brand-id" class="w-full h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="">전체</option>
+                <option value="none" <%= _f.brandId === 'none' ? 'selected' : '' %>>미설정 (브랜드 없음)</option>
+                <% _brands.forEach(function (b) { %>
+                    <option value="<%= b.id %>" <%= String(_f.brandId) === String(b.id) ? 'selected' : '' %>><%= b.name %></option>
+                <% }) %>
+            </select>
         </div>
 
         <div class="flex items-center gap-2">
@@ -450,29 +429,6 @@
     </script>
 </div>
 
-<%# ── 카테고리/브랜드 선택 레이어 ──────────────────────────────
-    항목이 각각 수백~1천 개라 select 박스로는 못 쓴다. 레이어에서 검색해 고른다.
-    한 번에 그리는 항목 수를 제한한다(브랜드 1354개를 전부 그리면 DOM 이 무겁다). %>
-<div id="pickerModal" class="fixed inset-0 z-50 hidden" aria-modal="true" role="dialog">
-    <div class="absolute inset-0 bg-black/40" onclick="closePickerModal()"></div>
-    <div class="relative mx-auto mt-24 w-full max-w-lg rounded-lg bg-white shadow-xl">
-        <div class="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-            <h3 class="text-base font-semibold text-gray-900" id="picker-title">선택</h3>
-            <button type="button" onclick="closePickerModal()" class="text-gray-400 hover:text-gray-700">✕</button>
-        </div>
-        <div class="p-5">
-            <input type="text" id="picker-search" placeholder="이름으로 검색"
-                class="mb-3 w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
-            <p id="picker-count" class="mb-2 text-xs text-gray-400"></p>
-            <ul id="picker-list" class="max-h-80 overflow-y-auto divide-y divide-gray-100 border border-gray-100 rounded-md"></ul>
-        </div>
-        <div class="flex justify-end gap-2 border-t border-gray-200 px-5 py-3">
-            <button type="button" onclick="pickItem(null)" class="h-[36px] px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50">전체(선택 해제)</button>
-            <button type="button" onclick="closePickerModal()" class="h-[36px] px-4 text-sm rounded-md bg-gray-700 text-white hover:bg-gray-800">닫기</button>
-        </div>
-    </div>
-</div>
-
 <script>
     /* perPage 는 URL 에 이미 있을 수 있다. 새로 append 하면 중복 키가 되어 서버가 기본값으로 되돌린다. */
     function changePerPage(value) {
@@ -482,88 +438,67 @@
         location.href = url.pathname + '?' + url.searchParams.toString();
     }
 
-    const PICKER_DATA = {
-        category: <%- toJs(_cats.map(c => ({ id: c.id, name: c.name, depth: c.depth, path: _catPath(c) }))) %>,
-        brand: <%- toJs(_brands.map(b => ({ id: b.id, name: b.name, depth: 1 }))) %>,
-    };
-    const PICKER_TITLE = { category: '카테고리 선택', brand: '브랜드 선택' };
-    const PICKER_MAX = 200;  // 한 번에 그릴 최대 항목 수
-    let pickerKind = 'category';
+    /* ── 카테고리 3뎁스 캐스케이드 필터 ──────────────────────────
+       옵션은 이 몰에 상품이 있는 카테고리(+조상)만(서버에서 필터됨).
+       셀렉트 3개는 name 이 없어 제출되지 않고, 선택 결과를 hidden #filter-category-id 로 실어 보낸다.
+       값: 카테고리 id | 'none'(미설정) | ''(전체). 항상 "가장 깊게 고른 값"을 제출한다. */
+    (function () {
+        const CATS = <%- toJs(_cats.map(c => ({ id: c.id, name: c.name, parent_id: c.parent_id || 0, depth: c.depth }))) %>;
+        const initial = '<%= _f.categoryId || '' %>';  // '', 'none', 또는 카테고리 id
+        const hidden = document.getElementById('filter-category-id');
+        const s1 = document.getElementById('filter-cat-1');
+        const s2 = document.getElementById('filter-cat-2');
+        const s3 = document.getElementById('filter-cat-3');
+        if (!s1) return;
 
-    function openPickerModal(kind) {
-        pickerKind = kind;
-        document.getElementById('picker-title').textContent = PICKER_TITLE[kind];
-        const search = document.getElementById('picker-search');
-        search.value = '';
-        renderPickerList('');
-        document.getElementById('pickerModal').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-        search.focus();
-    }
+        const byId = new Map(CATS.map(c => [c.id, c]));
+        const childrenOf = (pid) => CATS.filter(c => c.parent_id === pid);
 
-    function closePickerModal() {
-        document.getElementById('pickerModal').classList.add('hidden');
-        document.body.style.overflow = '';
-    }
-
-    function renderPickerList(query) {
-        const q = (query || '').trim().toLowerCase();
-        const all = PICKER_DATA[pickerKind] || [];
-        const matched = q ? all.filter(x => (x.path || x.name).toLowerCase().includes(q)) : all;
-        const shown = matched.slice(0, PICKER_MAX);
-        const searching = q.length > 0;
-
-        const countEl = document.getElementById('picker-count');
-        countEl.textContent = matched.length > shown.length
-            ? `${matched.length}개 중 ${shown.length}개 표시 — 검색으로 좁혀주세요`
-            : `${matched.length}개`;
-
-        const list = document.getElementById('picker-list');
-        list.innerHTML = '';
-        const frag = document.createDocumentFragment();
-        shown.forEach(item => {
-            const li = document.createElement('li');
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50';
-            if (searching && item.path) {
-                // 검색 중에는 동명 항목을 구분해야 하므로 경로를 그대로 보여준다.
-                btn.textContent = item.path;
-            } else {
-                btn.style.paddingLeft = (12 + (item.depth - 1) * 16) + 'px';
-                btn.textContent = (item.depth > 1 ? '└ ' : '') + item.name;
-            }
-            btn.onclick = () => pickItem(item);
-            li.appendChild(btn);
-            frag.appendChild(li);
-        });
-        if (shown.length === 0) {
-            const li = document.createElement('li');
-            li.className = 'px-3 py-6 text-center text-sm text-gray-400';
-            li.textContent = '검색 결과가 없습니다.';
-            frag.appendChild(li);
+        function opt(value, label) {
+            const o = document.createElement('option');
+            o.value = value; o.textContent = label;
+            return o;
         }
-        list.appendChild(frag);
-    }
+        function fill(sel, parentId, placeholder, withNone) {
+            sel.innerHTML = '';
+            sel.appendChild(opt('', placeholder));
+            if (withNone) sel.appendChild(opt('none', '미설정'));
+            childrenOf(parentId).forEach(c => sel.appendChild(opt(String(c.id), c.name)));
+            sel.disabled = sel.options.length <= 1;  // 자식 없으면(플레이스홀더만) 비활성
+        }
+        function submitValue() {
+            if (s1.value === 'none') { hidden.value = 'none'; return; }
+            hidden.value = s3.value || s2.value || s1.value || '';
+        }
 
-    /* 선택하면 hidden 값과 버튼 라벨만 바꾼다. 실제 필터링은 폼 제출(GET) 로 서버가 한다. */
-    function pickItem(item) {
-        const idInput = document.getElementById(`filter-${pickerKind}-id`);
-        const btn = document.getElementById(`filter-${pickerKind}-btn`);
-        const clear = document.getElementById(`filter-${pickerKind}-clear`);
-        idInput.value = item ? item.id : '';
-        btn.textContent = item ? (item.path || item.name) : '전체';
-        clear.classList.toggle('hidden', !item);
-        closePickerModal();
-    }
+        s1.addEventListener('change', function () {
+            const pid = (s1.value && s1.value !== 'none') ? Number(s1.value) : -1;
+            fill(s2, pid, '중분류 전체', false);
+            fill(s3, -1, '소분류 전체', false);
+            submitValue();
+        });
+        s2.addEventListener('change', function () {
+            fill(s3, s2.value ? Number(s2.value) : -1, '소분류 전체', false);
+            submitValue();
+        });
+        s3.addEventListener('change', submitValue);
 
-    function clearPicker(kind) {
-        pickerKind = kind;
-        pickItem(null);
-    }
+        // 초기 렌더
+        fill(s1, 0, '전체', true);
+        fill(s2, -1, '중분류 전체', false);
+        fill(s3, -1, '소분류 전체', false);
 
-    document.getElementById('picker-search').addEventListener('input', (e) => renderPickerList(e.target.value));
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !document.getElementById('pickerModal').classList.contains('hidden')) closePickerModal();
-    });
+        // 새로고침 프리필 — 선택 카테고리의 조상 체인 [대, 중, 소] 를 셀렉트에 순서대로 채운다.
+        if (initial === 'none') {
+            s1.value = 'none';
+        } else if (initial && byId.has(Number(initial))) {
+            const chain = [];
+            let cur = byId.get(Number(initial));
+            while (cur) { chain.unshift(cur); cur = cur.parent_id ? byId.get(cur.parent_id) : null; }
+            if (chain[0]) { s1.value = String(chain[0].id); fill(s2, chain[0].id, '중분류 전체', false); }
+            if (chain[1]) { s2.value = String(chain[1].id); fill(s3, chain[1].id, '소분류 전체', false); }
+            if (chain[2]) { s3.value = String(chain[2].id); }
+        }
+        submitValue();
+    })();
 </script>

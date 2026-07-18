@@ -50,6 +50,7 @@ const adminTitles = {
     lives: '쇼핑라이브 관리',
     // 상품 관리
     products: '상품 관리',
+    'derived-products': '세트·기획상품 관리',
     best: '베스트/랭킹 관리',
     deals: '쇼핑특가 관리',
     recommend: '상품 추천관리',
@@ -97,7 +98,8 @@ const adminDescriptions = {
     exhibitions: '기획전과 전문관 등록 (같은 화면에서 관리)',
     group_buys: '기간·전용가 조건으로 파는 공동구매 등록과 진행',
     lives: '영상 방송과 함께 상품을 파는 쇼핑라이브 편성',
-    products: '상품 등록·수정·삭제, 가격·재고·이미지·옵션',
+    products: '상품 등록·수정·삭제, 가격·재고·이미지·옵션(SKU)',
+    'derived-products': '여러 상품(SKU)을 묶어 파는 복합 상품 — 묶음·세트·선물세트·선택형세트 구성과 재고 파생',
     best: '자동 순위 집계와 MD 픽(수동 고정)으로 베스트 화면 구성',
     deals: '기간·시간 한정 할인 — 실제 결제 금액이 바뀌므로 주의',
     recommend: '추천 메뉴에 노출할 추천 그룹 구성',
@@ -134,7 +136,7 @@ const adminOrder = [
     // 페이지/전시 관리
     'page_builder', 'banners', 'exhibitions', 'group_buys', 'lives',
     // 상품 관리
-    'products', 'best', 'deals', 'recommend', 'outlet',
+    'products', 'derived-products', 'best', 'deals', 'recommend', 'outlet',
     // 프로모션 관리
     'coupons', 'points', 'events',
     // 멤버십 관리

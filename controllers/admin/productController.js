@@ -7,6 +7,7 @@ const productImporter = require('../../services/catalog/productImporter');
 const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
 const productMedia = require('../../services/catalog/productMedia');
 const skuService = require('../../services/catalog/skuService');
+const { validCategoryIdSet } = require('../../services/catalog/categoryScope');
 
 const { getAiStatus, getOpenAIClient } = require('../../services/ai/aiStatus');
 
@@ -78,9 +79,15 @@ async function resolveBrandName(brandCategoryId) {
  *     상품이 목록·검색에서 사라지지 않게 한다. 브랜드는 폴백하지 않는다
  *     (빈 브랜드는 허브에서 빠질 뿐 상품 노출과 무관하고 provider 텍스트가 대체).
  */
-async function resolveTaxonomyField(selectedId, freeText, type, mallId, fallbackUncategorized = false) {
+async function resolveTaxonomyField(selectedId, freeText, type, mallId, fallbackUncategorized = false, naverCategoryId = null) {
     const id = selectedId ? Number(selectedId) || null : null;
     if (id) return id;
+    // §6 네이버 매핑 우선(NORMAL 전용): 네이버 리프를 골랐으면 표준 노드로 먼저 매핑.
+    // 퍼지·경로 매칭보다 앞서 처리해 카테고리 남발을 막는다.
+    if (type === 'NORMAL' && naverCategoryId) {
+        const nm = await taxonomyResolver.resolveByNaverCategoryId({ naverCategoryId });
+        if (nm && nm.id) return nm.id;
+    }
     const text = String(freeText || '').trim();
     if (text) {
         // '대>중>소' 경로면 계층을 단계별로 생성/매핑(NORMAL 만). 브랜드는 계층 없음.
@@ -378,6 +385,8 @@ exports.getProductSEOView = async (req, res) => {
     }
 };
 
+// ⚠️ 죽은 정의 — 아래(파일 하단)에 같은 이름의 getList 가 다시 선언돼 이걸 덮어쓴다.
+//    실제 사용되는 목록 핸들러는 하단의 exports.getList(필터·페이지네이션 버전)다.
 exports.getList = async (req, res) => {
     try {
         // theme_category_id 는 전량 NULL 인 죽은 컬럼이라 JOIN 을 걷어냈다(THEME 축 폐기).
@@ -657,7 +666,7 @@ exports.postAdd = async (req, res) => {
         // 찾아 매핑하거나(없으면) 신규 생성한다. (services/catalog/taxonomyResolver)
         const _mallId = req.adminMallId || 1;
         const resolvedCategoryId = await resolveTaxonomyField(
-            category_id, req.body.new_category_name, 'NORMAL', _mallId, true);
+            category_id, req.body.new_category_name, 'NORMAL', _mallId, true, naver_category_id);
         const normalizedBrandCategoryId = await resolveTaxonomyField(
             brand_category_id, req.body.new_brand_name, 'BRAND', _mallId);
 
@@ -804,7 +813,7 @@ exports.postEdit = async (req, res) => {
         if (!_owned) return res.redirect('/admin/products');
 
         const resolvedCategoryId = await resolveTaxonomyField(
-            category_id, req.body.new_category_name, 'NORMAL', _mallId, true);
+            category_id, req.body.new_category_name, 'NORMAL', _mallId, true, naver_category_id);
         const normalizedBrandCategoryId = await resolveTaxonomyField(
             brand_category_id, req.body.new_brand_name, 'BRAND', _mallId);
 
@@ -927,8 +936,11 @@ exports.getList = async (req, res) => {
         const status = STATUSES.includes(req.query.status) ? req.query.status : '';
         const visibility = VISIBILITIES.includes(req.query.visibility) ? req.query.visibility : '';
         const stock = STOCKS.includes(req.query.stock) ? req.query.stock : '';
-        const categoryId = Number(req.query.categoryId) > 0 ? Number(req.query.categoryId) : null;
-        const brandId = Number(req.query.brandId) > 0 ? Number(req.query.brandId) : null;
+        // 카테고리/브랜드 필터 — 숫자 id, 또는 'none'(미설정: 값이 비어 있는 상품만).
+        const categoryUnset = req.query.categoryId === 'none';
+        const brandUnset = req.query.brandId === 'none';
+        const categoryId = !categoryUnset && Number(req.query.categoryId) > 0 ? Number(req.query.categoryId) : null;
+        const brandId = !brandUnset && Number(req.query.brandId) > 0 ? Number(req.query.brandId) : null;
 
         // 몰 필터는 항상 건다. keyword 유무와 무관하게 다른 몰 상품이 섞이면 안 된다.
         // 파생상품(세트·묶음·기획)은 별도 메뉴(/admin/derived-products)에서 관리 — 기본상품만 노출(설계 §31).
@@ -951,15 +963,21 @@ exports.getList = async (req, res) => {
         if (stock === 'in') whereClause += ' AND EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
         else if (stock === 'out') whereClause += ' AND NOT EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
 
-        // 선택한 카테고리가 다른 몰이면 서브트리가 비고, 결과는 0건이 된다(크로스몰 차단).
+        // 카테고리 필터 — 미설정(none)이면 category_id 가 비어 있는 상품만.
         let categoryIds = [];
-        if (categoryId) {
+        if (categoryUnset) {
+            whereClause += ' AND p.category_id IS NULL';
+        } else if (categoryId) {
+            // 선택한 카테고리가 다른 몰이면 서브트리가 비고, 결과는 0건이 된다(크로스몰 차단).
             categoryIds = await categorySubtreeIds(MALL_ID, categoryId);
             if (categoryIds.length === 0) categoryIds = [0];
             whereClause += ` AND p.category_id IN (${categoryIds.map(() => '?').join(',')})`;
             queryParams.push(...categoryIds);
         }
-        if (brandId) {
+        // 브랜드 필터 — 미설정(none)이면 brand_category_id 가 비어 있는 상품만.
+        if (brandUnset) {
+            whereClause += ' AND p.brand_category_id IS NULL';
+        } else if (brandId) {
             whereClause += ' AND p.brand_category_id = ?';
             queryParams.push(brandId);
         }
@@ -1006,17 +1024,23 @@ exports.getList = async (req, res) => {
             }
         }
 
-        // 선택 레이어용 목록 — 카테고리는 트리(들여쓰기), 브랜드는 검색으로 좁혀 고른다.
-        const [filterCategories] = await pool.query(
+        // 필터 셀렉트 옵션 — 카테고리는 3뎁스 캐스케이드, 브랜드는 단일 셀렉트.
+        // 카테고리·브랜드는 글로벌화(mall_id=0)됐으므로 mall_id IN (0, MALL_ID) 로 조회하고,
+        // 이 몰에 상품이 있는 것(+조상)만 노출한다 — 상품 없는 카테고리로 필터하면 항상 0건이라 무의미.
+        const [allNormalCats] = await pool.query(
             `SELECT id, name, parent_id, depth FROM categories
-             WHERE mall_id = ? AND type = 'NORMAL' ORDER BY display_order ASC, id ASC`, [MALL_ID]
+             WHERE mall_id IN (0, ?) AND type = 'NORMAL' ORDER BY depth ASC, display_order ASC, id ASC`, [MALL_ID]
         );
-        const [filterBrands] = await pool.query(
+        const [allBrandCats] = await pool.query(
             `SELECT id, name FROM categories
-             WHERE mall_id = ? AND type = 'BRAND' ORDER BY display_order ASC, id ASC`, [MALL_ID]
+             WHERE mall_id IN (0, ?) AND type = 'BRAND' ORDER BY display_order ASC, id ASC`, [MALL_ID]
         );
-        const selectedCategory = categoryId ? filterCategories.find(c => c.id === categoryId) || null : null;
-        const selectedBrand = brandId ? filterBrands.find(b => b.id === brandId) || null : null;
+        const [validCat, validBrand] = await Promise.all([
+            validCategoryIdSet(MALL_ID),
+            validCategoryIdSet(MALL_ID, { brand: true }),
+        ]);
+        const filterCategories = allNormalCats.filter(c => validCat.has(c.id));
+        const filterBrands = allBrandCats.filter(b => validBrand.has(b.id));
 
         const totalPages = Math.ceil(total / perPage);
 
@@ -1025,11 +1049,14 @@ exports.getList = async (req, res) => {
             title: '상품 관리',
             products,
             keyword,
-            filters: { status, visibility, stock, categoryId, brandId },
+            // 미설정 필터는 'none' 문자열로 뷰·페이지네이션에 실어 나른다.
+            filters: {
+                status, visibility, stock,
+                categoryId: categoryUnset ? 'none' : categoryId,
+                brandId: brandUnset ? 'none' : brandId,
+            },
             filterCategories,
             filterBrands,
-            selectedCategory,
-            selectedBrand,
             pagination: { page, perPage, total, totalPages }
         });
     } catch (err) {
