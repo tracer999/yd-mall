@@ -63,14 +63,27 @@
       <div class="swiper-button-prev swiper-button-prev-desktop"><i class="bi bi-chevron-left"></i></div>
     </div>
 
-    <%# 하단 마퀴 — 라이프스타일 무드의 무료배송/혜택 스트립 %>
-    <div class="yd-ed-marquee" aria-hidden="true">
-      <div class="yd-ed-marquee__track">
-        <% for (var i = 0; i < 8; i++) { %>
-          <span class="yd-ed-marquee__item">전 상품 무료배송&nbsp;&nbsp;·&nbsp;&nbsp;신규 회원 15% 쿠폰&nbsp;&nbsp;·&nbsp;&nbsp;당일 출고&nbsp;&nbsp;·&nbsp;&nbsp;</span>
-        <% } %>
+    <%# 하단 마퀴 — 관리자('테마 히어로' 섹션 설정)에서 입력한 문구를 흐르게 한다. %>
+    <%
+      var _mqOn = (typeof marqueeEnabled !== 'undefined') ? marqueeEnabled : true;
+      var _mqItems = (typeof marqueeItems !== 'undefined' && marqueeItems && marqueeItems.length)
+        ? marqueeItems : ['전 상품 무료배송', '신규 회원 15% 쿠폰', '당일 출고'];
+      var _mqSpeed = (typeof marqueeSpeed !== 'undefined' && marqueeSpeed) ? marqueeSpeed : 28;
+
+      // nbsp(U+00A0)·middot(U+00B7)를 문자 코드로 직접 구성 — 간격 유지 + 이중 이스케이프 회피.
+      var _mqSep = String.fromCharCode(160, 160, 183, 160, 160);
+      var _mqSeg = _mqItems.join(_mqSep) + _mqSep;
+    %>
+    <% if (_mqOn) { %>
+      <div class="yd-ed-marquee" aria-hidden="true">
+        <div class="yd-ed-marquee__track" style="animation-duration: <%= _mqSpeed %>s;">
+          <%# 짝수(8)회 반복 → translateX(-50%) 지점이 반복 경계와 맞아 이음매 없이 흐른다. %>
+          <% for (var i = 0; i < 8; i++) { %>
+            <span class="yd-ed-marquee__item"><%= _mqSeg %></span>
+          <% } %>
+        </div>
       </div>
-    </div>
+    <% } %>
   </section>
 
   <script>
