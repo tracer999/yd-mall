@@ -183,6 +183,28 @@ async function getDraftSections(pageId, shared = {}) {
 }
 
 /*
+ * 관리자용 — 이 몰 홈이 스토어프론트에서 **실제로 그리는** 히어로 섹션 타입.
+ * 프론트와 같은 소스(발행 스냅샷 우선 → 라이브 폴백)를 읽어 판정한다.
+ * theme_hero 는 hero_variant 를 무시하고 hero_slide 를 렌더하므로, 관리자 화면이
+ * 실제 노출과 어긋나지 않으려면 이 값으로 표시 모드를 정해야 한다.
+ * @returns 'theme_hero' | 'hero' | null
+ */
+async function getHomeHeroType(mallId = 1) {
+  const page = await getHomePage(mallId);
+  if (!page) return null;
+  const revision = await getLatestRevision(page.id);
+  let rows;
+  if (revision) {
+    const snap = parseConfig(revision.snapshot_json);
+    rows = filterSnapshotRows(Array.isArray(snap) ? snap : snap.sections);
+  } else {
+    rows = await getLiveSections(page.id);
+  }
+  const hero = (rows || []).find((s) => s.section_type === 'theme_hero' || s.section_type === 'hero');
+  return hero ? hero.section_type : null;
+}
+
+/*
  * slug 로 발행된 페이지를 찾는다. (홈 외 SDUI 랜딩 — 예: /new)
  * 없으면 null → 호출측이 레거시 화면으로 폴백한다.
  */
@@ -220,6 +242,7 @@ module.exports = {
   getLiveSections,
   loadHomeCategories,
   getHomePage,
+  getHomeHeroType,
   getPageBySlug,
   getPageSections
 };

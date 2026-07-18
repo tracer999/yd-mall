@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const upload = require('../../middleware/upload');
+const displayService = require('../../services/display/displayService');
 
 /*
  * 메인 슬라이더 관리 — 홈 히어로 영역 하나를 두 가지 방식 중 하나로 채운다.
@@ -44,9 +45,16 @@ async function getActiveVariant(mallId) {
 exports.getList = async (req, res) => {
     try {
         const mallId = req.adminMallId || 1;
-        const activeVariant = await getActiveVariant(mallId);
+        // 프론트가 실제로 그리는 히어로를 기준으로 판정한다.
+        // theme_hero(페이지 빌더)를 쓰는 몰은 hero_variant 와 무관하게 hero_slide 를 렌더하므로,
+        // hero_variant 로 화면 모드를 가르면 실제 노출 중인 슬라이드가 관리자에서 숨어버린다.
+        const usesThemeHero = (await displayService.getHomeHeroType(mallId)) === 'theme_hero';
+        const activeVariant = usesThemeHero ? 'product_showcase' : await getActiveVariant(mallId);
         // 적용 중이 아닌 방식도 미리 편집해 둘 수 있게 ?mode= 로 열람 방식을 따로 둔다.
-        const mode = VARIANTS.includes(req.query.mode) ? req.query.mode : activeVariant;
+        // 단 theme_hero 몰은 full_banner 가 프론트에 영향을 주지 않으므로 항상 쇼케이스로 연다.
+        const mode = usesThemeHero
+            ? 'product_showcase'
+            : (VARIANTS.includes(req.query.mode) ? req.query.mode : activeVariant);
 
         const [slides] = await pool.query(`
             SELECT hs.*, p.name AS product_name, p.main_image, p.price, p.status AS product_status
@@ -67,6 +75,7 @@ exports.getList = async (req, res) => {
         res.render('admin/banners/hero-slides/list', {
             layout: 'layouts/admin_layout',
             title: '메인 슬라이더 관리',
+            usesThemeHero,
             activeVariant,
             mode,
             slides,

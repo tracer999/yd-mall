@@ -12,13 +12,13 @@ const { GLOBAL_CATEGORY_MALL_ID, hiddenCategoryIdSet } = require('../../catalog/
  *
  * config:
  *   maxCount      최대 노출 브랜드 수 (기본 8)
- *   productCount  브랜드당 상품 수 (기본 6)
+ *   productCount  브랜드당 상품 수 (기본 12 — 상품줄이 스와이프 캐러셀이라 한 화면보다 넉넉히 담는다)
  *
  * 상품이 걸린 브랜드가 0곳이면 스킵.
  */
 async function resolve({ shared, config, locals }) {
     const brandLimit = Math.min(Number(config.maxCount) || 8, 30);
-    const productLimit = Math.min(Number(config.productCount) || 6, 20);
+    const productLimit = Math.min(Number(config.productCount) || 12, 20);
     const vis = visibilityClause(shared.hasUser);
     const mallId = shared.mallId || 1;
 

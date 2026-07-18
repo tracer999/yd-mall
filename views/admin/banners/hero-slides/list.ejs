@@ -8,6 +8,8 @@
    */
   const isShowcase = mode === 'product_showcase';
   const isPreviewingInactive = mode !== activeVariant;
+  // theme_hero(페이지 빌더 히어로)를 쓰는 몰은 hero_variant 방식 전환이 프론트에 영향을 주지 않는다.
+  const _usesThemeHero = !!locals.usesThemeHero;
   const MODES = [
     {
       key: 'product_showcase',
@@ -28,6 +30,17 @@
 
 <%- include('../_tabs', { activeTab: 'HERO' }) %>
 
+<% if (_usesThemeHero) { %>
+<!-- 페이지 빌더 히어로(theme_hero) 사용 몰: hero_variant 방식 전환은 프론트에 영향이 없으므로 숨긴다. -->
+<div class="mb-8 flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+    <i class="bi bi-info-circle text-blue-600 mt-0.5"></i>
+    <p class="text-sm text-blue-900">
+        이 몰의 홈은 <span class="font-semibold">페이지 빌더 히어로</span>를 사용합니다.
+        아래 <span class="font-semibold">상품 쇼케이스 슬라이드가 그대로 홈 상단에 노출</span>됩니다.
+        <span class="block mt-0.5 text-xs text-blue-700">이미지 배너 슬라이드(전 몰 공용) 방식은 이 몰에 적용되지 않습니다.</span>
+    </p>
+</div>
+<% } else { %>
 <!-- ── 히어로 방식 선택 ── -->
 <form action="/admin/banners/hero-slides/variant" method="POST" class="mb-8">
     <div class="flex items-center gap-2 mb-3">
@@ -74,6 +87,7 @@
         <p class="text-xs text-gray-400">이 방식이 현재 홈에 적용돼 있습니다.</p>
     <% } %>
 </form>
+<% } %>
 
 <hr class="border-gray-200 mb-8">
 
