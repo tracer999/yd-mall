@@ -76,10 +76,18 @@
       if (s.willRender === false) badges += '<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-700">프론트 미노출</span>';
 
       // 왜 안 나오는지까지 말해 준다 — "상품 그룹을 만드세요" 수준으로 구체적으로.
-      var reason = (s.willRender === false && s.skipReason)
-        ? '<p class="mt-1 text-[11px] text-amber-700 leading-snug">' +
-            '<i class="bi bi-exclamation-triangle-fill mr-1"></i>' + esc(s.skipReason) + '</p>'
-        : '';
+      var reason = '';
+      if (s.willRender === false && s.skipReason) {
+        reason = '<p class="mt-1 text-[11px] text-amber-700 leading-snug">' +
+          '<i class="bi bi-exclamation-triangle-fill mr-1"></i>' + esc(s.skipReason) + '</p>';
+        // 이 캐러셀 데이터를 채우는 화면이 따로 있으면 바로 이동하게 한다(새 탭).
+        if (s.fixTarget && s.fixTarget.url) {
+          reason += '<a href="' + esc(s.fixTarget.url) + '" target="_blank" rel="noopener" ' +
+            'class="pb-fix mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ' +
+            'bg-amber-100 text-amber-800 hover:bg-amber-200">' +
+            '<i class="bi bi-box-arrow-up-right"></i>' + esc(s.fixTarget.label) + '로 이동</a>';
+        }
+      }
 
       row.innerHTML =
         '<span class="text-xs font-bold text-gray-400 w-5 text-center">' + (idx + 1) + '</span>' +
@@ -417,6 +425,7 @@
         // 서버가 다시 판정한 노출 여부 — 그룹을 붙여 고쳤으면 경고가 바로 사라진다.
         s.willRender = saved.willRender !== false;
         s.skipReason = saved.skipReason || null;
+        s.fixTarget = saved.fixTarget || null;
         s.title = body.title; s.config = body.config;
         if (body.data_source_id !== undefined) {
           s.data_source_id = body.data_source_id || null;
@@ -451,6 +460,8 @@
 
   // ---------- 이벤트 바인딩 ----------
   listEl.addEventListener('click', function (e) {
+    // '설정 이동' 링크는 기본 동작(새 탭 이동)만 하고 섹션 선택은 건너뛴다.
+    if (e.target.closest('.pb-fix')) return;
     var actBtn = e.target.closest('.pb-act');
     var row = e.target.closest('.pb-row');
     if (!row) return;

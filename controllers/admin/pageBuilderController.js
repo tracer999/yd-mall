@@ -98,6 +98,40 @@ function skipMessage(code, sectionType) {
   return SKIP_MESSAGE[code] || '스토어프론트에 노출되지 않습니다.';
 }
 
+/*
+ * 섹션 타입 → 그 섹션의 데이터를 채우는 "다른 관리 화면".
+ *
+ * 캐러셀이 비어(스킵) 나오는 이유(EMPTY_REASON)는 대개 "다른 화면에서 데이터를 만들어야"
+ * 해결된다. 운영자가 어디로 가야 하는지 바로 알 수 있게 이동 버튼을 붙인다.
+ * 비활성·기간·기기 스킵은 이 설정 패널에서 바로 고치므로 대상이 없다(아래 fixTargetFor).
+ */
+const MANAGE_TARGET = {
+  hero: { label: '배너 관리', url: '/admin/banners' },
+  theme_hero: { label: '히어로 슬라이드 관리', url: '/admin/banners/hero-slides' },
+  promotion_banner: { label: '배너 관리', url: '/admin/banners' },
+  deal_carousel: { label: '특가 관리', url: '/admin/deals' },
+  best_ranking: { label: '베스트·랭킹 관리', url: '/admin/best-groups' },
+  ranking_tabs: { label: '랭킹 그룹 관리', url: '/admin/best-groups' },
+  brand_carousel: { label: '카테고리 관리', url: '/admin/categories' },
+  category_showcase: { label: '카테고리 관리', url: '/admin/categories' },
+  product_grid: { label: '상품 그룹 관리', url: '/admin/product-groups' },
+  product_carousel: { label: '상품 그룹 관리', url: '/admin/product-groups' },
+  benefit_bento: { label: '상품 그룹 관리', url: '/admin/product-groups' },
+  new_by_category: { label: '상품 관리', url: '/admin/products' },
+  new_by_brand: { label: '상품 관리', url: '/admin/products' },
+  new_brand_list: { label: '상품 관리', url: '/admin/products' },
+  kakao_cta: { label: '사이트 설정', url: '/admin/site-settings' },
+};
+
+/**
+ * 미노출 섹션의 "설정 이동" 대상. 데이터를 다른 화면에서 채워야 하는 경우(code='empty')에만 준다.
+ * inactive/scheduled/expired/device_off 는 이 패널에서 바로 고치므로 null(버튼 없음).
+ */
+function fixTargetFor(code, sectionType) {
+  if (code !== 'empty') return null;
+  return MANAGE_TARGET[sectionType] || null;
+}
+
 exports.getEditor = async (req, res) => {
   try {
     const mallId = req.adminMallId || 1;
@@ -146,6 +180,7 @@ exports.getEditor = async (req, res) => {
         // 진단을 못 돌렸으면(diag 비었음) 노출로 가정한다 — 거짓 경고가 더 나쁘다.
         willRender: d ? d.rendered : true,
         skipReason: d ? skipMessage(d.code, s.section_type) : null,
+        fixTarget: d && !d.rendered ? fixTargetFor(d.code, s.section_type) : null,
       });
     });
 
@@ -211,6 +246,7 @@ exports.postSectionUpdate = async (req, res) => {
      */
     let willRender = true;
     let skipReason = null;
+    let fixTarget = null;
     try {
       const saved = await builder.getSection(id);
       const shared = await buildAdminShared(req, res);
@@ -218,12 +254,13 @@ exports.postSectionUpdate = async (req, res) => {
       if (d) {
         willRender = d.rendered;
         skipReason = skipMessage(d.code, saved.section_type);
+        fixTarget = !d.rendered ? fixTargetFor(d.code, saved.section_type) : null;
       }
     } catch (e) {
       console.error('[pageBuilder.postSectionUpdate] 진단 실패:', e.message);
     }
 
-    res.json({ success: true, willRender, skipReason });
+    res.json({ success: true, willRender, skipReason, fixTarget });
   } catch (err) {
     console.error('[pageBuilder.postSectionUpdate]', err);
     res.status(400).json({ success: false, message: err.message || '섹션 저장 실패' });
