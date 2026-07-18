@@ -45,4 +45,11 @@ router.post('/naver-taxonomy/refresh', requireMenuAccess('/admin/sourcing/naver-
 router.post('/naver-taxonomy/schedule', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverTaxonomySchedule);
 router.get('/naver-taxonomy/search', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.getNaverCategorySearch);
 
+// 카테고리 재매핑 검토 — FUZZY 롤백 + 수동 지정 (Phase 4)
+const REMAP_GUARD = requireMenuAccess('/admin/sourcing/category-remap');
+router.get('/category-remap', REMAP_GUARD, c.getCategoryRemap);
+router.get('/category-remap/search', REMAP_GUARD, c.getRemapTargetSearch);
+router.post('/category-remap/rollback', REMAP_GUARD, c.postRemapRollback);
+router.post('/category-remap/assign', REMAP_GUARD, c.postRemapAssign);
+
 module.exports = router;

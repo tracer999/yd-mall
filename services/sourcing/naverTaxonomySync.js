@@ -122,6 +122,17 @@ async function syncCategories(opts = {}) {
 
         await finishLog(logId, { status: 'SUCCESS', total: mapped.length, upserted, deactivated,
             message: `카테고리 ${mapped.length}건 수집(리프 포함), 비활성 ${deactivated}건` });
+
+        // Phase 4 지속 동기화 — 수집분을 우리 글로벌 카테고리에 반영(신규 추가 + 비활성 정리).
+        // 실패해도 수집 자체는 SUCCESS. (설계: 네이버_기반_글로벌_카테고리_재구성_설계.md §5 Phase 4)
+        try {
+            const categoryReflect = require('./categoryReflect');
+            const rr = await categoryReflect.reflect({ commit: true });
+            console.log(`[categoryReflect] 신규 ${rr.created} · 승격 ${rr.promoted} · 비활성정리 ${rr.removed}`);
+        } catch (e) {
+            console.error('[categoryReflect] 글로벌 카테고리 반영 실패(수집은 성공):', e.message);
+        }
+
         return { status: 'SUCCESS', total: mapped.length, upserted, deactivated };
     } catch (e) {
         await finishLog(logId, { status: 'FAILED', message: e.message });

@@ -110,16 +110,39 @@ CREATE TABLE IF NOT EXISTS `categories` (
   `pc_visible` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'PC 노출',
   `mobile_visible` tinyint(1) NOT NULL DEFAULT '1' COMMENT '모바일 노출',
   `type` enum('NORMAL','THEME','BRAND','OUTLET') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'NORMAL' COMMENT '카테고리 타입 (일반/테마/브랜드/아울렛 — 뎁스가 아닌 병렬 분류축)',
+  `origin` enum('naver','user') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'user' COMMENT '출처 — naver:네이버 표준시드 / user:사용자·상품등록 생성 (네이버 기반 재구성)',
   `logo_image_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '브랜드 로고 이미지 경로',
   `onboarded_at` date DEFAULT NULL COMMENT '브랜드 입점일 (type=BRAND 에서만 의미. 신규 입점 브랜드 판정 기준)',
   `description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '카테고리/브랜드 설명',
   `shopify_collection_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Shopify 컬렉션 ID (연동용)',
+  `naver_category_id` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '대응 네이버 카테고리 ID (origin=naver 일 때. products.naver_category_id 와 축 다름)',
   PRIMARY KEY (`id`),
   KEY `parent_id` (`parent_id`),
   KEY `idx_shopify_col_id` (`shopify_collection_id`),
   KEY `idx_categories_onboarded` (`mall_id`,`type`,`onboarded_at`),
+  KEY `idx_categories_naver` (`naver_category_id`),
+  KEY `idx_categories_origin` (`type`,`origin`),
   CONSTRAINT `categories_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='상품 카테고리 (계층 구조 지원, 최대 3뎁스)';
+
+-- 카테고리 재구성 감사·롤백 원장 (네이버 기반 글로벌 카테고리 재구성 Phase 0)
+CREATE TABLE IF NOT EXISTS `category_remap_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `phase` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'SEED | REMAP | PRUNE | SYNC',
+  `from_category_id` int DEFAULT NULL COMMENT '이동 전 우리 카테고리',
+  `to_category_id` int DEFAULT NULL COMMENT '이동 후 우리 카테고리(네이버 노드)',
+  `naver_category_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `product_count` int DEFAULT NULL COMMENT '이동한 상품 수',
+  `match_kind` enum('PATH','NAME','FUZZY','MANUAL','NONE') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `score` decimal(4,3) DEFAULT NULL,
+  `reverted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '관리자 롤백 여부',
+  `note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_crl_phase` (`phase`,`created_at`),
+  KEY `idx_crl_from` (`from_category_id`),
+  KEY `idx_crl_kind` (`match_kind`,`reverted`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='카테고리 재구성 감사·롤백 원장';
 
 
 -- =============================================================================

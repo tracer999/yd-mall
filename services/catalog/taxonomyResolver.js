@@ -268,10 +268,58 @@ async function getUncategorizedCategoryId({ mallId, conn = pool }) {
     return id;
 }
 
+/**
+ * 네이버 카테고리 ID 로 우리 글로벌 NORMAL 노드를 찾는다(§6 매핑 우선).
+ * 네이버 기반 재구성 이후, 상품 등록 위젯이 네이버 리프를 선택하면 그 id 로
+ * **먼저** 우리 표준 노드를 찾아 붙인다(퍼지·경로 매칭보다 우선 — 남발 방지).
+ *
+ *   1) 직접 매핑: categories.naver_category_id = 그 id (우리는 L1~L3 시드)
+ *   2) 네이버 리프가 L4(미시드)면 → whole_category_name 의 상위 L3 경로로 폴백해
+ *      그 L3 네이버 노드의 id 로 우리 노드를 찾는다(우리 최대 3뎁스와 정합).
+ *
+ * @returns {Promise<{id:number, name:string, matched:'direct'|'l3parent'}|null>}
+ */
+async function resolveByNaverCategoryId({ naverCategoryId, conn = pool }) {
+    const nid = String(naverCategoryId || '').trim();
+    if (!nid) return null;
+    const mallId = GLOBAL_CATEGORY_MALL_ID;
+
+    // 1) 직접 매핑
+    let [rows] = await conn.query(
+        "SELECT id, name FROM categories WHERE mall_id=? AND type='NORMAL' AND naver_category_id=? LIMIT 1",
+        [mallId, nid]
+    );
+    if (rows.length) return { id: rows[0].id, name: rows[0].name, matched: 'direct' };
+
+    // 2) L4 등 미시드 → 상위 L3 경로로 폴백
+    const [nc] = await conn.query(
+        'SELECT whole_category_name, category_level FROM naver_category WHERE naver_category_id=? LIMIT 1', [nid]
+    );
+    if (nc.length) {
+        const segs = String(nc[0].whole_category_name || '').split('>').map((s) => s.trim()).filter(Boolean);
+        if (segs.length > 3) {
+            const parentWhole = segs.slice(0, 3).join('>');
+            const [p] = await conn.query(
+                "SELECT naver_category_id FROM naver_category WHERE whole_category_name=? AND category_level=3 LIMIT 1",
+                [parentWhole]
+            );
+            if (p.length) {
+                [rows] = await conn.query(
+                    "SELECT id, name FROM categories WHERE mall_id=? AND type='NORMAL' AND naver_category_id=? LIMIT 1",
+                    [mallId, p[0].naver_category_id]
+                );
+                if (rows.length) return { id: rows[0].id, name: rows[0].name, matched: 'l3parent' };
+            }
+        }
+    }
+    return null;
+}
+
 module.exports = {
     resolveOrCreateCategory,
     resolveOrCreatePath,
     resolveOrCreateBrand,
+    resolveByNaverCategoryId,
     createCategory,
     getUncategorizedCategoryId,
     UNCATEGORIZED_NAME,

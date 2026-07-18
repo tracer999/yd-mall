@@ -12,9 +12,11 @@ const pool = require('../../config/db');
 const cred = require('../../services/sourcing/credential');
 const { CHANNEL_META, validateConnection, resolveCredentialChannel } = require('../../services/sourcing/adapters');
 const naverTaxonomy = require('../../services/sourcing/naverTaxonomySync');
+const categoryRemap = require('../../services/sourcing/categoryRemapService');
 
 const BASE = '/admin/sourcing/connections';
 const NAVER_BASE = '/admin/sourcing/naver-taxonomy';
+const REMAP_BASE = '/admin/sourcing/category-remap';
 
 function isProviderReq(req) {
     return !!(req.session && req.session.admin && req.session.admin.role === 'super_admin');
@@ -242,5 +244,75 @@ exports.getNaverCategorySearch = async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
+    }
+};
+
+// ---------------------------------------------------------------------------
+// 카테고리 재매핑 수동큐 · 롤백 (Phase 4)
+//   FUZZY 자동편입(오매칭 가능) 검토·되돌리기 + MANUAL/NONE 수동 지정.
+// ---------------------------------------------------------------------------
+exports.getCategoryRemap = async (req, res) => {
+    try {
+        const status = await categoryRemap.getStatus();
+        res.render('admin/sourcing/category_remap', {
+            layout: 'layouts/admin_layout',
+            title: '외부몰 연동 · 카테고리 재매핑 검토',
+            subtitle: '네이버 표준으로 자동 편입된 상품(FUZZY)을 검토·되돌리고, 모호·무매칭 카테고리를 수동 지정합니다.',
+            status,
+            saved: req.query.saved === '1',
+            msg: req.query.msg || '',
+            error: req.query.error || '',
+        });
+    } catch (e) {
+        res.status(500).render('admin/sourcing/category_remap', {
+            layout: 'layouts/admin_layout',
+            title: '외부몰 연동 · 카테고리 재매핑 검토',
+            subtitle: '', status: null, saved: false, msg: '', error: e.message,
+        });
+    }
+};
+
+// 글로벌 NORMAL 카테고리 검색(수동 지정 타겟 고르기용, JSON) — 경로까지 표시.
+exports.getRemapTargetSearch = async (req, res) => {
+    try {
+        const q = String(req.query.q || '').trim();
+        if (q.length < 1) return res.json({ success: true, data: [] });
+        const [rows] = await pool.query(
+            `SELECT c.id, c.name, c.depth,
+                    TRIM(BOTH '>' FROM CONCAT(COALESCE(g.name,''),'>',COALESCE(p.name,''),'>',c.name)) AS path
+               FROM categories c
+               LEFT JOIN categories p ON c.parent_id=p.id
+               LEFT JOIN categories g ON p.parent_id=g.id
+              WHERE c.mall_id=0 AND c.type='NORMAL' AND c.origin='naver' AND c.name LIKE ?
+              ORDER BY c.depth DESC, c.name LIMIT 20`,
+            [`%${q}%`]
+        );
+        res.json({ success: true, data: rows });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+};
+
+exports.postRemapRollback = async (req, res) => {
+    try {
+        if (req.body.all === '1') {
+            const r = await categoryRemap.rollbackAllFuzzy();
+            return res.redirect(`${REMAP_BASE}?msg=` + encodeURIComponent(`FUZZY ${r.reverted}건 되돌림(상품 ${r.moved})`));
+        }
+        const r = await categoryRemap.rollbackOne(Number(req.body.log_id));
+        if (!r.ok) return res.redirect(`${REMAP_BASE}?error=` + encodeURIComponent(r.reason));
+        res.redirect(`${REMAP_BASE}?msg=` + encodeURIComponent(`되돌림(상품 ${r.moved})`));
+    } catch (e) {
+        res.redirect(`${REMAP_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+exports.postRemapAssign = async (req, res) => {
+    try {
+        const r = await categoryRemap.assign(Number(req.body.log_id), Number(req.body.target_id));
+        if (!r.ok) return res.redirect(`${REMAP_BASE}?error=` + encodeURIComponent(r.reason));
+        res.redirect(`${REMAP_BASE}?msg=` + encodeURIComponent(`지정 완료(상품 ${r.moved})`));
+    } catch (e) {
+        res.redirect(`${REMAP_BASE}?error=` + encodeURIComponent(e.message));
     }
 };
