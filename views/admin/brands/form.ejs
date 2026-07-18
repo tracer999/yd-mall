@@ -198,4 +198,230 @@
       <button type="submit" class="px-6 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">저장</button>
     </div>
   </form>
+
+  <%
+    var bpg = (typeof productPagination !== 'undefined') ? productPagination : { total: 0, page: 1, pages: 1 };
+    var bAssigned = (typeof assignedProducts !== 'undefined') ? assignedProducts : [];
+    var bUnassigned = (typeof unassignedCount !== 'undefined') ? unassignedCount : 0;
+    var bMallName = (typeof currentMallName !== 'undefined') ? currentMallName : '';
+    var bWon = function (n) { return Number(n || 0).toLocaleString('ko-KR'); };
+    var bVIS = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+  %>
+
+  <!-- 브랜드 상품 관리 -->
+  <section class="mt-6 bg-white border border-gray-200 rounded-xl">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+      <div class="mr-auto">
+        <h2 class="text-base font-bold text-gray-900">이 브랜드의 상품
+          <span class="ml-1 text-sm font-normal text-gray-400">(<%= bMallName %> · 총 <%= bpg.total %>개)</span>
+        </h2>
+        <p class="text-xs text-gray-500 mt-0.5">현재 편집 몰의 상품만 표시됩니다. 브랜드가 미설정된 상품을 배정하거나 제거하세요.</p>
+      </div>
+      <button type="button" id="brandOpenPicker"
+              class="inline-flex items-center h-[36px] px-4 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+        <i class="bi bi-plus-lg mr-1"></i>상품 추가
+        <% if (bUnassigned > 0) { %><span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-white/20">미설정 <%= bUnassigned %></span><% } %>
+      </button>
+    </div>
+
+    <div class="divide-y divide-gray-100">
+      <% if (bAssigned.length === 0) { %>
+        <p class="px-6 py-12 text-center text-sm text-gray-400">
+          <i class="bi bi-inbox text-2xl block mb-1 text-gray-300"></i>
+          아직 이 브랜드에 속한 상품이 없습니다. <strong>[상품 추가]</strong>로 배정하세요.
+        </p>
+      <% } %>
+      <% bAssigned.forEach(function (p) { %>
+        <div class="flex items-center gap-3 px-6 py-3" data-product-row="<%= p.id %>">
+          <img src="<%= p.main_image || '/images/no-image.png' %>" class="w-11 h-11 rounded object-cover bg-gray-100 flex-shrink-0">
+          <div class="flex-1 min-w-0">
+            <div class="text-sm text-gray-900 truncate"><%= p.name %></div>
+            <div class="text-xs text-gray-400">
+              <%= bWon(p.price) %>원 · 재고 <%= p.stock %> · <%= bVIS[p.visibility] || p.visibility %>
+              <% if (p.product_code) { %> · <%= p.product_code %><% } %>
+            </div>
+          </div>
+          <button type="button" data-remove-product="<%= p.id %>"
+                  class="flex-shrink-0 inline-flex items-center h-[30px] px-2.5 text-xs font-medium rounded-md border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">
+            <i class="bi bi-x-lg mr-1"></i>제거
+          </button>
+        </div>
+      <% }); %>
+    </div>
+
+    <% if (bpg.pages > 1) { %>
+      <div class="px-6 py-3 border-t border-gray-100 flex items-center justify-center gap-1 text-sm">
+        <% for (var pg = 1; pg <= bpg.pages; pg++) { %>
+          <a href="/admin/brands/<%= b.id %>?ppage=<%= pg %>"
+             class="px-2.5 py-1 rounded no-underline <%= pg === bpg.page ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-100' %>"><%= pg %></a>
+        <% } %>
+      </div>
+    <% } %>
+  </section>
 </div>
+
+<!-- ── 미설정 상품 추가 팝업 ── -->
+<div id="brandPicker" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+  <div class="absolute inset-0 bg-black/40" data-brand-close></div>
+  <div class="relative mx-auto my-8 w-[95%] max-w-3xl bg-white rounded-xl shadow-xl flex flex-col max-h-[85vh]">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div>
+        <h3 class="text-base font-bold text-gray-800">상품 추가 — 미설정 상품</h3>
+        <p class="text-xs text-gray-400 mt-0.5">브랜드가 아직 지정되지 않은 이 몰 상품만 보입니다.</p>
+      </div>
+      <button type="button" data-brand-close class="text-gray-400 hover:text-gray-700"><i class="bi bi-x-lg"></i></button>
+    </div>
+
+    <div class="px-5 py-4 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+      <div class="col-span-2">
+        <label class="block text-xs text-gray-500 mb-1">검색어</label>
+        <input type="text" id="bpQ" placeholder="상품명·상품코드" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">재고</label>
+        <select id="bpStock" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+          <option value="">전체</option><option value="y">재고 있음</option><option value="n">재고 없음</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">노출</label>
+        <select id="bpVis" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+          <option value="">전체</option><option value="PUBLIC">노출</option><option value="HIDDEN">숨김</option><option value="MEMBER_ONLY">회원전용</option>
+        </select>
+      </div>
+      <div class="col-span-2 sm:col-span-4 flex items-center gap-2">
+        <button type="button" id="bpSearch" class="h-[34px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900"><i class="bi bi-search mr-1"></i>검색</button>
+        <label class="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600">
+          <input type="checkbox" id="bpAll" class="w-4 h-4"> 결과 전체 선택
+        </label>
+      </div>
+    </div>
+
+    <div id="bpResults" class="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+      <p class="py-10 text-center text-sm text-gray-400">검색하여 미설정 상품을 찾으세요.</p>
+    </div>
+
+    <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+      <span class="text-xs text-gray-500"><span id="bpCount">0</span>개 선택됨</span>
+      <div class="flex gap-2">
+        <button type="button" data-brand-close class="h-[36px] px-4 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50">닫기</button>
+        <button type="button" id="bpAdd" class="h-[36px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50" disabled>선택 배정</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var BRAND_ID = <%- JSON.stringify(b.id) %>;
+  var won = function (n) { return Number(n || 0).toLocaleString('ko-KR'); };
+  var VIS = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+
+  document.querySelectorAll('[data-remove-product]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var pid = Number(btn.getAttribute('data-remove-product'));
+      if (!confirm('이 상품을 이 브랜드에서 제거할까요?')) return;
+      btn.disabled = true;
+      try {
+        var res = await fetch('/admin/brands/' + BRAND_ID + '/products/remove', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: pid })
+        });
+        var data = await res.json();
+        if (data && data.success) location.reload();
+        else { btn.disabled = false; alert('제거에 실패했습니다.'); }
+      } catch (e) { btn.disabled = false; alert('제거에 실패했습니다.'); }
+    });
+  });
+
+  var picker = document.getElementById('brandPicker');
+  var openBtn = document.getElementById('brandOpenPicker');
+  var resultsEl = document.getElementById('bpResults');
+  var countEl = document.getElementById('bpCount');
+  var addBtn = document.getElementById('bpAdd');
+  var allChk = document.getElementById('bpAll');
+  var selected = new Set();
+
+  function openPicker() { picker.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  function closePicker() { picker.classList.add('hidden'); document.body.style.overflow = ''; }
+  openBtn.addEventListener('click', openPicker);
+  picker.querySelectorAll('[data-brand-close]').forEach(function (el) { el.addEventListener('click', closePicker); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !picker.classList.contains('hidden')) closePicker(); });
+
+  function updateCount() { countEl.textContent = selected.size; addBtn.disabled = selected.size === 0; }
+
+  function render(products, limited) {
+    selected.clear(); updateCount(); if (allChk) allChk.checked = false;
+    if (!products.length) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조건에 맞는 미설정 상품이 없습니다.</p>';
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    if (limited) {
+      var note = document.createElement('p');
+      note.className = 'mb-2 text-xs text-amber-600';
+      note.textContent = '결과가 100개에 도달했습니다. 검색어로 좁혀 주세요.';
+      frag.appendChild(note);
+    }
+    products.forEach(function (p) {
+      var row = document.createElement('label');
+      row.className = 'flex items-center gap-3 px-2 py-2 rounded border border-gray-100 hover:bg-gray-50 cursor-pointer';
+      var chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.className = 'w-4 h-4 flex-shrink-0'; chk.value = String(p.id);
+      chk.addEventListener('change', function () { if (chk.checked) selected.add(p.id); else selected.delete(p.id); updateCount(); });
+      var img = document.createElement('img');
+      img.src = p.main_image || '/images/no-image.png';
+      img.className = 'w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0';
+      var info = document.createElement('div'); info.className = 'flex-1 min-w-0';
+      var nm = document.createElement('div'); nm.className = 'text-sm text-gray-900 truncate'; nm.textContent = p.name;
+      var meta = document.createElement('div'); meta.className = 'text-xs text-gray-400';
+      meta.textContent = won(p.price) + '원 · 재고 ' + p.stock + ' · ' + (VIS[p.visibility] || p.visibility);
+      info.append(nm, meta);
+      row.append(chk, img, info);
+      frag.appendChild(row);
+    });
+    resultsEl.innerHTML = ''; resultsEl.appendChild(frag);
+  }
+
+  async function doSearch() {
+    var params = new URLSearchParams();
+    var q = document.getElementById('bpQ').value.trim();
+    var stock = document.getElementById('bpStock').value;
+    var vis = document.getElementById('bpVis').value;
+    if (q) params.set('q', q);
+    if (stock) params.set('in_stock', stock);
+    if (vis) params.set('visibility', vis);
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조회 중…</p>';
+    try {
+      var res = await fetch('/admin/brands/' + BRAND_ID + '/product-search?' + params.toString());
+      var data = await res.json();
+      render(data.products || [], data.limited);
+    } catch (e) { resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-red-500">조회에 실패했습니다.</p>'; }
+  }
+  document.getElementById('bpSearch').addEventListener('click', doSearch);
+  document.getElementById('bpQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+
+  allChk.addEventListener('change', function () {
+    resultsEl.querySelectorAll('input[type=checkbox]').forEach(function (chk) {
+      chk.checked = allChk.checked;
+      var pid = Number(chk.value);
+      if (allChk.checked) selected.add(pid); else selected.delete(pid);
+    });
+    updateCount();
+  });
+
+  addBtn.addEventListener('click', async function () {
+    if (!selected.size) return;
+    addBtn.disabled = true;
+    try {
+      var res = await fetch('/admin/brands/' + BRAND_ID + '/products', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: [].concat(Array.from(selected)) })
+      });
+      var data = await res.json();
+      if (data && data.success) location.href = '/admin/brands/' + BRAND_ID + '?success=' + encodeURIComponent('상품을 배정했습니다.');
+      else { addBtn.disabled = false; alert('배정에 실패했습니다.'); }
+    } catch (e) { addBtn.disabled = false; alert('배정에 실패했습니다.'); }
+  });
+})();
+</script>

@@ -24,13 +24,13 @@ const toJs = (v) => JSON.stringify(v)
     <div>
         <p class="text-sm text-gray-500">상품, 테마, 브랜드 카테고리를 관리합니다. 각 분류 안에서 최대 <%= maxDepth %>단계까지 계층을 만들 수 있습니다.</p>
         <p class="mt-0.5 text-xs text-gray-400">
-            이름·순서·상위 변경은 행마다 <strong>[수정]</strong>. 노출(활성·PC·모바일)만 여러 건 바꿀 때는 <strong>[노출 일괄 저장]</strong> 을 쓰세요.<br>
-            카테고리·브랜드는 전 몰 공통(글로벌)입니다. <strong>[노출(전역)]</strong> 은 모든 몰에 적용되는 스위치, <strong>[이 몰 표시]</strong> 는 현재 몰(<%= currentMallName %>) 스토어프론트에서만 숨기고 여는 토글입니다(상품이 있는 항목만 가능, 즉시 저장).
+            상품 배정·기본정보 관리는 행마다 <strong>[관리]</strong>(상세 화면). 사용 여부만 여러 건 바꿀 때는 <strong>[사용여부 저장]</strong> 을 쓰세요. 메뉴(GNB) 노출·순서는 <a href="/admin/menu-preview" class="text-indigo-600 hover:underline">메뉴 미리보기</a>에서 관리합니다.<br>
+            카테고리·브랜드는 전 몰 공통(글로벌)입니다. <strong>[사용 여부]</strong> 는 모든 몰에 적용되는 스위치, <strong>[이 몰 표시]</strong> 는 현재 몰(<%= currentMallName %>) 스토어프론트에서만 숨기고 여는 토글입니다(상품이 있는 항목만 가능, 즉시 저장).
         </p>
     </div>
     <div class="flex items-center gap-2">
     <% if (typeof saved !== 'undefined' && saved) { %>
-        <span class="text-xs text-emerald-600 mr-1">노출이 저장되었습니다.</span>
+        <span class="text-xs text-emerald-600 mr-1">저장되었습니다.</span>
     <% } %>
     <%#
       노출 일괄 저장 — 체크박스는 행별 수정 폼(form 속성)에 묶여 있어 다른 폼으로 함께 보낼 수 없다.
@@ -38,7 +38,7 @@ const toJs = (v) => JSON.stringify(v)
     %>
     <button type="button" onclick="saveVisibility()"
         class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 whitespace-nowrap">
-        노출 일괄 저장
+        사용여부 저장
     </button>
     <button onclick="openModal()"
         class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 gap-2 whitespace-nowrap">
@@ -94,7 +94,7 @@ const toJs = (v) => JSON.stringify(v)
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">입점일</th>
                             <% } %>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">상위 카테고리</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-40" title="모든 몰 공통(글로벌 카탈로그) 노출 스위치">노출(전역)</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32" title="모든 몰 공통(글로벌 카탈로그) 사용 여부 스위치">사용 여부</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32" title="이 몰(<%= currentMallName %>) 스토어프론트에서만 표시 여부">이 몰 표시<br><span class="text-[10px] normal-case text-gray-400"><%= currentMallName %></span></th>
                             <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">상품수</th>
                             <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">관리</th>
@@ -215,21 +215,14 @@ const toJs = (v) => JSON.stringify(v)
 
                                 <td class="px-4 py-4 whitespace-nowrap">
                                     <div class="flex items-center justify-center gap-3 text-xs text-gray-600">
-                                        <label class="inline-flex items-center gap-1" title="활성화">
+                                        <label class="inline-flex items-center gap-1" title="사용 여부(전역)">
                                             <input form="<%= formId %>" type="hidden" name="is_active" value="0">
                                             <input form="<%= formId %>" type="checkbox" name="is_active" value="1" <%= category.is_active ? 'checked' : '' %>>
-                                            <span>활성</span>
+                                            <span>사용</span>
                                         </label>
-                                        <label class="inline-flex items-center gap-1" title="PC 노출">
-                                            <input form="<%= formId %>" type="hidden" name="pc_visible" value="0">
-                                            <input form="<%= formId %>" type="checkbox" name="pc_visible" value="1" <%= category.pc_visible ? 'checked' : '' %>>
-                                            <span>PC</span>
-                                        </label>
-                                        <label class="inline-flex items-center gap-1" title="모바일 노출">
-                                            <input form="<%= formId %>" type="hidden" name="mobile_visible" value="0">
-                                            <input form="<%= formId %>" type="checkbox" name="mobile_visible" value="1" <%= category.mobile_visible ? 'checked' : '' %>>
-                                            <span>M</span>
-                                        </label>
+                                        <%# 메뉴(PC/모바일) 노출은 메뉴 미리보기에서 관리한다. 여기서는 값만 보존한다. %>
+                                        <input form="<%= formId %>" type="hidden" name="pc_visible" value="<%= category.pc_visible ? 1 : 0 %>">
+                                        <input form="<%= formId %>" type="hidden" name="mobile_visible" value="<%= category.mobile_visible ? 1 : 0 %>">
                                     </div>
                                 </td>
 
@@ -258,6 +251,9 @@ const toJs = (v) => JSON.stringify(v)
 
                                 <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex justify-end gap-2">
+                                        <%# 상세 화면 — 기본정보 + 상품 배정/제거. 브랜드는 브랜드 관리 상세로. %>
+                                        <a href="<%= tab.type === 'BRAND' ? '/admin/brands/' + category.id : '/admin/categories/' + category.id %>"
+                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline"><i class="bi bi-box-arrow-up-right mr-1"></i>관리</a>
                                         <button form="<%= formId %>" type="submit"
                                             class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</button>
                                         <% if (category.childCount > 0) { %>
@@ -465,9 +461,8 @@ const toJs = (v) => JSON.stringify(v)
                 const box = row.querySelector('input[type="checkbox"][name="' + inputName + '"]');
                 if (box && box.checked) add(key + '[c' + id + ']', '1');
             };
+            // 사용 여부만 보낸다. 메뉴 노출(pc/mobile)은 메뉴 미리보기 소관.
             flag('is_active', 'active');
-            flag('pc_visible', 'pc');
-            flag('mobile_visible', 'mo');
         });
 
         form.submit();

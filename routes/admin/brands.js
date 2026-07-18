@@ -22,4 +22,9 @@ router.post('/recalc', c.postRecalc);
 router.get('/:id', requireNumericId('id'), c.getEdit);
 router.post('/:id', requireNumericId('id'), c.postUpdate);
 
+// 상품 배정/제거 (현재 편집 몰 스코프)
+router.get('/:id/product-search', requireNumericId('id'), c.getProductSearch);
+router.post('/:id/products', requireNumericId('id'), c.postAssignProducts);
+router.post('/:id/products/remove', requireNumericId('id'), c.postRemoveProduct);
+
 module.exports = router;

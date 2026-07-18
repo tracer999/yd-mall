@@ -338,6 +338,8 @@ exports.postEdit = async (req, res) => {
                 .then(r => !r?.skipped && console.log(`[Shopify] 카테고리 컬렉션 업데이트: ${name}`))
                 .catch(e => console.error(`[Shopify] 카테고리 컬렉션 업데이트 실패: ${name}: ${e.message}`));
         }
+        // 상세 화면에서 저장했으면 상세로 되돌린다.
+        if (req.body.return_to === 'detail') return res.redirect(`/admin/categories/${nodeId}?saved=1`);
         res.redirect(`/admin/categories?tab=${activeTab}`);
     } catch (err) {
         try { await conn.rollback(); } catch (e) { /* 트랜잭션 미시작 */ }
@@ -371,12 +373,12 @@ exports.postVisibility = async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+        // 사용 여부(is_active)만 일괄 저장한다. 메뉴 노출(pc/mobile)은 메뉴 미리보기 소관이라 건드리지 않는다.
         await conn.beginTransaction();
         for (const id of ids) {
             await conn.query(
-                `UPDATE categories SET is_active = ?, pc_visible = ?, mobile_visible = ?
-                  WHERE id = ? AND mall_id IN (0, ?)`,
-                [on(req.body.active, id), on(req.body.pc, id), on(req.body.mo, id), id, mallId],
+                'UPDATE categories SET is_active = ? WHERE id = ? AND mall_id IN (0, ?)',
+                [on(req.body.active, id), id, mallId],
             );
         }
         await conn.commit();
@@ -422,6 +424,160 @@ exports.postMallVisibility = async (req, res) => {
     } catch (err) {
         console.error('[category] postMallVisibility:', err.message);
         res.status(500).send('Server Error');
+    }
+};
+
+/* ────────────────────────────────────────────────────────────────
+ * 카테고리/브랜드 상세 — 기본정보 편집 + 상품 배정/제거
+ *
+ * 카테고리·브랜드는 글로벌(mall_id=0) 한 벌이지만 상품은 몰별이다. 그래서 상세의
+ * 상품 목록·배정·제거는 모두 **편집 중인 몰(req.adminMallId)** 스코프로만 다룬다.
+ * products.category_id / brand_category_id 는 단일 FK라 "배정"=컬럼 쓰기, "제거"=NULL.
+ * ──────────────────────────────────────────────────────────────── */
+
+const VISIBILITIES = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
+const DETAIL_PER_PAGE = 50;
+
+/** 상세에서 상품 컬럼을 type 으로 고른다(사용자 입력 아님 → SQL 주입 안전). */
+function productColumnFor(type) {
+    return type === 'BRAND' ? 'brand_category_id' : 'category_id';
+}
+
+/** GET /admin/categories/:id — 상세 화면 */
+exports.getDetail = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    try {
+        const [[category]] = await pool.query(
+            'SELECT * FROM categories WHERE id = ? AND mall_id IN (?, ?)',
+            [id, GLOBAL_CATEGORY_MALL_ID, MALL_ID]
+        );
+        if (!category) return res.redirect('/admin/categories?error=' + encodeURIComponent('카테고리를 찾을 수 없습니다.'));
+
+        const col = productColumnFor(category.type);
+
+        // 이 카테고리/브랜드에 속한 이 몰 상품 (페이지네이션)
+        const [[{ total }]] = await pool.query(
+            `SELECT COUNT(*) AS total FROM products WHERE mall_id = ? AND ${col} = ?`, [MALL_ID, id]
+        );
+        const totalPages = Math.max(1, Math.ceil(total / DETAIL_PER_PAGE));
+        const page = Math.min(Math.max(1, Number.parseInt(req.query.page, 10) || 1), totalPages);
+        const [products] = await pool.query(
+            `SELECT id, name, product_code, main_image, price, stock, status, visibility
+               FROM products WHERE mall_id = ? AND ${col} = ?
+              ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [MALL_ID, id, DETAIL_PER_PAGE, (page - 1) * DETAIL_PER_PAGE]
+        );
+
+        // 미설정(이 컬럼이 NULL) 상품 수 — 팝업 안내용
+        const [[{ unassigned }]] = await pool.query(
+            `SELECT COUNT(*) AS unassigned FROM products WHERE mall_id = ? AND ${col} IS NULL`, [MALL_ID]
+        );
+
+        // 기본정보 편집 폼의 상위 후보(같은 type, depth <= 최대-1)
+        const maxDepth = await depthGuard.getCategoryMaxDepth(MALL_ID);
+        const [sameType] = await pool.query(
+            'SELECT id, name, parent_id, display_order FROM categories WHERE type = ? AND mall_id IN (?, ?) ORDER BY display_order ASC, id ASC',
+            [category.type, GLOBAL_CATEGORY_MALL_ID, MALL_ID]
+        );
+        const parentOptions = flattenTree(sameType)
+            .filter(o => o._depth <= (maxDepth - 1) && o.id !== id)
+            .map(o => ({ id: o.id, name: o.name, depth: o._depth }));
+
+        const [[mallRow]] = await pool.query('SELECT name FROM mall WHERE id = ?', [MALL_ID]).catch(() => [[null]]);
+
+        res.render('admin/categories/detail', {
+            layout: 'layouts/admin_layout',
+            title: (category.type === 'BRAND' ? '브랜드' : '카테고리') + ' 상세',
+            category, products, total, page, totalPages, perPage: DETAIL_PER_PAGE,
+            unassigned, parentOptions, maxDepth,
+            currentMallName: (mallRow && mallRow.name) || `몰 ${MALL_ID}`,
+            saved: req.query.saved === '1', error: req.query.error || '',
+        });
+    } catch (err) {
+        console.error('[category] getDetail:', err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+/** GET /admin/categories/:id/product-search — 미설정(이 카테고리/브랜드 없음) 상품 검색(JSON) */
+exports.getProductSearch = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    try {
+        const [[category]] = await pool.query(
+            'SELECT type FROM categories WHERE id = ? AND mall_id IN (?, ?)', [id, GLOBAL_CATEGORY_MALL_ID, MALL_ID]
+        );
+        if (!category) return res.status(404).json({ products: [] });
+        const col = productColumnFor(category.type);
+
+        const q = String(req.query.q || '').trim();
+        const inStock = String(req.query.in_stock || '');
+        const visibility = String(req.query.visibility || '');
+
+        // 이 몰 상품 중 아직 이 축(카테고리/브랜드)이 미설정인 것만 후보로 제시한다.
+        const where = ['p.mall_id = ?', `p.${col} IS NULL`];
+        const params = [MALL_ID];
+        if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
+        if (inStock === 'y') where.push('p.stock > 0');
+        else if (inStock === 'n') where.push('p.stock <= 0');
+        if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
+
+        const [products] = await pool.query(`
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status, p.visibility
+            FROM products p WHERE ${where.join(' AND ')}
+            ORDER BY p.created_at DESC LIMIT 100
+        `, params);
+        res.json({ products, limited: products.length >= 100 });
+    } catch (err) {
+        console.error('[category] getProductSearch:', err.message);
+        res.status(500).json({ products: [] });
+    }
+};
+
+/** POST /admin/categories/:id/products — 미설정 상품을 이 카테고리/브랜드에 일괄 배정 */
+exports.postAssignProducts = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    const ids = [].concat(req.body.product_ids || []).map(Number).filter(n => Number.isInteger(n) && n > 0);
+    try {
+        const [[category]] = await pool.query(
+            'SELECT type FROM categories WHERE id = ? AND mall_id IN (?, ?)', [id, GLOBAL_CATEGORY_MALL_ID, MALL_ID]
+        );
+        if (!category) return res.status(404).json({ success: false, message: '카테고리를 찾을 수 없습니다.' });
+        if (!ids.length) return res.json({ success: true, assigned: 0 });
+        const col = productColumnFor(category.type);
+        // IS NULL 조건 — 이미 다른 카테고리에 속한 상품을 실수로 이동시키지 않는다(미설정만 배정).
+        const [r] = await pool.query(
+            `UPDATE products SET ${col} = ? WHERE mall_id = ? AND ${col} IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
+            [id, MALL_ID, ...ids]
+        );
+        res.json({ success: true, assigned: r.affectedRows });
+    } catch (err) {
+        console.error('[category] postAssignProducts:', err.message);
+        res.status(500).json({ success: false, message: '배정 실패' });
+    }
+};
+
+/** POST /admin/categories/:id/products/remove — 상품을 이 카테고리/브랜드에서 제거(연결 해제) */
+exports.postRemoveProduct = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    const productId = Number(req.body.product_id);
+    try {
+        const [[category]] = await pool.query(
+            'SELECT type FROM categories WHERE id = ? AND mall_id IN (?, ?)', [id, GLOBAL_CATEGORY_MALL_ID, MALL_ID]
+        );
+        if (!category) return res.status(404).json({ success: false });
+        const col = productColumnFor(category.type);
+        const [r] = await pool.query(
+            `UPDATE products SET ${col} = NULL WHERE id = ? AND mall_id = ? AND ${col} = ?`,
+            [productId, MALL_ID, id]
+        );
+        res.json({ success: true, removed: r.affectedRows });
+    } catch (err) {
+        console.error('[category] postRemoveProduct:', err.message);
+        res.status(500).json({ success: false });
     }
 };
 

@@ -16,6 +16,8 @@ const { GLOBAL_CATEGORY_MALL_ID } = require('../../services/catalog/categoryScop
  */
 
 const PAGE_SIZE = 30;
+const BRAND_PROD_PER_PAGE = 50;
+const VISIBILITIES = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
 
 /** GET /admin/brands */
 exports.getList = async (req, res) => {
@@ -148,13 +150,36 @@ exports.getEdit = async (req, res) => {
              ORDER BY bcs.product_count DESC LIMIT 20
         `, [mallId, id]);
 
+        // 이 브랜드에 속한 이 몰 상품 (배정/제거 관리 — 브랜드는 글로벌, 상품은 몰별)
+        const prodPage = Math.max(1, Number.parseInt(req.query.ppage, 10) || 1);
+        const [[{ ptotal }]] = await pool.query(
+            'SELECT COUNT(*) AS ptotal FROM products WHERE mall_id = ? AND brand_category_id = ?', [mallId, id]
+        );
+        const ptotalPages = Math.max(1, Math.ceil(ptotal / BRAND_PROD_PER_PAGE));
+        const curProdPage = Math.min(prodPage, ptotalPages);
+        const [assignedProducts] = await pool.query(
+            `SELECT id, name, product_code, main_image, price, stock, status, visibility
+               FROM products WHERE mall_id = ? AND brand_category_id = ?
+              ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [mallId, id, BRAND_PROD_PER_PAGE, (curProdPage - 1) * BRAND_PROD_PER_PAGE]
+        );
+        const [[{ unassignedCount }]] = await pool.query(
+            'SELECT COUNT(*) AS unassignedCount FROM products WHERE mall_id = ? AND brand_category_id IS NULL', [mallId]
+        );
+
+        const [[mallRow]] = await pool.query('SELECT name FROM mall WHERE id = ?', [mallId]).catch(() => [[null]]);
+
         res.render('admin/brands/form', {
             layout: 'layouts/admin_layout',
             title: `브랜드 · ${brand.name}`,
             brand,
             categories,
             initialBuckets: INITIAL_BUCKETS,
-            success: req.query.success || null
+            success: req.query.success || null,
+            assignedProducts,
+            productPagination: { total: ptotal, page: curProdPage, pages: ptotalPages },
+            unassignedCount,
+            currentMallName: (mallRow && mallRow.name) || `몰 ${mallId}`,
         });
     } catch (err) {
         console.error('[admin/brands] 편집 실패', err);
@@ -231,6 +256,81 @@ exports.postUpdate = async (req, res) => {
         res.status(500).send('Server Error');
     } finally {
         conn.release();
+    }
+};
+
+/* ── 브랜드 상품 배정/제거 (brand_category_id 단일 FK · 현재 편집 몰 스코프) ── */
+
+async function ensureBrand(id, mallId) {
+    const [[b]] = await pool.query(
+        "SELECT id FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id IN (0, ?)", [id, mallId]
+    );
+    return b || null;
+}
+
+/** GET /admin/brands/:id/product-search — 브랜드 미설정 상품 검색(JSON) */
+exports.getProductSearch = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    try {
+        if (!(await ensureBrand(id, mallId))) return res.status(404).json({ products: [] });
+        const q = String(req.query.q || '').trim();
+        const inStock = String(req.query.in_stock || '');
+        const visibility = String(req.query.visibility || '');
+
+        const where = ['p.mall_id = ?', 'p.brand_category_id IS NULL'];
+        const params = [mallId];
+        if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
+        if (inStock === 'y') where.push('p.stock > 0');
+        else if (inStock === 'n') where.push('p.stock <= 0');
+        if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
+
+        const [products] = await pool.query(`
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status, p.visibility
+            FROM products p WHERE ${where.join(' AND ')}
+            ORDER BY p.created_at DESC LIMIT 100
+        `, params);
+        res.json({ products, limited: products.length >= 100 });
+    } catch (err) {
+        console.error('[admin/brands] getProductSearch:', err.message);
+        res.status(500).json({ products: [] });
+    }
+};
+
+/** POST /admin/brands/:id/products — 미설정 상품을 이 브랜드에 일괄 배정 */
+exports.postAssignProducts = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    const ids = [].concat(req.body.product_ids || []).map(Number).filter(n => Number.isInteger(n) && n > 0);
+    try {
+        if (!(await ensureBrand(id, mallId))) return res.status(404).json({ success: false, message: '브랜드를 찾을 수 없습니다.' });
+        if (!ids.length) return res.json({ success: true, assigned: 0 });
+        const [r] = await pool.query(
+            `UPDATE products SET brand_category_id = ? WHERE mall_id = ? AND brand_category_id IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
+            [id, mallId, ...ids]
+        );
+        res.json({ success: true, assigned: r.affectedRows });
+    } catch (err) {
+        console.error('[admin/brands] postAssignProducts:', err.message);
+        res.status(500).json({ success: false, message: '배정 실패' });
+    }
+};
+
+/** POST /admin/brands/:id/products/remove — 상품을 이 브랜드에서 제거(연결 해제) */
+exports.postRemoveProduct = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    const productId = Number(req.body.product_id);
+    try {
+        if (!(await ensureBrand(id, mallId))) return res.status(404).json({ success: false });
+        const [r] = await pool.query(
+            'UPDATE products SET brand_category_id = NULL WHERE id = ? AND mall_id = ? AND brand_category_id = ?',
+            [productId, mallId, id]
+        );
+        res.json({ success: true, removed: r.affectedRows });
+    } catch (err) {
+        console.error('[admin/brands] postRemoveProduct:', err.message);
+        res.status(500).json({ success: false });
     }
 };
 

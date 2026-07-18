@@ -1,0 +1,361 @@
+<%
+  /* 카테고리/브랜드 상세 — 기본정보 편집 + 상품 배정/제거
+     카테고리·브랜드는 글로벌, 상품은 몰별 → 상품 목록/배정은 현재 편집 몰 기준. */
+  var isBrand = category.type === 'BRAND';
+  var tabKey = isBrand ? 'brand' : 'product';
+  var depth = Number(category.depth) || 1;
+  var canLogo = isBrand || (category.type === 'NORMAL' && depth === 1);
+  var canDesc = category.type === 'NORMAL' && depth === 1;
+  var canOnboarded = isBrand;
+  function toDateInput(v) {
+    if (!v) return '';
+    var d = new Date(v); if (isNaN(d.getTime())) return '';
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  var won = function (n) { return Number(n || 0).toLocaleString('ko-KR'); };
+  var VIS = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+%>
+
+<div class="mb-4 flex items-center gap-2 text-sm">
+  <a href="/admin/categories?tab=<%= tabKey %>" class="inline-flex items-center gap-1 text-gray-500 hover:text-gray-800 no-underline">
+    <i class="bi bi-arrow-left"></i> 카테고리 관리
+  </a>
+  <span class="text-gray-300">/</span>
+  <span class="font-semibold text-gray-900"><%= category.name %></span>
+  <span class="px-1.5 py-0.5 rounded text-[11px] font-medium <%= isBrand ? 'bg-amber-50 text-amber-700' : 'bg-indigo-50 text-indigo-700' %>"><%= isBrand ? '브랜드' : '카테고리' %></span>
+  <% if (!category.is_active) { %><span class="px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-200 text-gray-600">미사용</span><% } %>
+</div>
+
+<% if (saved) { %>
+  <div class="mb-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    <i class="bi bi-check-circle-fill"></i><span>저장되었습니다.</span>
+  </div>
+<% } %>
+<% if (error) { %>
+  <div class="mb-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+    <i class="bi bi-exclamation-triangle-fill"></i><span><%= error %></span>
+  </div>
+<% } %>
+
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+  <!-- ── 좌: 기본 정보 ── -->
+  <div class="lg:col-span-4">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="px-5 py-3 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-800">기본 정보</h2>
+      </div>
+      <form action="/admin/categories/edit" method="POST" enctype="multipart/form-data" class="p-5 space-y-4">
+        <input type="hidden" name="id" value="<%= category.id %>">
+        <input type="hidden" name="type" value="<%= category.type %>">
+        <input type="hidden" name="active_tab" value="<%= tabKey %>">
+        <input type="hidden" name="return_to" value="detail">
+        <%# 메뉴 노출(pc/mobile)은 여기서 관리하지 않고 값만 보존한다 → 메뉴 미리보기에서 관리. %>
+        <input type="hidden" name="pc_visible" value="<%= category.pc_visible ? 1 : 0 %>">
+        <input type="hidden" name="mobile_visible" value="<%= category.mobile_visible ? 1 : 0 %>">
+        <% if (!canDesc) { %><input type="hidden" name="description" value="<%= category.description || '' %>"><% } %>
+        <% if (!canOnboarded) { %><input type="hidden" name="onboarded_at" value=""><% } %>
+        <% if (canLogo) { %><input type="hidden" name="existing_logo" value="<%= category.logo_image_path || '' %>"><% } %>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">이름</label>
+          <input type="text" name="name" value="<%= category.name %>" required
+                 class="w-full px-3 py-2 rounded-md border border-gray-300 text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">노출 순서</label>
+            <input type="number" name="display_order" value="<%= category.display_order %>"
+                   class="w-full px-3 py-2 rounded-md border border-gray-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">상위 카테고리</label>
+            <select name="parent_id" class="w-full px-3 py-2 rounded-md border border-gray-300 text-sm">
+              <option value="">— 최상위 —</option>
+              <% parentOptions.forEach(function (o) { %>
+                <option value="<%= o.id %>" <%= Number(category.parent_id) === o.id ? 'selected' : '' %>>
+                  <%= '　'.repeat(o.depth - 1) %><%= o.name %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
+        </div>
+
+        <% if (canLogo) { %>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">로고 이미지</label>
+            <div class="flex items-center gap-3">
+              <div class="h-12 w-24 flex-shrink-0 overflow-hidden rounded border bg-gray-50 flex items-center justify-center">
+                <% if (category.logo_image_path) { %>
+                  <img src="<%= category.logo_image_path %>" class="max-h-full max-w-full object-contain">
+                <% } else { %><span class="text-[10px] text-gray-400">NO LOGO</span><% } %>
+              </div>
+              <input type="file" name="logo_image" accept="image/jpeg,image/png,image/webp"
+                     class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
+            </div>
+          </div>
+        <% } %>
+
+        <% if (canDesc) { %>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">간략 설명</label>
+            <input type="text" name="description" maxlength="255" value="<%= category.description || '' %>"
+                   placeholder="메가메뉴 우측 영역에 표시될 한 줄 설명"
+                   class="w-full px-3 py-2 rounded-md border border-gray-300 text-sm">
+          </div>
+        <% } %>
+
+        <% if (canOnboarded) { %>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">입점일</label>
+            <input type="date" name="onboarded_at" value="<%= toDateInput(category.onboarded_at) %>"
+                   class="w-full px-3 py-2 rounded-md border border-gray-300 text-sm">
+          </div>
+        <% } %>
+
+        <div class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5">
+          <div>
+            <span class="text-sm font-medium text-gray-800">사용 여부</span>
+            <p class="text-[11px] text-gray-400">끄면 이 <%= isBrand ? '브랜드' : '카테고리' %>를 어디에서도 쓰지 않습니다.</p>
+          </div>
+          <label class="inline-flex items-center gap-2">
+            <input type="hidden" name="is_active" value="0">
+            <input type="checkbox" name="is_active" value="1" <%= category.is_active ? 'checked' : '' %> class="w-4 h-4">
+            <span class="text-sm text-gray-700">사용</span>
+          </label>
+        </div>
+
+        <p class="text-[11px] text-gray-400 leading-relaxed">
+          <i class="bi bi-info-circle mr-1"></i>메뉴(GNB) 노출·순서는 <a href="/admin/menu-preview" class="text-indigo-600 hover:underline">메뉴 미리보기</a>에서 관리합니다.
+        </p>
+
+        <button type="submit" class="w-full inline-flex justify-center items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700">
+          <i class="bi bi-check-lg mr-1"></i>기본 정보 저장
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── 우: 상품 관리 ── -->
+  <div class="lg:col-span-8">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+        <div class="mr-auto">
+          <h2 class="text-sm font-semibold text-gray-800">
+            이 <%= isBrand ? '브랜드' : '카테고리' %>의 상품
+            <span class="ml-1 text-gray-400 font-normal">(<%= currentMallName %> · 총 <%= total %>개)</span>
+          </h2>
+          <p class="text-[11px] text-gray-400 mt-0.5">현재 편집 몰의 상품만 표시됩니다.</p>
+        </div>
+        <button type="button" id="catOpenPicker"
+                class="inline-flex items-center h-[34px] px-4 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700">
+          <i class="bi bi-plus-lg mr-1"></i>상품 추가
+          <% if (unassigned > 0) { %><span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-white/20">미설정 <%= unassigned %></span><% } %>
+        </button>
+      </div>
+
+      <div class="divide-y divide-gray-100">
+        <% if (products.length === 0) { %>
+          <p class="px-5 py-12 text-center text-sm text-gray-400">
+            <i class="bi bi-inbox text-2xl block mb-1 text-gray-300"></i>
+            아직 이 <%= isBrand ? '브랜드' : '카테고리' %>에 속한 상품이 없습니다. <strong>[상품 추가]</strong>로 배정하세요.
+          </p>
+        <% } %>
+        <% products.forEach(function (p) { %>
+          <div class="flex items-center gap-3 px-5 py-3" data-product-row="<%= p.id %>">
+            <img src="<%= p.main_image || '/images/no-image.png' %>" class="w-11 h-11 rounded object-cover bg-gray-100 flex-shrink-0">
+            <div class="flex-1 min-w-0">
+              <div class="text-sm text-gray-900 truncate"><%= p.name %></div>
+              <div class="text-xs text-gray-400">
+                <%= won(p.price) %>원 · 재고 <%= p.stock %> · <%= VIS[p.visibility] || p.visibility %>
+                <% if (p.product_code) { %> · <%= p.product_code %><% } %>
+              </div>
+            </div>
+            <button type="button" data-remove-product="<%= p.id %>"
+                    class="flex-shrink-0 inline-flex items-center h-[30px] px-2.5 text-xs font-medium rounded-md border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">
+              <i class="bi bi-x-lg mr-1"></i>제거
+            </button>
+          </div>
+        <% }); %>
+      </div>
+
+      <% if (totalPages > 1) { %>
+        <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-center gap-1 text-sm">
+          <% for (var pg = 1; pg <= totalPages; pg++) { %>
+            <a href="/admin/categories/<%= category.id %>?page=<%= pg %>"
+               class="px-2.5 py-1 rounded no-underline <%= pg === page ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-100' %>"><%= pg %></a>
+          <% } %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- ── 미설정 상품 추가 팝업 ── -->
+<div id="catPicker" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+  <div class="absolute inset-0 bg-black/40" data-cat-close></div>
+  <div class="relative mx-auto my-8 w-[95%] max-w-3xl bg-white rounded-xl shadow-xl flex flex-col max-h-[85vh]">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div>
+        <h3 class="text-base font-bold text-gray-800">상품 추가 — 미설정 상품</h3>
+        <p class="text-xs text-gray-400 mt-0.5"><%= isBrand ? '브랜드' : '카테고리' %>가 아직 지정되지 않은 이 몰 상품만 보입니다.</p>
+      </div>
+      <button type="button" data-cat-close class="text-gray-400 hover:text-gray-700"><i class="bi bi-x-lg"></i></button>
+    </div>
+
+    <div class="px-5 py-4 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+      <div class="col-span-2">
+        <label class="block text-xs text-gray-500 mb-1">검색어</label>
+        <input type="text" id="cpQ" placeholder="상품명·상품코드" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">재고</label>
+        <select id="cpStock" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+          <option value="">전체</option><option value="y">재고 있음</option><option value="n">재고 없음</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">노출</label>
+        <select id="cpVis" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
+          <option value="">전체</option><option value="PUBLIC">노출</option><option value="HIDDEN">숨김</option><option value="MEMBER_ONLY">회원전용</option>
+        </select>
+      </div>
+      <div class="col-span-2 sm:col-span-4 flex items-center gap-2">
+        <button type="button" id="cpSearch" class="h-[34px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900"><i class="bi bi-search mr-1"></i>검색</button>
+        <label class="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600">
+          <input type="checkbox" id="cpAll" class="w-4 h-4"> 결과 전체 선택
+        </label>
+      </div>
+    </div>
+
+    <div id="cpResults" class="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+      <p class="py-10 text-center text-sm text-gray-400">검색하여 미설정 상품을 찾으세요.</p>
+    </div>
+
+    <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+      <span class="text-xs text-gray-500"><span id="cpCount">0</span>개 선택됨</span>
+      <div class="flex gap-2">
+        <button type="button" data-cat-close class="h-[36px] px-4 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50">닫기</button>
+        <button type="button" id="cpAdd" class="h-[36px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50" disabled>선택 배정</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var CAT_ID = <%- JSON.stringify(category.id) %>;
+  var won = function (n) { return Number(n || 0).toLocaleString('ko-KR'); };
+  var VIS = { PUBLIC: '노출', HIDDEN: '숨김', MEMBER_ONLY: '회원전용' };
+
+  /* ── 제거 ── */
+  document.querySelectorAll('[data-remove-product]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var pid = Number(btn.getAttribute('data-remove-product'));
+      if (!confirm('이 상품을 제거(연결 해제)할까요?')) return;
+      btn.disabled = true;
+      try {
+        var res = await fetch('/admin/categories/' + CAT_ID + '/products/remove', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: pid })
+        });
+        var data = await res.json();
+        if (data && data.success) location.reload();
+        else { btn.disabled = false; alert('제거에 실패했습니다.'); }
+      } catch (e) { btn.disabled = false; alert('제거에 실패했습니다.'); }
+    });
+  });
+
+  /* ── 미설정 상품 팝업 ── */
+  var picker = document.getElementById('catPicker');
+  var openBtn = document.getElementById('catOpenPicker');
+  var resultsEl = document.getElementById('cpResults');
+  var countEl = document.getElementById('cpCount');
+  var addBtn = document.getElementById('cpAdd');
+  var allChk = document.getElementById('cpAll');
+  var selected = new Set();
+
+  function openPicker() { picker.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  function closePicker() { picker.classList.add('hidden'); document.body.style.overflow = ''; }
+  openBtn.addEventListener('click', openPicker);
+  picker.querySelectorAll('[data-cat-close]').forEach(function (el) { el.addEventListener('click', closePicker); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !picker.classList.contains('hidden')) closePicker(); });
+
+  function updateCount() { countEl.textContent = selected.size; addBtn.disabled = selected.size === 0; }
+
+  function render(products, limited) {
+    selected.clear(); updateCount(); if (allChk) allChk.checked = false;
+    if (!products.length) {
+      resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조건에 맞는 미설정 상품이 없습니다.</p>';
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    if (limited) {
+      var note = document.createElement('p');
+      note.className = 'mb-2 text-xs text-amber-600';
+      note.textContent = '결과가 100개에 도달했습니다. 검색어로 좁혀 주세요.';
+      frag.appendChild(note);
+    }
+    products.forEach(function (p) {
+      var row = document.createElement('label');
+      row.className = 'flex items-center gap-3 px-2 py-2 rounded border border-gray-100 hover:bg-gray-50 cursor-pointer';
+      var chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.className = 'w-4 h-4 flex-shrink-0'; chk.value = String(p.id);
+      chk.addEventListener('change', function () { if (chk.checked) selected.add(p.id); else selected.delete(p.id); updateCount(); });
+      var img = document.createElement('img');
+      img.src = p.main_image || '/images/no-image.png';
+      img.className = 'w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0';
+      var info = document.createElement('div'); info.className = 'flex-1 min-w-0';
+      var nm = document.createElement('div'); nm.className = 'text-sm text-gray-900 truncate'; nm.textContent = p.name;
+      var meta = document.createElement('div'); meta.className = 'text-xs text-gray-400';
+      meta.textContent = won(p.price) + '원 · 재고 ' + p.stock + ' · ' + (VIS[p.visibility] || p.visibility);
+      info.append(nm, meta);
+      row.append(chk, img, info);
+      frag.appendChild(row);
+    });
+    resultsEl.innerHTML = ''; resultsEl.appendChild(frag);
+  }
+
+  async function doSearch() {
+    var params = new URLSearchParams();
+    var q = document.getElementById('cpQ').value.trim();
+    var stock = document.getElementById('cpStock').value;
+    var vis = document.getElementById('cpVis').value;
+    if (q) params.set('q', q);
+    if (stock) params.set('in_stock', stock);
+    if (vis) params.set('visibility', vis);
+    resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">조회 중…</p>';
+    try {
+      var res = await fetch('/admin/categories/' + CAT_ID + '/product-search?' + params.toString());
+      var data = await res.json();
+      render(data.products || [], data.limited);
+    } catch (e) { resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-red-500">조회에 실패했습니다.</p>'; }
+  }
+  document.getElementById('cpSearch').addEventListener('click', doSearch);
+  document.getElementById('cpQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+
+  allChk.addEventListener('change', function () {
+    resultsEl.querySelectorAll('input[type=checkbox]').forEach(function (chk) {
+      chk.checked = allChk.checked;
+      var pid = Number(chk.value);
+      if (allChk.checked) selected.add(pid); else selected.delete(pid);
+    });
+    updateCount();
+  });
+
+  addBtn.addEventListener('click', async function () {
+    if (!selected.size) return;
+    addBtn.disabled = true;
+    try {
+      var res = await fetch('/admin/categories/' + CAT_ID + '/products', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: [].concat(Array.from(selected)) })
+      });
+      var data = await res.json();
+      if (data && data.success) location.href = '/admin/categories/' + CAT_ID + '?saved=1';
+      else { addBtn.disabled = false; alert('배정에 실패했습니다.'); }
+    } catch (e) { addBtn.disabled = false; alert('배정에 실패했습니다.'); }
+  });
+})();
+</script>
