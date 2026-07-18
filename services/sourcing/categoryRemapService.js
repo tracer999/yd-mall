@@ -16,21 +16,26 @@ const SNAPSHOT = 'products_catmap_bak_20260719';
 /** 관리자 화면 현황 — 롤백 대상(FUZZY) + 수동큐(MANUAL/NONE) + 요약. */
 async function getStatus() {
     const [fuzzy] = await pool.query(
+        // 원 카테고리(from)가 아직 살아있는 것만 노출 — hard delete 로 사라졌으면
+        // 스냅샷 기반 되돌리기가 불가능하므로 유령 표시하지 않는다.
         `SELECT l.id, l.from_category_id, l.to_category_id, l.product_count, l.score, l.note,
                 fc.name AS from_name, tc.name AS to_name
            FROM category_remap_log l
-           LEFT JOIN categories fc ON fc.id = l.from_category_id
+           JOIN categories fc ON fc.id = l.from_category_id
            LEFT JOIN categories tc ON tc.id = l.to_category_id
           WHERE l.phase='REMAP' AND l.match_kind='FUZZY' AND l.reverted=0
           ORDER BY l.product_count DESC, l.id`
     );
     const [queue] = await pool.query(
+        // from 카테고리가 아직 상품을 실제로 들고 있는 것만 큐로 노출.
+        // (전면정리 등으로 이미 상품이 빠진 과거 로그는 stale — 유령표시 방지)
         `SELECT l.id, l.from_category_id, l.product_count, l.match_kind, l.note,
                 fc.name AS from_name
            FROM category_remap_log l
            LEFT JOIN categories fc ON fc.id = l.from_category_id
           WHERE l.phase='REMAP' AND l.to_category_id IS NULL AND l.reverted=0
                 AND l.match_kind IN ('MANUAL','NONE')
+                AND EXISTS(SELECT 1 FROM products p WHERE p.category_id = l.from_category_id)
           ORDER BY l.product_count DESC, l.id`
     );
     const [[summary]] = await pool.query(
@@ -40,7 +45,11 @@ async function getStatus() {
            SUM(to_category_id IS NULL AND reverted=0 AND match_kind IN ('MANUAL','NONE')) AS queue_open
          FROM category_remap_log WHERE phase='REMAP'`
     );
-    return { fuzzy, queue, summary: summary || {} };
+    // 카드-목록 정합: 실제 노출 목록 길이로 열린 건수를 맞춘다(summary 쿼리는 stale 미반영).
+    const s = summary || {};
+    s.fuzzy_open = fuzzy.length;
+    s.queue_open = queue.length;
+    return { fuzzy, queue, summary: s };
 }
 
 /** 특정 REMAP 로그 1건을 스냅샷 기준으로 되돌린다(from→to 로 옮겼던 상품을 from 으로 복원). */
@@ -63,6 +72,10 @@ async function rollbackOne(logId) {
               WHERE b.category_id = ? AND p.category_id = ?`,
             [log.from_category_id, log.from_category_id, log.to_category_id]
         );
+        // 상품을 되돌린 원 카테고리가 전면정리로 비활성됐다면 다시 활성화(안 그러면 고객 화면서 사라짐).
+        if (res.affectedRows > 0) {
+            await conn.query('UPDATE categories SET is_active=1 WHERE id=? AND is_active=0', [log.from_category_id]);
+        }
         await conn.query('UPDATE category_remap_log SET reverted=1, note=CONCAT(COALESCE(note,\'\'),\' [롤백]\') WHERE id=?', [logId]);
         await conn.query(
             "INSERT INTO category_remap_log (phase, from_category_id, to_category_id, product_count, match_kind, note) VALUES ('REMAP', ?, ?, ?, 'MANUAL', ?)",
