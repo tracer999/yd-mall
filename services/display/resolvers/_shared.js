@@ -1,5 +1,6 @@
 const pool = require('../../../config/db');
 const dealSvc = require('../../deal/dealService');
+const { GLOBAL_CATEGORY_MALL_ID, visibleCategoryIdSet } = require('../../catalog/categoryScope');
 
 /*
  * 리졸버 공용 쿼리/헬퍼 (CT-0)
@@ -22,18 +23,21 @@ function visibilityClause(hasUser) {
     return hasUser ? "p.visibility IN ('PUBLIC','MEMBER_ONLY')" : "p.visibility = 'PUBLIC'";
 }
 
-/** 홈 카테고리 탭용: 상품이 1건 이상 있는 NORMAL 카테고리 */
+/**
+ * 홈 카테고리 탭용: 이 몰에 상품이 1건 이상 있는 NORMAL 카테고리.
+ * NORMAL 카테고리는 전 몰 공통(글로벌)이라 상품(products.mall_id) 기준으로 이 몰 것만 집계한다.
+ */
 async function loadHomeCategories(hasUser, mallId = 1) {
     const vis = visibilityClause(hasUser);
     const [rows] = await pool.query(`
     SELECT c.id, c.name, COUNT(p.id) AS product_count
     FROM categories c
-    JOIN products p ON p.category_id = c.id AND ${P_STATUS} AND ${vis}
-    WHERE c.type = 'NORMAL' AND c.mall_id = ?
+    JOIN products p ON p.category_id = c.id AND p.mall_id = ? AND ${P_STATUS} AND ${vis}
+    WHERE c.type = 'NORMAL' AND c.mall_id = ? AND c.is_active = 1
     GROUP BY c.id, c.name
     HAVING product_count > 0
     ORDER BY c.display_order ASC
-  `, [mallId]);
+  `, [mallId, GLOBAL_CATEGORY_MALL_ID]);
     return rows;
 }
 
@@ -55,13 +59,18 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
     const categoryLimit = Math.min(Number(opts.categoryLimit) || 20, 40);
     const vis = visibilityClause(hasUser);
 
-    // 몰의 활성 NORMAL 카테고리 전체 (트리 구성용) — 쿼리 1회
+    // NORMAL 카테고리는 전 몰 공통(글로벌). 이 몰에 노출할 카테고리 =
+    // 이 몰(products.mall_id) 상품이 걸린 카테고리(+조상) − 몰별 숨김.
+    const visible = await visibleCategoryIdSet(mallId);
+    if (!visible.size) return [];
+
+    // 트리 구성용 글로벌 NORMAL 카테고리 전체 — 쿼리 1회
     const [cats] = await pool.query(`
         SELECT id, name, parent_id
         FROM categories
         WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1
         ORDER BY display_order ASC, id ASC
-    `, [mallId]);
+    `, [GLOBAL_CATEGORY_MALL_ID]);
     if (!cats.length) return [];
 
     // parent_id → children 맵 (parent_id NULL 은 키 0)
@@ -71,9 +80,10 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
         if (!childrenOf.has(p)) childrenOf.set(p, []);
         childrenOf.get(p).push(c);
     }
-    const roots = (childrenOf.get(0) || []).slice(0, categoryLimit);
+    // 이 몰에 상품이 있는(노출) 최상위 카테고리만
+    const roots = (childrenOf.get(0) || []).filter((r) => visible.has(r.id)).slice(0, categoryLimit);
 
-    // 최상위 root 별 서브트리 id (BFS, 순환 가드)
+    // 최상위 root 별 서브트리 id (BFS, 순환 가드) — 노출 대상 id 만 담는다.
     const subtreeIds = (rootId) => {
         const ids = [];
         const seen = new Set();
@@ -82,7 +92,7 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
             const cur = queue.shift();
             if (seen.has(cur)) continue;
             seen.add(cur);
-            ids.push(cur);
+            if (visible.has(cur)) ids.push(cur); // 숨김·무상품 하위 제외
             (childrenOf.get(cur) || []).forEach(ch => queue.push(ch.id));
         }
         return ids;
@@ -91,17 +101,18 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
     const result = [];
     for (const root of roots) {
         const ids = subtreeIds(root.id);
+        if (!ids.length) continue;
         const placeholders = ids.map(() => '?').join(',');
         const [products] = await pool.query(`
             SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
                    p.discount_rate, p.status, p.stock, p.provider,
                    p.product_badge, p.distribution_badge
             FROM products p
-            WHERE p.category_id IN (${placeholders}) AND ${P_STATUS} AND ${vis}
+            WHERE p.mall_id = ? AND p.category_id IN (${placeholders}) AND ${P_STATUS} AND ${vis}
             ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT','OFF'),
                      p.view_count DESC, p.created_at DESC
             LIMIT ?
-        `, [...ids, productLimit]);
+        `, [mallId, ...ids, productLimit]);
         if (products.length === 0) continue; // 빈 최상위 카테고리는 스킵
         await dealSvc.applyDeals(products); // 카테고리별 베스트 카드도 특가가로 표시
         result.push({ id: root.id, name: root.name, products });

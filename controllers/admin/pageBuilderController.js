@@ -112,8 +112,10 @@ const MANAGE_TARGET = {
   deal_carousel: { label: '특가 관리', url: '/admin/deals' },
   best_ranking: { label: '베스트·랭킹 관리', url: '/admin/best-groups' },
   ranking_tabs: { label: '랭킹 그룹 관리', url: '/admin/best-groups' },
-  brand_carousel: { label: '카테고리 관리', url: '/admin/categories' },
-  category_showcase: { label: '카테고리 관리', url: '/admin/categories' },
+  // 카테고리·브랜드는 전 몰 공통. 캐러셀이 비는 건 "이 몰 상품에 카테고리·브랜드가
+  // 지정되지 않아서"이므로, 상품 관리에서 상품에 카테고리·브랜드를 지정하게 안내한다.
+  brand_carousel: { label: '상품 관리', url: '/admin/products' },
+  category_showcase: { label: '상품 관리', url: '/admin/products' },
   product_grid: { label: '상품 그룹 관리', url: '/admin/product-groups' },
   product_carousel: { label: '상품 그룹 관리', url: '/admin/product-groups' },
   benefit_bento: { label: '상품 그룹 관리', url: '/admin/product-groups' },
