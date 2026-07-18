@@ -142,14 +142,16 @@ exports.getList = async (req, res) => {
                 query += ` AND category_id IN (${ids.map(() => '?').join(',')})`;
                 params.push(...ids);
 
+                // 개별 카테고리 배너가 있으면 그것을, 없으면 전체 공통 배너를 노출한다.
+                // (category_id IS NULL) ASC 로 개별을 항상 우선한다.
                 const [bannerRows] = await pool.query(
                     `SELECT * FROM banners
                      WHERE is_active = 1
                        AND banner_type = 'CATEGORY'
-                       AND category_id = ?
-                     ORDER BY created_at DESC, id DESC
+                       AND (category_id = ? OR group_key = ?)
+                     ORDER BY (category_id IS NULL) ASC, created_at DESC, id DESC
                      LIMIT 1`,
-                    [selectedCategoryId]
+                    [selectedCategoryId, `common:CATEGORY:${mallId}`]
                 );
                 if (bannerRows.length > 0) {
                     categoryBanner = bannerRows[0];
@@ -197,14 +199,15 @@ exports.getList = async (req, res) => {
                 params.push(selectedBrandId);
 
                 if (!categoryBanner) {
+                    // 개별 브랜드 배너 우선, 없으면 전체 공통 브랜드 배너.
                     const [brandBannerRows] = await pool.query(
                         `SELECT * FROM banners
                          WHERE is_active = 1
                            AND banner_type = 'BRAND'
-                           AND category_id = ?
-                         ORDER BY created_at DESC, id DESC
+                           AND (category_id = ? OR group_key = ?)
+                         ORDER BY (category_id IS NULL) ASC, created_at DESC, id DESC
                          LIMIT 1`,
-                        [selectedBrandId]
+                        [selectedBrandId, `common:BRAND:${mallId}`]
                     );
                     if (brandBannerRows.length > 0) {
                         categoryBanner = brandBannerRows[0];

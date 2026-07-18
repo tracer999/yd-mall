@@ -102,20 +102,22 @@ exports.getList = async (req, res) => {
         } else {
             // 일반 타입 배너에는 메뉴별 배너(group_key='menu:%')가 섞이지 않도록 제외한다.
             //
-            // 몰 스코프: banners 테이블엔 mall_id 가 없다(전 몰 공용). 다만 CATEGORY·BRAND 배너는
-            // 대상 카테고리/브랜드(= 이 몰의 categories 행)로 몰이 정해지므로, 조인한 categories.mall_id
-            // 로 현재 몰 것만 보여준다(새 몰에서 다른 몰 배너가 보이던 버그 수정). 대상 미선택
-            // (category_id NULL) 유령 배너는 관리 가능하도록 남긴다. POPUP 은 대상이 없어 몰을
-            // 특정할 수 없으므로 전 몰 공용으로 둔다.
+            // 몰 스코프: banners 테이블엔 mall_id 가 없다(전 몰 공용). CATEGORY·BRAND 배너는 대상
+            // 카테고리/브랜드로 몰이 정해지므로 조인한 categories.mall_id 로 좁힌다. 단 카테고리·브랜드가
+            // 글로벌화되어(글로벌 마스터 mall_id=0 + 몰별 mall_id) 존재하므로, 폼의 대상 드롭다운과 동일하게
+            // mall_id IN (0, 현재몰) 을 본다 — 글로벌 대상에 걸린 개별 배너가 목록에서 사라지지 않게.
+            // 전체 공통 배너는 category_id 가 NULL 이라 조인으로 몰을 못 잡으므로 group_key='common:{TYPE}:{mallId}'
+            // 로 이 몰 것만 노출한다(타 몰 공통 배너가 섞이지 않게). POPUP 은 대상이 없어 전 몰 공용으로 둔다.
             const scopeByMall = (type === 'CATEGORY' || type === 'BRAND');
+            const commonKey = commonGroupKey(type, mallId);
             [banners] = await pool.query(`
                 SELECT b.*, c.name AS category_name
                 FROM banners b
                 LEFT JOIN categories c ON b.category_id = c.id
                 WHERE b.banner_type = ? AND (b.group_key IS NULL OR b.group_key NOT LIKE 'menu:%')
-                ${scopeByMall ? 'AND (c.mall_id = ? OR b.category_id IS NULL)' : ''}
+                ${scopeByMall ? 'AND (c.mall_id IN (0, ?) OR b.group_key = ?)' : ''}
                 ORDER BY b.display_order ASC, b.created_at DESC
-            `, scopeByMall ? [type, mallId] : [type]);
+            `, scopeByMall ? [type, mallId, commonKey] : [type]);
         }
 
         res.render('admin/banners/list', {
@@ -203,9 +205,10 @@ exports.postAdd = async (req, res) => {
 
     try {
         // 신규 등록 — 보존할 기존 group_key 없음(null).
-        const menuKeys = (await getBannerMenuTargets(req.adminMallId || 1)).map(t => t.key);
+        const mallId = req.adminMallId || 1;
+        const menuKeys = (await getBannerMenuTargets(mallId)).map(t => t.key);
         const { storedType, categoryId, groupKey, redirectType, menuKey } =
-            resolveBannerTarget(banner_type, category_id, req.body.menu_target, null, menuKeys);
+            resolveBannerTarget(banner_type, category_id, req.body.menu_target, null, menuKeys, req.body.is_common === '1', mallId);
         const ov = readOverlay(req.body, banner_type);
 
         if (await hasMobileImageColumn()) {
@@ -239,15 +242,24 @@ exports.postAdd = async (req, res) => {
     }
 };
 
+/** 카테고리/브랜드 '전체 공통' 배너 group_key — menu 배너처럼 group_key 로 몰 스코프를 얻는다. */
+function commonGroupKey(type, mallId) {
+    return `common:${type}:${mallId}`;
+}
+
 /*
  * 폼의 banner_type → 실제 저장값을 정한다.
  * MENU 는 스키마 변경을 피하려 banner_type='CATEGORY' + category_id=NULL + group_key='menu:{key}' 로 저장한다.
  *
+ * 카테고리/브랜드 '전체 공통' 배너도 같은 관용구다: banner_type 은 그대로(CATEGORY/BRAND),
+ * category_id=NULL, group_key='common:{TYPE}:{mallId}'. 개별 대상이 없는 카테고리/브랜드 접근 시
+ * 폴백으로 노출된다. banners 엔 mall_id 가 없어 group_key 로 몰을 구분한다.
+ *
  * ⚠️ 비-MENU 타입은 group_key 를 **보존**한다. 이 화면과 무관한 group_key(예: 홈 프로모션 섹션이
  *    소비하는 'home_promo')를 가진 배너를 편집할 때 null 로 덮어쓰면 라이브 배너가 사라진다.
- *    단 'menu:' 네임스페이스는 메뉴별 배너 전용이므로, 일반 타입으로 전환되면 제거한다.
+ *    단 'menu:'·'common:' 네임스페이스는 이 화면 전용이므로, 개별 대상으로 전환되면 제거한다.
  */
-function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGroupKey, menuKeys = []) {
+function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGroupKey, menuKeys = [], isCommon = false, mallId = 1) {
     if (bannerType === 'MENU') {
         // 목록에 없는 키는 저장하지 않는다 — 노출될 곳이 없는 배너가 생긴다.
         if (!menuKeys.includes(menuTarget)) {
@@ -261,8 +273,30 @@ function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGrou
         };
     }
     const type = ['MAIN', 'CATEGORY', 'POPUP', 'BRAND'].includes(bannerType) ? bannerType : 'MAIN';
+
+    // 카테고리/브랜드 전체 공통 배너 — 개별 대상 대신 몰 전체 기본값.
+    if ((type === 'CATEGORY' || type === 'BRAND') && isCommon) {
+        return {
+            storedType: type, categoryId: null, groupKey: commonGroupKey(type, mallId),
+            redirectType: type, menuKey: ''
+        };
+    }
+
     const categoryId = (type === 'CATEGORY' || type === 'BRAND') && categoryIdRaw ? Number(categoryIdRaw) || null : null;
-    const groupKey = existingGroupKey && !String(existingGroupKey).startsWith('menu:') ? existingGroupKey : null;
+
+    // 개별 대상 저장 시 'menu:'·'common:' 키는 제거(전환 잔존 방지). 그 외(home_promo 등)는 보존.
+    let groupKey = existingGroupKey || null;
+    if (groupKey && (String(groupKey).startsWith('menu:') || String(groupKey).startsWith('common:'))) {
+        groupKey = null;
+    }
+
+    // 개별 카테고리/브랜드 배너인데 대상 미선택 → 저장할 곳이 없다(공통이면 위에서 처리됨).
+    if ((type === 'CATEGORY' || type === 'BRAND') && !categoryId) {
+        const err = new Error('대상 카테고리/브랜드를 선택하거나 전체 공통으로 설정하세요.');
+        err.statusCode = 400;
+        throw err;
+    }
+
     return { storedType: type, categoryId, groupKey, redirectType: type, menuKey: '' };
 }
 
@@ -329,9 +363,10 @@ exports.postEdit = async (req, res) => {
 
     try {
         // 편집 — 기존 group_key(existing_group_key)를 넘겨 이 화면과 무관한 group_key 를 보존한다.
-        const menuKeys = (await getBannerMenuTargets(req.adminMallId || 1)).map(t => t.key);
+        const mallId = req.adminMallId || 1;
+        const menuKeys = (await getBannerMenuTargets(mallId)).map(t => t.key);
         const { storedType, categoryId, groupKey, redirectType, menuKey } =
-            resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key, menuKeys);
+            resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key, menuKeys, req.body.is_common === '1', mallId);
         const ov = readOverlay(req.body, banner_type);
 
         if (await hasMobileImageColumn()) {
