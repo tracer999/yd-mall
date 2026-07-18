@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const upload = require('../../middleware/upload');
 const menuShowcaseService = require('../../services/menu/menuShowcaseService');
 const topbarService = require('../../services/display/topbarService');
+const { visibleCategoryIdSet } = require('../../services/catalog/categoryScope');
 
 /*
  * 메뉴별 배너
@@ -70,6 +71,8 @@ exports.getList = async (req, res) => {
         if (!req.query.type) return res.redirect('/admin/banners/hero-slides');
         const type = req.query.type;
         if (type === 'MAIN') return res.redirect(HERO_LIST_URL);
+        // 카테고리·브랜드 배너는 '대상(카테고리/브랜드) 리스트' 화면으로 — 각 대상별 배너 적용 여부를 한눈에.
+        if (type === 'CATEGORY' || type === 'BRAND') return renderTargetList(req, res, mallId, type);
         const menuTargets = await getBannerMenuTargets(mallId);
 
         let banners;
@@ -123,6 +126,7 @@ exports.getList = async (req, res) => {
         res.render('admin/banners/list', {
             layout: 'layouts/admin_layout',
             title: '배너 관리',
+            targetMode: false,
             banners,
             currentType: type,
             currentMenuKey,
@@ -136,6 +140,91 @@ exports.getList = async (req, res) => {
     }
 };
 
+/*
+ * 카테고리·브랜드 배너 = 대상 리스트 화면.
+ * 대상(카테고리 1뎁스 / 브랜드)을 나열하고 각 대상에 설정된 배너를 오른쪽 카드로 붙여
+ * "어디에 배너가 걸렸는지"를 한눈에 보게 한다.
+ *
+ * 대상 집합 = mall_id IN (0, mallId) · type 일치 중에서
+ *   (depth==1 AND 이 몰에 노출됨) OR (배너가 걸려 있음)
+ * — 배너가 걸린 대상은 지금 상품이 없어 노출되지 않아도 반드시 보여야 관리(수정/삭제)가 가능하다.
+ */
+async function renderTargetList(req, res, mallId, type) {
+    const isBrand = type === 'BRAND';
+    const catType = isBrand ? 'BRAND' : 'NORMAL';
+
+    // 이 몰의 모든 대상 후보(글로벌 마스터 mall 0 + 몰별)
+    const [allTargets] = await pool.query(
+        'SELECT id, name, depth, parent_id, display_order FROM categories WHERE mall_id IN (0, ?) AND type = ? ORDER BY display_order ASC, id ASC',
+        [mallId, catType]
+    );
+
+    // 개별 배너 한방 조회(N+1 금지). menu:/common: 는 category_id 가 NULL 이라 자동 제외.
+    const [indivBanners] = await pool.query(
+        `SELECT * FROM banners
+         WHERE banner_type = ? AND category_id IS NOT NULL
+           AND (group_key IS NULL OR group_key NOT LIKE 'menu:%')
+         ORDER BY display_order ASC, created_at DESC`,
+        [type]
+    );
+    const bannersByCat = new Map();
+    for (const b of indivBanners) {
+        if (!bannersByCat.has(b.category_id)) bannersByCat.set(b.category_id, []);
+        bannersByCat.get(b.category_id).push(b);
+    }
+
+    // 전체 공통 배너(상단 별도 노출)
+    const commonKey = commonGroupKey(type, mallId);
+    const [commonBanners] = await pool.query(
+        'SELECT * FROM banners WHERE group_key = ? ORDER BY display_order ASC, created_at DESC',
+        [commonKey]
+    );
+
+    // 이 몰에 노출되는(상품 있는) 대상 + 배너 걸린 대상은 무조건 포함
+    const visible = await visibleCategoryIdSet(mallId, { brand: isBrand });
+    const nameById = new Map(allTargets.map(t => [t.id, t.name]));
+    let targets = allTargets
+        .map(t => Object.assign({}, t, {
+            banners: bannersByCat.get(t.id) || [],
+            parentName: t.parent_id ? (nameById.get(t.parent_id) || '') : '',
+        }))
+        .filter(t => (t.depth === 1 && visible.has(t.id)) || t.banners.length > 0);
+
+    const setCount = targets.filter(t => t.banners.length > 0).length;
+
+    // 필터: all | set(설정됨) | unset(미설정)
+    const statusFilter = ['set', 'unset'].includes(req.query.status) ? req.query.status : 'all';
+    let filtered = targets;
+    if (statusFilter === 'set') filtered = targets.filter(t => t.banners.length > 0);
+    else if (statusFilter === 'unset') filtered = targets.filter(t => t.banners.length === 0);
+
+    // 페이지네이션(브랜드는 몰에 따라 수백~수천 개 → 필수)
+    const perPage = 40;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+    const page = Math.min(Math.max(1, Number.parseInt(req.query.page, 10) || 1), totalPages);
+    const pageTargets = filtered.slice((page - 1) * perPage, page * perPage);
+
+    res.render('admin/banners/list', {
+        layout: 'layouts/admin_layout',
+        title: '배너 관리',
+        targetMode: true,
+        currentType: type,
+        targets: pageTargets,
+        commonBanners,
+        targetTotal: targets.length,
+        targetSetCount: setCount,
+        statusFilter,
+        page,
+        totalPages,
+        // 공유 템플릿이 참조하는 변수들(대상 모드에선 미사용) 안전 기본값
+        banners: [],
+        currentMenuKey: '',
+        menuTargets: [],
+        menuBannerCounts: {},
+        menuProductGroup: null,
+    });
+}
+
 exports.getAdd = async (req, res) => {
     try {
         const type = req.query.type || 'MAIN';
@@ -148,6 +237,9 @@ exports.getAdd = async (req, res) => {
             'SELECT id, name, type FROM categories WHERE mall_id IN (0, ?) ORDER BY display_order ASC, id ASC',
             [req.adminMallId || 1]
         );
+        // 대상 리스트에서 '배너 등록'을 누르면 그 카테고리/브랜드가 골라진 채로(또는 공통 체크된 채로) 열린다.
+        const preselectTarget = Number.parseInt(req.query.target, 10) || null;
+        const preselectCommon = req.query.common === '1';
         res.render('admin/banners/form', {
             layout: 'layouts/admin_layout',
             title: '배너 등록',
@@ -156,6 +248,8 @@ exports.getAdd = async (req, res) => {
             currentType: type,
             menuTargets,
             currentMenuKey,
+            preselectTarget,
+            preselectCommon,
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
         });
     } catch (err) {
@@ -338,6 +432,8 @@ exports.getEdit = async (req, res) => {
             currentType: isMenuBanner ? 'MENU' : banner.banner_type,
             menuTargets: await getBannerMenuTargets(req.adminMallId || 1),
             currentMenuKey,
+            preselectTarget: null,
+            preselectCommon: false,
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
         });
     } catch (err) {

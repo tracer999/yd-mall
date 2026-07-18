@@ -1,0 +1,30 @@
+<%
+    /*
+     * 컴팩트 배너 카드 — 대상(카테고리/브랜드) 리스트에서 각 대상에 걸린 배너를 최소 크기로 보여준다.
+     * 필요한 것만: 썸네일 · 노출여부(사용중/중지) · 노출기간 · 수정/삭제.
+     * locals: banner, returnTo
+     */
+    const _fmt = (d) => d ? new Date(d).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }) : null;
+    const _s = _fmt(banner.start_date);
+    const _e = _fmt(banner.end_date);
+    const _period = (_s || _e) ? `${_s || '상시'} ~ ${_e || '상시'}` : '상시 노출';
+%>
+<div class="flex items-stretch rounded-md border <%= banner.is_active ? 'border-gray-200' : 'border-gray-200 opacity-60' %> bg-white overflow-hidden">
+    <img src="<%= banner.image_url %>" alt="<%= banner.title || '' %>"
+         class="h-11 w-[72px] object-cover bg-gray-100 shrink-0" title="<%= banner.title || '' %>">
+    <div class="flex flex-col justify-center gap-0.5 px-2 py-1 min-w-0">
+        <div class="flex items-center gap-1.5">
+            <span class="px-1.5 py-0.5 rounded text-[10px] leading-none font-semibold <%= banner.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500' %>"><%= banner.is_active ? '사용중' : '중지' %></span>
+            <span class="text-[11px] text-gray-500 whitespace-nowrap"><%= _period %></span>
+        </div>
+        <div class="flex items-center gap-1">
+            <a href="/admin/banners/edit/<%= banner.id %>" class="text-[11px] text-blue-600 hover:underline no-underline">수정</a>
+            <span class="text-gray-300 text-[11px]">·</span>
+            <form action="/admin/banners/delete" method="POST" onsubmit="return confirm('삭제하시겠습니까?');" class="inline m-0">
+                <input type="hidden" name="id" value="<%= banner.id %>">
+                <input type="hidden" name="return_to" value="<%= returnTo %>">
+                <button type="submit" class="text-[11px] text-red-600 hover:underline bg-transparent border-0 p-0 cursor-pointer">삭제</button>
+            </form>
+        </div>
+    </div>
+</div>

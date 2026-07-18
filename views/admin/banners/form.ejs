@@ -66,7 +66,7 @@
             <label class="mb-3 inline-flex items-start gap-2 text-sm text-gray-700 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 w-full">
               <input type="checkbox" name="is_common" value="1" id="isCommonCheckbox"
                 class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                <%= (banner && banner.group_key && banner.group_key.indexOf('common:') === 0) ? 'checked' : '' %>>
+                <%= ((banner && banner.group_key && banner.group_key.indexOf('common:') === 0) || (!banner && typeof preselectCommon !== 'undefined' && preselectCommon)) ? 'checked' : '' %>>
               <span>
                 <span id="isCommonLabel" class="font-medium">전체 공통 배너로 설정</span>
                 <span class="block text-xs text-gray-400 mt-0.5">개별 설정이 없는 카테고리/브랜드 접근 시 이 배너가 노출됩니다. 개별 설정이 있으면 개별 배너가 우선합니다.</span>
@@ -79,8 +79,10 @@
                 <option value="">선택하세요</option>
                 <% if (categories && categories.length) { %>
                   <% categories.forEach(function(category) { %>
-                    <option value="<%= category.id %>" data-type="<%= category.type %>" <%=banner &&
-                      String(banner.category_id)===String(category.id) ? 'selected' : '' %>><%= category.name %>
+                    <option value="<%= category.id %>" data-type="<%= category.type %>" <%=
+                      (banner && String(banner.category_id)===String(category.id)) ||
+                      (!banner && typeof preselectTarget !== 'undefined' && preselectTarget && Number(preselectTarget)===category.id)
+                      ? 'selected' : '' %>><%= category.name %>
                     </option>
                     <% }) %>
                       <% } %>
