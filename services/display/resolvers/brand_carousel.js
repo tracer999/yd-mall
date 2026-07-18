@@ -1,38 +1,39 @@
 const pool = require('../../../config/db');
+const dealSvc = require('../../deal/dealService');
 const { P_STATUS, visibilityClause } = require('./_shared');
 const { GLOBAL_CATEGORY_MALL_ID, hiddenCategoryIdSet } = require('../../catalog/categoryScope');
 
 /**
- * brand_carousel — categories(type='BRAND') 기반 브랜드 로고 목록.
+ * brand_carousel — "베스트 브랜드": 브랜드별 실제 상품 리스트.
  *
  * 브랜드는 전 몰 공통(글로벌, mall_id=0). 이 몰 스토어프론트에는
  * **이 몰(products.mall_id)에 등록된 상품이 걸린 브랜드만** 노출한다(−몰별 숨김).
+ * 각 브랜드마다 로고+이름 헤더와 그 브랜드 상품 N개를 함께 보여준다(상품 카운트 대신).
  *
  * config:
- *   maxCount      최대 노출 수 (기본 20)
- *   onlyWithProducts  상품이 1건 이상인 브랜드만 (기본 true)
+ *   maxCount      최대 노출 브랜드 수 (기본 8)
+ *   productCount  브랜드당 상품 수 (기본 6)
  *
- * 브랜드가 0건이면 스킵.
+ * 상품이 걸린 브랜드가 0곳이면 스킵.
  */
 async function resolve({ shared, config, locals }) {
-    const limit = Math.min(Number(config.maxCount) || 20, 60);
-    const onlyWithProducts = config.onlyWithProducts !== false;
+    const brandLimit = Math.min(Number(config.maxCount) || 8, 30);
+    const productLimit = Math.min(Number(config.productCount) || 6, 20);
     const vis = visibilityClause(shared.hasUser);
     const mallId = shared.mallId || 1;
 
-    // 글로벌 브랜드 × 이 몰 상품. product_count 는 이 몰 상품만 센다(LEFT JOIN 의 p.mall_id).
-    const having = onlyWithProducts ? 'HAVING product_count > 0' : '';
+    // 1) 이 몰에 상품이 걸린 브랜드만 추린다(글로벌 브랜드 × 이 몰 상품).
     const [rows] = await pool.query(`
         SELECT c.id, c.name, c.logo_image_path, COUNT(p.id) AS product_count
         FROM categories c
-        LEFT JOIN products p
+        JOIN products p
                ON p.brand_category_id = c.id AND p.mall_id = ? AND ${P_STATUS} AND ${vis}
         WHERE c.type = 'BRAND' AND c.is_active = 1 AND c.mall_id = ?
         GROUP BY c.id, c.name, c.logo_image_path
-        ${having}
+        HAVING product_count > 0
         ORDER BY c.display_order ASC, c.id ASC
         LIMIT ?
-    `, [mallId, GLOBAL_CATEGORY_MALL_ID, limit]);
+    `, [mallId, GLOBAL_CATEGORY_MALL_ID, brandLimit]);
 
     if (!rows || rows.length === 0) return null;
 
@@ -41,7 +42,34 @@ async function resolve({ shared, config, locals }) {
     const visibleRows = hidden.size ? rows.filter((r) => !hidden.has(r.id)) : rows;
     if (visibleRows.length === 0) return null;
 
-    locals.brands = visibleRows;
+    // 2) 브랜드별 상품 채우기 (view_count DESC — loadHomeCategoryBests 관례와 동일).
+    const brands = [];
+    for (const b of visibleRows) {
+        const [products] = await pool.query(`
+            SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
+                   p.discount_rate, p.status, p.stock, p.provider,
+                   p.product_badge, p.distribution_badge
+            FROM products p
+            WHERE p.mall_id = ? AND p.brand_category_id = ? AND ${P_STATUS} AND ${vis}
+            ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT','OFF'),
+                     p.view_count DESC, p.created_at DESC
+            LIMIT ?
+        `, [mallId, b.id, productLimit]);
+
+        if (!products.length) continue;
+        await dealSvc.applyDeals(products); // 다른 상품 카드와 특가 표시 일관성
+        brands.push({
+            id: b.id,
+            name: b.name,
+            logo_image_path: b.logo_image_path,
+            product_count: b.product_count,
+            products,
+        });
+    }
+
+    if (!brands.length) return null;
+
+    locals.brands = brands;
     return locals;
 }
 

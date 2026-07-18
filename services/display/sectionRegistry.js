@@ -45,7 +45,11 @@ module.exports = {
     description: '몰 전용 히어로 슬라이드(hero_slide)를 표현별로 노출한다. 상품 쇼케이스 / 이미지 배너 / 풀블리드 에디토리얼.',
     dataSource: null,
     fields: [
-      { key: 'layout', label: '표현', type: 'select', options: ['showcase', 'banner', 'editorial'], default: 'banner' }
+      { key: 'layout', label: '표현', type: 'select', options: ['showcase', 'banner', 'editorial'], default: 'banner' },
+      // ↓ 아래 3개는 '에디토리얼' 표현의 히어로 하단에 흐르는 문구(마퀴) 전용.
+      { key: 'marqueeEnabled', label: '하단 흐름문구 표시 (에디토리얼 전용)', type: 'select', options: ['표시', '숨김'], default: '표시' },
+      { key: 'marqueeText', label: '흐름문구 내용 (한 줄에 항목 하나, 줄바꿈으로 구분)', type: 'textarea', default: '전 상품 무료배송\n신규 회원 15% 쿠폰\n당일 출고' },
+      { key: 'marqueeSpeed', label: '흐름 속도 (초, 작을수록 빠름)', type: 'number', min: 5, max: 120, default: 28 }
     ]
   },
   product_grid: {
@@ -118,13 +122,12 @@ module.exports = {
   },
   brand_carousel: {
     view: 'partials/sections/brand_carousel',
-    label: '브랜드 캐러셀',
-    description: '브랜드 로고를 가로 슬라이드로. 카테고리 관리의 BRAND 카테고리를 자동으로 끌어온다.',
+    label: '베스트 브랜드',
+    description: '브랜드별로 로고+이름 헤더와 그 브랜드의 상품 리스트를 함께 보여준다. 카테고리 관리의 BRAND 카테고리를 자동으로 끌어온다.',
     dataSource: null, // categories(type=BRAND) 고정 소스
     fields: [
-      Object.assign({}, FIELD.maxCount, { label: '표시 브랜드 수', default: 20 }),
-      Object.assign({}, FIELD.columns, { label: '뷰당 표시 수(PC)', max: 8, default: 6 }),
-      { key: 'shape', label: '모양', type: 'select', options: ['rect', 'circle'], default: 'rect' },
+      Object.assign({}, FIELD.maxCount, { label: '표시 브랜드 수', default: 8 }),
+      { key: 'productCount', label: '브랜드당 상품 수', type: 'number', min: 2, max: 20, default: 6 },
       FIELD.moreLink
     ]
   },
