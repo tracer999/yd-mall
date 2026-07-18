@@ -5,6 +5,7 @@ const displayService = require('../../services/display/displayService');
 const linkTargetService = require('../../services/menu/linkTargets');
 const mainController = require('../mainController');
 const presets = require('../../services/mall/presets');
+const mallProvisioner = require('../../services/mall/mallProvisioner');
 
 /*
  * 관리자 페이지 빌더 컨트롤러 (P2)
@@ -148,15 +149,26 @@ exports.getEditor = async (req, res) => {
       });
     });
 
-    // 이지 모드(테마 재선택)용 — 현재 몰의 마지막 테마 + 테마 목록.
+    // 테마 설정 탭용 — 현재 몰의 마지막 테마 + 테마 목록.
     const [[mallRow]] = await pool.query('SELECT preset_key FROM mall WHERE id = ?', [mallId]);
+
+    // 페이지 설정 > 이지모드 탭용 — 번들 카드(섹션을 사람이 읽을 라벨로 풀어 준다).
+    const pageBundles = presets.bundleList().map((b) => ({
+      key: b.key,
+      label: b.label,
+      summary: b.summary,
+      items: b.sections.map((s) => (s.title || (registry[s.type] && registry[s.type].label) || s.type)),
+    }));
 
     res.render('admin/page-builder/editor', {
       layout: 'layouts/admin_layout',
       title: '페이지 빌더',
       subtitle: '섹션을 추가·삭제·재정렬한 뒤 발행해야 스토어프론트에 반영됩니다.',
       page, pages, sections, palette: buildPalette(), productGroups, revisions, dirty, linkTargets,
-      mallId, presetList: presets.list(), currentPreset: (mallRow && mallRow.preset_key) || presets.DEFAULT_KEY
+      mallId, presetList: presets.list(), currentPreset: (mallRow && mallRow.preset_key) || presets.DEFAULT_KEY,
+      pageBundles,
+      notice: req.query.notice || null,
+      errorMsg: req.query.error || null,
     });
   } catch (err) {
     console.error('[pageBuilder.getEditor]', err);
@@ -250,6 +262,27 @@ exports.postSectionReorder = async (req, res) => {
   } catch (err) {
     console.error('[pageBuilder.postSectionReorder]', err);
     res.status(500).json({ success: false, message: '순서 변경 실패' });
+  }
+};
+
+/*
+ * POST /admin/page-builder/apply-bundle — 페이지 설정 > 이지모드 번들 적용.
+ * 홈의 히어로 아래 콘텐츠를 선택한 번들로 교체·발행한 뒤 빌더로 되돌린다(폼 POST → redirect).
+ */
+exports.postApplyBundle = async (req, res) => {
+  const mallId = req.adminMallId || 1;
+  const bundleKey = req.body.bundle_key;
+  try {
+    if (!presets.isValidBundleKey(bundleKey)) {
+      return res.redirect('/admin/page-builder?error=' + encodeURIComponent('알 수 없는 구성입니다.'));
+    }
+    const actor = (req.session.admin && req.session.admin.username) || 'admin';
+    const result = await mallProvisioner.applyHomeBundle(mallId, bundleKey, { actor });
+    res.redirect('/admin/page-builder?notice=' + encodeURIComponent(
+      `'${result.bundle.label}' 구성을 적용하고 발행했습니다(rev.${result.revisionNo}).`));
+  } catch (err) {
+    console.error('[pageBuilder.postApplyBundle]', err);
+    res.redirect('/admin/page-builder?error=' + encodeURIComponent('구성 적용 실패: ' + err.message));
   }
 };
 

@@ -323,8 +323,102 @@ async function provisionMall(mallId, presetKey, opts = {}) {
     return { preset, menuMode, created: mode === 'create', homeReplaced: home.replaced, revisionNo };
 }
 
+/**
+ * 페이지 이지모드 번들 적용 — 홈의 "히어로 아래 콘텐츠 캐러셀"만 교체·발행한다.
+ *
+ * provisionMall 과 달리 **내비·테마·메뉴는 건드리지 않는다**(그건 테마 설정 소관).
+ * 리딩 히어로(theme_hero)는 원래 config 를 보존해 그대로 두고, 나머지 섹션을 번들로 갈아끼운다.
+ *
+ * @param {number} mallId
+ * @param {string} bundleKey  presets.PAGE_BUNDLES 키
+ * @param {{ actor?: string }} opts
+ * @returns {Promise<{ bundle, pageId: number, revisionNo: number|null }>}
+ */
+async function applyHomeBundle(mallId, bundleKey, opts = {}) {
+    const id = Number(mallId);
+    if (!Number.isInteger(id) || id <= 0) throw new Error('applyHomeBundle: 잘못된 mallId');
+
+    const bundle = presets.getBundle(bundleKey);
+    if (!bundle) throw new Error('applyHomeBundle: 알 수 없는 번들 키');
+
+    const [[mall]] = await pool.query('SELECT id FROM mall WHERE id = ?', [id]);
+    if (!mall) throw new Error(`applyHomeBundle: 몰 ${id} 을(를) 찾을 수 없습니다.`);
+
+    const [[home]] = await pool.query(
+        "SELECT id FROM page WHERE mall_id = ? AND page_type = 'home' ORDER BY id ASC LIMIT 1", [id]);
+    if (!home) throw new Error('applyHomeBundle: 편집할 홈 페이지가 없습니다. 먼저 테마를 적용하세요.');
+
+    // 프로모션 배너가 번들에 있으면 실제 존재하는 그룹 키를 하나 배선한다(없으면 그 섹션은 스킵됨).
+    let bannerGroupKey = null;
+    if (bundle.sections.some((s) => s.type === 'promotion_banner')) {
+        const [rows] = await pool.query(`
+            SELECT group_key FROM banners
+             WHERE is_active = 1 AND group_key IS NOT NULL AND group_key <> ''
+             GROUP BY group_key ORDER BY MIN(display_order) ASC, group_key ASC LIMIT 1`);
+        bannerGroupKey = rows.length ? rows[0].group_key : null;
+    }
+
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 히어로는 테마 소관 — 원래 config 그대로 보존한다.
+        const [heroRows] = await conn.query(
+            `SELECT title, sort_order, data_source_type, data_source_id, config_json, is_active
+               FROM page_section
+              WHERE page_id = ? AND section_type = 'theme_hero'
+              ORDER BY sort_order ASC`, [home.id]);
+
+        // 신상품 캐러셀이 물 조건형 상품 그룹(멱등) + 베스트 그룹.
+        const groupIdByKey = await applyProductGroups(conn, id);
+        await applyBestGroups(conn, id);
+
+        await conn.query('DELETE FROM page_section WHERE page_id = ?', [home.id]);
+
+        let sortOrder = 1;
+        // 1) 히어로 재삽입(보존).
+        //    config_json 은 JSON 컬럼이라 mysql2 가 SELECT 시 객체로 파싱해 돌려준다.
+        //    그대로 다시 넣으면 mysql2 가 객체를 SET 표현식으로 직렬화해 깨진다 → 문자열로 정규화한다.
+        for (const h of heroRows) {
+            const heroCfg = h.config_json == null
+                ? null
+                : (typeof h.config_json === 'string' ? h.config_json : JSON.stringify(h.config_json));
+            await conn.query(`
+                INSERT INTO page_section
+                  (page_id, section_type, position, title, sort_order, data_source_type, data_source_id, config_json, is_active)
+                VALUES (?, 'theme_hero', 'main_content', ?, ?, ?, ?, ?, ?)`,
+                [home.id, h.title, sortOrder++, h.data_source_type, h.data_source_id, heroCfg, h.is_active]);
+        }
+        // 2) 번들 섹션 삽입
+        for (const s of bundle.sections) {
+            const groupId = s.group ? (groupIdByKey[s.group] || null) : null;
+            const cfg = Object.assign({}, s.config || {});
+            if (s.type === 'promotion_banner' && bannerGroupKey && !cfg.groupKey) cfg.groupKey = bannerGroupKey;
+            const cfgJson = Object.keys(cfg).length ? JSON.stringify(cfg) : null;
+            await conn.query(`
+                INSERT INTO page_section
+                  (page_id, section_type, position, title, sort_order, data_source_type, data_source_id, config_json, is_active)
+                VALUES (?, ?, 'main_content', ?, ?, ?, ?, ?, 1)`,
+                [home.id, s.type, s.title || null, sortOrder++, groupId ? 'product_group' : null, groupId, cfgJson]);
+        }
+
+        await conn.commit();
+    } catch (err) {
+        await conn.rollback();
+        throw err;
+    } finally {
+        conn.release();
+    }
+
+    // 교체 후 반드시 발행 — 안 하면 옛 page_revision 스냅샷이 계속 렌더된다.
+    const revisionNo = await pageBuilderService.publish(home.id, opts.actor || 'bundle');
+
+    return { bundle, pageId: home.id, revisionNo };
+}
+
 module.exports = {
     provisionMall,
+    applyHomeBundle,
     inspect,
     // 백필 스크립트(scripts/backfill_mall_data_sources.js)가 같은 시드 정의를 재사용한다.
     PRODUCT_GROUP_SEEDS,

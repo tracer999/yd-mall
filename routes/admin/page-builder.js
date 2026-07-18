@@ -12,6 +12,9 @@ router.get('/preview', mainController.getHomePreview);
 // 섹션 카탈로그 미리보기 — 추가하기 전에 그 섹션이 어떻게 보이는지 실데이터로 렌더 (iframe 소스)
 router.get('/section-preview', pageBuilder.getSectionPreview);
 
+// 페이지 설정 > 이지모드 — 번들 구성 적용(폼 POST → redirect)
+router.post('/apply-bundle', pageBuilder.postApplyBundle);
+
 // 섹션 CRUD (JSON)
 router.post('/sections', pageBuilder.postSectionAdd);
 router.post('/sections/reorder', pageBuilder.postSectionReorder);

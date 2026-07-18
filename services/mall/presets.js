@@ -201,6 +201,88 @@ const PRESETS = {
 
 const DEFAULT_KEY = 'theme_banner';
 
+/*
+ * ────────────────────────────────────────────────────────────────
+ * 페이지 이지모드 번들 (페이지 빌더 > 페이지 설정 > 이지모드)
+ *
+ * 테마(히어로·색·폰트)와 **독립된 축**이다. 테마가 최상단 히어로와 룩을 정하고,
+ * 이 번들은 그 **히어로 아래 콘텐츠 캐러셀 구성**만 정한다.
+ *   - 적용 시 홈의 리딩 히어로(theme_hero)는 그대로 두고, 나머지 섹션을 이 목록으로 교체·발행한다.
+ *   - 그래서 두 탭(테마 설정 / 페이지 설정)이 히어로를 두고 서로 싸우지 않는다.
+ *
+ * 각 섹션은 preset.homeSections 와 같은 스키마: { type, title, group?, config? }.
+ *   group : applyProductGroups 가 만든 조건형 상품 그룹 키('recommend'|'new')
+ *   config: page_section.config_json 초기값. promotion_banner 의 groupKey 는
+ *           실제 배너 존재 여부에 달렸으므로 적용 시점에 자동 배선한다(여기서 비워 둠).
+ *
+ * 초보자가 3종 중 하나를 골라 "바로 뜨는 메인"을 만들고, 이후 직접설정(섹션 편집)에서
+ * 세부 조정한다. 요구 사양: 캐러셀 풀[베스트 카테고리·베스트 브랜드·신상품·특가·프로모션배너·퀵메뉴]
+ * 을 3종으로, 각 3~4개씩 구성.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* 퀵 메뉴 기본 항목 — icon 은 bootstrap-icons 이름에서 'bi-' 를 뺀 값 */
+const DEFAULT_QUICK_ITEMS = [
+    { icon: 'lightning-charge', label: '오늘특가', url: '/deals' },
+    { icon: 'award', label: '베스트', url: '/best' },
+    { icon: 'stars', label: '신상품', url: '/new' },
+    { icon: 'ticket-perforated', label: '쿠폰', url: '/coupon', badge: 'N' },
+];
+
+const PAGE_BUNDLES = {
+    /* 번들 1 — 상품을 앞세운 구성(4개) */
+    bundle_product: {
+        key: 'bundle_product',
+        label: '상품 중심',
+        summary: '특가 → 신상품 → 베스트 카테고리 → 베스트 브랜드 순으로 상품을 크게 앞세운 구성입니다.',
+        sections: [
+            { type: 'deal_carousel', title: '쇼핑특가', config: { maxCount: 12, columnsPerView: 4 } },
+            { type: 'product_carousel', title: '신상품', group: 'new', config: { maxCount: 12, columnsPerView: 4 } },
+            { type: 'category_showcase', title: '베스트 카테고리' },
+            { type: 'brand_carousel', title: '베스트 브랜드' },
+        ],
+    },
+
+    /* 번들 2 — 이벤트·혜택을 앞세운 구성(4개) */
+    bundle_benefit: {
+        key: 'bundle_benefit',
+        label: '혜택 강조',
+        summary: '퀵 메뉴 → 프로모션 배너 → 특가 → 베스트 카테고리로 이벤트·혜택을 앞세운 구성입니다.',
+        sections: [
+            { type: 'quick_menu', title: null, config: { items: DEFAULT_QUICK_ITEMS, columns: 4 } },
+            { type: 'promotion_banner', title: '기획전', config: { maxCount: 4, layout: 'rect', columns: 2 } },
+            { type: 'deal_carousel', title: '쇼핑특가', config: { maxCount: 12, columnsPerView: 4 } },
+            { type: 'category_showcase', title: '베스트 카테고리' },
+        ],
+    },
+
+    /* 번들 3 — 단순 구성(3개) */
+    bundle_simple: {
+        key: 'bundle_simple',
+        label: '심플',
+        summary: '베스트 카테고리 → 베스트 브랜드 → 신상품 3종만 담은 가장 단순한 구성입니다.',
+        sections: [
+            { type: 'category_showcase', title: '베스트 카테고리' },
+            { type: 'brand_carousel', title: '베스트 브랜드' },
+            { type: 'product_carousel', title: '신상품', group: 'new', config: { maxCount: 12, columnsPerView: 4 } },
+        ],
+    },
+};
+
+/** 유효한 페이지 번들 키인가 */
+function isValidBundleKey(key) {
+    return Object.prototype.hasOwnProperty.call(PAGE_BUNDLES, String(key || ''));
+}
+
+/** 번들을 돌려준다. 없는 키면 null. */
+function getBundle(key) {
+    return PAGE_BUNDLES[String(key || '')] || null;
+}
+
+/** 관리자 카드 목록용 */
+function bundleList() {
+    return Object.values(PAGE_BUNDLES);
+}
+
 /** 유효한 프리셋 키인가 */
 function isValidKey(key) {
     return Object.prototype.hasOwnProperty.call(PRESETS, String(key || ''));
@@ -239,4 +321,5 @@ function resolveNavigation(preset, menuMode) {
 module.exports = {
     PRESETS, DEFAULT_KEY, get, list, isValidKey,
     MENU_MODES, DEFAULT_MENU_MODE, menuModeList, isValidMenuMode, resolveNavigation,
+    PAGE_BUNDLES, isValidBundleKey, getBundle, bundleList,
 };

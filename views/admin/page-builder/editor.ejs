@@ -6,23 +6,36 @@
 <% } else { %>
 
 <%
-  /* 이지 모드 / 설정 모드 탭 — 홈 페이지에서만. 이지 모드는 테마를 골라 홈을 기본 구성으로 재구성한다.
-     설정 모드는 기존 섹션 편집 UI 다. */
+  /* 두 탭 — 테마 설정 / 페이지 설정(홈 페이지에서만). 페이지 설정 안에서 다시 이지모드 / 직접설정.
+       테마 설정 = 히어로·색·폰트(테마 적용). 이지모드 = 콘텐츠 캐러셀 번들 선택. 직접설정 = 섹션 직접 편집. */
   var _isHome = page.page_type === 'home';
   var _pl = (typeof presetList !== 'undefined') ? presetList : [];
   var _cur = (typeof currentPreset !== 'undefined') ? currentPreset : '';
+  var _bundles = (typeof pageBundles !== 'undefined') ? pageBundles : [];
 %>
+
+<% if (typeof notice !== 'undefined' && notice) { %>
+  <div class="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    <i class="bi bi-check-circle-fill mt-0.5"></i><span><%= notice %></span>
+  </div>
+<% } %>
+<% if (typeof errorMsg !== 'undefined' && errorMsg) { %>
+  <div class="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+    <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= errorMsg %></span>
+  </div>
+<% } %>
 
 <% if (_isHome) { %>
   <div class="mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
     <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1 text-sm" role="tablist">
-      <button type="button" data-pb-tab="easy" class="pb-tab px-4 py-1.5 rounded-md font-medium text-gray-600 hover:text-gray-900">이지 모드</button>
-      <button type="button" data-pb-tab="settings" class="pb-tab px-4 py-1.5 rounded-md font-medium bg-indigo-600 text-white">설정 모드</button>
+      <button type="button" data-pb-tab="theme" class="pb-tab px-4 py-1.5 rounded-md font-medium text-gray-600 hover:text-gray-900">테마 설정</button>
+      <button type="button" data-pb-tab="page" class="pb-tab px-4 py-1.5 rounded-md font-medium bg-indigo-600 text-white">페이지 설정</button>
     </div>
-    <span class="text-xs text-gray-400">이지 모드 = 테마로 메인 화면 자동 구성 · 설정 모드 = 섹션 직접 편집</span>
+    <span class="text-xs text-gray-400">테마 설정 = 히어로·색·폰트 · 페이지 설정 = 메인에 표시할 캐러셀 구성</span>
   </div>
 
-  <div id="pb-pane-easy" class="hidden">
+  <!-- ── 테마 설정 탭 ── -->
+  <div id="pb-pane-theme" class="hidden">
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-2xl">
       <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
         <h2 class="text-sm font-semibold text-gray-800">테마로 메인 화면 다시 구성</h2>
@@ -52,7 +65,56 @@
   </div>
 <% } %>
 
-<div id="pb-pane-settings">
+<!-- ── 페이지 설정 탭 ── -->
+<div id="pb-pane-page">
+
+<% if (_isHome) { %>
+  <div class="mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
+    <div class="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1 text-sm" role="tablist">
+      <button type="button" data-pb-sub="easy" class="pb-sub px-4 py-1.5 rounded-md font-medium text-gray-600 hover:text-gray-900">이지모드</button>
+      <button type="button" data-pb-sub="direct" class="pb-sub px-4 py-1.5 rounded-md font-medium bg-white shadow-sm text-gray-900">직접설정</button>
+    </div>
+    <span class="text-xs text-gray-400">이지모드 = 미리 만든 캐러셀 구성 선택 · 직접설정 = 섹션 직접 편집</span>
+  </div>
+
+  <!-- 이지모드: 미리 구성된 캐러셀 번들 -->
+  <div id="pb-sub-easy" class="hidden">
+    <div class="mb-3 text-xs text-gray-500">
+      원하는 구성을 고르면 <strong>메인 상단 히어로는 그대로 두고, 그 아래 캐러셀을 선택한 구성으로 교체·발행</strong>합니다.
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <% _bundles.forEach(function (b) { %>
+        <form method="POST" action="/admin/page-builder/apply-bundle"
+              class="flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:border-indigo-300 transition"
+              onsubmit="return confirm('&quot;<%= b.label %>&quot; 구성으로 메인 캐러셀을 교체·발행합니다.\n계속할까요?');">
+          <input type="hidden" name="bundle_key" value="<%= b.key %>">
+          <div class="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+            <h3 class="text-sm font-semibold text-gray-900"><%= b.label %></h3>
+            <p class="mt-0.5 text-xs text-gray-500 leading-relaxed"><%= b.summary %></p>
+          </div>
+          <div class="flex-1 p-4">
+            <ol class="space-y-1.5">
+              <% (b.items || []).forEach(function (it, i) { %>
+                <li class="flex items-center gap-2 text-sm text-gray-700">
+                  <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 text-[11px] font-semibold"><%= i + 1 %></span>
+                  <%= it %>
+                </li>
+              <% }); %>
+            </ol>
+          </div>
+          <div class="p-4 pt-0">
+            <button type="submit" class="w-full inline-flex items-center justify-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+              <i class="bi bi-magic mr-1.5"></i>이 구성 적용
+            </button>
+          </div>
+        </form>
+      <% }); %>
+    </div>
+  </div>
+<% } %>
+
+<!-- 직접설정: 섹션 직접 편집(기존 UI) -->
+<div id="pb-sub-direct">
 
 <!-- 상단 툴바 -->
 <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
@@ -195,28 +257,53 @@
   </div>
 </div>
 
-</div><!-- /pb-pane-settings -->
+</div><!-- /pb-sub-direct -->
+
+</div><!-- /pb-pane-page -->
 
 <% if (typeof page !== 'undefined' && page && page.page_type === 'home') { %>
 <script>
   (function () {
+    // ── 상위 탭: 테마 설정 / 페이지 설정 ──
     var tabs = document.querySelectorAll('.pb-tab');
-    var easy = document.getElementById('pb-pane-easy');
-    var settings = document.getElementById('pb-pane-settings');
-    if (!tabs.length || !easy || !settings) return;
-    function activate(which) {
-      easy.classList.toggle('hidden', which !== 'easy');
-      settings.classList.toggle('hidden', which !== 'settings');
+    var themePane = document.getElementById('pb-pane-theme');
+    var pagePane = document.getElementById('pb-pane-page');
+    if (tabs.length && themePane && pagePane) {
+      function activateTab(which) {
+        themePane.classList.toggle('hidden', which !== 'theme');
+        pagePane.classList.toggle('hidden', which !== 'page');
+        tabs.forEach(function (t) {
+          var on = t.getAttribute('data-pb-tab') === which;
+          t.classList.toggle('bg-indigo-600', on);
+          t.classList.toggle('text-white', on);
+          t.classList.toggle('text-gray-600', !on);
+        });
+      }
       tabs.forEach(function (t) {
-        var on = t.getAttribute('data-pb-tab') === which;
-        t.classList.toggle('bg-indigo-600', on);
-        t.classList.toggle('text-white', on);
-        t.classList.toggle('text-gray-600', !on);
+        t.addEventListener('click', function () { activateTab(t.getAttribute('data-pb-tab')); });
       });
     }
-    tabs.forEach(function (t) {
-      t.addEventListener('click', function () { activate(t.getAttribute('data-pb-tab')); });
-    });
+
+    // ── 하위 토글: 이지모드 / 직접설정 (페이지 설정 안) ──
+    var subs = document.querySelectorAll('.pb-sub');
+    var easy = document.getElementById('pb-sub-easy');
+    var direct = document.getElementById('pb-sub-direct');
+    if (subs.length && easy && direct) {
+      function activateSub(which) {
+        easy.classList.toggle('hidden', which !== 'easy');
+        direct.classList.toggle('hidden', which !== 'direct');
+        subs.forEach(function (s) {
+          var on = s.getAttribute('data-pb-sub') === which;
+          s.classList.toggle('bg-white', on);
+          s.classList.toggle('shadow-sm', on);
+          s.classList.toggle('text-gray-900', on);
+          s.classList.toggle('text-gray-600', !on);
+        });
+      }
+      subs.forEach(function (s) {
+        s.addEventListener('click', function () { activateSub(s.getAttribute('data-pb-sub')); });
+      });
+    }
   })();
 </script>
 <% } %>
