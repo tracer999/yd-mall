@@ -42,14 +42,21 @@ async function resolve({ shared, config, locals }) {
     locals.mainSlides = mainSlides;
     locals.feature = feature;
 
-    // 하단 흐름문구(마퀴) — 에디토리얼 표현에서만 뷰가 사용한다. 관리자 입력을 정규화.
-    const rawText = (config.marqueeText != null && String(config.marqueeText).trim())
-        ? String(config.marqueeText)
+    // 하단 흐름문구(마퀴) — 에디토리얼 표현에서만 뷰가 사용한다.
+    // 소스는 site_settings(배너 관리 > 메인 슬라이더 화면에서 편집). 발행 스냅샷을 거치지 않으므로
+    // 관리자가 저장하면 즉시 반영된다. 몰 행이 없으면 기본몰(1) 폴백 — siteSettings 미들웨어와 동일 규칙.
+    const [ssRows] = await pool.query(
+        `SELECT marquee_enabled, marquee_text, marquee_speed FROM site_settings
+          WHERE mall_id IN (?, 1) ORDER BY (mall_id = ?) DESC LIMIT 1`,
+        [mallId, mallId]
+    );
+    const ss = ssRows[0] || {};
+    const rawText = (ss.marquee_text != null && String(ss.marquee_text).trim())
+        ? String(ss.marquee_text)
         : '전 상품 무료배송\n신규 회원 15% 쿠폰\n당일 출고';
     const items = rawText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    const off = ['숨김', 'off', 'false', 'no', '0'].includes(String(config.marqueeEnabled || '').trim().toLowerCase());
-    const spd = Number(config.marqueeSpeed);
-    locals.marqueeEnabled = !off && items.length > 0;
+    const spd = Number(ss.marquee_speed);
+    locals.marqueeEnabled = Number(ss.marquee_enabled) !== 0 && items.length > 0;
     locals.marqueeItems = items;
     locals.marqueeSpeed = (Number.isFinite(spd) && spd >= 5 && spd <= 120) ? spd : 28;
 

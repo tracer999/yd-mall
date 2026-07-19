@@ -54,6 +54,8 @@ router.post('/topbar', handleTopbarUpload, bannerController.postTopbar);
 // 한 화면에서 히어로 방식(상품 쇼케이스 / 이미지 배너)을 고르고 그 방식의 콘텐츠를 편집한다.
 router.get('/hero-slides', heroSlideController.getList);
 router.post('/hero-slides/variant', heroSlideController.postVariant);
+// 에디토리얼 히어로 하단 흐름문구(마퀴) — site_settings 에 바로 저장(프론트 즉시 반영)
+router.post('/hero-slides/marquee', heroSlideController.postMarquee);
 // 이미지 배너 슬라이드(banner_type='MAIN')의 순서·노출 일괄 저장
 router.post('/hero-slides/banners', heroSlideController.postBannerOrder);
 router.get('/hero-slides/add', heroSlideController.getAdd);

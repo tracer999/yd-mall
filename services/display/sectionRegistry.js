@@ -45,11 +45,9 @@ module.exports = {
     description: '몰 전용 히어로 슬라이드(hero_slide)를 표현별로 노출한다. 상품 쇼케이스 / 이미지 배너 / 풀블리드 에디토리얼.',
     dataSource: null,
     fields: [
-      { key: 'layout', label: '표현', type: 'select', options: ['showcase', 'banner', 'editorial'], default: 'banner' },
-      // ↓ 아래 3개는 '에디토리얼' 표현의 히어로 하단에 흐르는 문구(마퀴) 전용.
-      { key: 'marqueeEnabled', label: '하단 흐름문구 표시 (에디토리얼 전용)', type: 'select', options: ['표시', '숨김'], default: '표시' },
-      { key: 'marqueeText', label: '흐름문구 내용 (한 줄에 항목 하나, 줄바꿈으로 구분)', type: 'textarea', default: '전 상품 무료배송\n신규 회원 15% 쿠폰\n당일 출고' },
-      { key: 'marqueeSpeed', label: '흐름 속도 (초, 작을수록 빠름)', type: 'number', min: 5, max: 120, default: 28 }
+      { key: 'layout', label: '표현', type: 'select', options: ['showcase', 'banner', 'editorial'], default: 'banner' }
+      // 에디토리얼 하단 흐름문구(마퀴)는 '배너 관리 > 메인 슬라이더' 화면에서 편집한다
+      // (site_settings.marquee_*). 즉시 반영이 필요해 페이지빌더 발행 흐름에서 분리했다.
     ]
   },
   product_grid: {

@@ -42,6 +42,29 @@ async function getActiveVariant(mallId) {
     return VARIANTS.includes(v) ? v : DEFAULT_VARIANT;
 }
 
+// 마퀴 흐름 속도 허용 범위 — 리졸버(theme_hero.js)와 반드시 같은 값이어야 어긋나지 않는다.
+const MARQUEE_SPEED_MIN = 5;
+const MARQUEE_SPEED_MAX = 120;
+const MARQUEE_SPEED_DEFAULT = 28;
+const MARQUEE_TEXT_DEFAULT = '전 상품 무료배송\n신규 회원 15% 쿠폰\n당일 출고';
+
+/* 에디토리얼 히어로 하단 흐름문구(마퀴) 값. getActiveVariant 와 같은 몰 폴백 규칙. */
+async function getMarquee(mallId) {
+    const [rows] = await pool.query(
+        `SELECT marquee_enabled, marquee_text, marquee_speed FROM site_settings
+         WHERE mall_id IN (?, 1) ORDER BY (mall_id = ?) DESC LIMIT 1`,
+        [mallId, mallId]
+    );
+    const r = rows[0] || {};
+    const spd = Number(r.marquee_speed);
+    return {
+        enabled: Number(r.marquee_enabled) !== 0,
+        // 빈 값이면 편집칸에 코드 기본값을 보여줘, 무엇이 노출되는지 관리자가 바로 알 수 있게 한다.
+        text: (r.marquee_text != null && String(r.marquee_text).trim()) ? String(r.marquee_text) : MARQUEE_TEXT_DEFAULT,
+        speed: (Number.isFinite(spd) && spd >= MARQUEE_SPEED_MIN && spd <= MARQUEE_SPEED_MAX) ? spd : MARQUEE_SPEED_DEFAULT,
+    };
+}
+
 exports.getList = async (req, res) => {
     try {
         const mallId = req.adminMallId || 1;
@@ -72,6 +95,9 @@ exports.getList = async (req, res) => {
             ORDER BY display_order ASC, id ASC
         `);
 
+        // 에디토리얼 히어로 하단 흐름문구(마퀴) — theme_hero 리졸버와 같은 소스·폴백을 읽는다.
+        const marquee = await getMarquee(mallId);
+
         res.render('admin/banners/hero-slides/list', {
             layout: 'layouts/admin_layout',
             title: '메인 슬라이더 관리',
@@ -82,7 +108,9 @@ exports.getList = async (req, res) => {
             mainSlides: slides.filter(s => s.slot === 'MAIN'),
             featureSlides: slides.filter(s => s.slot === 'FEATURE'),
             mainBanners,
-            saved: req.query.saved === '1'
+            marquee,
+            saved: req.query.saved === '1',
+            marqueeSaved: req.query.marquee === '1'
         });
     } catch (err) {
         console.error(err);
@@ -113,6 +141,39 @@ exports.postVariant = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send(`Hero variant update failed${err.code ? `: ${err.code}` : ''}`);
+    }
+};
+
+/*
+ * POST /admin/banners/hero-slides/marquee — 에디토리얼 히어로 하단 흐름문구(마퀴) 저장.
+ * site_settings 에 바로 쓴다(발행 스냅샷을 안 거치므로 프론트 즉시 반영).
+ * postVariant 와 같은 제약: 이 몰의 site_settings 행이 없으면 만들지 않고 409 로 거부한다
+ * (행을 새로 만들면 siteSettings 미들웨어의 '기본몰 폴백'이 끊겨 브랜딩이 빈 값이 된다).
+ */
+exports.postMarquee = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const enabled = String(req.body.marquee_enabled) === '1' ? 1 : 0;
+    // 빈 문자열이면 NULL 로 저장 → 리졸버가 코드 기본값으로 폴백한다.
+    const rawText = (req.body.marquee_text != null && String(req.body.marquee_text).trim())
+        ? String(req.body.marquee_text) : null;
+    const spdIn = Number(req.body.marquee_speed);
+    const speed = (Number.isFinite(spdIn) && spdIn >= MARQUEE_SPEED_MIN && spdIn <= MARQUEE_SPEED_MAX)
+        ? Math.round(spdIn) : MARQUEE_SPEED_DEFAULT;
+
+    try {
+        const [result] = await pool.query(
+            'UPDATE site_settings SET marquee_enabled = ?, marquee_text = ?, marquee_speed = ? WHERE mall_id = ?',
+            [enabled, rawText, speed, mallId]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(409).send(
+                '이 몰의 사이트 설정이 아직 없습니다. 사이트 설정(/admin/settings)에서 먼저 저장한 뒤 다시 시도해 주세요.'
+            );
+        }
+        res.redirect('/admin/banners/hero-slides?marquee=1');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send(`Marquee update failed${err.code ? `: ${err.code}` : ''}`);
     }
 };
 

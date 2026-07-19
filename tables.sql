@@ -435,6 +435,9 @@ CREATE TABLE IF NOT EXISTS `site_settings` (
   `brand_dark_color` varchar(7) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '#5A824B' COMMENT '브랜드 진한 색상',
   `brand_light_color` varchar(7) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '#F0F7EE' COMMENT '브랜드 연한 배경색',
   `ga4_measurement_id` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Google Analytics 4 측정 ID (예: G-XXXXXXXXXX)',
+  `marquee_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '에디토리얼 히어로 하단 흐름문구(마퀴) 표시 여부',
+  `marquee_text` text COLLATE utf8mb4_general_ci COMMENT '마퀴 문구(줄바꿈으로 항목 구분). NULL/빈값이면 코드 기본값',
+  `marquee_speed` smallint NOT NULL DEFAULT '28' COMMENT '마퀴 흐름 속도(초, 5~120)',
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정일시',
   PRIMARY KEY (`id`),
   CONSTRAINT `site_settings_chk_1` CHECK ((`id` = 1))
