@@ -69,12 +69,12 @@
 
 ---
 
-## 8. 사이트 · 테마 설정
+## 8. 사이트 설정 · 디자인 스타일
 
 - **URL:** `/admin/settings`, `/admin/site-settings`, `/admin/sys-settings`, `/admin/theme-settings`
 - **회사 정보:** 몰별 `site_settings` 1행 (로고·파비콘·연락처·SNS·브랜드 색상·GA4)
 - **시스템 설정:** `system_settings` 테이블 → 앱 기동 시 `process.env` 를 **덮어씀**(빈 값은 스킵). TinyMCE·OpenAI·OAuth·SMTP·Toss·Shopify 키
-- **테마:** `theme.config_json` 토큰이 CSS 변수로 `<head>` 에 직접 삽입되므로 서버 검증 필수
+- **디자인 스타일(`/admin/theme-settings`):** `theme.config_json` 토큰이 CSS 변수로 `<head>` 에 직접 삽입되므로 서버 검증 필수
 - **상세 문서:** [settings.md](./settings.md)
 
 ---

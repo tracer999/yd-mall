@@ -152,11 +152,6 @@ function placeholder(title, subtitle, note) {
     });
 }
 
-exports.getPublish = placeholder(
-    '스마트스토어 등록',
-    '편집한 상품을 네이버에 등록하고 검수 상태를 추적합니다.',
-    'Phase 3에서 구현됩니다.'
-);
 exports.getChannelImport = placeholder(
     '스토어 상품 가져오기 (역방향)',
     '스마트스토어에 직접 등록된 상품을 우리 몰로 가져옵니다.',
@@ -423,32 +418,58 @@ exports.postStagingDelete = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// 네이버 카테고리 리소스 — 수집 현황 · 수동 수집 · 스케줄
+// 네이버 리소스 관리 — 수집 현황 · 수동 수집 · 스케줄 · 수집된 리소스 브라우징
 // 설계: docs/사이트개선/네이버_카테고리_리소스_설계.md
+//
+// 수집한 네이버 카테고리/브랜드 리소스를 보는 곳은 여기 하나다.
+// (구 "몰 관리 → 리소스 관리"(/admin/resources)는 이 화면으로 통합·제거되었다)
 //
 // ⚠ 여기서 수집한 네이버 카테고리는 "참조 리소스"다. 몰 categories 에 자동
 //   반영하지 않는다. 상품 등록 화면에서 검색·선택될 때 taxonomyResolver 가
 //   그걸 근거로 몰 카테고리를 생성/매핑한다.
 // ---------------------------------------------------------------------------
 
+const NAVER_TABS = ['category', 'brand'];
+const NAVER_PAGE_TITLE = '외부몰 연동 · 네이버 리소스 관리';
+
 exports.getNaverTaxonomy = async (req, res) => {
+    // 목록 필터는 화면 상태일 뿐이라 잘못된 값이 와도 기본값으로 흡수한다.
+    const tab = NAVER_TABS.includes(req.query.tab) ? req.query.tab : 'category';
+    const q = String(req.query.q || '').trim();
+    const page = Number(req.query.page) || 1;
+    // 체크박스는 "체크=필터 적용". 최초 진입(파라미터 없음)은 활성만 보여준다.
+    const hasFilterParams = Object.prototype.hasOwnProperty.call(req.query, 'tab');
+    const activeOnly = hasFilterParams ? req.query.active === '1' : true;
+    const leafOnly = req.query.leaf === '1';
+
     try {
         const status = await naverTaxonomy.getStatus();
+        const list = tab === 'brand'
+            ? await naverTaxonomy.listBrands({ q, activeOnly, page })
+            : await naverTaxonomy.listCategories({ q, activeOnly, leafOnly, page });
+
         res.render('admin/sourcing/naver_taxonomy', {
             layout: 'layouts/admin_layout',
-            title: '외부몰 연동 · 네이버 카테고리 리소스',
-            subtitle: '네이버 스마트스토어 전체 카테고리를 주기 수집해 상품 등록 시 참고합니다. (몰 카테고리에 자동 반영되지 않음)',
+            title: NAVER_PAGE_TITLE,
+            subtitle: '네이버 스마트스토어의 카테고리·브랜드를 주기 수집해 상품 등록 시 참고합니다. (몰 카테고리에 자동 반영되지 않음)',
             status,
+            tab,
+            list,
+            filters: { q, activeOnly, leafOnly },
             saved: req.query.saved === '1',
             msg: req.query.msg || '',
             error: req.query.error || '',
         });
     } catch (e) {
+        console.error('[naver-taxonomy] getNaverTaxonomy:', e.message);
         res.status(500).render('admin/sourcing/naver_taxonomy', {
             layout: 'layouts/admin_layout',
-            title: '외부몰 연동 · 네이버 카테고리 리소스',
+            title: NAVER_PAGE_TITLE,
             subtitle: '',
             status: null,
+            tab,
+            list: null,
+            filters: { q: '', activeOnly: true, leafOnly: false },
             saved: false,
             msg: '',
             error: e.message,
@@ -493,3 +514,178 @@ exports.getNaverCategorySearch = async (req, res) => {
     }
 };
 
+
+// ---------------------------------------------------------------------------
+// 스마트스토어 등록 (Phase 3)
+//
+// ⚠ 여기가 "우리 상품 → 네이버" 방향이다.
+//   /staging 의 [등록]은 "공급처 → 우리 몰" 이라 완전히 다른 경로다.
+//   두 화면 모두 '등록'이라는 단어를 쓰므로 문구에 방향을 항상 붙인다.
+// ---------------------------------------------------------------------------
+
+const naverPublish = require('../../services/sourcing/channel/naverPublishService');
+const naverProfileSvc = require('../../services/sourcing/channel/naverProfile');
+
+const PUBLISH_BASE = '/admin/sourcing/publish';
+const PUBLISH_PAGE_SIZE = 30;
+
+/** 등록 대상 상품 목록 + 네이버 매핑 상태를 함께 읽는다. */
+async function listPublishTargets(mallId, filters) {
+    const where = ['p.mall_id = ?'];
+    const params = [mallId];
+
+    if (filters.q) {
+        where.push('p.name LIKE ?');
+        params.push(`%${filters.q}%`);
+    }
+    if (filters.state === 'PUBLISHED') where.push("m.status = 'PUBLISHED'");
+    else if (filters.state === 'FAILED') where.push("m.status = 'FAILED'");
+    else if (filters.state === 'NONE') where.push('m.id IS NULL');
+    // 네이버 카테고리가 없으면 애초에 등록할 수 없다 — 걸러 보고 싶을 때가 있다.
+    if (filters.ready === 'Y') where.push('p.naver_category_id IS NOT NULL AND p.main_image IS NOT NULL');
+
+    const whereSql = where.join(' AND ');
+    const page = Math.max(Number(filters.page) || 1, 1);
+    const offset = (page - 1) * PUBLISH_PAGE_SIZE;
+
+    const [rows] = await pool.query(
+        `SELECT p.id, p.name, p.price, p.stock, p.status, p.product_type,
+                p.main_image, p.naver_category_id, p.product_code,
+                nc.whole_category_name AS naver_category_path,
+                m.id AS mapping_id, m.status AS map_status, m.origin_product_no,
+                m.channel_product_no, m.sale_status, m.last_error, m.last_published_at
+           FROM products p
+           LEFT JOIN channel_product_mapping m
+                  ON m.product_id = p.id AND m.mall_id = p.mall_id AND m.channel = 'NAVER_SMARTSTORE'
+           -- ⚠ collation 드리프트: products.naver_category_id 는 utf8mb4_general_ci,
+           --    naver_category.naver_category_id 는 utf8mb4_unicode_ci 라 그냥 조인하면
+           --    "Illegal mix of collations" 로 쿼리가 죽는다. 명시 지정으로 맞춘다.
+           LEFT JOIN naver_category nc
+                  ON nc.naver_category_id = p.naver_category_id COLLATE utf8mb4_unicode_ci
+          WHERE ${whereSql}
+          ORDER BY p.id DESC
+          LIMIT ? OFFSET ?`,
+        [...params, PUBLISH_PAGE_SIZE, offset]
+    );
+
+    const [cnt] = await pool.query(
+        `SELECT COUNT(*) AS total
+           FROM products p
+           LEFT JOIN channel_product_mapping m
+                  ON m.product_id = p.id AND m.mall_id = p.mall_id AND m.channel = 'NAVER_SMARTSTORE'
+          WHERE ${whereSql}`,
+        params
+    );
+
+    return { rows, total: cnt[0].total, page, pageSize: PUBLISH_PAGE_SIZE };
+}
+
+/** 상단 요약 카드용 집계. */
+async function publishStats(mallId) {
+    const [rows] = await pool.query(
+        `SELECT
+            (SELECT COUNT(*) FROM products WHERE mall_id = ?) AS total,
+            (SELECT COUNT(*) FROM channel_product_mapping
+              WHERE mall_id = ? AND channel = 'NAVER_SMARTSTORE' AND status = 'PUBLISHED') AS published,
+            (SELECT COUNT(*) FROM channel_product_mapping
+              WHERE mall_id = ? AND channel = 'NAVER_SMARTSTORE' AND status = 'FAILED') AS failed,
+            (SELECT COUNT(*) FROM products
+              WHERE mall_id = ? AND (naver_category_id IS NULL OR main_image IS NULL)) AS not_ready`,
+        [mallId, mallId, mallId, mallId]
+    );
+    return rows[0];
+}
+
+exports.getPublish = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const filters = {
+        q: (req.query.q || '').trim(),
+        state: req.query.state || '',
+        ready: req.query.ready || '',
+        page: req.query.page,
+    };
+
+    try {
+        const [profile, list, stats, creds] = await Promise.all([
+            naverProfileSvc.getProfile(mallId),
+            listPublishTargets(mallId, filters),
+            publishStats(mallId),
+            cred.listCredentials(mallId),
+        ]);
+
+        const [logs] = await pool.query(
+            `SELECT id, product_id, action, ok, message, created_at
+               FROM channel_publish_log
+              WHERE mall_id = ? AND channel = 'NAVER_SMARTSTORE'
+              ORDER BY id DESC LIMIT 20`,
+            [mallId]
+        );
+
+        res.render('admin/sourcing/publish', {
+            layout: 'layouts/admin_layout',
+            title: '스마트스토어 등록',
+            subtitle: '우리 몰 상품을 네이버 스마트스토어에 등록합니다. (우리 → 네이버 방향)',
+            profile,
+            profileMissing: naverProfileSvc.validateProfile(profile),
+            hasCredential: creds.some((c) => c.channel === 'NAVER_SMARTSTORE' && c.has_secret),
+            ...list,
+            stats,
+            filters,
+            logs,
+            batchLimit: naverPublish.BATCH_LIMIT,
+            result: req.session.naverPublishResult || null,
+            saved: req.query.saved === '1',
+            error: req.query.error || '',
+            msg: req.query.msg || '',
+        });
+        // 결과는 한 번만 보여 준다(새로고침 시 재노출 방지).
+        delete req.session.naverPublishResult;
+    } catch (e) {
+        res.status(500).render('admin/sourcing/placeholder', {
+            layout: 'layouts/admin_layout',
+            title: '스마트스토어 등록',
+            subtitle: '화면을 불러오지 못했습니다.',
+            note: e.message,
+        });
+    }
+};
+
+/** 네이버 등록 기본값(프로필) 저장. */
+exports.postNaverProfile = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        await naverProfileSvc.saveProfile(mallId, req.body);
+        res.redirect(`${PUBLISH_BASE}?saved=1`);
+    } catch (e) {
+        res.redirect(`${PUBLISH_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+/** 선택 상품을 네이버에 등록(순차). */
+exports.postPublishToNaver = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const ids = [].concat(req.body.product_ids || []);
+    try {
+        const result = await naverPublish.publishMany(mallId, ids, { actor: actorOf(req) });
+        req.session.naverPublishResult = result;
+        const parts = [`성공 ${result.success}건`];
+        if (result.failed) parts.push(`실패 ${result.failed}건`);
+        if (result.skipped) parts.push(`건너뜀 ${result.skipped}건`);
+        if (result.overLimit) parts.push(`1회 상한 ${result.limit}건 — 나머지는 다시 선택해 실행하세요`);
+        res.redirect(`${PUBLISH_BASE}?msg=` + encodeURIComponent(parts.join(' / ')));
+    } catch (e) {
+        res.redirect(`${PUBLISH_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+/** 등록 후 실제 상태 재확인(강제 카테고리 이동·판매금지 탐지). */
+exports.postVerifyPublished = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const r = await naverPublish.verifyPublished(mallId, Number(req.params.id));
+        const note = r.categoryMoved ? ' — ⚠ 네이버가 카테고리를 강제 이동했습니다' : '';
+        res.redirect(`${PUBLISH_BASE}?msg=` + encodeURIComponent(`상태: ${r.statusType}${note}`));
+    } catch (e) {
+        res.redirect(`${PUBLISH_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};

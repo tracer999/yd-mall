@@ -95,8 +95,8 @@ router.use('/sys-settings', requireMenuAccess('/admin/sys-settings'), require('.
 router.use('/operators', requireMenuAccess('/admin/operators'), require('./admin/operators'));
 // 몰 관리 (P5 Phase 2) — mall 정의 테이블 CRUD
 router.use('/malls', requireMenuAccess('/admin/malls'), require('./admin/malls'));
-// 리소스 관리 (몰 관리 하위) — 몰 빌더 기본 리소스 조회: 네이버 수집 카테고리/브랜드 + 샘플 상품
-router.use('/resources', requireMenuAccess('/admin/resources'), require('./admin/resources'));
+// (구 '/resources' — 몰 관리 하위 리소스 관리는 '외부몰 연동 → 네이버 리소스 관리'
+//  (/admin/sourcing/naver-taxonomy)로 통합되어 제거됨)
 router.use('/policies', requireMenuAccess('/admin/policies'), require('./admin/policies'));
 router.use('/notices', requireMenuAccess('/admin/notices'), require('./admin/notices'));
 router.use('/inquiries', requireMenuAccess('/admin/inquiries'), require('./admin/inquiries'));

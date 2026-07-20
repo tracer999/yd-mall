@@ -241,6 +241,7 @@ SSL 은 와일드카드 인증서(`/data/ssl_cert/ydata.co.kr_2026/_wildcard_.yd
 |------|------|
 | [`README.md`](./README.md) | 전체 레퍼런스 — 기능·라우트·Shopify API 명세·DB |
 | `docs/team/session.md` | **세션 인계 파일**. 세션 시작 시 먼저 읽고, 종료 시 최신 내용으로 전면 교체 |
+| `docs/사이트개선/네이버_스마트스토어_연동.md` | **네이버 스마트스토어 연동 단일 관리 문서** — 인증·상품등록·호출제한·고시·매핑·운영. 네이버 관련 내용은 전부 여기에 누적한다 |
 | `docs/사이트개선/admin_dev_plan.md` | 관리자 개선 계획서 (A·B 트랙) |
 | `docs/사이트개선/frontend_dev_plan.md` | 프론트 개선 계획서 |
 | `docs/manual/` | 온라인 매뉴얼 소스(마크다운) — `/manual` 라우트가 `marked` 로 렌더 |

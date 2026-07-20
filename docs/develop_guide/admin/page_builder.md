@@ -169,6 +169,10 @@ page (page_type='home', mall_id)
 - 운영자가 아직 아무것도 안 넣은 타입(`quick_menu`·`custom_html`·`benefit_bento` 의 프로모 블록)만 `SAMPLE_CONFIG` 예시 값으로 채우고, 뷰가 "예시 데이터" 배너를 띄운다.
 - 데이터가 0건이라 섹션이 스킵되면 `EMPTY_REASON` 이 **무엇을 채워야 하는지**를 알려준다(예: "배너 관리에 노출 중인 MAIN 배너가 없습니다").
 - 같은 진단(`displayService.diagnoseSections`)을 섹션 목록에도 붙여, 스토어프론트에 실제로 안 나오는 섹션에 `skipReason` 배지를 단다. 저장 직후에도 다시 판정해 돌려준다.
+- **`EMPTY_DIAGNOSER` — 'empty' 사유의 정밀화.** `EMPTY_REASON` 은 타입당 고정 문구라 "데이터가 없다"와 "데이터는 있는데 지금 조건 밖이다"를 구분하지 못한다. 특가 캐러셀이 그 문제가 컸다: 특가가 등록돼 있어도 요일·시간창에 걸리면 "지금 진행 중인 특가가 없습니다"만 떠서, 운영자가 **설정이 없는 줄 알고 특가를 중복 등록**했다. 그래서 타입별 비동기 진단자를 두고 데이터를 실제로 읽어 문장을 만든다(`resolveSkipMessage`). 현재 `deal_carousel` 만 등록돼 있고, 진단 실패는 삼켜 고정 문구로 폴백한다.
+  - 근거 데이터는 `dealService.diagnoseDealAvailability(mallId, categoryCode)` 가 만든다. `ACTIVE_WHERE` 와 **같은 식**으로 기간·시간창·요일·상품 적격성을 각각 판정해 특가별 차단 사유를 돌려준다(갈라지면 진단이 거짓말이 된다).
+  - 결과 문구 예: `특가 1건이 등록돼 있지만 지금은 노출 조건에 맞는 특가가 없습니다. ‘샘플 특가전’ → 화·목·토요일에만 노출 (오늘은 해당 없음). 특가 관리에서 …`
+- **특가 캐러셀의 "형태" 미리보기(`buildSampleDealSection`).** `deal_carousel` 은 config 로 채울 수 없는 유일한 캐러셀이다 — 데이터가 config 가 아니라 *지금 활성인 deal* 이라서다. 그래서 요일·시간창에 걸린 몰에서는 카탈로그 미리보기가 통째로 비어 **섹션이 어떻게 생겼는지조차 볼 수 없었다**(추가 여부를 판단할 근거가 없다). 지금은 그 몰의 **실제 상품**에 가짜 특가 메타(카운트다운·선착순 게이지)만 얹어 형태를 보여주고, 뷰가 `sampleNote` 배너로 예시임을 명시한다. 실데이터가 1건이라도 있으면 언제나 실데이터가 우선이며, 상품이 0건이면 기존 빈 안내로 폴백한다.
 - `promotion_banner` 의 `dataSource` 는 `'banner_group'` 이지만 실제 리졸버는 `data_source_id` 가 아니라 **`config.groupKey`(문자열)** 로 `banners.group_key` 를 조회한다.
 - `resolvers/_shared.js` 는 리졸버가 아니라 공용 헬퍼다: `P_STATUS`(전시 가능 상태 = `ON,SOLD_OUT,COMING_SOON,RESTOCK`), `visibilityClause(hasUser)`(비로그인=`PUBLIC` 만), `loadHomeCategories`, `loadHomeCategoryBests`.
 

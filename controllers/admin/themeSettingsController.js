@@ -3,7 +3,10 @@ const themeService = require('../../services/theme/themeService');
 const themeData = require('../../middleware/themeData');
 
 /*
- * 테마 설정 (쇼핑몰 설정 > 테마)
+ * 디자인 스타일 (쇼핑몰 관리 > 디자인 스타일)
+ *
+ * 메뉴명은 '디자인 스타일'이다. 페이지 빌더의 [테마 설정] 탭(히어로 배치·테마 1·2·3 적용)과
+ * 이름이 겹쳐 혼동을 부르던 것을 분리했다. URL·테이블(`theme`)은 그대로 둔다.
  *
  * `theme.config_json` 의 스타일 토큰을 편집한다. 값은 `main_layout` 의 <head> 에서
  * CSS 커스텀 프로퍼티로 **직접 삽입**되므로 CSS 인젝션 방어가 필수다.
@@ -64,7 +67,7 @@ exports.getEdit = async (req, res) => {
 
         res.render('admin/theme-settings/edit', {
             layout: 'layouts/admin_layout',
-            title: '테마 설정',
+            title: '디자인 스타일',
             theme: row,
             raw,
             active,

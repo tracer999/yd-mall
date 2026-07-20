@@ -169,7 +169,7 @@ async function writeLog({ resource, triggerBy, credentialId, status, message }) 
     );
 }
 
-/** 관리자 현황 화면용 — 최근 회차 + 현재 적재 통계. */
+/** 관리자 현황 화면용 — 최근 회차 + 현재 적재 통계(카테고리 · 브랜드). */
 async function getStatus() {
     const [[counts]] = await pool.query(
         `SELECT
@@ -178,6 +178,13 @@ async function getStatus() {
             SUM(is_active = 1 AND is_leaf = 1) AS active_leaf,
             MAX(fetched_at) AS last_fetched_at
          FROM naver_category`
+    );
+    const [[brandCounts]] = await pool.query(
+        `SELECT
+            COUNT(*) AS total,
+            SUM(is_active = 1) AS active_total,
+            MAX(fetched_at) AS last_fetched_at
+         FROM naver_brand`
     );
     const [logs] = await pool.query(
         `SELECT id, resource, trigger_by, status, total_count, upserted_count, deactivated_count,
@@ -192,10 +199,102 @@ async function getStatus() {
     );
     return {
         counts: counts || { total: 0, active_total: 0, active_leaf: 0, last_fetched_at: null },
+        brandCounts: brandCounts || { total: 0, active_total: 0, last_fetched_at: null },
         logs,
         schedule: schedule || null,
         hasActiveCredential: (credRow && credRow.n > 0),
     };
+}
+
+// ---- 리소스 브라우징 -------------------------------------------------------
+// "네이버 리소스 관리" 화면에서 수집된 리소스를 직접 훑어보기 위한 페이징 목록.
+// 검색 API(searchLeafCategories)와 달리 비활성·비리프도 볼 수 있어야 한다.
+
+const PAGE_SIZE = 50;
+
+/** page/size 를 안전한 정수로 정규화한다(음수·NaN·과대값 차단). */
+function normalizePaging(page, size) {
+    const p = Math.max(1, Math.floor(Number(page)) || 1);
+    const s = Math.min(200, Math.max(1, Math.floor(Number(size)) || PAGE_SIZE));
+    return { page: p, size: s, offset: (p - 1) * s };
+}
+
+/**
+ * 수집된 네이버 카테고리 목록(페이징).
+ * @param {{q?:string, leafOnly?:boolean, activeOnly?:boolean, level?:number, page?:number, size?:number}} opts
+ */
+async function listCategories(opts = {}) {
+    const { page, size, offset } = normalizePaging(opts.page, opts.size);
+    const where = [];
+    const params = [];
+
+    const q = String(opts.q || '').trim();
+    if (q) {
+        where.push('(whole_category_name LIKE ? OR name LIKE ? OR naver_category_id = ?)');
+        params.push(`%${q}%`, `%${q}%`, q);
+    }
+    if (opts.activeOnly) where.push('is_active = 1');
+    if (opts.leafOnly) where.push('is_leaf = 1');
+
+    const level = Number(opts.level);
+    if (Number.isFinite(level) && level >= 1) {
+        where.push('category_level = ?');
+        params.push(level);
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const [[cnt]] = await pool.query(
+        `SELECT COUNT(*) AS n FROM naver_category ${whereSql}`,
+        params
+    );
+    const [rows] = await pool.query(
+        `SELECT naver_category_id, name, whole_category_name, category_level,
+                is_leaf, is_active, fetched_at
+           FROM naver_category
+           ${whereSql}
+          ORDER BY whole_category_name ASC, naver_category_id ASC
+          LIMIT ? OFFSET ?`,
+        [...params, size, offset]
+    );
+
+    const total = (cnt && cnt.n) || 0;
+    return { rows, total, page, size, totalPages: Math.max(1, Math.ceil(total / size)) };
+}
+
+/**
+ * 수집된 네이버 브랜드 목록(페이징).
+ * @param {{q?:string, activeOnly?:boolean, page?:number, size?:number}} opts
+ */
+async function listBrands(opts = {}) {
+    const { page, size, offset } = normalizePaging(opts.page, opts.size);
+    const where = [];
+    const params = [];
+
+    const q = String(opts.q || '').trim();
+    if (q) {
+        where.push('(name LIKE ? OR name_en LIKE ? OR naver_brand_id = ?)');
+        params.push(`%${q}%`, `%${q}%`, q);
+    }
+    if (opts.activeOnly) where.push('is_active = 1');
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const [[cnt]] = await pool.query(
+        `SELECT COUNT(*) AS n FROM naver_brand ${whereSql}`,
+        params
+    );
+    const [rows] = await pool.query(
+        `SELECT naver_brand_id, name, name_en, is_active, fetched_at
+           FROM naver_brand
+           ${whereSql}
+          ORDER BY name ASC, naver_brand_id ASC
+          LIMIT ? OFFSET ?`,
+        [...params, size, offset]
+    );
+
+    const total = (cnt && cnt.n) || 0;
+    return { rows, total, page, size, totalPages: Math.max(1, Math.ceil(total / size)) };
 }
 
 /**
@@ -222,6 +321,8 @@ module.exports = {
     syncCategories,
     getStatus,
     searchLeafCategories,
+    listCategories,
+    listBrands,
     pickActiveNaverCredential,
     mapCategory,
 };

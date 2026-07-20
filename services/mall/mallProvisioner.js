@@ -373,7 +373,7 @@ async function provisionMall(mallId, presetKey, opts = {}) {
 /**
  * 페이지 이지모드 번들 적용 — 홈의 "히어로 아래 콘텐츠 캐러셀"만 교체·발행한다.
  *
- * provisionMall 과 달리 **내비·테마·메뉴는 건드리지 않는다**(그건 테마 설정 소관).
+ * provisionMall 과 달리 **내비·테마·메뉴는 건드리지 않는다**(그건 페이지 빌더 > 테마 설정 탭 · 디자인 스타일 소관).
  * 리딩 히어로(theme_hero)는 원래 config 를 보존해 그대로 두고, 나머지 섹션을 번들로 갈아끼운다.
  *
  * @param {number} mallId

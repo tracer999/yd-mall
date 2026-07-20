@@ -5,7 +5,7 @@
 <div class="manual-goto-bar">
   <span class="manual-goto-label">바로 이동</span>
   <a class="manual-goto" href="/admin/site-settings" target="_blank">사이트 설정</a>
-  <a class="manual-goto is-sub" href="/admin/theme-settings" target="_blank">테마 설정</a>
+  <a class="manual-goto is-sub" href="/admin/theme-settings" target="_blank">디자인 스타일</a>
   <a class="manual-goto is-sub" href="/admin/header-settings" target="_blank">Header 설정</a>
   <a class="manual-goto is-sub" href="/admin/banners/hero-slides" target="_blank">배너 &gt; 메인 슬라이더</a>
 </div>
@@ -19,18 +19,18 @@
 | 바꾸고 싶은 것 | 가야 할 화면 |
 |---------------|-------------|
 | **색상 · 로고 · 상호** | 사이트 설정 (`/admin/site-settings`) |
-| **모서리 · 글꼴 · 간격** | 테마 설정 (`/admin/theme-settings`) |
+| **모서리 · 글꼴 · 간격** | 디자인 스타일 (`/admin/theme-settings`) |
 | **헤더 레이아웃 · GNB 최대 노출 수** | Header 설정 (`/admin/header-settings`) |
 | **메인 최상단 큰 이미지** | 배너 관리 → 메인 슬라이더 (`/admin/banners/hero-slides`) |
 | **테마 1·2·3 자체 · 메뉴 구성 방식** | 페이지 빌더 → 테마 설정 탭 (`/admin/page-builder?tab=theme`) |
 
-> **테마 설정에는 색상이 없습니다.** 색상·로고는 **사이트 설정**입니다. 가장 많이 헤매는 부분입니다.
+> **디자인 스타일에는 색상이 없습니다.** 색상·로고는 **사이트 설정**입니다. 가장 많이 헤매는 부분입니다.
 
 ## 순서대로 하기
 
 1. **사이트 설정** — 상호·로고·브랜드 색상 입력. 납품 시 가장 먼저 바뀌어야 할 값입니다.
    *(테마를 다시 적용해도 사이트 설정은 덮어쓰지 않습니다. 운영자 자산이라 보존됩니다.)*
-2. **테마 설정** — 모서리 둥글기·글꼴·간격 조정. 비워 두면 기본값으로 되돌아갑니다.
+2. **디자인 스타일** — 모서리 둥글기·글꼴·간격 조정. 비워 두면 기본값으로 되돌아갑니다.
 3. **Header 설정** — 헤더 레이아웃과 **GNB 최대 노출 수** 확인.
 4. **배너 관리 → 메인 슬라이더** — 메인 최상단 히어로 이미지 등록.
 

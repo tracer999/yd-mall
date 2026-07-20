@@ -1,6 +1,7 @@
 <%
   /*
-   * 테마 설정 — theme.config_json 스타일 토큰
+   * 디자인 스타일 — theme.config_json 스타일 토큰
+   * (페이지 빌더의 [테마 설정] 탭 = 히어로 배치·테마 적용. 이 화면은 그 뒤 미세조정)
    *
    * 값은 CSS 커스텀 프로퍼티로 직접 삽입되므로 서버가 화이트리스트로 검증한다.
    * 화면에는 저장된 원본 값(raw)을 보여주고, 실제 적용 중인 값(active.tokens)을 함께 표기한다.
@@ -12,10 +13,11 @@
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
   <div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-900">테마 설정</h1>
+    <h1 class="text-2xl font-bold text-gray-900">디자인 스타일</h1>
     <p class="mt-1 text-sm text-gray-500">
       스토어프론트의 <strong>모서리·간격·폰트</strong> 같은 스타일 토큰입니다.
-      브랜드 색상과 로고는 <a href="/admin/site-settings" class="text-indigo-600 hover:underline">사이트 설정</a>에서 관리합니다.
+      브랜드 색상과 로고는 <a href="/admin/site-settings" class="text-indigo-600 hover:underline">사이트 설정</a>에서,
+      히어로 배치(테마 1·2·3)는 <a href="/admin/page-builder?tab=theme" class="text-indigo-600 hover:underline">페이지 빌더 &gt; 테마 설정 탭</a>에서 관리합니다.
     </p>
   </div>
 

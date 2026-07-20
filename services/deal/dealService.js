@@ -340,6 +340,108 @@ async function getUpcomingTimeDeals(mallId = 1) {
     }));
 }
 
+/* WEEKDAY()+1 표기(1=월 … 7=일) → 사람이 읽는 요일. */
+const WEEKDAY_LABEL = ['', '월', '화', '수', '목', '금', '토', '일'];
+
+function formatWeekdays(csv) {
+    return String(csv || '')
+        .split(',')
+        .map((n) => WEEKDAY_LABEL[Number(n)])
+        .filter(Boolean)
+        .join('·');
+}
+
+/** '18:00:00' → '18:00' (초는 관리자에게 의미 없다) */
+function hhmm(t) {
+    return t ? String(t).slice(0, 5) : '';
+}
+
+function ymd(d) {
+    if (!d) return '';
+    const dt = new Date(d);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
+
+/**
+ * 관리자 진단용 — 활성 특가가 0건일 때 **"왜"** 를 설명한다.
+ *
+ * 이게 없으면 페이지 빌더가 "특가가 없습니다" 한 줄만 띄운다. 그런데 특가는 등록돼 있고
+ * 요일·시간창 때문에 오늘만 안 나오는 경우가 흔하다 — 운영자는 그걸 "설정이 날아갔다"로
+ * 읽고 특가를 다시 만든다(중복 등록). 그래서 "없음"과 "있으나 지금 조건 밖"을 구분하고,
+ * 어떤 특가의 어떤 조건이 걸렸는지까지 돌려준다.
+ *
+ * 판정 조건은 ACTIVE_WHERE 와 **같은 식**을 쓴다. 갈라지면 진단이 거짓말이 된다.
+ *
+ * @returns {{ total: number, activeCount: number, deals: Array<{id,title,categoryName,blocked,reasons:string[]}> }}
+ */
+async function diagnoseDealAvailability(mallId = 1, categoryCode = null) {
+    const params = [mallId];
+    let codeClause = '';
+    if (categoryCode) {
+        codeClause = 'AND dc.code = ?';
+        params.push(categoryCode);
+    }
+
+    const [rows] = await pool.query(
+        `SELECT d.id, d.title, d.is_active, d.starts_at, d.ends_at,
+                d.daily_start_time, d.daily_end_time, d.weekdays,
+                dc.name AS category_name, dc.is_active AS category_active,
+                (NOW() BETWEEN d.starts_at AND d.ends_at) AS in_period,
+                (d.daily_start_time IS NULL
+                     OR CURTIME() BETWEEN d.daily_start_time AND d.daily_end_time) AS in_window,
+                (d.weekdays IS NULL OR d.weekdays = ''
+                     OR FIND_IN_SET(WEEKDAY(NOW()) + 1, d.weekdays) > 0) AS in_weekday,
+                COUNT(di.id) AS item_count,
+                COALESCE(SUM(
+                    p.id IS NOT NULL AND p.status = 'ON' AND p.visibility = 'PUBLIC'
+                    AND di.deal_price < p.price
+                    AND (di.qty_limit IS NULL OR di.sold_qty < di.qty_limit)
+                ), 0) AS eligible_items
+           FROM deal d
+           JOIN deal_category dc ON dc.id = d.deal_category_id
+           LEFT JOIN deal_item di ON di.deal_id = d.id
+           LEFT JOIN products p ON p.id = di.product_id
+          WHERE d.mall_id = ? ${codeClause}
+          GROUP BY d.id
+          ORDER BY d.sort_order ASC, d.id ASC`,
+        params
+    );
+
+    const deals = rows.map((r) => {
+        const reasons = [];
+        if (!Number(r.is_active)) reasons.push('특가가 “비활성” 상태');
+        if (!Number(r.category_active)) reasons.push(`특가 카테고리 ‘${r.category_name}’가 비활성`);
+        if (!Number(r.in_period)) {
+            reasons.push(`노출 기간 밖 (${ymd(r.starts_at)} ~ ${ymd(r.ends_at)})`);
+        }
+        if (!Number(r.in_weekday)) {
+            reasons.push(`${formatWeekdays(r.weekdays)}요일에만 노출 (오늘은 해당 없음)`);
+        }
+        if (!Number(r.in_window)) {
+            reasons.push(`${hhmm(r.daily_start_time)}~${hhmm(r.daily_end_time)} 에만 노출 (지금은 시간 밖)`);
+        }
+        if (Number(r.item_count) === 0) {
+            reasons.push('특가 상품이 하나도 등록되지 않음');
+        } else if (Number(r.eligible_items) === 0) {
+            reasons.push('등록된 특가 상품이 모두 판매중지·비공개이거나, 특가가 정가보다 비싸거나, 선착순 소진');
+        }
+        return {
+            id: r.id,
+            title: r.title,
+            categoryName: r.category_name,
+            blocked: reasons.length > 0,
+            reasons,
+        };
+    });
+
+    return {
+        total: deals.length,
+        activeCount: deals.filter((d) => !d.blocked).length,
+        deals,
+    };
+}
+
 /** 활성 특가가 걸린 상품 수 (GNB 노출 판단·관리자 요약용). */
 async function countActiveDealProducts(mallId = 1) {
     const [[row]] = await pool.query(
@@ -364,4 +466,5 @@ module.exports = {
     getActiveDealsByCategory,
     getUpcomingTimeDeals,
     countActiveDealProducts,
+    diagnoseDealAvailability,
 };

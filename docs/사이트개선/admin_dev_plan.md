@@ -21,7 +21,7 @@
 | B2·B3·B4·B7 일반/커스텀/시스템 메뉴 + 메뉴 미리보기 | `develop_guide/admin/storefront_menus.md`, `manual/admin/menus.md` |
 | B5 Header 설정 (스킨 2종 · `nav_mode`) | `develop_guide/admin/settings.md`, `manual/admin/settings.md` |
 | B6 상품 그룹 관리 | `develop_guide/admin/page_builder.md` |
-| 테마 설정 | `develop_guide/admin/settings.md` |
+| 디자인 스타일 | `develop_guide/admin/settings.md` |
 | 페이지 빌더 (섹션 18종 · 발행/롤백 · 섹션 카탈로그 · 랜딩 페이지 편집) | `develop_guide/admin/page_builder.md`, `manual/admin/page_builder.md` |
 | 쿠폰 | `develop_guide/admin/coupons.md`, `manual/admin/coupons.md` |
 | 멤버십 등급 관리 (1차 MVP — 등급·혜택·평가·결제연동·배치·스토어프론트) | `develop_guide/admin/membership.md`, `manual/admin/membership.md` (설계: `사이트개선/membership_grade_admin_design.md`) |

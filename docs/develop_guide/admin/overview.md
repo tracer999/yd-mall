@@ -131,7 +131,7 @@ routes/admin.js
 - **역할:** 관리자 사이드바 메뉴를 DB에서 로드하여 역할별로 필터링하고 **그룹 트리**로 조립
 - **동작:**
   - `admin_menus` 테이블에서 `is_active = 1`인 메뉴를 `display_order ASC, id ASC` 순으로 조회
-  - **그룹 행은 `path IS NULL`로 식별** (현재 7개 그룹: 쇼핑몰 설정 / 메뉴·카테고리 관리 / 페이지·전시 관리 / 상품 관리 / 프로모션 관리 / 주문·회원 관리 / 운영·시스템 관리)
+  - **그룹 행은 `path IS NULL`로 식별** (예: 쇼핑몰 관리 / 메뉴·카테고리 관리 / 페이지·전시 관리 / 상품 관리 / 프로모션 관리 / 주문·회원 관리 / 운영·시스템 관리)
   - 권한(`visible_roles`)은 **잎 메뉴에만** 적용. `super_admin`은 모든 메뉴 노출, `visible_roles`가 비어 있으면 제한 없음
   - 보이는 자식이 하나도 없는 그룹은 통째로 숨김. 최상위 잎(대시보드)은 그룹 없이 그대로 노출
   - 결과를 **`res.locals.adminMenuTree`**(사이드바 렌더용 트리)에 저장하고, 하위호환용으로 잎 메뉴 평면 목록을 `res.locals.adminMenus`에 저장
@@ -227,7 +227,7 @@ TinyMCE 이미지 업로드는 `POST /admin/uploads/tinymce`로 처리되며, `{
 | 포인트 | `controllers/admin/pointController.js` | `views/admin/points/` |
 | 방문자 | `controllers/admin/visitorController.js` | `views/admin/visitors/` |
 | 설정(사이트·시스템) | `controllers/admin/settingsController.js` | `views/admin/settings/` |
-| 테마 설정 | `controllers/admin/themeSettingsController.js` | `views/admin/theme-settings/` |
+| 디자인 스타일 | `controllers/admin/themeSettingsController.js` | `views/admin/theme-settings/` |
 | 고객센터 FAQ | `controllers/admin/faqController.js` | `views/admin/faqs/` |
 | 운영자 | `controllers/admin/operatorController.js` | `views/admin/operators/` |
 | 몰 관리 | `controllers/admin/mallController.js` | `views/admin/malls/` |

@@ -1,3 +1,10 @@
+-- ⚠️ 폐기됨 (superseded). 실행하지 마세요.
+--    이 메뉴("몰 관리 → 리소스 관리", /admin/resources)는
+--    "외부몰 연동 → 네이버 리소스 관리"(/admin/sourcing/naver-taxonomy)로 통합되었고
+--    컨트롤러·라우트·뷰가 모두 제거되었습니다. 되돌림:
+--    scripts/migrate_naver_resource_menu_merge.sql
+--    이 파일은 이력 보존용으로만 남깁니다.
+--
 -- 리소스 관리 메뉴 — "몰 관리"(id 70) 대메뉴 아래 마지막 항목.
 -- 설계: docs/사이트개선/네이버_카테고리_리소스_설계.md §5
 --

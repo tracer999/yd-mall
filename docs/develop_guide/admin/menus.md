@@ -37,7 +37,7 @@
 
 | id | 그룹 | display_order | 잎 메뉴 (id · path · visible_roles) |
 |----|------|---------------|--------------------------------------|
-| 29 | 쇼핑몰 설정 | 20 | 15 `/admin/site-settings` · 10 `/admin/policies` · 38 `/admin/header-settings` · 41 `/admin/theme-settings` — 모두 `super_admin,admin` |
+| 29 | 쇼핑몰 관리 | 20 | 15 `/admin/site-settings` · 10 `/admin/policies` · 38 `/admin/header-settings` · 41 `/admin/theme-settings`(**디자인 스타일**) — 여기까지 `super_admin,admin` · 1 `/admin/dashboard`(대시보드, `super_admin,admin,content_admin`) |
 | 30 | 메뉴/카테고리 관리 | 30 | 2 `/admin/categories`(+`content_admin`) · 36 `/admin/feature-menus` · **57 `/admin/brands`**(+`content_admin`) · 37 `/admin/system-menus` · **56 `/admin/custom-menus`** · 40 `/admin/menu-preview` |
 | 31 | 페이지/전시 관리 | 40 | 21 `/admin/page-builder` · 4 `/admin/banners` · **44 `/admin/exhibitions`** · **46 `/admin/group-buys`** · **58 `/admin/lives`** — 모두 `super_admin,admin,content_admin` |
 | 32 | 상품 관리 | 50 | 3 `/admin/products` · 39 `/admin/product-groups` · **50 `/admin/best-groups`** · **51 `/admin/deals`** · **52 `/admin/deal-categories`** · **53 `/admin/recommend-groups`** · **54 `/admin/outlet`** · **55 `/admin/outlet/categories`** — 모두 `super_admin,admin,content_admin` |
@@ -51,9 +51,8 @@
 | id | 이름 | path | display_order | is_active | visible_roles |
 |----|------|------|---------------|-----------|----------------|
 | 43 | 몰 관리 | `/admin/malls` | -10 (그룹보다 위) | 1 | `super_admin,admin` |
-| 1 | 대시보드 | `/admin` | 0 | **0** | `super_admin,admin,content_admin` |
 
-> **대시보드 행은 `is_active = 0`** 이라 사이드바에 렌더되지 않습니다. 라우트(`/admin`)에는 `requireMenuAccess` 가 걸려 있지 않으므로 접근은 됩니다(로고 클릭·직접 URL). 즉 이 행은 현재 접근 제어에도 사이드바에도 영향을 주지 않습니다.
+> **대시보드(id=1)는 최상위 잎이 아닙니다.** `쇼핑몰 관리`(id=29) 그룹의 잎(`/admin/dashboard`, `display_order = 5`, `is_active = 1`)으로 들어가 있습니다. 라우트(`/admin/dashboard`)에는 `requireMenuAccess` 가 걸려 있지 않으므로 역할과 무관하게 접근은 됩니다. `/admin` 은 접근 가능한 첫 메뉴로 리다이렉트하는 진입점입니다.
 >
 > `/admin/shopify-orders`(id=20)도 `is_active = 0` 입니다. 사이드바에서 빠질 뿐 아니라 라우트에 `requireMenuAccess('/admin/shopify-orders')` 가 걸려 있어 **`admin` 외 역할은 403** 입니다(§7.2).
 

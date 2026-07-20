@@ -1,0 +1,416 @@
+<%
+  /*
+   * 외부몰 연동 · 스마트스토어 등록 (우리 몰 상품 → 네이버)
+   *
+   * ⚠ /admin/sourcing/staging 의 [등록]과 방향이 반대다.
+   *   저긴 "공급처 → 우리 몰", 여긴 "우리 몰 → 네이버". 문구에 항상 방향을 붙인다.
+   */
+  const f = filters || {};
+  const won = (v) => (v == null ? '-' : Number(v).toLocaleString('ko-KR') + '원');
+  const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR') : '-');
+  const totalPages = Math.max(Math.ceil((total || 0) / (pageSize || 30)), 1);
+  const qs = (over) => {
+    const p = new URLSearchParams({ q: f.q || '', state: f.state || '', ready: f.ready || '', page: String(page || 1) });
+    Object.entries(over || {}).forEach(([k, v]) => p.set(k, String(v)));
+    return '/admin/sourcing/publish?' + p.toString();
+  };
+  const MAP_CLS = {
+    PUBLISHED: 'bg-green-50 text-green-700',
+    FAILED: 'bg-red-50 text-red-700',
+    PUBLISHING: 'bg-amber-50 text-amber-700',
+    SUSPENDED: 'bg-orange-50 text-orange-700',
+    DRAFT: 'bg-gray-100 text-gray-600',
+  };
+  const blocked = !hasCredential || profileMissing.length > 0;
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <div class="mb-3 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
+      <i class="bi bi-shop text-lg text-indigo-600"></i>
+      <span class="text-sm font-medium text-indigo-700">현재 편집 몰</span>
+      <span class="text-lg font-bold text-indigo-900"><%= (adminMall && adminMall.name) || ('mall #' + adminMallId) %></span>
+    </div>
+    <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+    <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
+  </div>
+
+  <!-- 방향 안내 — 두 '등록'을 혼동하는 사고를 막는다 -->
+  <div class="mb-4 rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+    <i class="bi bi-arrow-right-circle"></i>
+    이 화면은 <b>우리 몰 상품을 네이버 스마트스토어로 내보내는</b> 방향입니다.
+    공급처(도매꾹)에서 우리 몰로 가져오는 것은 <a href="/admin/sourcing/staging" class="underline font-medium">가져온 상품(중간)</a> 화면입니다.
+  </div>
+
+  <% if (msg) { %>
+    <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800"><%= msg %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800"><%= error %></div>
+  <% } %>
+  <% if (saved) { %>
+    <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">저장되었습니다.</div>
+  <% } %>
+
+  <!-- 등록 차단 사유 -->
+  <% if (!hasCredential) { %>
+    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      <b>네이버 자격증명이 없습니다.</b>
+      <a href="/admin/sourcing/connections" class="underline">공급처/채널 연결</a>에서 client_id / client_secret 을 등록하고 [검증]을 누르세요.
+    </div>
+  <% } else if (profileMissing.length) { %>
+    <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <b>네이버 등록 기본값이 비어 있습니다:</b> <%= profileMissing.join(', ') %>
+      <div class="mt-1 text-xs">아래 [네이버 등록 기본값]에서 채워야 등록할 수 있습니다. 네이버가 상품마다 요구하는 판매자 정보입니다.</div>
+    </div>
+  <% } %>
+
+  <!-- 실행 결과 -->
+  <% if (result) { %>
+    <div class="mb-6 bg-white shadow-sm rounded-lg p-4">
+      <div class="text-sm font-semibold text-gray-900">
+        직전 실행 결과 — 요청 <%= result.requested %>건 / 처리 <%= result.processed %>건 ·
+        <span class="text-green-700">성공 <%= result.success %></span> ·
+        <span class="text-red-700">실패 <%= result.failed %></span> ·
+        <span class="text-gray-500">건너뜀 <%= result.skipped %></span>
+      </div>
+      <% if (result.overLimit) { %>
+        <div class="mt-2 text-xs text-amber-700">
+          1회 상한 <%= result.limit %>건을 넘어 앞 <%= result.processed %>건만 처리했습니다. 나머지는 다시 선택해 실행하세요.
+        </div>
+      <% } %>
+      <div class="mt-3 max-h-64 overflow-y-auto border-t border-gray-100 pt-2">
+        <% result.results.forEach(function (r) { %>
+          <div class="py-1.5 text-xs border-b border-gray-50 flex gap-2">
+            <span class="w-16 shrink-0 text-gray-400">#<%= r.productId %></span>
+            <% if (r.ok) { %>
+              <span class="text-green-700">등록 성공 — 원상품 <%= r.originProductNo %><%= r.channelProductNo ? ' / 채널 ' + r.channelProductNo : '' %></span>
+            <% } else if (r.skipped) { %>
+              <span class="text-gray-500"><%= r.error %></span>
+            <% } else { %>
+              <span class="text-red-700"><%= r.error %><%= r.traceId ? ' [trace=' + r.traceId + ']' : '' %></span>
+            <% } %>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- 요약 -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white shadow-sm rounded-lg p-4">
+      <div class="text-xs text-gray-500">우리 몰 전체 상품</div>
+      <div class="mt-1 text-2xl font-bold text-gray-900"><%= (stats.total || 0).toLocaleString('ko-KR') %></div>
+    </div>
+    <a href="<%= qs({ state: 'PUBLISHED', page: 1 }) %>" class="bg-white shadow-sm rounded-lg p-4 hover:ring-2 hover:ring-green-300">
+      <div class="text-xs text-gray-500">네이버 등록됨</div>
+      <div class="mt-1 text-2xl font-bold text-green-700"><%= (stats.published || 0).toLocaleString('ko-KR') %></div>
+    </a>
+    <a href="<%= qs({ state: 'FAILED', page: 1 }) %>" class="bg-white shadow-sm rounded-lg p-4 hover:ring-2 hover:ring-red-300">
+      <div class="text-xs text-gray-500">등록 실패</div>
+      <div class="mt-1 text-2xl font-bold <%= stats.failed ? 'text-red-600' : 'text-gray-900' %>"><%= (stats.failed || 0).toLocaleString('ko-KR') %></div>
+    </a>
+    <div class="bg-white shadow-sm rounded-lg p-4">
+      <div class="text-xs text-gray-500">등록 불가(카테고리·이미지 없음)</div>
+      <div class="mt-1 text-2xl font-bold <%= stats.not_ready ? 'text-amber-600' : 'text-gray-900' %>"><%= (stats.not_ready || 0).toLocaleString('ko-KR') %></div>
+    </div>
+  </div>
+
+  <!-- 네이버 등록 기본값(프로필) -->
+  <details class="mb-6 bg-white shadow-sm rounded-lg" <%= profileMissing.length ? 'open' : '' %>>
+    <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900 select-none">
+      <i class="bi bi-sliders"></i> 네이버 등록 기본값
+      <span class="ml-2 text-xs font-normal text-gray-500">상품마다 네이버가 요구하는 판매자 정보 — 몰당 한 번만 설정</span>
+    </summary>
+    <form method="post" action="/admin/sourcing/publish/profile" class="border-t border-gray-100 p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-700">A/S 전화번호 <span class="text-red-500">*</span></label>
+        <input name="as_telephone" value="<%= profile.as_telephone || '' %>" placeholder="1588-0000"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div class="lg:col-span-2">
+        <label class="block text-xs font-medium text-gray-700">A/S 안내 <span class="text-red-500">*</span></label>
+        <input name="as_guide_content" value="<%= profile.as_guide_content || '' %>" placeholder="평일 09:00~18:00 고객센터로 문의해 주세요."
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">원산지 코드 <span class="text-red-500">*</span></label>
+        <input name="origin_area_code" value="<%= profile.origin_area_code || '' %>" placeholder="0200037"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <p class="mt-1 text-xs text-gray-400">네이버 원산지 코드. 수입산이면 수입사도 필요합니다.</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">원산지 상세</label>
+        <input name="origin_area_content" value="<%= profile.origin_area_content || '' %>"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">배송비 유형</label>
+        <select name="delivery_fee_type" class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <% ['FREE','PAID','CONDITIONAL_FREE'].forEach(function (t) { %>
+            <option value="<%= t %>" <%= profile.delivery_fee_type === t ? 'selected' : '' %>><%= t %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">기본 배송비</label>
+        <input name="delivery_fee" type="number" value="<%= profile.delivery_fee == null ? '' : profile.delivery_fee %>"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">무료배송 기준금액</label>
+        <input name="free_threshold" type="number" value="<%= profile.free_threshold == null ? '' : profile.free_threshold %>"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">반품 배송비 <span class="text-red-500">*</span></label>
+        <input name="return_delivery_fee" type="number" value="<%= profile.return_delivery_fee == null ? '' : profile.return_delivery_fee %>"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">교환 배송비 <span class="text-red-500">*</span></label>
+        <input name="exchange_delivery_fee" type="number" value="<%= profile.exchange_delivery_fee == null ? '' : profile.exchange_delivery_fee %>"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">택배사 코드</label>
+        <input name="delivery_company" value="<%= profile.delivery_company || '' %>" placeholder="CJGLS"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">출고지 주소록 번호</label>
+        <input name="release_address_no" value="<%= profile.release_address_no || '' %>"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">반품지 주소록 번호</label>
+        <input name="refund_address_no" value="<%= profile.refund_address_no || '' %>"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <p class="mt-1 text-xs text-gray-400">네이버 판매자 주소록의 번호입니다(주소 직접 입력 아님).</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">상품정보제공고시 유형</label>
+        <input name="notice_type" value="<%= profile.notice_type || '' %>" placeholder="DIET_FOOD"
+               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <p class="mt-1 text-xs text-gray-400">
+          건강기능식품은 <b>DIET_FOOD</b> 입니다(HEALTH_FUNCTIONAL_FOOD 는 없습니다). 비우면 ETC.
+        </p>
+      </div>
+      <div class="lg:col-span-3">
+        <label class="block text-xs font-medium text-gray-700">고시정보 기본값 (JSON)</label>
+        <textarea name="notice_defaults_json" rows="4" placeholder='{"productName":"...","producer":"..."}'
+                  class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2 font-mono"><%= profile.notice_defaults_json ? JSON.stringify(profile.notice_defaults_json, null, 2) : '' %></textarea>
+        <p class="mt-1 text-xs text-gray-400">
+          상품군마다 필수 항목이 다릅니다. 비운 공통 항목은 "상품상세 참조"로 자동 저장됩니다.
+        </p>
+      </div>
+      <%# 체크박스는 해제 시 값 자체가 전송되지 않아 "끄기"가 저장되지 않는다. select 로 명시 전송한다. %>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">네이버쇼핑 노출</label>
+        <select name="naver_shopping_registration" class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="1" <%= profile.naver_shopping_registration ? 'selected' : '' %>>노출</option>
+          <option value="0" <%= profile.naver_shopping_registration ? '' : 'selected' %>>노출 안 함</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700">미성년자 구매</label>
+        <select name="minor_purchasable" class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="1" <%= profile.minor_purchasable ? 'selected' : '' %>>가능</option>
+          <option value="0" <%= profile.minor_purchasable ? '' : 'selected' %>>불가</option>
+        </select>
+      </div>
+      <div class="lg:col-span-3 flex justify-end">
+        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+          기본값 저장
+        </button>
+      </div>
+    </form>
+  </details>
+
+  <!-- 필터 -->
+  <form method="get" class="mb-4 bg-white shadow-sm rounded-lg p-4 grid sm:grid-cols-4 gap-3">
+    <div class="sm:col-span-2">
+      <label class="block text-xs font-medium text-gray-700">상품명 검색</label>
+      <input name="q" value="<%= f.q || '' %>" class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700">등록 상태</label>
+      <select name="state" class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <option value="">전체</option>
+        <option value="NONE" <%= f.state === 'NONE' ? 'selected' : '' %>>미등록만</option>
+        <option value="PUBLISHED" <%= f.state === 'PUBLISHED' ? 'selected' : '' %>>등록됨만</option>
+        <option value="FAILED" <%= f.state === 'FAILED' ? 'selected' : '' %>>실패만</option>
+      </select>
+    </div>
+    <div class="flex items-end gap-2">
+      <label class="inline-flex items-center gap-2 text-sm">
+        <input type="checkbox" name="ready" value="Y" <%= f.ready === 'Y' ? 'checked' : '' %>> 등록 가능만
+      </label>
+      <button class="ml-auto rounded-md bg-gray-800 px-4 py-2 text-sm text-white">검색</button>
+    </div>
+  </form>
+
+  <!-- 목록 + 일괄 등록 -->
+  <form method="post" action="/admin/sourcing/publish/run" id="publish-form">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="text-sm text-gray-600">총 <b><%= (total || 0).toLocaleString('ko-KR') %></b>건</div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-500">1회 최대 <b><%= batchLimit %></b>건 (네이버는 대량등록 API 가 없어 순차 처리됩니다)</span>
+        <button type="submit" id="publish-btn" <%= blocked ? 'disabled' : '' %>
+                class="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+          <i class="bi bi-box-arrow-up"></i> 선택 상품을 네이버에 등록
+        </button>
+      </div>
+    </div>
+
+    <div class="bg-white shadow-sm rounded-lg overflow-hidden">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500">
+          <tr>
+            <th class="px-3 py-2 w-10"><input type="checkbox" id="check-all"></th>
+            <th class="px-3 py-2 text-left">상품</th>
+            <th class="px-3 py-2 text-left">네이버 카테고리</th>
+            <th class="px-3 py-2 text-right">판매가</th>
+            <th class="px-3 py-2 text-center">등록 상태</th>
+            <th class="px-3 py-2 text-left">네이버 번호</th>
+            <th class="px-3 py-2"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% if (!rows.length) { %>
+            <tr><td colspan="7" class="px-3 py-10 text-center text-sm text-gray-400">해당 조건의 상품이 없습니다.</td></tr>
+          <% } %>
+          <% rows.forEach(function (row) {
+               const ready = !!(row.naver_category_id && row.main_image);
+               const done = row.map_status === 'PUBLISHED';
+          %>
+            <tr class="<%= done ? 'bg-green-50/30' : '' %>">
+              <td class="px-3 py-2 align-top">
+                <input type="checkbox" name="product_ids" value="<%= row.id %>"
+                       class="row-check" data-ready="<%= ready ? '1' : '' %>" data-done="<%= done ? '1' : '' %>"
+                       <%= (!ready || done) ? 'disabled' : '' %>>
+              </td>
+              <td class="px-3 py-2">
+                <div class="flex items-start gap-2">
+                  <% if (row.main_image) { %>
+                    <img src="<%= row.main_image %>" alt="" class="w-10 h-10 rounded object-cover border border-gray-200">
+                  <% } else { %>
+                    <div class="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300"><i class="bi bi-image"></i></div>
+                  <% } %>
+                  <div>
+                    <a href="/admin/products/edit/<%= row.id %>" class="font-medium text-gray-900 hover:underline"><%= row.name %></a>
+                    <div class="text-xs text-gray-400">#<%= row.id %> · <%= row.product_type %> · 재고 <%= row.stock %></div>
+                    <% if (!ready) { %>
+                      <div class="mt-0.5 text-xs text-amber-700">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <%= !row.naver_category_id ? '네이버 카테고리 미지정' : '' %>
+                        <%= !row.main_image ? '대표이미지 없음' : '' %>
+                      </div>
+                    <% } %>
+                  </div>
+                </div>
+              </td>
+              <td class="px-3 py-2 text-xs text-gray-600"><%= row.naver_category_path || '-' %></td>
+              <td class="px-3 py-2 text-right"><%= won(row.price) %></td>
+              <td class="px-3 py-2 text-center">
+                <% if (row.map_status) { %>
+                  <span class="inline-block rounded px-2 py-0.5 text-xs <%= MAP_CLS[row.map_status] || 'bg-gray-100 text-gray-600' %>">
+                    <%= row.map_status %>
+                  </span>
+                  <% if (row.sale_status) { %><div class="mt-0.5 text-xs text-gray-400"><%= row.sale_status %></div><% } %>
+                <% } else { %>
+                  <span class="text-xs text-gray-400">미등록</span>
+                <% } %>
+              </td>
+              <td class="px-3 py-2 text-xs">
+                <% if (row.origin_product_no) { %>
+                  <div class="text-gray-600">원상품 <%= row.origin_product_no %></div>
+                  <% if (row.channel_product_no) { %>
+                    <a href="https://smartstore.naver.com/main/products/<%= row.channel_product_no %>" target="_blank" rel="noopener"
+                       class="text-indigo-600 hover:underline">채널 <%= row.channel_product_no %> <i class="bi bi-box-arrow-up-right"></i></a>
+                  <% } %>
+                  <div class="text-gray-400"><%= dt(row.last_published_at) %></div>
+                <% } else if (row.last_error) { %>
+                  <div class="text-red-600 max-w-xs truncate" title="<%= row.last_error %>"><%= row.last_error %></div>
+                <% } else { %>-<% } %>
+              </td>
+              <td class="px-3 py-2 text-right">
+                <% if (row.origin_product_no) { %>
+                  <button type="submit" formaction="/admin/sourcing/publish/<%= row.id %>/verify"
+                          class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                    상태 확인
+                  </button>
+                <% } %>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  <!-- 페이지 -->
+  <% if (totalPages > 1) { %>
+    <div class="mt-4 flex justify-center gap-1">
+      <% for (let i = Math.max(1, page - 3); i <= Math.min(totalPages, page + 3); i++) { %>
+        <a href="<%= qs({ page: i }) %>"
+           class="rounded px-3 py-1.5 text-sm <%= i === page ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50' %>"><%= i %></a>
+      <% } %>
+    </div>
+  <% } %>
+
+  <!-- 최근 전송 로그 -->
+  <% if (logs && logs.length) { %>
+    <details class="mt-6 bg-white shadow-sm rounded-lg">
+      <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900 select-none">
+        <i class="bi bi-clock-history"></i> 최근 전송 로그 (<%= logs.length %>)
+      </summary>
+      <div class="border-t border-gray-100 divide-y divide-gray-50">
+        <% logs.forEach(function (lg) { %>
+          <div class="px-4 py-2 text-xs flex gap-3">
+            <span class="w-32 shrink-0 text-gray-400"><%= dt(lg.created_at) %></span>
+            <span class="w-16 shrink-0 <%= lg.ok ? 'text-green-600' : 'text-red-600' %>"><%= lg.action %></span>
+            <span class="w-14 shrink-0 text-gray-400">#<%= lg.product_id || '-' %></span>
+            <span class="text-gray-700 break-all"><%= lg.message %></span>
+          </div>
+        <% }); %>
+      </div>
+    </details>
+  <% } %>
+</div>
+
+<script>
+(function () {
+  var all = document.getElementById('check-all');
+  var form = document.getElementById('publish-form');
+  if (!form) return;
+
+  if (all) {
+    all.addEventListener('change', function () {
+      document.querySelectorAll('.row-check:not([disabled])').forEach(function (c) { c.checked = all.checked; });
+    });
+  }
+
+  form.addEventListener('submit', function (e) {
+    // [상태 확인] 버튼은 개별 formaction 이라 선택 검사 대상이 아니다.
+    var isPublish = e.submitter && e.submitter.id === 'publish-btn';
+    if (!isPublish) return;
+
+    var checked = Array.prototype.slice.call(document.querySelectorAll('.row-check:checked'));
+    if (!checked.length) {
+      e.preventDefault();
+      alert('네이버에 등록할 상품을 선택하세요.');
+      return;
+    }
+    var limit = <%= batchLimit %>;
+    var over = checked.length > limit ? ('\n\n선택이 ' + checked.length + '건이라 앞 ' + limit + '건만 처리됩니다.') : '';
+    if (!confirm('선택한 ' + checked.length + '건을 네이버 스마트스토어에 등록합니다.\n\n네이버는 대량등록 API 가 없어 한 건씩 순차 전송되며, 건당 2~4초가 걸립니다.\n완료까지 창을 닫지 마세요.' + over)) {
+      e.preventDefault();
+      return;
+    }
+    var btn = document.getElementById('publish-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 전송 중… (건당 2~4초)'; }
+  });
+})();
+</script>

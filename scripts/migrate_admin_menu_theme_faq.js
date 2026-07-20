@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * 테마 설정 · 고객센터 관리 — 관리자 메뉴 등록 (멱등)
+ * 디자인 스타일 · 고객센터 관리 — 관리자 메뉴 등록 (멱등)
  *
  * 실행: node scripts/migrate_admin_menu_theme_faq.js
  *
- *   '테마 설정'(/admin/theme-settings) → '쇼핑몰 설정' 그룹
- *   '고객센터 관리'(/admin/faqs)       → '운영/시스템 관리' 그룹
+ *   '디자인 스타일'(/admin/theme-settings) → '쇼핑몰 관리' 그룹
+ *   '고객센터 관리'(/admin/faqs)           → '운영/시스템 관리' 그룹
+ *
+ * 메뉴명은 원래 '테마 설정'이었으나 페이지 빌더의 [테마 설정] 탭과 겹쳐 '디자인 스타일'로 바꿨다.
+ * 그룹명도 '쇼핑몰 설정' → '쇼핑몰 관리'로 바뀐 뒤였다(그대로 두면 findGroupId 가 못 찾아 실패).
  *
  * ⚠️ 실행 순서 주의. dev·prod 가 같은 DB 를 보고, `middleware/adminMenu.js` 는
  * 매 요청 DB 를 읽어 사이드바를 그린다(라우트 존재 여부는 확인하지 않는다).
@@ -16,8 +19,8 @@ const pool = require('../config/db');
 
 const MENUS = [
     {
-        group: '쇼핑몰 설정',
-        name: '테마 설정',
+        group: '쇼핑몰 관리',
+        name: '디자인 스타일',
         path: '/admin/theme-settings',
         icon: 'bi bi-palette',
         order: 4, // 사이트 설정(1) · 약관/정책(2) · Header 설정(3) 다음
@@ -68,7 +71,7 @@ async function findGroupId(conn, name) {
             }
         }
 
-        for (const groupName of ['쇼핑몰 설정', '운영/시스템 관리']) {
+        for (const groupName of ['쇼핑몰 관리', '운영/시스템 관리']) {
             const parentId = await findGroupId(conn, groupName);
             if (!parentId) continue;
             const [rows] = await conn.query(

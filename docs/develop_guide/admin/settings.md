@@ -169,7 +169,7 @@
 
 ---
 
-## 5. 테마 설정 (/admin/theme-settings)
+## 5. 디자인 스타일 (/admin/theme-settings)
 
 - **라우트:** `routes/admin/theme-settings.js`
 - **컨트롤러:** `controllers/admin/themeSettingsController.js`
@@ -242,7 +242,7 @@
 
 - **컨트롤러:** `controllers/admin/headerSettingsController.js`
 - **테이블:** `navigation_config` (**몰별 1행**). 행이 없으면 500 + "`scripts/migrate_menu_architecture.js` 를 실행하세요"
-- **권한:** `admin_menus` id=38 (`super_admin,admin`), 상위 메뉴 = 쇼핑몰 설정
+- **권한:** `admin_menus` id=38 (`super_admin,admin`), 상위 메뉴 = 쇼핑몰 관리
 - 헤더 **톱바(배너·알림)** 는 여기가 아니라 **배너 관리**(`/admin/banners/topbar`)에 있습니다.
 
 ### 7.1 헤더 스킨 2종 — 레이아웃과 `nav_mode` 는 짝이다

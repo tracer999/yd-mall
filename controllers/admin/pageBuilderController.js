@@ -6,6 +6,7 @@ const linkTargetService = require('../../services/menu/linkTargets');
 const mainController = require('../mainController');
 const presets = require('../../services/mall/presets');
 const mallProvisioner = require('../../services/mall/mallProvisioner');
+const dealSvc = require('../../services/deal/dealService');
 
 /*
  * 관리자 페이지 빌더 컨트롤러 (P2)
@@ -99,6 +100,59 @@ function skipMessage(code, sectionType) {
 }
 
 /*
+ * ── 'empty' 사유를 데이터로 정밀화한다 ───────────────────────────────
+ *
+ * EMPTY_REASON 은 타입당 고정 문구다. 그래서 특가 캐러셀은 특가가 **등록돼 있어도**
+ * "지금 진행 중인 특가가 없습니다" 한 줄만 떴다. 운영자는 그걸 "특가 설정이 없다"로 읽고
+ * 이미 있는 특가를 또 만든다. 실제 원인은 대개 요일·시간창이라 어디를 고쳐야 하는지도 모른다.
+ *
+ * 그래서 데이터를 실제로 들여다보고 "없음"과 "있으나 오늘 조건 밖"을 구분해 문장을 만든다.
+ * 진단 실패는 삼키고 고정 문구로 폴백한다 — 빌더가 뜨는 게 우선이다.
+ */
+const EMPTY_DIAGNOSER = {
+  deal_carousel: async (mallId, config) => {
+    const code = config && config.dealCategoryCode
+      ? String(config.dealCategoryCode).toUpperCase()
+      : null;
+    const diag = await dealSvc.diagnoseDealAvailability(mallId, code);
+
+    if (diag.total === 0) {
+      return code
+        ? `특가 카테고리 코드 ‘${code}’ 에 해당하는 특가가 없습니다. `
+          + '특가 관리에서 그 코드의 특가를 등록하거나, 섹션 설정에서 코드를 비워 전체 특가를 받으세요.'
+        : '등록된 특가가 하나도 없습니다. 특가 관리에서 특가를 먼저 등록하세요.';
+    }
+
+    // 등록은 돼 있다 — 지금 왜 안 나오는지를 특가별로 짚어 준다.
+    const blocked = diag.deals.filter((d) => d.blocked);
+    const shown = blocked.slice(0, 3)
+      .map((d) => `‘${d.title}’ → ${d.reasons.join(' / ')}`)
+      .join(' · ');
+    const more = blocked.length > 3 ? ` 외 ${blocked.length - 3}건` : '';
+
+    return `특가 ${diag.total}건이 등록돼 있지만 지금은 노출 조건에 맞는 특가가 없습니다. `
+      + `${shown}${more}. `
+      + '특가 관리에서 해당 특가를 열어 노출 기간·요일·시간대를 조정하거나, 특가 상품의 판매상태를 확인하세요.';
+  }
+};
+
+/**
+ * 스킵 사유 문장을 만든다. 'empty' 이고 진단자가 있으면 데이터를 읽어 정밀 문구를 쓴다.
+ * 그 외에는 기존 고정 문구와 동일하다.
+ */
+async function resolveSkipMessage(code, sectionType, mallId, config) {
+  if (code === 'empty' && EMPTY_DIAGNOSER[sectionType]) {
+    try {
+      const msg = await EMPTY_DIAGNOSER[sectionType](mallId, config);
+      if (msg) return msg;
+    } catch (e) {
+      console.error(`[pageBuilder] '${sectionType}' empty 진단 실패:`, e.message);
+    }
+  }
+  return skipMessage(code, sectionType);
+}
+
+/*
  * 섹션 타입 → 그 섹션의 데이터를 채우는 "다른 관리 화면".
  *
  * 캐러셀이 비어(스킵) 나오는 이유(EMPTY_REASON)는 대개 "다른 화면에서 데이터를 만들어야"
@@ -176,15 +230,18 @@ exports.getEditor = async (req, res) => {
 
     const groupNameById = {};
     for (const g of productGroups) groupNameById[g.id] = g.name;
-    const sections = rawSections.map((s) => {
+    const sections = await Promise.all(rawSections.map(async (s) => {
       const d = diag.get(s.id);
-      return Object.assign(decorateSection(s, groupNameById), {
+      const decorated = decorateSection(s, groupNameById);
+      return Object.assign(decorated, {
         // 진단을 못 돌렸으면(diag 비었음) 노출로 가정한다 — 거짓 경고가 더 나쁘다.
         willRender: d ? d.rendered : true,
-        skipReason: d ? skipMessage(d.code, s.section_type) : null,
+        skipReason: d
+          ? await resolveSkipMessage(d.code, s.section_type, mallId, decorated.config)
+          : null,
         fixTarget: d && !d.rendered ? fixTargetFor(d.code, s.section_type) : null,
       });
-    });
+    }));
 
     // 테마 설정 탭용 — 현재 몰의 테마 + 메뉴 구성 방식(몰 관리에서 이 탭으로 이관).
     const [[mallRow]] = await pool.query('SELECT preset_key FROM mall WHERE id = ?', [mallId]);
@@ -262,7 +319,9 @@ exports.postSectionUpdate = async (req, res) => {
       const d = (await displayService.diagnoseSections([saved], shared)).get(id);
       if (d) {
         willRender = d.rendered;
-        skipReason = skipMessage(d.code, saved.section_type);
+        skipReason = await resolveSkipMessage(
+          d.code, saved.section_type, req.adminMallId || 1, parseConfig(saved.config_json)
+        );
         fixTarget = !d.rendered ? fixTargetFor(d.code, saved.section_type) : null;
       }
     } catch (e) {
@@ -455,6 +514,65 @@ async function pickBannerGroupKey(mallId) {
   return rows.length ? rows[0].group_key : null;
 }
 
+/*
+ * 특가 캐러셀 "형태" 미리보기.
+ *
+ * deal_carousel 은 config 로 채울 수 없는 유일한 캐러셀이다 — 데이터가 config 가 아니라
+ * **지금 활성인 deal** 이라서다. 그래서 요일·시간창에 걸린 몰에서는 미리보기가 통째로 비었고,
+ * 운영자는 이 섹션이 어떻게 생겼는지조차 볼 수 없었다(= 추가할지 판단할 근거가 없다).
+ *
+ * 이 몰의 **진짜 상품**에 가짜 특가 메타(카운트다운·선착순 게이지)만 얹어 형태를 보여준다.
+ * 값이 실제 특가가 아니므로 뷰가 "예시" 배너를 반드시 띄운다(sampleNote).
+ * 상품이 하나도 없으면 null 을 돌려 기존 빈 안내로 폴백한다.
+ */
+async function buildSampleDealSection(def, mallId, config) {
+  const [rows] = await pool.query(
+    `SELECT id, name, slug, main_image, thumbnail_image, price, original_price, status, stock
+       FROM products
+      WHERE mall_id = ? AND status = 'ON' AND visibility = 'PUBLIC' AND price > 0
+      ORDER BY id DESC
+      LIMIT 8`,
+    [mallId]
+  );
+  if (rows.length === 0) return null;
+
+  const closesAt = Date.now() + 3 * 60 * 60 * 1000;   // "3시간 남음" — 카운트다운이 돌아가는 걸 보여준다
+  const products = rows.map((r, i) => {
+    const base = Number(r.price) || 0;
+    const listPrice = Math.max(Number(r.original_price) || 0, base);
+    const dealPrice = Math.max(1, Math.round((base * 0.8) / 10) * 10);
+    const qtyLimit = 50;
+    const soldQty = 20 + ((i * 7) % 25);
+    return Object.assign({}, r, {
+      price: dealPrice,
+      original_price: listPrice,
+      discount_rate: listPrice > 0 ? Math.round((1 - dealPrice / listPrice) * 100) : 0,
+      deal: {
+        dealItemId: 0,
+        dealId: 0,
+        dealPrice,
+        title: '예시 특가',
+        categoryName: '오늘의 특가',
+        categoryCode: 'SAMPLE',
+        badgeText: '오늘의 특가',
+        badgeColor: 'rose',
+        isTimeDeal: true,
+        closesAtEpoch: closesAt,
+        qtyLimit,
+        soldQty,
+        remainQty: qtyLimit - soldQty,
+      }
+    });
+  });
+
+  return {
+    type: 'deal_carousel',
+    view: def.view,
+    locals: Object.assign({}, config, { title: def.label, products }),
+    gateClass: ''
+  };
+}
+
 /** GET /admin/page-builder/section-preview?type=<section_type> — iframe 소스 */
 exports.getSectionPreview = async (req, res) => {
   const type = String(req.query.type || '');
@@ -481,15 +599,33 @@ exports.getSectionPreview = async (req, res) => {
 
     // 리졸버·히어로가 편집 중인 몰로 스코프되도록 맞춘다(미리보기 전용, 요청 안에서만 유효).
     const shared = await buildAdminShared(req, res);
-    const sections = await displayService.resolveSections([row], shared);
+    let sections = await displayService.resolveSections([row], shared);
+    let isSample = Boolean(sample) && sections.length > 0;
+    let sampleNote = null;
+
+    /*
+     * 특가는 실데이터로 못 그리는 날이 정상적으로 존재한다(요일·시간창). 그때도 형태는 보여준다.
+     * 실데이터가 하나라도 있으면 그쪽이 언제나 우선이다 — 예시는 어디까지나 폴백이다.
+     */
+    if (type === 'deal_carousel' && sections.length === 0) {
+      const sampleSection = await buildSampleDealSection(def, mallId, config);
+      if (sampleSection) {
+        sections = [sampleSection];
+        isSample = true;
+        sampleNote = '지금은 진행 중인 특가가 없어 예시로 그린 화면입니다. '
+          + '특가 관리에서 특가가 시작되면 이 형태로 실제 상품이 채워집니다.';
+      }
+    }
 
     res.render('admin/page-builder/section_preview', {
       layout: 'layouts/main_layout',
       isBare: true, // 헤더·푸터 없이 섹션만
       title: def.label,
       sections,
-      isSample: Boolean(sample) && sections.length > 0,
-      emptyReason: EMPTY_REASON[type] || '이 섹션을 채울 데이터가 아직 없습니다.'
+      isSample,
+      sampleNote,
+      // 빈 안내도 데이터를 읽어 정밀하게 — "없음"과 "있으나 조건 밖"을 구분한다.
+      emptyReason: await resolveSkipMessage('empty', type, mallId, config)
     });
   } catch (err) {
     console.error('[pageBuilder.getSectionPreview]', type, err);

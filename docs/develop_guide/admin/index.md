@@ -24,7 +24,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 
 | 그룹 | 잎 메뉴 |
 |------|---------|
-| 쇼핑몰 설정 | 사이트 설정 · 약관/정책 관리 · Header 설정 · 테마 설정 |
+| 쇼핑몰 관리 | 사이트 설정 · 약관/정책 관리 · Header 설정 · 디자인 스타일 · 대시보드 |
 | 메뉴/카테고리 관리 | 카테고리 · 일반 메뉴 관리 · 브랜드 관리 · 시스템 메뉴 설정 · 커스텀 메뉴 관리 · 메뉴 미리보기 |
 | 페이지/전시 관리 | 페이지 빌더 · 배너 관리 · 기획전 관리 · 공동구매 관리 · 쇼핑라이브 관리 |
 | 상품 관리 | 상품 관리 · 상품 그룹 관리 · 베스트/랭킹 관리 · 쇼핑특가 관리 · 특가 카테고리 · 상품 추천관리 · 아울렛 관리 · 아울렛 카테고리 |
@@ -34,7 +34,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 | 주문/회원 관리 | 판매 관리 · 배송 관리 · 배송비 정책 · 클레임 관리 · Shopify 주문(`is_active = 0`) · 회원 관리 |
 | 운영/시스템 관리 | 운영자 관리 · 관리자 메뉴 관리 · 시스템 설정 |
 
-- 그룹에 속하지 않는 **최상위 잎**은 `몰 관리`(`/admin/malls`)와 `대시보드`(`/admin`)입니다. 다만 **대시보드 행은 `is_active = 0`** 이라 사이드바에 렌더되지 않습니다(라우트 자체는 `requireMenuAccess` 가 없어 로그인만 하면 접근됩니다).
+- **대시보드**(`/admin/dashboard`, id=1)는 최상위 잎이 아니라 **`쇼핑몰 관리` 그룹의 잎**입니다. `/admin` 은 접근 가능한 첫 메뉴로 리다이렉트하는 진입점이며, 대시보드 라우트에는 `requireMenuAccess` 가 걸려 있지 않아 로그인만 하면 접근됩니다.
 - 권한(`visible_roles`)은 **잎 메뉴에만** 적용됩니다. 그룹 행의 `visible_roles` 는 비어 있고, **보이는 자식이 하나도 없는 그룹은 통째로 숨겨집니다.**
 
 자세한 내용은 [overview.md](./overview.md) · [menus.md](./menus.md) 참고.
@@ -46,7 +46,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 | URL | 설명 | 문서 |
 |-----|------|------|
 | `/admin/login`, `/admin/logout` | 로그인(선택적 이메일 2FA)·로그아웃 | [auth.md](./auth.md) |
-| `/admin` | 대시보드 (`admin_menus` 행은 `is_active = 0` → 사이드바 미노출) | [dashboard.md](./dashboard.md) |
+| `/admin`, `/admin/dashboard` | 대시보드 (`/admin` 은 접근 가능한 첫 메뉴로 리다이렉트, 사이드바에는 `쇼핑몰 관리` 하위로 노출) | [dashboard.md](./dashboard.md) |
 | `/admin/search-logs` | 검색 로그 | [search_logs.md](./search_logs.md) |
 | `/admin/traffic-sources`, `/admin/traffic-sources/drill` | 유입 매체 분석 | [dashboard.md](./dashboard.md) |
 | `/admin/popular-products` | 인기 상품 분석 | [dashboard.md](./dashboard.md) |
@@ -92,7 +92,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 | | `/admin/header-settings` | 헤더 스킨·nav_mode·GNB 슬롯(navigation_config) | [storefront_menus.md](./storefront_menus.md) |
 | | `/admin/menu-preview` | 스토어프론트 메뉴 조립 결과 미리보기·GNB 순서 편집 | [storefront_menus.md](./storefront_menus.md) |
 | **설정** | `/admin/settings`, `/admin/site-settings`, `/admin/sys-settings` | 회사 정보·시스템 설정(system_settings) | [settings.md](./settings.md) |
-| | `/admin/theme-settings` | 테마 토큰(CSS 변수) | [settings.md](./settings.md) |
+| | `/admin/theme-settings` | 디자인 스타일 — 테마 토큰(CSS 변수) | [settings.md](./settings.md) |
 | | `/admin/malls` | 몰 정의 CRUD + 프리셋 프로비저닝 (실효 권한: super_admin) | [malls.md](./malls.md) |
 | | `/admin/policies` | 이용약관·개인정보 버전 관리 | [policies.md](./policies.md) |
 | **통계** | `/admin/visitors` | 방문자 통계 | [visitors.md](./visitors.md) |

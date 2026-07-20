@@ -94,7 +94,7 @@ async function getActiveTheme(mallId = 1) {
         ? raw.productCardStyle
         : DEFAULTS.productCardStyle;
 
-    // 스킨 — 전역 룩 결정(body.yd-skin-*). TOKENS 밖에서 다뤄 테마설정 저장이 덮지 않게 한다.
+    // 스킨 — 전역 룩 결정(body.yd-skin-*). TOKENS 밖에서 다뤄 디자인 스타일 저장이 덮지 않게 한다.
     const skin = SKINS.includes(raw.skin) ? raw.skin : 'classic';
 
     // 디스플레이 폰트 — 에디토리얼 히어로/헤딩용. 없으면 본문 폰트로 폴백(classic 은 사실상 미사용).

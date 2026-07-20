@@ -49,8 +49,16 @@ router.get('/staging/:id', requireNumericId(), requireMenuAccess('/admin/sourcin
 router.post('/staging/:id/refresh', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postStagingRefresh);
 router.post('/staging/:id/delete', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postStagingDelete);
 
-// 1차 나머지 화면 (골격 플레이스홀더)
+/*
+ * 스마트스토어 등록 — **우리 몰 상품 → 네이버** 방향.
+ * (위의 /staging/publish 는 "공급처 → 우리 몰" 이라 이름만 비슷하고 전혀 다른 경로다.)
+ * Express 5: 정적 세그먼트를 :id 보다 먼저 선언한다.
+ */
 router.get('/publish', requireMenuAccess('/admin/sourcing/publish'), c.getPublish);
+router.post('/publish/profile', requireMenuAccess('/admin/sourcing/publish'), c.postNaverProfile);
+router.post('/publish/run', requireMenuAccess('/admin/sourcing/publish'), c.postPublishToNaver);
+router.post('/publish/:id/verify', requireNumericId(), requireMenuAccess('/admin/sourcing/publish'), c.postVerifyPublished);
+
 router.get('/channel-import', requireMenuAccess('/admin/sourcing/channel-import'), c.getChannelImport);
 router.get('/sync', requireMenuAccess('/admin/sourcing/sync'), c.getSync);
 
