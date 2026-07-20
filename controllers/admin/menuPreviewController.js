@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const navigationService = require('../../services/menu/navigationService');
+const categoryScope = require('../../services/catalog/categoryScope');
 
 /*
  * 메뉴 미리보기 (B7)
@@ -85,12 +86,16 @@ const KEY = {
 async function loadGnbItems(mallId, withCategories) {
     // split(기본형)은 카테고리가 GNB 축이 아니라 **별도 패널**이다 → 이 목록에서 제외한다.
     // 여기서 순서를 매기면 카테고리 관리의 순서를 GNB 기준으로 덮어써 패널 순서가 뒤틀린다.
-    const [cats] = withCategories ? await pool.query(`
+    // NORMAL 카테고리는 글로벌 한 벌(mall_id=0)이라 몰 스코핑은 categoryScope 가 한다.
+    // 스토어프론트(navigationService.getCategoryRows)와 같은 집합을 써야 편집 목록과 실제가 어긋나지 않는다.
+    const [rawCats] = withCategories ? await pool.query(`
         SELECT id, name, display_order AS sortOrder, pc_visible AS pcVisible, mobile_visible AS mobileVisible
           FROM categories
-         WHERE mall_id = ? AND type = 'NORMAL' AND is_active = 1 AND depth = 1
+         WHERE mall_id IN (0, ?) AND type = 'NORMAL' AND is_active = 1 AND depth = 1
          ORDER BY display_order ASC, id ASC
     `, [mallId]) : [[]];
+    const visibleIds = withCategories ? await categoryScope.visibleCategoryIdSet(mallId) : null;
+    const cats = visibleIds ? rawCats.filter((c) => visibleIds.has(c.id)) : rawCats;
 
     /*
      * CATEGORY 행의 뜻이 모드마다 다르다.

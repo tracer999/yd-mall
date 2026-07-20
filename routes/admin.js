@@ -14,6 +14,8 @@ router.get('/logout', authController.logout);
 router.use(adminAuth); // Apply middleware to all routes below
 // 관리자 편집 몰 컨텍스트 (P5) — 인증된 관리자 요청에만. req.adminMallId 주입.
 router.use(require('../middleware/adminMallContext'));
+// 관리자 헤더 로고·회사명을 편집 몰 기준으로 다시 읽는다(전역 siteSettings 는 req.mallId 기준이라 어긋남).
+router.use(require('../middleware/adminSiteSettings'));
 // 외부몰 연동 — 몰별 사용여부(유료) 주입 + 미사용 몰의 '외부몰 연동' 대메뉴 숨김.
 // adminMallContext(req.adminMallId)·adminMenu(res.locals.adminMenuTree) 이후에 마운트.
 router.use(require('../middleware/sourcingFlag').injectSourcingFlag);

@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const exhibitionService = require('../exhibition/exhibitionService');
+const categoryScope = require('../catalog/categoryScope');
 
 /*
  * 내비게이션 조립 서비스 (M4)
@@ -312,6 +313,10 @@ function buildTree(rows) {
  * maxDepth 를 주면 그 뎁스까지만(=GNB 표시 규칙), 안 주면 활성 전체를 돌려준다.
  * 상품 집계(서브트리)는 표시 뎁스 상한과 무관해야 하므로 후자를 쓴다 —
  * 상한을 낮췄다고 하위 카테고리 상품이 목록에서 사라지면 안 된다.
+ *
+ * NORMAL 카테고리는 글로벌 한 벌(mall_id=0)이다(설계: 카테고리·브랜드 글로벌화).
+ * 그래서 몰 스코핑은 mall_id 가 아니라 categoryScope 의 "유효 − 숨김" 집합으로 한다.
+ * mall_id IN (0, ?) 로 남겨둔 건 글로벌화 이전에 몰별로 만들어진 잔존 행 때문이다.
  */
 async function getCategoryRows(mallId, maxDepth) {
     const hasDepth = Number.isFinite(Number(maxDepth));
@@ -319,11 +324,13 @@ async function getCategoryRows(mallId, maxDepth) {
         SELECT id, name, slug, parent_id, depth, display_order, pc_visible, mobile_visible,
                logo_image_path, description
         FROM categories
-        WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1
+        WHERE type = 'NORMAL' AND mall_id IN (0, ?) AND is_active = 1
           ${hasDepth ? 'AND depth <= ?' : ''}
         ORDER BY display_order ASC, id ASC
     `, hasDepth ? [mallId, Number(maxDepth)] : [mallId]);
-    return rows;
+
+    const visible = await categoryScope.visibleCategoryIdSet(mallId);
+    return rows.filter((r) => visible.has(r.id));
 }
 
 /** 카테고리 드롭다운용 트리 (NORMAL, 활성, 최대 뎁스 이내) */
