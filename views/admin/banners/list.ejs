@@ -8,22 +8,30 @@
      * - 그 외(POPUP·MENU): 기존 배너 카드 그리드.
      */
     const isMenuTab = currentType === 'MENU';
+    const isPromoTab = currentType === 'PROMO';
     const currentMenu = (menuTargets || []).find(t => t.key === currentMenuKey) || null;
+    const currentPromo = (promoGroups || []).find(g => g.key === currentPromoKey) || null;
     const isTargetMode = !!targetMode;
     const addUrl = isMenuTab && currentMenuKey
         ? `/admin/banners/add?type=MENU&menu=${encodeURIComponent(currentMenuKey)}`
-        : `/admin/banners/add?type=${currentType}`;
+        : (isPromoTab && currentPromoKey
+            ? `/admin/banners/add?type=PROMO&group=${encodeURIComponent(currentPromoKey)}`
+            : `/admin/banners/add?type=${currentType}`);
     const returnTo = isTargetMode
         ? `/admin/banners?type=${currentType}&status=${statusFilter}&page=${page}`
         : (isMenuTab && currentMenuKey
             ? `/admin/banners?type=MENU&menu=${encodeURIComponent(currentMenuKey)}`
-            : `/admin/banners?type=${currentType}`);
+            : (isPromoTab && currentPromoKey
+                ? `/admin/banners?type=PROMO&group=${encodeURIComponent(currentPromoKey)}`
+                : `/admin/banners?type=${currentType}`));
 %>
 
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
     <p class="text-sm text-gray-500">
         <% if (isTargetMode) { %>
             <%= currentType === 'BRAND' ? '브랜드' : '카테고리' %>별로 배너 적용 여부를 확인하고 관리합니다.
+        <% } else if (isPromoTab) { %>
+            페이지 빌더의 <span class="font-medium text-gray-700">프로모션 배너</span> 섹션에 노출할 배너를 그룹별로 등록합니다.
         <% } else { %>
             배너 이미지를 등록하고 노출 영역을 관리합니다.
         <% } %>
@@ -123,6 +131,52 @@
 
 <% } else { %>
 
+    <% if (isPromoTab) { %>
+        <div class="mb-6">
+            <p class="text-xs text-gray-500 mb-2">
+                배너 그룹을 고르세요. 페이지 빌더의 <span class="font-medium text-gray-700">프로모션 배너</span> 섹션에
+                <span class="font-medium text-gray-700">배너 그룹 키</span>를 같은 값으로 넣으면 그 자리에 노출됩니다.
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <% (promoGroups || []).forEach(function (g) {
+                       const on = g.key === currentPromoKey;
+                %>
+                    <a href="/admin/banners?type=PROMO&group=<%= encodeURIComponent(g.key) %>"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm no-underline transition-colors
+                              <%= on ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-700' %>">
+                        <span class="font-mono text-[13px]"><%= g.key %></span>
+                        <% if (g.bannerCount > 0) { %>
+                            <span class="px-1.5 py-0.5 rounded-full text-[11px] font-semibold <%= on ? 'bg-white/25 text-white' : 'bg-blue-100 text-blue-700' %>"><%= g.bannerCount %></span>
+                        <% } %>
+                    </a>
+                <% }); %>
+                <a href="/admin/banners/add?type=PROMO&new=1"
+                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-dashed border-gray-300 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 no-underline">+ 새 그룹</a>
+            </div>
+        </div>
+
+        <%# 그룹과 페이지 빌더 섹션의 연결 상태 — 어느 쪽이 비었는지 바로 보이게 한다. %>
+        <% if (currentPromo) { %>
+            <% if (!currentPromo.sectionCount) { %>
+                <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    이 그룹을 쓰는 <span class="font-semibold">프로모션 배너 섹션</span>이 아직 없습니다.
+                    <a href="/admin/page-builder" class="text-amber-900 underline">페이지 빌더</a>에서 섹션을 추가하고
+                    배너 그룹 키에 <span class="font-mono font-semibold"><%= currentPromo.key %></span> 를 입력하세요.
+                </div>
+            <% } else if (!currentPromo.activeCount) { %>
+                <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    페이지 빌더 섹션 <span class="font-semibold"><%= currentPromo.sectionCount %></span>개가 이 그룹을 쓰고 있지만,
+                    <span class="font-semibold">활성 배너가 없어</span> 프론트에는 아무것도 노출되지 않습니다.
+                </div>
+            <% } else { %>
+                <div class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                    페이지 빌더 섹션 <span class="font-semibold"><%= currentPromo.sectionCount %></span>개에서
+                    활성 배너 <span class="font-semibold"><%= currentPromo.activeCount %></span>장이 노출 중입니다.
+                </div>
+            <% } %>
+        <% } %>
+    <% } %>
+
     <% if (isMenuTab) { %>
         <div class="mb-6">
             <p class="text-xs text-gray-500 mb-2">배너를 걸 메뉴를 고르세요. 선택한 메뉴 페이지 <span class="font-medium text-gray-700">상단</span>에 배너 슬라이드로 노출됩니다.</p>
@@ -164,6 +218,7 @@
         <% banners.forEach(banner=> {
             const isMenuBanner = banner.group_key && banner.group_key.indexOf('menu:') === 0;
             const isCommonBanner = banner.group_key && banner.group_key.indexOf('common:') === 0;
+            const isPromoBanner = !!banner.group_key && !isMenuBanner && !isCommonBanner && !banner.category_id;
             const menuKey = isMenuBanner ? banner.group_key.slice('menu:'.length) : '';
             const menuLabel = isMenuBanner ? ((menuTargets || []).find(t => t.key === menuKey) || {}).label || menuKey : '';
         %>
@@ -176,8 +231,9 @@
                         </h5>
                         <span
                             class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full
-                                            <%= isCommonBanner ? 'bg-emerald-100 text-emerald-800' : isMenuBanner ? 'bg-teal-100 text-teal-800' : banner.banner_type === 'CATEGORY' ? 'bg-indigo-100 text-indigo-800' : banner.banner_type === 'BRAND' ? 'bg-purple-100 text-purple-800' : banner.banner_type === 'POPUP' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800' %>">
+                                            <%= isCommonBanner ? 'bg-emerald-100 text-emerald-800' : isPromoBanner ? 'bg-pink-100 text-pink-800' : isMenuBanner ? 'bg-teal-100 text-teal-800' : banner.banner_type === 'CATEGORY' ? 'bg-indigo-100 text-indigo-800' : banner.banner_type === 'BRAND' ? 'bg-purple-100 text-purple-800' : banner.banner_type === 'POPUP' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800' %>">
                             <%= isCommonBanner ? (banner.banner_type==='BRAND' ? '브랜드 공통 배너' : '카테고리 공통 배너') :
+                                isPromoBanner ? '프로모션 배너' :
                                 isMenuBanner ? '메뉴별 배너' : banner.banner_type==='CATEGORY' ? '카테고리 배너' : banner.banner_type==='BRAND' ? '브랜드 배너' :
                                 banner.banner_type==='POPUP' ? '팝업 배너' : '메인 배너' %>
                         </span>
@@ -185,6 +241,8 @@
                     <p class="text-xs text-gray-500 mb-1">
                         <% if (isCommonBanner) { %>
                             전체 공통 · 개별 설정 없는 <%= banner.banner_type==='BRAND' ? '브랜드' : '카테고리' %>에 노출
+                        <% } else if (isPromoBanner) { %>
+                            배너 그룹: <span class="font-mono font-medium"><%= banner.group_key %></span>
                         <% } else if (isMenuBanner) { %>
                             대상 메뉴: <span class="font-medium"><%= menuLabel %></span>
                         <% } else if ((banner.banner_type==='CATEGORY' || banner.banner_type==='BRAND' ) && banner.category_name) {
@@ -229,6 +287,8 @@
                     <div class="col-span-full text-center py-12 bg-gray-50 rounded-lg text-gray-500">
                         <% if (isMenuTab && currentMenu) { %>
                             <span class="font-medium text-gray-700"><%= currentMenu.name %></span> 메뉴에 등록된 배너가 없습니다.
+                        <% } else if (isPromoTab) { %>
+                            <span class="font-mono font-medium text-gray-700"><%= currentPromoKey %></span> 그룹에 등록된 배너가 없습니다.
                         <% } else { %>
                             등록된 배너가 없습니다.
                         <% } %>

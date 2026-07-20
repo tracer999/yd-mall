@@ -1,7 +1,7 @@
 <%
   /*
    * 배너 관리 공용 탭 네비게이션.
-   * locals: activeTab — 'HERO' | 'CATEGORY' | 'POPUP' | 'BRAND' | 'MENU'
+   * locals: activeTab — 'HERO' | 'CATEGORY' | 'POPUP' | 'BRAND' | 'MENU' | 'PROMO'
    *
    * 'HERO' 탭 하나가 메인 히어로 두 방식(상품 쇼케이스 / 이미지 배너 슬라이드)을 모두 관장한다.
    * 예전에는 '메인 슬라이더'와 '메인 배너(레거시)'가 별도 탭이었으나, 프론트가 site_settings.hero_variant
@@ -14,6 +14,8 @@
     { key: 'BRAND',    label: '브랜드 배너',   href: '/admin/banners?type=BRAND' },
     { key: 'POPUP',    label: '팝업 배너',     href: '/admin/banners?type=POPUP' },
     { key: 'MENU',     label: '메뉴별 배너',   href: '/admin/banners?type=MENU' },
+    // 페이지 빌더 'promotion_banner' 섹션이 group_key 로 집어가는 배너 묶음.
+    { key: 'PROMO',    label: '프로모션 배너', href: '/admin/banners?type=PROMO' },
   ];
 %>
 <div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">

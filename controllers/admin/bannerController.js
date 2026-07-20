@@ -38,6 +38,102 @@ async function getMenuBannerCounts(mallId) {
     return counts;
 }
 
+/*
+ * 프로모션 배너
+ *
+ * 페이지 빌더의 'promotion_banner' 섹션이 config.groupKey 로 집어가는 배너 묶음이다.
+ * 메뉴별 배너와 같은 관용구로 저장한다(스키마 변경 없음):
+ *   banner_type='CATEGORY', category_id=NULL, group_key='{그룹키}'
+ *
+ * 'menu:'·'common:' 은 각각 전용 화면(메뉴별 배너 / 카테고리·브랜드 공통)이 관장하므로
+ * 프로모션 그룹에서 제외한다. 그래서 그룹 키에는 ':' 를 허용하지 않는다.
+ */
+const PROMO_RESERVED_PREFIXES = ['menu:', 'common:'];
+const DEFAULT_PROMO_GROUP = 'home_promo';
+const PROMO_GROUP_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/** 이 group_key 가 프로모션 그룹인가 — 전용 네임스페이스가 아니면 프로모션으로 본다. */
+function isPromoGroupKey(key) {
+    const k = String(key || '').trim();
+    if (!k) return false;
+    return !PROMO_RESERVED_PREFIXES.some(p => k.startsWith(p));
+}
+
+/** 이 배너가 프로모션 배너인가 — 대상 카테고리가 없는(묶음 전용) 배너만 해당한다. */
+function isPromoBanner(banner) {
+    return !banner.category_id && isPromoGroupKey(banner.group_key);
+}
+
+/** 폼 입력 → 저장 가능한 group_key. banners.group_key 는 VARCHAR(50). */
+function normalizePromoGroupKey(raw) {
+    const key = String(raw || '').trim().slice(0, 50);
+    if (!key) {
+        const err = new Error('프로모션 그룹 키를 입력하세요.');
+        err.statusCode = 400;
+        throw err;
+    }
+    // ':' 를 막아 'menu:'·'common:' 네임스페이스 침범을 원천 차단한다.
+    if (!PROMO_GROUP_KEY_RE.test(key)) {
+        const err = new Error('프로모션 그룹 키는 영문으로 시작하고 영문·숫자·_·- 만 쓸 수 있습니다.');
+        err.statusCode = 400;
+        throw err;
+    }
+    return key;
+}
+
+/**
+ * 이 몰의 프로모션 그룹 목록.
+ *
+ * 등록된 배너의 그룹 ∪ 페이지 빌더 섹션이 참조하는 그룹. 후자를 합치는 이유는,
+ * 섹션은 걸어 뒀는데 배너가 하나도 없는 그룹(= 프론트에 아무것도 안 나오는 상태)이
+ * 목록에 보여야 "왜 안 나오지"가 생기지 않기 때문이다.
+ */
+async function getPromoGroups(mallId) {
+    const [bannerRows] = await pool.query(`
+        SELECT group_key, COUNT(*) AS cnt,
+               SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_cnt
+        FROM banners
+        WHERE mall_id = ? AND group_key IS NOT NULL AND category_id IS NULL
+          AND group_key NOT LIKE 'menu:%' AND group_key NOT LIKE 'common:%'
+        GROUP BY group_key
+    `, [mallId]);
+
+    const [sectionRows] = await pool.query(`
+        SELECT ps.config_json ->> '$.groupKey' AS group_key, COUNT(*) AS cnt
+        FROM page_section ps
+        JOIN page p ON p.id = ps.page_id
+        WHERE ps.section_type = 'promotion_banner' AND p.mall_id = ?
+          AND ps.config_json ->> '$.groupKey' IS NOT NULL
+        GROUP BY 1
+    `, [mallId]);
+
+    const groups = new Map();
+    for (const r of bannerRows) {
+        groups.set(r.group_key, {
+            key: r.group_key,
+            bannerCount: Number(r.cnt),
+            activeCount: Number(r.active_cnt),
+            sectionCount: 0,
+        });
+    }
+    for (const r of sectionRows) {
+        // 'menu:NEW' 처럼 남의 네임스페이스를 가리키는 섹션은 이 화면 소관이 아니다.
+        if (!isPromoGroupKey(r.group_key)) continue;
+        const cur = groups.get(r.group_key)
+            || { key: r.group_key, bannerCount: 0, activeCount: 0, sectionCount: 0 };
+        cur.sectionCount = Number(r.cnt);
+        groups.set(r.group_key, cur);
+    }
+
+    // 아무것도 없는 몰에서도 등록을 시작할 수 있게 기본 그룹 하나는 항상 제시한다.
+    if (groups.size === 0) {
+        groups.set(DEFAULT_PROMO_GROUP, {
+            key: DEFAULT_PROMO_GROUP, bannerCount: 0, activeCount: 0, sectionCount: 0,
+        });
+    }
+    return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
 let hasMobileImageColumnCache = null;
 
 async function hasMobileImageColumn() {
@@ -79,8 +175,24 @@ exports.getList = async (req, res) => {
         let currentMenuKey = '';
         let menuBannerCounts = {};
         let menuProductGroup = null;
+        let promoGroups = [];
+        let currentPromoKey = '';
 
-        if (type === 'MENU') {
+        if (type === 'PROMO') {
+            // 프로모션 탭은 그룹 하나를 골라 그 그룹의 배너만 보여준다(메뉴별 배너와 같은 서브탭 방식).
+            promoGroups = await getPromoGroups(mallId);
+            const requested = String(req.query.group || '').trim();
+            currentPromoKey = promoGroups.some(g => g.key === requested)
+                ? requested
+                : (promoGroups[0]?.key || DEFAULT_PROMO_GROUP);
+
+            [banners] = await pool.query(`
+                SELECT b.*, NULL AS category_name
+                FROM banners b
+                WHERE b.group_key = ? AND b.mall_id = ? AND b.category_id IS NULL
+                ORDER BY b.display_order ASC, b.created_at DESC
+            `, [currentPromoKey, mallId]);
+        } else if (type === 'MENU') {
             // 메뉴별 탭은 메뉴 하나를 골라 그 메뉴의 배너만 보여준다(서브탭). 기본은 첫 메뉴.
             const requested = req.query.menu;
             currentMenuKey = menuTargets.some(t => t.key === requested)
@@ -103,7 +215,8 @@ exports.getList = async (req, res) => {
                 `, [`menu:${currentMenuKey}`, mallId])
                 : [[]];
         } else {
-            // 일반 타입 배너에는 메뉴별 배너(group_key='menu:%')가 섞이지 않도록 제외한다.
+            // 일반 타입 배너에는 묶음 전용 배너(메뉴별 'menu:%' · 프로모션 그룹)가 섞이지 않도록,
+            // group_key 가 비었거나 공통 배너('common:%')인 것만 남긴다.
             //
             // 몰 스코프는 banners.mall_id 로 직접 건다(20260720_banners_mall_scope.sql).
             // 예전에는 이 컬럼이 없어 CATEGORY·BRAND 를 조인한 categories.mall_id 로 우회했는데,
@@ -113,7 +226,7 @@ exports.getList = async (req, res) => {
                 FROM banners b
                 LEFT JOIN categories c ON b.category_id = c.id
                 WHERE b.banner_type = ? AND b.mall_id = ?
-                  AND (b.group_key IS NULL OR b.group_key NOT LIKE 'menu:%')
+                  AND (b.group_key IS NULL OR b.group_key LIKE 'common:%')
                 ORDER BY b.display_order ASC, b.created_at DESC
             `, [type, mallId]);
         }
@@ -127,7 +240,9 @@ exports.getList = async (req, res) => {
             currentMenuKey,
             menuTargets,
             menuBannerCounts,
-            menuProductGroup
+            menuProductGroup,
+            promoGroups,
+            currentPromoKey
         });
     } catch (err) {
         console.error(err);
@@ -217,6 +332,8 @@ async function renderTargetList(req, res, mallId, type) {
         menuTargets: [],
         menuBannerCounts: {},
         menuProductGroup: null,
+        promoGroups: [],
+        currentPromoKey: '',
     });
 }
 
@@ -235,6 +352,18 @@ exports.getAdd = async (req, res) => {
         // 대상 리스트에서 '배너 등록'을 누르면 그 카테고리/브랜드가 골라진 채로(또는 공통 체크된 채로) 열린다.
         const preselectTarget = Number.parseInt(req.query.target, 10) || null;
         const preselectCommon = req.query.common === '1';
+
+        // 프로모션 탭에서 '배너 등록'을 누르면 보던 그룹이 채워진 채로 열린다.
+        // '새 그룹'(?new=1)으로 들어오면 비운 채 열어 새 그룹 키를 직접 입력하게 한다.
+        const promoGroups = await getPromoGroups(req.adminMallId || 1);
+        const requestedGroup = String(req.query.group || '').trim();
+        let currentPromoKey = '';
+        if (type === 'PROMO' && req.query.new !== '1') {
+            currentPromoKey = promoGroups.some(g => g.key === requestedGroup)
+                ? requestedGroup
+                : (promoGroups[0]?.key || DEFAULT_PROMO_GROUP);
+        }
+
         res.render('admin/banners/form', {
             layout: 'layouts/admin_layout',
             title: '배너 등록',
@@ -243,6 +372,8 @@ exports.getAdd = async (req, res) => {
             currentType: type,
             menuTargets,
             currentMenuKey,
+            promoGroups,
+            currentPromoKey,
             preselectTarget,
             preselectCommon,
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
@@ -296,8 +427,17 @@ exports.postAdd = async (req, res) => {
         // 신규 등록 — 보존할 기존 group_key 없음(null).
         const mallId = req.adminMallId || 1;
         const menuKeys = (await getBannerMenuTargets(mallId)).map(t => t.key);
-        const { storedType, categoryId, groupKey, redirectType, menuKey } =
-            resolveBannerTarget(banner_type, category_id, req.body.menu_target, null, menuKeys, req.body.is_common === '1', mallId);
+        const { storedType, categoryId, groupKey, redirectType, menuKey, promoKey } =
+            resolveBannerTarget({
+                bannerType: banner_type,
+                categoryIdRaw: category_id,
+                menuTarget: req.body.menu_target,
+                promoGroup: req.body.promo_group,
+                existingGroupKey: null,
+                menuKeys,
+                isCommon: req.body.is_common === '1',
+                mallId,
+            });
         const ov = readOverlay(req.body, banner_type);
 
         if (await hasMobileImageColumn()) {
@@ -325,7 +465,7 @@ exports.postAdd = async (req, res) => {
                 ]
             );
         }
-        res.redirect(listUrl(redirectType, menuKey));
+        res.redirect(listUrl(redirectType, menuKey, promoKey));
     } catch (err) {
         console.error(err);
         if (err.statusCode === 400) return res.status(400).send(err.message);
@@ -350,7 +490,18 @@ function commonGroupKey(type, mallId) {
  *    소비하는 'home_promo')를 가진 배너를 편집할 때 null 로 덮어쓰면 라이브 배너가 사라진다.
  *    단 'menu:'·'common:' 네임스페이스는 이 화면 전용이므로, 개별 대상으로 전환되면 제거한다.
  */
-function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGroupKey, menuKeys = [], isCommon = false, mallId = 1) {
+function resolveBannerTarget({
+    bannerType, categoryIdRaw, menuTarget, promoGroup,
+    existingGroupKey, menuKeys = [], isCommon = false, mallId = 1,
+}) {
+    // 프로모션 배너 — 메뉴별 배너와 같은 관용구(CATEGORY + category_id=NULL + group_key).
+    if (bannerType === 'PROMO') {
+        const groupKey = normalizePromoGroupKey(promoGroup);
+        return {
+            storedType: 'CATEGORY', categoryId: null, groupKey,
+            redirectType: 'PROMO', menuKey: '', promoKey: groupKey
+        };
+    }
     if (bannerType === 'MENU') {
         // 목록에 없는 키는 저장하지 않는다 — 노출될 곳이 없는 배너가 생긴다.
         if (!menuKeys.includes(menuTarget)) {
@@ -360,7 +511,7 @@ function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGrou
         }
         return {
             storedType: 'CATEGORY', categoryId: null, groupKey: `menu:${menuTarget}`,
-            redirectType: 'MENU', menuKey: menuTarget
+            redirectType: 'MENU', menuKey: menuTarget, promoKey: ''
         };
     }
     const type = ['MAIN', 'CATEGORY', 'POPUP', 'BRAND'].includes(bannerType) ? bannerType : 'MAIN';
@@ -369,7 +520,7 @@ function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGrou
     if ((type === 'CATEGORY' || type === 'BRAND') && isCommon) {
         return {
             storedType: type, categoryId: null, groupKey: commonGroupKey(type, mallId),
-            redirectType: type, menuKey: ''
+            redirectType: type, menuKey: '', promoKey: ''
         };
     }
 
@@ -388,13 +539,16 @@ function resolveBannerTarget(bannerType, categoryIdRaw, menuTarget, existingGrou
         throw err;
     }
 
-    return { storedType: type, categoryId, groupKey, redirectType: type, menuKey: '' };
+    return { storedType: type, categoryId, groupKey, redirectType: type, menuKey: '', promoKey: '' };
 }
 
-/** 저장 후 돌아갈 목록 URL — 메뉴별 배너는 방금 편집한 메뉴 서브탭으로, MAIN 은 메인 슬라이더 화면으로. */
-function listUrl(redirectType, menuKey) {
+/** 저장 후 돌아갈 목록 URL — 메뉴별·프로모션 배너는 방금 편집한 서브탭으로, MAIN 은 메인 슬라이더 화면으로. */
+function listUrl(redirectType, menuKey, promoKey) {
     if (redirectType === 'MENU' && menuKey) {
         return `/admin/banners?type=MENU&menu=${encodeURIComponent(menuKey)}`;
+    }
+    if (redirectType === 'PROMO' && promoKey) {
+        return `/admin/banners?type=PROMO&group=${encodeURIComponent(promoKey)}`;
     }
     if (redirectType === 'MAIN') return HERO_LIST_URL;
     return `/admin/banners?type=${redirectType}`;
@@ -417,19 +571,28 @@ exports.getEdit = async (req, res) => {
         // 메뉴별 배너(group_key='menu:%')는 폼에서 'MENU' 타입으로 다룬다.
         const isMenuBanner = banner.group_key && banner.group_key.startsWith('menu:');
         const currentMenuKey = isMenuBanner ? banner.group_key.slice('menu:'.length) : '';
+        // 프로모션 배너도 마찬가지로 'PROMO' 가상 타입으로 다룬다.
+        const promoBanner = isPromoBanner(banner);
 
         const [categories] = await pool.query(
             'SELECT id, name, type FROM categories WHERE mall_id IN (0, ?) ORDER BY display_order ASC, id ASC',
             [req.adminMallId || 1]
         );
+
+        let currentType = banner.banner_type;
+        if (isMenuBanner) currentType = 'MENU';
+        else if (promoBanner) currentType = 'PROMO';
+
         res.render('admin/banners/form', {
             layout: 'layouts/admin_layout',
             title: '배너 수정',
             categories,
             banner,
-            currentType: isMenuBanner ? 'MENU' : banner.banner_type,
+            currentType,
             menuTargets: await getBannerMenuTargets(req.adminMallId || 1),
             currentMenuKey,
+            promoGroups: await getPromoGroups(mallId),
+            currentPromoKey: promoBanner ? banner.group_key : '',
             preselectTarget: null,
             preselectCommon: false,
             maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
@@ -459,8 +622,17 @@ exports.postEdit = async (req, res) => {
         // 편집 — 기존 group_key(existing_group_key)를 넘겨 이 화면과 무관한 group_key 를 보존한다.
         const mallId = req.adminMallId || 1;
         const menuKeys = (await getBannerMenuTargets(mallId)).map(t => t.key);
-        const { storedType, categoryId, groupKey, redirectType, menuKey } =
-            resolveBannerTarget(banner_type, category_id, req.body.menu_target, req.body.existing_group_key, menuKeys, req.body.is_common === '1', mallId);
+        const { storedType, categoryId, groupKey, redirectType, menuKey, promoKey } =
+            resolveBannerTarget({
+                bannerType: banner_type,
+                categoryIdRaw: category_id,
+                menuTarget: req.body.menu_target,
+                promoGroup: req.body.promo_group,
+                existingGroupKey: req.body.existing_group_key,
+                menuKeys,
+                isCommon: req.body.is_common === '1',
+                mallId,
+            });
         const ov = readOverlay(req.body, banner_type);
 
         if (await hasMobileImageColumn()) {
@@ -484,7 +656,7 @@ exports.postEdit = async (req, res) => {
                 ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align, id, mallId
             ]);
         }
-        res.redirect(listUrl(redirectType, menuKey));
+        res.redirect(listUrl(redirectType, menuKey, promoKey));
     } catch (err) {
         console.error(err);
         if (err.statusCode === 400) return res.status(400).send(err.message);
