@@ -1,58 +1,68 @@
-# 몰 채우기
+# 3. 몰 채우기
 
-몰의 뼈대를 만들었으면, 이제 실제 내용을 넣습니다. **상품·메뉴·테마·홈을 편집하기 전에는 반드시 대상 몰이 "선택"되어 있는지** 확인하세요(몰 관리 화면 또는 우측 상단 몰 선택기). 이들은 몰마다 따로 저장되므로 엉뚱한 몰을 고치기 쉽습니다.
+카테고리를 만들고 → 상품을 넣고 → 메뉴와 홈을 정리합니다.
 
-> **카테고리·브랜드는 예외입니다.** 전 몰이 공유하는 공용 마스터라, 어느 몰을 선택했든 같은 목록을 편집합니다. 선택된 몰은 "저장 위치"가 아니라 **화면의 상품 수·노출 필터가 어느 몰 기준인지**만 정합니다.
+<div class="manual-goto-bar">
+  <span class="manual-goto-label">바로 이동</span>
+  <a class="manual-goto" href="/admin/categories" target="_blank">카테고리 관리</a>
+  <a class="manual-goto is-sub" href="/admin/products" target="_blank">상품 관리</a>
+  <a class="manual-goto is-sub" href="/admin/feature-menus" target="_blank">일반 메뉴 관리</a>
+  <a class="manual-goto is-sub" href="/admin/page-builder" target="_blank">페이지 빌더</a>
+</div>
 
-## 순서: 카테고리 → 상품 → 꾸미기
+> **상품·메뉴·홈은 "편집 중인 몰"에 저장됩니다.** 시작 전에 대상 몰이 맞는지 확인하세요. 엉뚱한 몰을 고치기 가장 쉬운 단계입니다.
 
-카테고리를 먼저 만들어야 상품을 그 안에 넣을 수 있으므로 순서가 중요합니다.
+---
 
-### 1. 카테고리 만들기 (`/admin/categories`)
+## 1) 카테고리 만들기
 
-- 상품을 담을 분류를 먼저 만듭니다.
-- 카테고리·브랜드는 **모든 몰이 공유하는 공용 분류**입니다. 여기서 만든 분류는 어느 몰을 선택했든 공용 마스터에 저장되어 다른 몰에서도 함께 보입니다.
-- 각 몰 스토어프론트에는 **그 몰에 상품이 담긴 카테고리만** 자동으로 노출됩니다(빈 카테고리는 숨김). 특정 몰에서만 어떤 카테고리를 숨기려면 목록의 **몰별 표시** 토글을 씁니다.
-- 카테고리는 **최대 3단계**까지 계층(부모-자식)을 가질 수 있습니다.
-- 규칙:
-  - 4단계 이상으로는 만들 수 없습니다.
-  - 자식이 달린 카테고리는 삭제할 수 없습니다(먼저 자식을 정리).
-  - **다른 몰 것을 포함해 상품이 연결된 카테고리는 삭제할 수 없습니다**(공용이므로 다른 몰의 상품이 조용히 끊기는 것을 막습니다).
+<div class="manual-goto-bar">
+  <span class="manual-goto-label">이 단계 화면</span>
+  <a class="manual-goto" href="/admin/categories" target="_blank">카테고리 관리 열기</a>
+</div>
 
-### 2. 상품 등록 (`/admin/products`)
+- 상품을 담을 분류를 먼저 만듭니다. 상품 등록 시 필요하므로 순서가 중요합니다.
+- **카테고리·브랜드는 전 몰 공용 마스터**입니다. 여기서 만든 분류는 다른 몰에서도 함께 보입니다.
+- 각 몰 스토어에는 **그 몰에 상품이 담긴 카테고리만** 노출됩니다(빈 카테고리는 자동 숨김). 특정 몰에서만 숨기려면 목록의 **몰별 표시** 토글을 씁니다.
+- 최대 **3단계**까지 계층을 만들 수 있습니다. 자식이 있는 카테고리, 상품이 연결된 카테고리는 삭제할 수 없습니다.
 
-- 각 상품은 하나의 카테고리에 속합니다. **상품은 카테고리와 달리 현재 선택된 몰에 묶이므로**, 등록 전에 대상 몰이 맞는지 꼭 확인하세요.
-- 이름·가격·이미지·설명 등을 입력합니다. 이미지는 업로드하면 `public/uploads/` 에 저장됩니다.
-- 카테고리는 대분류→중분류→소분류를 **단계별 드롭다운**으로 고르거나, `대>중>소` 경로를 직접 입력하면 없는 단계가 자동으로 만들어집니다.
-- 색상·사이즈처럼 **선택지가 있는 상품**은 등록·수정 화면의 **옵션·SKU 관리**에서 옵션과 조합별 재고·가격(SKU)을 설정합니다. 자세히는 관리자 매뉴얼 [상품 관리](/manual/admin/products)를 보세요.
+**완료 판단:** 상품 등록 화면의 카테고리 드롭다운에 방금 만든 분류가 뜬다.
 
-### 3. 몰 꾸미기
+## 2) 상품 등록
 
-내용이 어느 정도 채워지면 겉모습을 다듬습니다. 디자인 설정이 **네 군데로 나뉘어 있으니** 헷갈리지 마세요.
+<div class="manual-goto-bar">
+  <span class="manual-goto-label">이 단계 화면</span>
+  <a class="manual-goto" href="/admin/products" target="_blank">상품 관리 열기</a>
+</div>
 
-| 화면 | 하는 일 |
-|------|---------|
-| 사이트 설정 (`/admin/site-settings`) | **색상 · 로고 · 상호** |
-| 테마 설정 (`/admin/theme-settings`) | **모서리 · 글꼴 · 간격** (색상 아님) |
-| Header 설정 (`/admin/header-settings`) | 헤더 레이아웃, GNB 최대 노출 수 |
-| 일반 메뉴 관리 (`/admin/feature-menus`) | 상단 메뉴 켜기/끄기·이름·순서 |
-| 배너 관리 → 메인 슬라이더 (`/admin/banners/hero-slides`) | 메인 최상단 큰 이미지 |
-| 페이지 빌더 (`/admin/page-builder`) | 메인(홈) 화면의 섹션 조립·**발행** |
+- 상품은 **편집 중인 몰에 묶입니다.** 등록 전 대상 몰을 꼭 확인하세요.
+- 카테고리는 단계별 드롭다운으로 고르거나 `대>중>소` 경로를 직접 입력하면 없는 단계가 자동 생성됩니다.
+- 색상·사이즈 등 선택지가 있는 상품은 **옵션·SKU 관리**에서 조합별 재고·가격을 설정합니다.
 
-> 자세한 순서는 [테마·디자인 다듬기](theme_design)를 보세요.
+**완료 판단:** `/?mall=<코드>` 의 카테고리 메뉴에 상품이 보인다.
+
+## 3) 메뉴 · 홈 정리
+
+<div class="manual-goto-bar">
+  <span class="manual-goto-label">이 단계 화면</span>
+  <a class="manual-goto" href="/admin/feature-menus" target="_blank">일반 메뉴 관리</a>
+  <a class="manual-goto is-sub" href="/admin/page-builder" target="_blank">페이지 빌더</a>
+</div>
+
+- **일반 메뉴 관리** — 상단 메뉴 켜기/끄기·이름·순서.
+- **페이지 빌더** — 메인(홈) 화면 섹션 조립.
 
 > ⚠️ **페이지 빌더는 "발행"해야 반영됩니다.** 편집만 하고 발행하지 않으면 고객 화면은 그대로입니다.
 
-## 확인: 스토어프론트 미리보기
+## 최종 확인
 
-몰 관리 화면의 **스토어 링크**(`?mall=<코드> ↗`)를 누르거나, 브라우저에서 직접 엽니다.
+몰 리스트의 **스토어 링크**(`?mall=<코드> ↗`)를 눌러 손님이 보는 화면을 확인합니다. 카테고리·상품·메인 화면이 모두 정상이면 몰 하나가 완성된 것입니다.
 
-```
-/?mall=<몰코드>
-```
-
-예를 들어 코드가 `myshop` 이면 `/?mall=myshop` 으로 접속해 실제 손님이 보는 화면을 확인합니다. 카테고리·상품이 잘 보이면 몰 하나가 완성된 것입니다.
-
-## 다음 단계
-
-만든 몰을 지우고 처음부터 다시 만들고 싶다면 → [몰 지우고 다시 만들기](delete_rebuild)
+<div class="manual-goto-bar">
+  <span class="manual-goto-label">관련 매뉴얼</span>
+  <a class="manual-goto" href="/manual/admin/products">상품 관리</a>
+  <a class="manual-goto is-sub" href="/manual/admin/categories">카테고리 관리</a>
+  <a class="manual-goto is-sub" href="/manual/admin/menus">메뉴 관리</a>
+  <a class="manual-goto is-sub" href="/manual/admin/page_builder">페이지 빌더</a>
+  <a class="manual-goto is-sub" href="/manual/mall_builder/delete_rebuild">4. 몰 지우고 다시 만들기</a>
+</div>
