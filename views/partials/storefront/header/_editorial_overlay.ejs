@@ -12,6 +12,22 @@
   const _gnb = (typeof gnbMenus !== 'undefined' ? gnbMenus : []);
   const _catBtn = (typeof categoryButton !== 'undefined') ? categoryButton : null;
   const _company = (siteSettings && siteSettings.company_name) || '와이디몰';
+
+  /*
+   * 통합형(nav_mode='unified') — 카테고리 버튼 없이 카테고리 1뎁스가 GNB 항목이 되고 하위는 children.
+   * 이 스킨은 테마3에서 split·unified 양쪽에 쓰이므로(presets.js 의 테마3 예외) 두 경우를 모두 낸다.
+   *   - PC: 여기 중앙 nav 가 메뉴 전체를 낸다. 하위가 있으면 마우스 오버 드롭다운(햄버거 아님).
+   *   - 모바일: 우측 [☰] 드로어(md:hidden).
+   * split 이면 children 이 항상 비어 있어 드롭다운 분기 자체가 렌더되지 않는다 — 기존 동작 그대로.
+   */
+  const _unified = String(_cfg.nav_mode) === 'unified';
+  const _pcKids = (m) => (m.children || []).filter((c) => Number(c.pcVisible) !== 0);
+  /* unified 는 navigationService.buildUnified 가 이미 max_gnb_items 를 적용했다 — 여기서 또 자르면
+     카테고리까지 함께 잘려 PC 메뉴가 사라진다. split 만 기존대로 방어적으로 자른다. */
+  const _pcGnb = (() => {
+    const list = _gnb.filter((m) => Number(m.pcVisible) !== 0);
+    return _unified ? list : list.slice(0, Number(_cfg.max_gnb_items) || 8);
+  })();
 %>
 <header class="yd-ed-hdr absolute top-0 left-0 right-0 z-50" data-solid-after="80">
   <div class="max-w-[80rem] mx-auto px-5 lg:px-10">
@@ -28,7 +44,11 @@
       </div>
 
       <!-- Center nav (PC) -->
-      <nav class="hidden md:flex items-center gap-7 yd-ed-nav" aria-label="주 메뉴">
+      <%#
+        self-stretch — 항목이 헤더 높이(h-20)를 꽉 채워야 드롭다운 패널(top-full)이 헤더 하단에 딱 붙는다.
+        틈이 생기면 링크 → 패널로 마우스를 옮기는 사이 hover 가 끊긴다.
+      %>
+      <nav class="hidden md:flex items-center self-stretch gap-7 yd-ed-nav" aria-label="주 메뉴">
         <% if (_catBtn) { %>
           <div class="relative" id="gnb-cat-wrap">
             <button type="button" id="gnb-cat-btn" aria-expanded="false"
@@ -41,13 +61,43 @@
             </div>
           </div>
         <% } %>
-        <% _gnb.filter(function (m) { return m.pcVisible !== 0; }).slice(0, Number(_cfg.max_gnb_items) || 8).forEach(function (m) {
-             var active = m.href && m.href !== '#' && (typeof currentPath !== 'undefined') && currentPath === m.href; %>
-          <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
-             class="yd-ed-navlink relative text-sm font-medium <%= active ? 'is-active' : '' %>">
-            <%= m.name %>
-            <% if (m.badgeType) { %><span class="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-[var(--gh-accent)]"></span><% } %>
-          </a>
+        <% _pcGnb.forEach(function (m) {
+             var active = m.href && m.href !== '#' && (typeof currentPath !== 'undefined') && currentPath === m.href;
+             var kids = _pcKids(m); %>
+          <div class="yd-ed-item relative flex items-center h-full">
+            <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
+               class="yd-ed-navlink relative text-sm font-medium <%= active ? 'is-active' : '' %>">
+              <%= m.name %>
+              <% if (m.badgeType) { %><span class="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-[var(--gh-accent)]"></span><% } %>
+            </a>
+
+            <%# 하위메뉴 드롭다운 — 있을 때만. 투명 헤더 위라 패널은 흰 배경·어두운 글자로 되돌린다. %>
+            <% if (kids.length) { %>
+              <div class="yd-ed-panel absolute left-0 top-full z-40 min-w-[180px] rounded-b-lg border border-gray-100 border-t-0 bg-white shadow-xl py-2">
+                <ul>
+                  <% kids.forEach(function (c) { %>
+                    <li>
+                      <a href="<%= c.href %>" class="block px-4 py-2 text-sm text-gray-600 hover:text-[var(--gh-primary)] hover:bg-gray-50 whitespace-nowrap">
+                        <%= c.name %>
+                      </a>
+                      <% var grand = _pcKids(c); %>
+                      <% if (grand.length) { %>
+                        <ul class="pb-1">
+                          <% grand.forEach(function (g) { %>
+                            <li>
+                              <a href="<%= g.href %>" class="block pl-7 pr-4 py-1.5 text-xs text-gray-400 hover:text-[var(--gh-primary)] whitespace-nowrap">
+                                <%= g.name %>
+                              </a>
+                            </li>
+                          <% }); %>
+                        </ul>
+                      <% } %>
+                    </li>
+                  <% }); %>
+                </ul>
+              </div>
+            <% } %>
+          </div>
         <% }); %>
       </nav>
 
@@ -68,11 +118,11 @@
           <button type="button" id="yd-dw-search" aria-label="검색" class="yd-ed-ico"><i class="bi bi-search text-lg"></i></button>
         <% } %>
         <% if (isAdmin) { %>
-          <a href="/admin" aria-label="관리자모드" class="yd-ed-ico hidden md:inline-flex"><i class="bi bi-gear text-lg"></i></a>
+          <a href="/admin" aria-label="관리자모드" class="yd-ed-ico yd-ed-ico--pc hidden md:inline-flex"><i class="bi bi-gear text-lg"></i></a>
         <% } %>
         <%# 햄버거 — PC 는 가운데 메뉴가 있으므로 모바일에서만. 없으면 모바일에 메뉴 진입점이 사라진다. %>
         <button type="button" id="yd-dw-open" aria-expanded="false" aria-controls="yd-drawer" aria-label="전체 메뉴 열기"
-                class="yd-ed-ico md:hidden"><i class="bi bi-list text-2xl"></i></button>
+                class="yd-ed-ico yd-ed-ico--mo md:hidden"><i class="bi bi-list text-2xl"></i></button>
       </div>
     </div>
   </div>
@@ -94,6 +144,27 @@
   .yd-ed-navlink.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -6px; height: 1px; background: currentColor; }
   .yd-ed-ico { display: inline-flex; opacity: .92; text-decoration: none; }
   .yd-ed-ico:hover { opacity: 1; }
+
+  /*
+   * 아이콘의 기기별 노출 — Tailwind 유틸(md:hidden / hidden md:inline-flex)만으로는 안 된다.
+   * 위 `.yd-ed-ico { display: inline-flex }` 와 `.md\:hidden { display: none }` 은 특이도가 같고(0,1,0)
+   * 이 <style> 이 문서상 뒤에 와서 항상 이긴다 → PC 에 햄버거가 그대로 남고(요구사항 위반),
+   * 모바일에는 관리자 아이콘이 남았다. 특이도를 한 단계 올린 미디어쿼리로 확실히 끊는다.
+   */
+  @media (max-width: 767.98px) { .yd-ed-ico.yd-ed-ico--pc { display: none; } }
+  @media (min-width: 768px)    { .yd-ed-ico.yd-ed-ico--mo { display: none; } }
+
+  /*
+   * PC 하위메뉴 드롭다운 — 마우스 오버·키보드 포커스에서만 펼친다(1뎁스는 상시 노출).
+   * 드로어형 스킨(_compact_drawer.ejs .yd-gnb__panel)과 같은 규칙이되, 이 헤더는 투명 상태에서
+   * 흰 글자 + text-shadow 를 자손에 상속시키므로 패널 안에서 그걸 되돌린다(흰 배경에 흰 글자 방지).
+   */
+  .yd-ed-panel { display: none; }
+  .yd-ed-item:hover .yd-ed-panel,
+  .yd-ed-item:focus-within .yd-ed-panel { display: block; }
+  .yd-ed-hdr .yd-ed-panel,
+  .yd-ed-hdr.is-solid .yd-ed-panel,
+  body.yd-overlay-header .yd-ed-hdr:not(.is-solid) .yd-ed-panel { color: #374151; text-shadow: none; }
   /* 히어로 위 흰 글자 가독성 */
   body.yd-overlay-header .yd-ed-hdr:not(.is-solid) { text-shadow: 0 1px 10px rgba(0,0,0,.35); }
   /* 굳은 상태 */

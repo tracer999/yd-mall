@@ -159,7 +159,8 @@ async function pruneDeactivated(conn, { commit = true } = {}) {
 
 /**
  * 지속 동기화 1회 — naverTaxonomySync.syncCategories 성공 이후 훅으로 호출.
- * 신규 반영 + 비활성 정리 + category_remap_log(SYNC) 기록. 자체 트랜잭션.
+ * 신규 반영 + 비활성 정리. 자체 트랜잭션.
+ * 회차 요약은 호출부(naverTaxonomySync)가 반환값으로 로깅한다.
  * @param {{commit?:boolean}} [opts]
  */
 async function reflect({ commit = true } = {}) {
@@ -169,11 +170,6 @@ async function reflect({ commit = true } = {}) {
         const s = await syncTreeFromNaver(conn, { commit });
         const p = await pruneDeactivated(conn, { commit });
         if (commit) {
-            await conn.query(
-                `INSERT INTO category_remap_log (phase, match_kind, note)
-                 VALUES ('SYNC', 'PATH', ?)`,
-                [`동기화: 신규 ${s.created}, 승격 ${s.promoted}, 비활성정리 ${p.removed}`]
-            );
             await conn.commit();
         } else {
             await conn.rollback();

@@ -22,11 +22,6 @@ async function main() {
         await conn.beginTransaction();
         const r = await categoryReflect.syncTreeFromNaver(conn, { commit: COMMIT });
         if (COMMIT) {
-            await conn.query(
-                `INSERT INTO category_remap_log (phase, match_kind, note)
-                 VALUES ('SEED', 'PATH', ?)`,
-                [`네이버 L1~L3 시드: 생성 ${r.created}, 승격 ${r.promoted}, 재사용 ${r.reused} (대상 ${r.total})`]
-            );
             await conn.commit();
         } else {
             await conn.rollback();
