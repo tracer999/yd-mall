@@ -99,37 +99,8 @@
         </div>
       </div>
 
-      <!-- 우측 피처(추천) 카드 -->
-      <% if (feature) { %>
-        <aside class="hidden lg:flex w-72 shrink-0 flex-col border border-gray-200 rounded-2xl overflow-hidden self-start">
-          <div class="relative bg-gray-50 aspect-square">
-            <% if (feature.label) { %>
-              <span class="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md text-[11px] font-bold bg-[var(--gh-primary)] text-white"><%= feature.label %></span>
-            <% } %>
-            <a href="<%= slideHref(feature) %>" class="block w-full h-full">
-              <img src="<%= slideImg(feature) %>" alt="<%= slideTitle(feature) %>" class="w-full h-full object-contain p-4">
-            </a>
-          </div>
-          <div class="p-4 flex-1 flex flex-col">
-            <a href="<%= slideHref(feature) %>" class="no-underline">
-              <h3 class="text-sm font-semibold text-gray-900 line-clamp-2 hover:text-[var(--gh-primary)] transition-colors"><%= slideTitle(feature) %></h3>
-            </a>
-            <div class="mt-2 flex items-end gap-2 flex-wrap">
-              <% if (feature.discount_rate > 0) { %>
-                <span class="text-lg font-extrabold text-[var(--gh-primary)]"><%= feature.discount_rate %>%</span>
-              <% } %>
-              <span class="text-xl font-extrabold text-gray-900"><%= won(feature.price) %>원</span>
-            </div>
-            <% if (feature.original_price && feature.original_price > feature.price) { %>
-              <span class="text-gray-400 line-through text-xs"><%= won(feature.original_price) %>원</span>
-            <% } %>
-            <div class="mt-auto pt-4 space-y-2">
-              <a href="<%= slideHref(feature) %>" class="block text-center py-2.5 rounded-lg bg-[var(--gh-primary)] text-white text-sm font-bold no-underline hover:bg-[var(--gh-primary-dark)] transition-colors">구매하기</a>
-              <a href="<%= slideHref(feature) %>" class="block text-center py-2.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium no-underline hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition-colors">상세 보기</a>
-            </div>
-          </div>
-        </aside>
-      <% } %>
+      <!-- 우측 피처(추천) 카드 — 테마2와 공유하는 파샬 -->
+      <%- include('./hero_feature_card', { feature: (typeof feature !== 'undefined' ? feature : null) }) %>
 
       <%# CT-7: 히어로 내부 유틸 레일은 제거됨.
           전역 우측 유틸 레일(views/partials/storefront/right_utility.ejs, position:fixed)이 대체한다.

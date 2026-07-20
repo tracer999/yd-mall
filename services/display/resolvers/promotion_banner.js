@@ -9,12 +9,13 @@ const bannerService = require('../bannerService');
  *
  * 배너가 0건이면 스킵.
  */
-async function resolve({ config, locals }) {
+async function resolve({ shared, config, locals }) {
     const groupKey = config.groupKey;
     if (!groupKey) return null;
 
     const banners = await bannerService.getByGroup(groupKey, {
         limit: config.maxCount || 4,
+        mallId: shared.mallId || 1,
     });
     if (!banners || banners.length === 0) return null;
 

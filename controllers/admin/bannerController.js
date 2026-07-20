@@ -26,13 +26,13 @@ async function getBannerMenuTargets(mallId = 1) {
 }
 
 /** 메뉴별 배너 등록 건수 — 서브탭에 표시해 어디에 배너가 있는지 한눈에 보이게 한다. */
-async function getMenuBannerCounts() {
+async function getMenuBannerCounts(mallId) {
     const [rows] = await pool.query(`
         SELECT group_key, COUNT(*) AS cnt
         FROM banners
-        WHERE group_key LIKE 'menu:%'
+        WHERE group_key LIKE 'menu:%' AND mall_id = ?
         GROUP BY group_key
-    `);
+    `, [mallId]);
     const counts = {};
     for (const r of rows) counts[r.group_key.slice('menu:'.length)] = Number(r.cnt);
     return counts;
@@ -86,7 +86,7 @@ exports.getList = async (req, res) => {
             currentMenuKey = menuTargets.some(t => t.key === requested)
                 ? requested
                 : (menuTargets[0]?.key || '');
-            menuBannerCounts = await getMenuBannerCounts();
+            menuBannerCounts = await getMenuBannerCounts(mallId);
 
             // 이 메뉴에 상품 캐러셀도 걸려 있는지 — 배너는 그 위에 함께 노출된다는 안내를 위해.
             if (currentMenuKey) {
@@ -98,29 +98,24 @@ exports.getList = async (req, res) => {
                     SELECT b.*, c.name AS category_name
                     FROM banners b
                     LEFT JOIN categories c ON b.category_id = c.id
-                    WHERE b.group_key = ?
+                    WHERE b.group_key = ? AND b.mall_id = ?
                     ORDER BY b.display_order ASC, b.created_at DESC
-                `, [`menu:${currentMenuKey}`])
+                `, [`menu:${currentMenuKey}`, mallId])
                 : [[]];
         } else {
             // 일반 타입 배너에는 메뉴별 배너(group_key='menu:%')가 섞이지 않도록 제외한다.
             //
-            // 몰 스코프: banners 테이블엔 mall_id 가 없다(전 몰 공용). CATEGORY·BRAND 배너는 대상
-            // 카테고리/브랜드로 몰이 정해지므로 조인한 categories.mall_id 로 좁힌다. 단 카테고리·브랜드가
-            // 글로벌화되어(글로벌 마스터 mall_id=0 + 몰별 mall_id) 존재하므로, 폼의 대상 드롭다운과 동일하게
-            // mall_id IN (0, 현재몰) 을 본다 — 글로벌 대상에 걸린 개별 배너가 목록에서 사라지지 않게.
-            // 전체 공통 배너는 category_id 가 NULL 이라 조인으로 몰을 못 잡으므로 group_key='common:{TYPE}:{mallId}'
-            // 로 이 몰 것만 노출한다(타 몰 공통 배너가 섞이지 않게). POPUP 은 대상이 없어 전 몰 공용으로 둔다.
-            const scopeByMall = (type === 'CATEGORY' || type === 'BRAND');
-            const commonKey = commonGroupKey(type, mallId);
+            // 몰 스코프는 banners.mall_id 로 직접 건다(20260720_banners_mall_scope.sql).
+            // 예전에는 이 컬럼이 없어 CATEGORY·BRAND 를 조인한 categories.mall_id 로 우회했는데,
+            // 카테고리가 글로벌화(mall_id=0)된 뒤로는 그 우회가 몰을 전혀 가르지 못했다.
             [banners] = await pool.query(`
                 SELECT b.*, c.name AS category_name
                 FROM banners b
                 LEFT JOIN categories c ON b.category_id = c.id
-                WHERE b.banner_type = ? AND (b.group_key IS NULL OR b.group_key NOT LIKE 'menu:%')
-                ${scopeByMall ? 'AND (c.mall_id IN (0, ?) OR b.group_key = ?)' : ''}
+                WHERE b.banner_type = ? AND b.mall_id = ?
+                  AND (b.group_key IS NULL OR b.group_key NOT LIKE 'menu:%')
                 ORDER BY b.display_order ASC, b.created_at DESC
-            `, scopeByMall ? [type, mallId, commonKey] : [type]);
+            `, [type, mallId]);
         }
 
         res.render('admin/banners/list', {
@@ -162,10 +157,10 @@ async function renderTargetList(req, res, mallId, type) {
     // 개별 배너 한방 조회(N+1 금지). menu:/common: 는 category_id 가 NULL 이라 자동 제외.
     const [indivBanners] = await pool.query(
         `SELECT * FROM banners
-         WHERE banner_type = ? AND category_id IS NOT NULL
+         WHERE banner_type = ? AND mall_id = ? AND category_id IS NOT NULL
            AND (group_key IS NULL OR group_key NOT LIKE 'menu:%')
          ORDER BY display_order ASC, created_at DESC`,
-        [type]
+        [type, mallId]
     );
     const bannersByCat = new Map();
     for (const b of indivBanners) {
@@ -176,8 +171,8 @@ async function renderTargetList(req, res, mallId, type) {
     // 전체 공통 배너(상단 별도 노출)
     const commonKey = commonGroupKey(type, mallId);
     const [commonBanners] = await pool.query(
-        'SELECT * FROM banners WHERE group_key = ? ORDER BY display_order ASC, created_at DESC',
-        [commonKey]
+        'SELECT * FROM banners WHERE group_key = ? AND mall_id = ? ORDER BY display_order ASC, created_at DESC',
+        [commonKey, mallId]
     );
 
     // 이 몰에 노출되는(상품 있는) 대상 + 배너 걸린 대상은 무조건 포함
@@ -307,22 +302,24 @@ exports.postAdd = async (req, res) => {
 
         if (await hasMobileImageColumn()) {
             await pool.query(
-                `INSERT INTO banners (banner_type, category_id, group_key, title, image_url, mobile_image_url, link_url, display_order, is_active, start_date, end_date,
+                `INSERT INTO banners (mall_id, banner_type, category_id, group_key, title, image_url, mobile_image_url, link_url, display_order, is_active, start_date, end_date,
                                       overlay_title, overlay_subtitle, overlay_button_text, overlay_button_color, overlay_align)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    storedType, categoryId, groupKey, title, image_url, mobile_image_url, link_url,
+                    mallId, storedType, categoryId, groupKey, title, image_url, mobile_image_url, link_url,
                     display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
                     ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align
                 ]
             );
         } else {
             await pool.query(
-                `INSERT INTO banners (banner_type, category_id, group_key, title, image_url, link_url, display_order, is_active, start_date, end_date,
+                // 컬럼 16개 ↔ 플레이스홀더 16개. (이전엔 15:14 로 어긋나 있었다 — 이 분기는
+                //  mobile_image_url 컬럼이 없는 DB 에서만 타므로 현 환경에서 드러나지 않았다.)
+                `INSERT INTO banners (mall_id, banner_type, category_id, group_key, title, image_url, link_url, display_order, is_active, start_date, end_date,
                                       overlay_title, overlay_subtitle, overlay_button_text, overlay_button_color, overlay_align)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    storedType, categoryId, groupKey, title, image_url, link_url,
+                    mallId, storedType, categoryId, groupKey, title, image_url, link_url,
                     display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
                     ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align
                 ]
@@ -406,12 +403,13 @@ function listUrl(redirectType, menuKey) {
 exports.getEdit = async (req, res) => {
     try {
         const { id } = req.params;
+        const mallId = req.adminMallId || 1;
         const [rows] = await pool.query(`
-            SELECT b.*, c.name AS category_name 
-            FROM banners b 
-            LEFT JOIN categories c ON b.category_id = c.id 
-            WHERE b.id = ?
-        `, [id]);
+            SELECT b.*, c.name AS category_name
+            FROM banners b
+            LEFT JOIN categories c ON b.category_id = c.id
+            WHERE b.id = ? AND b.mall_id = ?
+        `, [id, mallId]);
 
         if (rows.length === 0) return res.redirect('/admin/banners');
 
@@ -470,20 +468,20 @@ exports.postEdit = async (req, res) => {
                 UPDATE banners SET
                 banner_type=?, category_id=?, group_key=?, title=?, image_url=?, mobile_image_url=?, link_url=?, display_order=?, is_active=?, start_date=?, end_date=?,
                 overlay_title=?, overlay_subtitle=?, overlay_button_text=?, overlay_button_color=?, overlay_align=?
-                WHERE id=?
+                WHERE id=? AND mall_id=?
             `, [
                 storedType, categoryId, groupKey, title, image_url, mobile_image_url, link_url, display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
-                ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align, id
+                ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align, id, mallId
             ]);
         } else {
             await pool.query(`
                 UPDATE banners SET
                 banner_type=?, category_id=?, group_key=?, title=?, image_url=?, link_url=?, display_order=?, is_active=?, start_date=?, end_date=?,
                 overlay_title=?, overlay_subtitle=?, overlay_button_text=?, overlay_button_color=?, overlay_align=?
-                WHERE id=?
+                WHERE id=? AND mall_id=?
             `, [
                 storedType, categoryId, groupKey, title, image_url, link_url, display_order || 0, is_active ? 1 : 0, start_date || null, end_date || null,
-                ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align, id
+                ov.title, ov.subtitle, ov.buttonText, ov.buttonColor, ov.align, id, mallId
             ]);
         }
         res.redirect(listUrl(redirectType, menuKey));
@@ -496,8 +494,10 @@ exports.postEdit = async (req, res) => {
 
 exports.postDelete = async (req, res) => {
     const { id } = req.body;
+    const mallId = req.adminMallId || 1;
     try {
-        await pool.query('DELETE FROM banners WHERE id = ?', [id]);
+        // mall_id 를 함께 건다 — 없으면 남의 몰 배너 id 로 삭제가 통한다.
+        await pool.query('DELETE FROM banners WHERE id = ? AND mall_id = ?', [id, mallId]);
         // 보던 탭으로 되돌린다. 외부 URL 로 튕기지 않도록 배너 목록 경로만 허용한다.
         const back = String(req.body.return_to || '');
         res.redirect(back.startsWith('/admin/banners') ? back : '/admin/banners');

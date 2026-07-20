@@ -148,10 +148,11 @@ exports.getList = async (req, res) => {
                     `SELECT * FROM banners
                      WHERE is_active = 1
                        AND banner_type = 'CATEGORY'
+                       AND mall_id = ?
                        AND (category_id = ? OR group_key = ?)
                      ORDER BY (category_id IS NULL) ASC, created_at DESC, id DESC
                      LIMIT 1`,
-                    [selectedCategoryId, `common:CATEGORY:${mallId}`]
+                    [mallId, selectedCategoryId, `common:CATEGORY:${mallId}`]
                 );
                 if (bannerRows.length > 0) {
                     categoryBanner = bannerRows[0];
@@ -204,10 +205,11 @@ exports.getList = async (req, res) => {
                         `SELECT * FROM banners
                          WHERE is_active = 1
                            AND banner_type = 'BRAND'
+                           AND mall_id = ?
                            AND (category_id = ? OR group_key = ?)
                          ORDER BY (category_id IS NULL) ASC, created_at DESC, id DESC
                          LIMIT 1`,
-                        [selectedBrandId, `common:BRAND:${mallId}`]
+                        [mallId, selectedBrandId, `common:BRAND:${mallId}`]
                     );
                     if (brandBannerRows.length > 0) {
                         categoryBanner = brandBannerRows[0];

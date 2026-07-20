@@ -1,0 +1,49 @@
+<%
+  /*
+   * 히어로 우측 피처(추천) 카드 — 캡쳐 구조의 오른쪽 상품 카드.
+   *
+   * locals: feature (hero_slide slot='FEATURE' 행 + 상품 조인) 또는 null
+   *
+   * 테마1(상품 쇼케이스)·테마2(일반 배너) 양쪽에서 include 한다. 예전에는 hero_showcase.ejs
+   * 안에만 있어서 테마2로 바꾸면 우측 카드가 통째로 사라졌다 — 그래서 파일로 뺐다.
+   * 헬퍼를 호출부에서 물려받지 않도록 여기서 자체 정의한다(EJS include 는 함수를 상속하지 않는다).
+   *
+   * 데스크톱 전용(lg 이상)이다 — 좁은 화면에서는 중앙 슬라이더만 남는다.
+   */
+  const _won = n => Number(n || 0).toLocaleString();
+  const _href = s => s.link_url
+    ? s.link_url
+    : (s.slug && String(s.slug).trim() ? `/products/${encodeURIComponent(s.slug)}` : (s.product_id ? `/products/view/${s.product_id}` : '#'));
+  const _img = s => s.image_url || s.main_image || '/images/placeholder.png';
+  const _title = s => s.headline || s.product_name || '';
+%>
+<% if (typeof feature !== 'undefined' && feature) { %>
+  <aside class="hidden lg:flex w-72 shrink-0 flex-col border border-gray-200 rounded-2xl overflow-hidden self-start bg-white">
+    <div class="relative bg-gray-50 aspect-square">
+      <% if (feature.label) { %>
+        <span class="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md text-[11px] font-bold bg-[var(--gh-primary)] text-white"><%= feature.label %></span>
+      <% } %>
+      <a href="<%= _href(feature) %>" class="block w-full h-full">
+        <img src="<%= _img(feature) %>" alt="<%= _title(feature) %>" class="w-full h-full object-contain p-4">
+      </a>
+    </div>
+    <div class="p-4 flex-1 flex flex-col">
+      <a href="<%= _href(feature) %>" class="no-underline">
+        <h3 class="text-sm font-semibold text-gray-900 line-clamp-2 hover:text-[var(--gh-primary)] transition-colors"><%= _title(feature) %></h3>
+      </a>
+      <div class="mt-2 flex items-end gap-2 flex-wrap">
+        <% if (feature.discount_rate > 0) { %>
+          <span class="text-lg font-extrabold text-[var(--gh-primary)]"><%= feature.discount_rate %>%</span>
+        <% } %>
+        <span class="text-xl font-extrabold text-gray-900"><%= _won(feature.price) %>원</span>
+      </div>
+      <% if (feature.original_price && feature.original_price > feature.price) { %>
+        <span class="text-gray-400 line-through text-xs"><%= _won(feature.original_price) %>원</span>
+      <% } %>
+      <div class="mt-auto pt-4 space-y-2">
+        <a href="<%= _href(feature) %>" class="block text-center py-2.5 rounded-lg bg-[var(--gh-primary)] text-white text-sm font-bold no-underline hover:bg-[var(--gh-primary-dark)] transition-colors">구매하기</a>
+        <a href="<%= _href(feature) %>" class="block text-center py-2.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium no-underline hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition-colors">상세 보기</a>
+      </div>
+    </div>
+  </aside>
+<% } %>

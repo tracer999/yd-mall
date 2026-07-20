@@ -68,15 +68,25 @@ async function getMarquee(mallId) {
 exports.getList = async (req, res) => {
     try {
         const mallId = req.adminMallId || 1;
-        // 프론트가 실제로 그리는 히어로를 기준으로 판정한다.
-        // theme_hero(페이지 빌더)를 쓰는 몰은 hero_variant 와 무관하게 hero_slide 를 렌더하므로,
-        // hero_variant 로 화면 모드를 가르면 실제 노출 중인 슬라이드가 관리자에서 숨어버린다.
-        const usesThemeHero = (await displayService.getHomeHeroType(mallId)) === 'theme_hero';
-        const activeVariant = usesThemeHero ? 'product_showcase' : await getActiveVariant(mallId);
+        /*
+         * 프론트가 실제로 그리는 히어로를 기준으로 판정한다.
+         *
+         * theme_hero 몰은 hero_variant 가 아니라 섹션의 config.layout 이 소스를 정한다.
+         *   showcase|editorial → hero_slide      → 이 화면의 product_showcase 모드
+         *   banner             → banners(MAIN)   → 이 화면의 full_banner 모드
+         * 예전에는 theme_hero 면 무조건 product_showcase 로 뭉갰다. 그래서 테마2(banner)·테마3 인
+         * 몰에서도 상품 쇼케이스만 보이고, 실제 노출 중인 배너를 관리자에서 편집할 수 없었다.
+         */
+        const heroSection = await displayService.getHomeHeroSection(mallId);
+        const usesThemeHero = heroSection && heroSection.type === 'theme_hero';
+        const themeLayout = usesThemeHero ? (heroSection.layout || 'banner') : null;
+        const activeVariant = usesThemeHero
+            ? (themeLayout === 'banner' ? 'full_banner' : 'product_showcase')
+            : await getActiveVariant(mallId);
         // 적용 중이 아닌 방식도 미리 편집해 둘 수 있게 ?mode= 로 열람 방식을 따로 둔다.
-        // 단 theme_hero 몰은 full_banner 가 프론트에 영향을 주지 않으므로 항상 쇼케이스로 연다.
+        // theme_hero 몰은 레이아웃이 소스를 확정하므로 다른 방식을 열어도 프론트에 영향이 없다 → 고정한다.
         const mode = usesThemeHero
-            ? 'product_showcase'
+            ? activeVariant
             : (VARIANTS.includes(req.query.mode) ? req.query.mode : activeVariant);
 
         const [slides] = await pool.query(`
@@ -90,10 +100,10 @@ exports.getList = async (req, res) => {
         // full_banner 방식의 소스 — 메뉴별 배너(group_key='menu:%')는 다른 화면 소관이라 제외한다.
         const [mainBanners] = await pool.query(`
             SELECT * FROM banners
-            WHERE banner_type = 'MAIN'
+            WHERE banner_type = 'MAIN' AND mall_id = ?
               AND (group_key IS NULL OR group_key NOT LIKE 'menu:%')
             ORDER BY display_order ASC, id ASC
-        `);
+        `, [mallId]);
 
         // 에디토리얼 히어로 하단 흐름문구(마퀴) — theme_hero 리졸버와 같은 소스·폴백을 읽는다.
         const marquee = await getMarquee(mallId);
@@ -102,6 +112,7 @@ exports.getList = async (req, res) => {
             layout: 'layouts/admin_layout',
             title: '메인 슬라이더 관리',
             usesThemeHero,
+            themeLayout,
             activeVariant,
             mode,
             slides,
@@ -189,9 +200,10 @@ exports.postMarquee = async (req, res) => {
  *    인덱스로 보고 `["3","4"]` 로 압축해, id 로 값을 찾지 못한다(전 배너가 0/비노출로 저장됐다).
  *    그래서 `b` 접두어를 붙여 객체 키로 강제한다.
  *
- * banners 테이블에는 mall_id 가 없다(전 몰 공용) — 여기서도 몰 스코프를 걸지 않는다.
+ * mall_id 조건을 반드시 건다 — 없으면 남의 몰 배너 id 를 넣어 순서·노출을 바꿀 수 있다.
  */
 exports.postBannerOrder = async (req, res) => {
+    const mallId = req.adminMallId || 1;
     const ids = [].concat(req.body.id || []).map(Number).filter(n => Number.isInteger(n) && n > 0);
     const orders = req.body.order || {};
     const actives = req.body.active || {};
@@ -202,9 +214,9 @@ exports.postBannerOrder = async (req, res) => {
         for (const id of ids) {
             await conn.query(
                 `UPDATE banners SET display_order = ?, is_active = ?
-                  WHERE id = ? AND banner_type = 'MAIN'
+                  WHERE id = ? AND mall_id = ? AND banner_type = 'MAIN'
                     AND (group_key IS NULL OR group_key NOT LIKE 'menu:%')`,
-                [Number(orders['b' + id]) || 0, String(actives['b' + id]) === '1' ? 1 : 0, id],
+                [Number(orders['b' + id]) || 0, String(actives['b' + id]) === '1' ? 1 : 0, id, mallId],
             );
         }
         await conn.commit();
@@ -234,6 +246,19 @@ exports.getAdd = async (req, res) => {
     }
 };
 
+/*
+ * 슬라이드 종류(폼의 slide_kind) → product_id.
+ *
+ * 상품배너 = 상품 연결, 일반배너 = 상품 없이 이미지·문구만(product_id NULL).
+ * 종류를 명시적으로 'plain' 으로 보냈으면 상품 칸에 값이 남아 있어도 무조건 NULL 로 만든다 —
+ * 브라우저에서 칸을 감추기만 하면 JS 가 막힌 환경에서 예전 상품이 그대로 붙어 저장된다.
+ * slide_kind 가 없는 예전 폼·외부 요청은 값 유무로 판단(기존 동작 유지).
+ */
+function resolveProductId(slideKind, rawProductId) {
+    if (slideKind === 'plain') return null;
+    return rawProductId ? Number(rawProductId) || null : null;
+}
+
 exports.postAdd = async (req, res) => {
     const mallId = req.adminMallId || 1;
     const { slot, product_id, label, headline, link_url, sort_order, is_active } = req.body;
@@ -241,7 +266,7 @@ exports.postAdd = async (req, res) => {
     const image_url = slideImage ? '/uploads/banners/' + slideImage.filename : null;
 
     const safeSlot = SLOTS.includes(slot) ? slot : 'MAIN';
-    const productId = product_id ? Number(product_id) || null : null;
+    const productId = resolveProductId(req.body.slide_kind, product_id);
 
     try {
         await pool.query(`
@@ -302,7 +327,7 @@ exports.postEdit = async (req, res) => {
     }
 
     const safeSlot = SLOTS.includes(slot) ? slot : 'MAIN';
-    const productId = product_id ? Number(product_id) || null : null;
+    const productId = resolveProductId(req.body.slide_kind, product_id);
 
     try {
         await pool.query(`

@@ -190,6 +190,19 @@ async function getDraftSections(pageId, shared = {}) {
  * @returns 'theme_hero' | 'hero' | null
  */
 async function getHomeHeroType(mallId = 1) {
+  const hero = await getHomeHeroSection(mallId);
+  return hero ? hero.type : null;
+}
+
+/*
+ * 관리자용 — 홈 히어로 섹션의 타입과 설정을 함께 돌려준다.
+ *
+ * theme_hero 는 config.layout(showcase|banner|editorial)이 곧 테마1/2/3 이고 데이터 소스도 그에 따라
+ * 갈린다(리졸버 theme_hero.js). 관리자 화면이 타입만 보고 표시 모드를 정하면 테마2·3 인 몰까지
+ * 상품 쇼케이스로 뭉개져, 실제 노출 중인 콘텐츠가 관리자에서 안 보인다.
+ * @returns {{type:'theme_hero'|'hero', layout:string|null}|null}
+ */
+async function getHomeHeroSection(mallId = 1) {
   const page = await getHomePage(mallId);
   if (!page) return null;
   const revision = await getLatestRevision(page.id);
@@ -201,7 +214,9 @@ async function getHomeHeroType(mallId = 1) {
     rows = await getLiveSections(page.id);
   }
   const hero = (rows || []).find((s) => s.section_type === 'theme_hero' || s.section_type === 'hero');
-  return hero ? hero.section_type : null;
+  if (!hero) return null;
+  const cfg = parseConfig(hero.config_json);
+  return { type: hero.section_type, layout: cfg.layout || null };
 }
 
 /*
@@ -243,6 +258,7 @@ module.exports = {
   loadHomeCategories,
   getHomePage,
   getHomeHeroType,
+  getHomeHeroSection,
   getPageBySlug,
   getPageSections
 };

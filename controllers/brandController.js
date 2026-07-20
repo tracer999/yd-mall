@@ -115,15 +115,15 @@ exports.getDetail = async (req, res, next) => {
         ]);
 
         // 관리자 '브랜드 배너'(banner_type='BRAND', category_id=브랜드id) — 상세관 최상단 노출.
-        // banners 테이블은 전 몰 공용이지만 category_id 가 이 브랜드(=이 몰의 categories 행)를 가리키므로 몰 스코프가 성립한다.
         // 개별 브랜드 배너가 없으면 전체 공통 브랜드 배너(group_key='common:BRAND:{mallId}')를 폴백으로 노출한다.
+        // 카테고리가 글로벌해진 뒤로 category_id 만으로는 몰이 갈리지 않으므로 mall_id 로 직접 스코프한다.
         const [bannerRows] = await pool.query(
             `SELECT * FROM banners
-             WHERE is_active = 1 AND banner_type = 'BRAND'
+             WHERE is_active = 1 AND banner_type = 'BRAND' AND mall_id = ?
                AND (category_id = ? OR group_key = ?)
              ORDER BY (category_id IS NULL) ASC, created_at DESC, id DESC
              LIMIT 1`,
-            [brandId, `common:BRAND:${mallId}`]
+            [mallId, brandId, `common:BRAND:${mallId}`]
         );
         const brandBanner = bannerRows[0] || null;
 

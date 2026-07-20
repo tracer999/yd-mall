@@ -28,7 +28,8 @@ async function buildHomeContext(req, res) {
 
     // 1. 메인 상단 배너 (MAIN 타입만)
     const [banners] = await pool.query(
-        "SELECT * FROM banners WHERE is_active = 1 AND banner_type = 'MAIN' ORDER BY display_order ASC, id ASC"
+        "SELECT * FROM banners WHERE is_active = 1 AND banner_type = 'MAIN' AND mall_id = ? ORDER BY display_order ASC, id ASC",
+        [mallId]
     );
     const heroBanners = (banners || []).slice(0, 6);
     // 모바일 이미지가 없는 배너는 PC 이미지로 대체한다. 예전처럼 걸러내 버리면 모바일 슬라이드가
@@ -63,11 +64,12 @@ async function buildHomeContext(req, res) {
         SELECT * FROM banners
         WHERE is_active = 1
           AND banner_type = 'POPUP'
+          AND mall_id = ?
           AND (start_date IS NULL OR start_date <= CURDATE())
           AND (end_date IS NULL OR end_date >= CURDATE())
         ORDER BY display_order ASC, id ASC
         LIMIT 10
-    `);
+    `, [mallId]);
     const popupBanners = Array.isArray(popupBannerRows) ? popupBannerRows : [];
 
     const siteSettings = res.locals.siteSettings || {};

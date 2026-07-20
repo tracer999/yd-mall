@@ -1,11 +1,12 @@
 <%
   /*
    * 테마 히어로 래퍼 — config.layout 으로 표현을 가른다.
-   * locals: layout, mainSlides(hero_slide MAIN + 상품조인), feature(FEATURE 슬라이드 or null)
+   * locals: layout, mainSlides, feature(FEATURE 슬라이드 or null)
    *
-   *   showcase  → hero_showcase 재사용 (상품 쇼케이스)
-   *   banner    → hero_banner 재사용 (전체폭 이미지 배너, hero_slide 를 배너 형태로 매핑)
-   *   editorial → 전용 풀블리드 마크업 (오버레이 텍스트 + 마퀴)
+   * mainSlides 의 출처는 layout 마다 다르다(리졸버 theme_hero.js 참고):
+   *   showcase  → hero_slide(상품 연결). hero_showcase 재사용 (상품 쇼케이스)
+   *   banner    → banners(banner_type='MAIN', 몰 스코프). hero_banner 재사용 (일반 이미지 배너)
+   *   editorial → hero_slide. 전용 풀블리드 마크업 (오버레이 텍스트 + 마퀴)
    *
    * Swiper 초기화(.mySwiperDesktop/.mySwiperMobile)는 user/index.ejs 의 initHeroSwiper 가 담당.
    */
@@ -44,7 +45,7 @@
                 <div class="w-full max-w-[80rem] mx-auto px-6 lg:px-10 pb-20 lg:pb-28">
                   <div class="max-w-2xl">
                     <% if (s.label) { %>
-                      <span class="yd-ed-eyebrow block text-white/80 text-xs md:text-sm tracking-[0.25em] uppercase mb-4"><%= s.label %></span>
+                      <span class="yd-ed-eyebrow block text-white/80 text-base md:text-xl tracking-[0.25em] uppercase mb-4"><%= s.label %></span>
                     <% } %>
                     <h2 class="yd-ed-title text-white font-normal leading-[1.05]"><%= s.headline || s.product_name || '' %></h2>
                     <a href="<%= _href(s) %>" class="yd-ed-cta mt-8 inline-flex items-center gap-2 px-8 py-3.5 text-sm font-semibold tracking-wide">
@@ -105,7 +106,13 @@
     .yd-ed-hero .yd-ed-stage { height: 88vh; min-height: 520px; max-height: 900px; }
     @media (max-width: 640px) { .yd-ed-hero .yd-ed-stage { height: 82vh; min-height: 460px; } }
     .yd-ed-scrim { background: linear-gradient(to top, rgba(0,0,0,.60) 0%, rgba(0,0,0,.15) 45%, rgba(0,0,0,.05) 100%); }
-    .yd-ed-title { font-family: var(--yd-font-display, serif); font-size: clamp(2.6rem, 6vw, 5.5rem); }
+    <%#
+      헤드라인 — 확정 40px(데스크톱). 상한을 40px 로 두어 창을 아무리 넓혀도 그 이상 커지지 않는다
+      (상품명이 그대로 들어와 길어지는 일이 많아 커지면 3줄 이상으로 꺾인다).
+      3.2vw 는 1250px 에서 40px 에 닿으므로 일반적인 데스크톱은 전부 정확히 40px.
+      좁아지면 30px 까지만 줄어든다(모바일 가독성 하한).
+    %>
+    .yd-ed-title { font-family: var(--yd-font-display, serif); font-size: clamp(1.875rem, 3.2vw, 2.5rem); }
     .yd-ed-eyebrow { font-family: var(--yd-font-family); }
     .yd-ed-cta {
       background: #fff; color: #111; border-radius: 9999px;
@@ -125,8 +132,16 @@
       background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.5);
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #fff;
     }
+    /*
+     * 화살표 위치. 우측 유틸 레일(.yd-rail — position:fixed, right:16px, width:74px, z-index:45)은
+     * ≥1600px 에서만 뜬다. 레일이 화살표보다 위에 그려져 클릭까지 먹으므로,
+     * 같은 지점에서 오른쪽 화살표를 레일 바깥으로 민다. (hero_banner.ejs 와 동일 규칙)
+     */
     .yd-ed-swiper .swiper-button-prev-desktop { left: 32px; }
     .yd-ed-swiper .swiper-button-next-desktop { right: 32px; }
+    @media (min-width: 1600px) {
+      .yd-ed-swiper .swiper-button-next-desktop { right: 122px; }
+    }
     .yd-ed-swiper .swiper-pagination { bottom: 20px; }
     .yd-ed-swiper .swiper-pagination-bullet { width: 8px; height: 8px; background: rgba(255,255,255,.55); opacity: 1; }
     .yd-ed-swiper .swiper-pagination-bullet-active { background: #fff; }
@@ -134,23 +149,40 @@
 
 <% } else { %>
   <%
-    // banner: hero_slide 를 hero_banner 가 기대하는 배너 형태로 매핑(전역 banners 미사용 → 몰 격리).
-    var _banners = _slides.map(function (s) {
-      var url = _img(s);
+    /* banner(테마2): 리졸버가 banners(banner_type='MAIN', 몰 스코프) 행을 그대로 넘긴다.
+       overlay_* 는 관리자가 배너마다 직접 입력한 값이므로 합성하지 않고 그대로 쓴다.
+       banners 에는 영상 컬럼이 없어 media 는 항상 null(= hero_media 가 이미지로 렌더). */
+    var _banners = _slides.map(function (b) {
       return {
-        // 원본 슬라이드를 그대로 넘긴다 — hero_media 가 여기서 영상 여부를 판단한다.
-        media: s,
-        image_url: url,
-        mobile_image_url: s.mobile_image_url || url,
-        title: s.headline || s.product_name || '',
-        link_url: _href(s),
-        overlay_title: s.headline || '',
-        overlay_subtitle: s.label || '',
-        overlay_button_text: (s.headline || s.link_url) ? '자세히 보기' : '',
-        overlay_button_color: '',
-        overlay_align: 'LEFT'
+        media: null,
+        image_url: b.image_url,
+        mobile_image_url: b.mobile_image_url || b.image_url,
+        title: b.title || '',
+        link_url: b.link_url || '',
+        overlay_title: b.overlay_title || '',
+        overlay_subtitle: b.overlay_subtitle || '',
+        overlay_button_text: b.overlay_button_text || '',
+        overlay_button_color: b.overlay_button_color || '',
+        overlay_align: b.overlay_align || 'LEFT'
       };
     });
   %>
-  <%- include('./hero_banner', { heroBanners: _banners, mobileHeroBanners: _banners }) %>
+  <%
+    var _feature = (typeof feature !== 'undefined') ? feature : null;
+  %>
+  <% if (_feature) { %>
+    <%# 캡쳐 구조: 배너 슬라이더 + 우측 상품 카드. 카드가 없으면 예전처럼 전체폭으로 둔다. %>
+    <section class="bg-white">
+      <div class="max-w-[1400px] mx-auto px-4 py-4">
+        <div class="flex gap-3">
+          <div class="flex-1 min-w-0">
+            <%- include('./hero_banner', { heroBanners: _banners, mobileHeroBanners: _banners }) %>
+          </div>
+          <%- include('./hero_feature_card', { feature: _feature }) %>
+        </div>
+      </div>
+    </section>
+  <% } else { %>
+    <%- include('./hero_banner', { heroBanners: _banners, mobileHeroBanners: _banners }) %>
+  <% } %>
 <% } %>

@@ -438,13 +438,13 @@ async function pickDataSource(def, mallId) {
   return any.length ? any[0].id : null;
 }
 
-/** promotion_banner 는 config.groupKey 가 있어야 렌더된다 — 실제 존재하는 키를 하나 집어준다. */
-async function pickBannerGroupKey() {
+/** promotion_banner 는 config.groupKey 가 있어야 렌더된다 — 이 몰에 실제 존재하는 키를 하나 집어준다. */
+async function pickBannerGroupKey(mallId) {
   const [rows] = await pool.query(`
     SELECT group_key FROM banners
-     WHERE is_active = 1 AND group_key IS NOT NULL AND group_key <> ''
+     WHERE is_active = 1 AND mall_id = ? AND group_key IS NOT NULL AND group_key <> ''
      GROUP BY group_key ORDER BY MIN(display_order) ASC, group_key ASC LIMIT 1
-  `);
+  `, [mallId]);
   return rows.length ? rows[0].group_key : null;
 }
 
@@ -459,7 +459,7 @@ exports.getSectionPreview = async (req, res) => {
     const sample = SAMPLE_CONFIG[type] || null;
     const config = Object.assign(defaultConfig(def), sample || {});
     if (type === 'promotion_banner' && !config.groupKey) {
-      config.groupKey = await pickBannerGroupKey();
+      config.groupKey = await pickBannerGroupKey(mallId);
     }
 
     const row = {

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS `admin_verification_codes` (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS `banners` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '배너 ID (PK)',
+  `mall_id` bigint NOT NULL DEFAULT '1' COMMENT '몰 ID(멀티몰 스코프). 적용: scripts/migrations/20260720_banners_mall_scope.sql',
   `banner_type` enum('MAIN','CATEGORY','POPUP','BRAND') COLLATE utf8mb4_general_ci DEFAULT 'MAIN' COMMENT '배너 타입 (메인/카테고리/팝업/브랜드)',
   `group_key` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 그룹 키(promotion_banner 등 섹션 데이터소스). 적용: scripts/migrate_banner_group_key.js',
   `category_id` int DEFAULT NULL COMMENT '카테고리 ID (CATEGORY 타입일 경우)',
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS `banners` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '등록일시',
   PRIMARY KEY (`id`),
   KEY `fk_banners_category` (`category_id`),
+  KEY `idx_banners_mall_type` (`mall_id`,`banner_type`,`display_order`),
   CONSTRAINT `fk_banners_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='메인 및 카테고리 배너';
 
@@ -124,25 +126,6 @@ CREATE TABLE IF NOT EXISTS `categories` (
   KEY `idx_categories_origin` (`type`,`origin`),
   CONSTRAINT `categories_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='상품 카테고리 (계층 구조 지원, 최대 3뎁스)';
-
--- 카테고리 재구성 감사·롤백 원장 (네이버 기반 글로벌 카테고리 재구성 Phase 0)
-CREATE TABLE IF NOT EXISTS `category_remap_log` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `phase` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'SEED | REMAP | PRUNE | SYNC',
-  `from_category_id` int DEFAULT NULL COMMENT '이동 전 우리 카테고리',
-  `to_category_id` int DEFAULT NULL COMMENT '이동 후 우리 카테고리(네이버 노드)',
-  `naver_category_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `product_count` int DEFAULT NULL COMMENT '이동한 상품 수',
-  `match_kind` enum('PATH','NAME','FUZZY','MANUAL','NONE') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `score` decimal(4,3) DEFAULT NULL,
-  `reverted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '관리자 롤백 여부',
-  `note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_crl_phase` (`phase`,`created_at`),
-  KEY `idx_crl_from` (`from_category_id`),
-  KEY `idx_crl_kind` (`match_kind`,`reverted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='카테고리 재구성 감사·롤백 원장';
 
 
 -- =============================================================================

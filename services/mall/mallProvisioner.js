@@ -178,6 +178,44 @@ async function applyBestGroups(conn, mallId) {
     return r.insertId;
 }
 
+/*
+ * 히어로 표현(config.layout)만 프리셋에 맞춘다 — include_home 과 무관하게 항상 돈다.
+ *
+ * 히어로가 showcase|banner|editorial 중 무엇인가는 **테마의 정체성**이라 테마를 바꾸면
+ * 반드시 따라와야 한다. 그런데 이건 그동안 '홈 섹션 전체 파괴적 교체'(include_home)에
+ * 묶여 있었다. 그래서 홈을 지키면서 테마만 바꾸면 히어로가 이전 테마에 남았고,
+ * mall.preset_key 와 실제 화면이 갈라졌다(테마1·2 를 고른 몰이 에디토리얼에 갇힌 원인).
+ *
+ * layout 키 하나만 갱신한다 — 다른 섹션도, 히어로의 다른 config 키도 건드리지 않는다.
+ * @returns {Promise<{pageId: number|null, changed: boolean}>}
+ */
+async function syncHeroLayout(conn, mallId, sections) {
+    const heroDef = (sections || []).find((s) => s.type === 'theme_hero');
+    const layout = heroDef && heroDef.config && heroDef.config.layout;
+    if (!layout) return { pageId: null, changed: false };
+
+    const [[home]] = await conn.query(
+        "SELECT id FROM page WHERE mall_id = ? AND page_type = 'home' ORDER BY id ASC LIMIT 1", [mallId]);
+    if (!home) return { pageId: null, changed: false };
+
+    const [rows] = await conn.query(
+        "SELECT id, config_json FROM page_section WHERE page_id = ? AND section_type = 'theme_hero'", [home.id]);
+
+    let changed = false;
+    for (const r of rows) {
+        let cfg = {};
+        if (r.config_json) {
+            if (typeof r.config_json === 'object') cfg = r.config_json;
+            else { try { cfg = JSON.parse(r.config_json); } catch (e) { cfg = {}; } }
+        }
+        if (cfg.layout === layout) continue;
+        await conn.query('UPDATE page_section SET config_json = ? WHERE id = ?',
+            [JSON.stringify(Object.assign({}, cfg, { layout })), r.id]);
+        changed = true;
+    }
+    return { pageId: home.id, changed };
+}
+
 /**
  * page(home) + page_section — 홈 골격.
  *
@@ -262,6 +300,7 @@ async function provisionMall(mallId, presetKey, opts = {}) {
 
     const conn = await pool.getConnection();
     let home = { pageId: null, replaced: false };
+    let heroSynced = false; // include_home 없이 히어로 layout 만 바꿨는가
     try {
         await conn.beginTransaction();
 
@@ -279,6 +318,11 @@ async function provisionMall(mallId, presetKey, opts = {}) {
             const groupIdByKey = await applyProductGroups(conn, id);
             await applyBestGroups(conn, id);
             home = await applyHome(conn, id, mall.code, mall.name, preset.homeSections, overwrite, groupIdByKey);
+        } else {
+            // 홈 섹션은 보존하되 히어로 표현만 테마를 따르게 한다(위 syncHeroLayout 주석 참고).
+            const synced = await syncHeroLayout(conn, id, preset.homeSections);
+            heroSynced = synced.changed;
+            if (synced.changed) home = { pageId: synced.pageId, replaced: false };
         }
 
         // 마지막으로 적용한 프리셋을 기억한다(목록·재적용 화면 표시용).
@@ -309,9 +353,12 @@ async function provisionMall(mallId, presetKey, opts = {}) {
     /*
      * 홈 섹션을 교체했으면 반드시 발행한다. 안 하면 옛 스냅샷이 계속 렌더된다.
      * (새로 만든 페이지는 리비전이 없어 라이브 폴백으로 뜨지만, 발행해 두면 상태가 명확하다)
+     *
+     * 히어로 layout 만 바꾼 경우도 발행해야 한다 — 프론트는 발행 스냅샷을 우선 읽으므로
+     * page_section 만 고치면 화면이 그대로다(테마를 바꿨는데 안 바뀌는 것처럼 보인다).
      */
     let revisionNo = null;
-    if (includeHome && home.pageId) {
+    if ((includeHome || heroSynced) && home.pageId) {
         revisionNo = await pageBuilderService.publish(home.pageId, opts.actor || 'provisioner');
     }
 
@@ -320,7 +367,7 @@ async function provisionMall(mallId, presetKey, opts = {}) {
     themeData.invalidate(id);
     navigationService.invalidateContentGate(id);
 
-    return { preset, menuMode, created: mode === 'create', homeReplaced: home.replaced, revisionNo };
+    return { preset, menuMode, created: mode === 'create', homeReplaced: home.replaced, heroSynced, revisionNo };
 }
 
 /**
@@ -353,8 +400,8 @@ async function applyHomeBundle(mallId, bundleKey, opts = {}) {
     if (bundle.sections.some((s) => s.type === 'promotion_banner')) {
         const [rows] = await pool.query(`
             SELECT group_key FROM banners
-             WHERE is_active = 1 AND group_key IS NOT NULL AND group_key <> ''
-             GROUP BY group_key ORDER BY MIN(display_order) ASC, group_key ASC LIMIT 1`);
+             WHERE is_active = 1 AND mall_id = ? AND group_key IS NOT NULL AND group_key <> ''
+             GROUP BY group_key ORDER BY MIN(display_order) ASC, group_key ASC LIMIT 1`, [id]);
         bannerGroupKey = rows.length ? rows[0].group_key : null;
     }
 

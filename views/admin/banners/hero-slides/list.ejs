@@ -8,8 +8,16 @@
    */
   const isShowcase = mode === 'product_showcase';
   const isPreviewingInactive = mode !== activeVariant;
-  // theme_hero(페이지 빌더 히어로)를 쓰는 몰은 hero_variant 방식 전환이 프론트에 영향을 주지 않는다.
+  // theme_hero(페이지 빌더 히어로)를 쓰는 몰은 hero_variant 가 아니라 섹션의 layout 이 방식을 정한다.
   const _usesThemeHero = !!locals.usesThemeHero;
+  const _themeLayout = locals.themeLayout || null;
+  // 테마 번호·이름·데이터 소스. 몰 생성 시 고른 테마가 그대로 여기에 대응한다.
+  const THEME_INFO = {
+    showcase:  { no: 1, name: '상품 배너 슬라이드쇼', src: '아래 상품 쇼케이스 슬라이드' },
+    banner:    { no: 2, name: '일반 배너 슬라이드쇼', src: '아래 이미지 배너' },
+    editorial: { no: 3, name: '에디토리얼(풀블리드)', src: '아래 상품 쇼케이스 슬라이드' },
+  };
+  const _theme = _themeLayout ? THEME_INFO[_themeLayout] : null;
   const MODES = [
     {
       key: 'product_showcase',
@@ -79,13 +87,20 @@
 </form>
 
 <% if (_usesThemeHero) { %>
-<!-- 페이지 빌더 히어로(theme_hero) 사용 몰: hero_variant 방식 전환은 프론트에 영향이 없으므로 숨긴다. -->
+<!-- theme_hero 몰: 방식은 몰 생성 시 고른 테마(섹션 config.layout)가 정한다. 여기선 콘텐츠만 편집한다. -->
 <div class="mb-8 flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-    <i class="bi bi-info-circle text-blue-600 mt-0.5"></i>
+    <i class="bi bi-palette text-blue-600 mt-0.5"></i>
     <p class="text-sm text-blue-900">
-        이 몰의 홈은 <span class="font-semibold">페이지 빌더 히어로</span>를 사용합니다.
-        아래 <span class="font-semibold">상품 쇼케이스 슬라이드가 그대로 홈 상단에 노출</span>됩니다.
-        <span class="block mt-0.5 text-xs text-blue-700">이미지 배너 슬라이드(전 몰 공용) 방식은 이 몰에 적용되지 않습니다.</span>
+        <% if (_theme) { %>
+            이 몰은 <span class="font-semibold">테마 <%= _theme.no %> — <%= _theme.name %></span> 를 사용합니다.
+            <span class="font-semibold"><%= _theme.src %></span>가 그대로 홈 상단에 노출됩니다.
+        <% } else { %>
+            이 몰의 홈은 <span class="font-semibold">페이지 빌더 히어로</span>를 사용합니다.
+        <% } %>
+        <span class="block mt-0.5 text-xs text-blue-700">
+            테마 변경은 <a href="/admin/page-builder" class="underline font-medium">페이지 빌더</a>의 히어로 섹션 설정에서 합니다.
+            여기서는 해당 테마가 쓰는 콘텐츠만 편집합니다.
+        </span>
     </p>
 </div>
 <% } else { %>
@@ -153,7 +168,10 @@
     <%
       function renderSlideCard(slide) {
         const img = slide.image_url || slide.main_image || '';
-        const title = slide.headline || slide.product_name || '(상품 미연결)';
+        // 상품배너/일반배너는 product_id 유무로 갈린다. 일반배너를 '(상품 미연결)'로 부르면
+        // 잘못 만든 것처럼 보이므로, 종류로 표기한다.
+        const isProductKind = !!slide.product_id;
+        const title = slide.headline || slide.product_name || (isProductKind ? '(삭제된 상품)' : '(문구 없음)');
     %>
         <div class="bg-white overflow-hidden shadow-sm rounded-lg flex flex-col h-full border border-gray-100">
             <div class="w-full h-40 bg-gray-50 flex items-center justify-center overflow-hidden">
@@ -166,23 +184,27 @@
             <div class="p-5 flex-1 flex flex-col">
                 <div class="flex items-center justify-between mb-2 gap-2">
                     <h5 class="text-base font-bold text-gray-900 truncate"><%= title %></h5>
-                    <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full <%= slide.slot === 'FEATURE' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' %>">
+                    <span class="shrink-0 px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full <%= slide.slot === 'FEATURE' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' %>">
                         <%= slide.slot === 'FEATURE' ? '우측 카드' : '중앙 슬라이더' %>
+                    </span>
+                </div>
+                <div class="mb-2">
+                    <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full <%= isProductKind ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700' %>">
+                        <%= isProductKind ? '상품배너' : '일반배너' %>
                     </span>
                 </div>
                 <p class="text-xs text-gray-500 mb-1">
                     <span class="font-semibold text-gray-700">라벨:</span> <%= slide.label || '없음' %>
                 </p>
-                <p class="text-xs text-gray-500 mb-1">
-                    <span class="font-semibold text-gray-700">연결 상품:</span>
-                    <% if (slide.product_id) { %>
+                <% if (isProductKind) { %>
+                    <p class="text-xs text-gray-500 mb-1">
+                        <span class="font-semibold text-gray-700">연결 상품:</span>
                         #<%= slide.product_id %> <%= slide.product_name || '(삭제된 상품)' %>
-                    <% } else { %>
-                        미연결
-                    <% } %>
-                </p>
+                    </p>
+                <% } %>
                 <p class="text-xs text-gray-500 mb-3 truncate">
-                    <span class="font-semibold text-gray-700">링크:</span> <%= slide.link_url || '상품 상세(자동)' %>
+                    <span class="font-semibold text-gray-700">링크:</span>
+                    <%= slide.link_url || (isProductKind ? '상품 상세(자동)' : '없음') %>
                 </p>
                 <div class="mt-auto flex justify-between items-center">
                     <div class="flex items-center gap-2">

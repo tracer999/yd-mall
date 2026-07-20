@@ -128,7 +128,7 @@ async function getForPath(reqPath, { mallId = 1, hasUser = false } = {}) {
     const showcases = [];
 
     // 1) 배너형 — group_key='menu:{feature_code}'
-    const banners = await bannerService.getByGroup(`menu:${menuCode}`, { limit: 12 });
+    const banners = await bannerService.getByGroup(`menu:${menuCode}`, { limit: 12, mallId });
     if (banners.length > 0) {
         showcases.push({
             kind: 'banner',

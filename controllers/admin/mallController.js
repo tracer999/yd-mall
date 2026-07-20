@@ -315,9 +315,16 @@ exports.postProvision = async (req, res) => {
         });
 
         const menuLabel = (presets.menuModeList().find((m) => m.key === result.menuMode) || {}).label || result.menuMode;
-        const note = result.homeReplaced
-            ? `테마 '${result.preset.label}' · 메뉴 '${menuLabel}' 적용 완료 — 홈 섹션을 교체하고 발행했습니다(rev.${result.revisionNo}).`
-            : `테마 '${result.preset.label}' · 메뉴 '${menuLabel}' 적용 완료 — 내비·메뉴·테마를 되돌렸습니다(홈 섹션은 유지).`;
+        const base = `테마 '${result.preset.label}' · 메뉴 '${menuLabel}' 적용 완료`;
+        let note;
+        if (result.homeReplaced) {
+            note = `${base} — 홈 섹션을 교체하고 발행했습니다(rev.${result.revisionNo}).`;
+        } else if (result.heroSynced) {
+            // 홈은 지켰지만 히어로 표현은 테마를 따라 바뀌었다 — 안 알리면 "왜 상단만 바뀌었지"가 된다.
+            note = `${base} — 홈 섹션은 유지하고 메인 슬라이더 방식만 테마에 맞춰 바꾼 뒤 발행했습니다(rev.${result.revisionNo}).`;
+        } else {
+            note = `${base} — 내비·메뉴·테마를 되돌렸습니다(홈 섹션은 유지).`;
+        }
         // 페이지 빌더 이지 모드에서 왔으면 빌더로 되돌린다.
         const dest = req.body.return_to === 'page-builder' ? '/admin/page-builder' : `/admin/malls/${id}`;
         res.redirect(`${dest}?notice=` + encodeURIComponent(note));
