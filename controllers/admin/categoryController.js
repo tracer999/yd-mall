@@ -149,6 +149,24 @@ exports.getList = async (req, res) => {
             }
         }
 
+        /*
+         * 아코디언 화살표(">")는 **이 화면에 실제로 남아 있는 자식** 기준이어야 한다.
+         * childCount 는 글로벌 카탈로그 기준이라, 위 필터로 자식이 전부 빠진 부모도 화살표가
+         * 남아 펼쳐도 아무것도 안 나오는 상태가 됐다. → 필터 이후 집합으로 다시 센다.
+         * (삭제 차단은 여전히 childCount 기준 — 서버 postDelete 의 실제 자식 수와 맞춰야 한다.)
+         */
+        for (const type of TYPES) {
+            if (!byType[type]) continue;
+            const visibleChildCountBy = new Map();
+            for (const n of byType[type]) {
+                if (!n.parent_id) continue;
+                visibleChildCountBy.set(n.parent_id, (visibleChildCountBy.get(n.parent_id) || 0) + 1);
+            }
+            byType[type] = byType[type].map(n => Object.assign({}, n, {
+                visibleChildCount: visibleChildCountBy.get(n.id) || 0,
+            }));
+        }
+
         const nextDisplayOrder = {};
         for (const type of TYPES) {
             const rows = categories.filter(c => c.type === type);

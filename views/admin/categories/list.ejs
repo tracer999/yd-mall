@@ -154,7 +154,8 @@ const toJs = (v) => JSON.stringify(v)
 
                                 <td class="px-4 py-4 whitespace-nowrap">
                                     <div class="flex items-center" style="padding-left: <%= indent %>px">
-                                        <% if (category.childCount > 0) { %>
+                                        <%# 화살표는 현재 몰에 실제로 보이는 하위가 있을 때만 (visibleChildCount) %>
+                                        <% if (category.visibleChildCount > 0) { %>
                                             <button type="button" class="cat-toggle flex-shrink-0 mr-1 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700"
                                                 data-cat-id="<%= category.id %>" aria-expanded="false" title="하위 카테고리 펼치기/접기">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="cat-chevron h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -168,8 +169,8 @@ const toJs = (v) => JSON.stringify(v)
                                         <% } %>
                                         <input form="<%= formId %>" type="text" name="name" value="<%= category.name %>" class="flex-1 min-w-[120px]">
                                         <span class="ml-2 text-[11px] text-gray-400 whitespace-nowrap">D<%= category._depth %></span>
-                                        <% if (category.childCount > 0) { %>
-                                            <span class="ml-1 text-[11px] text-gray-400 whitespace-nowrap">하위 <%= category.childCount %></span>
+                                        <% if (category.visibleChildCount > 0) { %>
+                                            <span class="ml-1 text-[11px] text-gray-400 whitespace-nowrap">하위 <%= category.visibleChildCount %></span>
                                         <% } %>
                                     </div>
                                 </td>
