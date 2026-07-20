@@ -1,19 +1,26 @@
 <%
   /*
-   * 테마 히어로 래퍼 — config.layout 으로 표현을 가른다.
-   * locals: layout, mainSlides, feature(FEATURE 슬라이드 or null)
+   * 테마 히어로 래퍼 — 축이 둘이고 서로 독립이다(리졸버 theme_hero.js 참고).
    *
-   * mainSlides 의 출처는 layout 마다 다르다(리졸버 theme_hero.js 참고):
-   *   showcase  → hero_slide(상품 연결). hero_showcase 재사용 (상품 쇼케이스)
-   *   banner    → banners(banner_type='MAIN', 몰 스코프). hero_banner 재사용 (일반 이미지 배너)
-   *   editorial → hero_slide. 전용 풀블리드 마크업 (오버레이 텍스트 + 마퀴)
+   *   layout(배치·테마)  split_feature | full_width | full_bleed
+   *   source(콘텐츠)     product_showcase | full_banner
+   *
+   * locals: layout, source, mainSlides, feature(우측 카드 or null)
+   *
+   * 배치는 "어디에 어떻게 놓을지"만, 콘텐츠는 "무엇을 넣을지"만 정한다. 그래서 6가지 조합이
+   * 모두 성립한다 — 테마를 바꿔도 등록해 둔 배너·상품이 사라지지 않는다.
    *
    * Swiper 초기화(.mySwiperDesktop/.mySwiperMobile)는 user/index.ejs 의 initHeroSwiper 가 담당.
    */
-  var _layout = (typeof layout !== 'undefined' && layout) ? layout : 'banner';
+  var _LEGACY = { showcase: 'split_feature', banner: 'full_width', editorial: 'full_bleed' };
+  var _rawLayout = (typeof layout !== 'undefined' && layout) ? layout : 'full_width';
+  var _layout = _LEGACY[_rawLayout] || _rawLayout;
+  var _source = (typeof source !== 'undefined' && source) ? source : 'full_banner';
+  var _isProduct = _source === 'product_showcase';
   var _slides = (typeof mainSlides !== 'undefined' && mainSlides) ? mainSlides : [];
+  var _feature = (typeof feature !== 'undefined') ? feature : null;
 
-  // hero_slide 한 행을 클릭 링크로 변환
+  // 슬라이드 한 행을 클릭 링크로 — 상품 슬라이드와 배너 행 양쪽을 받는다.
   var _href = function (s) {
     if (s.link_url) return s.link_url;
     if (s.slug && String(s.slug).trim()) return '/products/' + encodeURIComponent(s.slug);
@@ -21,33 +28,67 @@
     return '#';
   };
   var _img = function (s) { return s.image_url || s.main_image || '/images/placeholder.png'; };
+  // 풀블리드는 상품/배너 어느 쪽이든 "제목 + 작은 라벨"만 쓴다. 필드명이 달라 여기서 흡수한다.
+  var _title = function (s) { return s.headline || s.overlay_title || s.product_name || ''; };
+  var _eyebrow = function (s) { return s.label || s.overlay_subtitle || ''; };
+
+  // 이미지 배너 행 → hero_banner 가 기대하는 모양
+  var _toBanners = function (rows) {
+    return rows.map(function (b) {
+      return {
+        media: null,
+        image_url: b.image_url,
+        mobile_image_url: b.mobile_image_url || b.image_url,
+        title: b.title || '',
+        link_url: b.link_url || '',
+        overlay_title: b.overlay_title || '',
+        overlay_subtitle: b.overlay_subtitle || '',
+        overlay_button_text: b.overlay_button_text || '',
+        overlay_button_color: b.overlay_button_color || '',
+        overlay_align: b.overlay_align || 'LEFT'
+      };
+    });
+  };
 %>
 
-<% if (_layout === 'showcase') { %>
-  <%- include('./hero_showcase', { mainSlides: _slides, feature: (typeof feature !== 'undefined' ? feature : null) }) %>
+<% if (_layout === 'split_feature') { %>
+  <%# 테마1 — 좌 히어로 + 우 상품 카드. 좌측 내용만 콘텐츠 종류에 따라 갈린다. %>
+  <section class="bg-white">
+    <div class="max-w-[1400px] mx-auto px-4 py-4">
+      <div class="flex gap-3">
+        <div class="flex-1 min-w-0">
+          <% if (_isProduct) { %>
+            <%- include('./hero_showcase_main', { mainSlides: _slides }) %>
+          <% } else { %>
+            <% var _b = _toBanners(_slides); %>
+            <%- include('./hero_banner', { heroBanners: _b, mobileHeroBanners: _b }) %>
+          <% } %>
+        </div>
+        <%- include('./hero_feature_card', { feature: _feature }) %>
+      </div>
+    </div>
+  </section>
 
-<% } else if (_layout === 'editorial') { %>
-  <%
-    // 에디토리얼: 풀블리드 슬라이드 + 오버레이 텍스트 + 하단 마퀴
-    var _first = _slides[0] || {};
-  %>
+<% } else if (_layout === 'full_bleed') { %>
+  <%# 테마3 — 풀블리드 슬라이드 + 오버레이 텍스트 + 하단 마퀴. 상품·배너 어느 쪽이든 같은 마크업. %>
   <section class="yd-ed-hero relative w-full overflow-hidden bg-black">
     <div class="swiper mySwiperDesktop yd-ed-swiper">
       <div class="swiper-wrapper">
         <% _slides.forEach(function (s, _i) { %>
           <div class="swiper-slide relative">
             <div class="yd-ed-stage relative w-full">
+              <%# 배너 행에는 영상 컬럼이 없다 — media 를 null 로 줘서 이미지로 렌더한다. %>
               <%- include('./hero_media', {
-                    media: s, img: _img(s), alt: (s.headline || ''),
+                    media: (_isProduct ? s : null), img: _img(s), alt: _title(s),
                     cls: 'absolute inset-0 w-full h-full object-cover', mobile: false, eager: _i === 0 }) %>
               <div class="yd-ed-scrim absolute inset-0"></div>
               <div class="relative z-10 h-full flex items-end">
                 <div class="w-full max-w-[80rem] mx-auto px-6 lg:px-10 pb-20 lg:pb-28">
                   <div class="max-w-2xl">
-                    <% if (s.label) { %>
-                      <span class="yd-ed-eyebrow block text-white/80 text-base md:text-xl tracking-[0.25em] uppercase mb-4"><%= s.label %></span>
+                    <% if (_eyebrow(s)) { %>
+                      <span class="yd-ed-eyebrow block text-white/80 text-base md:text-xl tracking-[0.25em] uppercase mb-4"><%= _eyebrow(s) %></span>
                     <% } %>
-                    <h2 class="yd-ed-title text-white font-normal leading-[1.05]"><%= s.headline || s.product_name || '' %></h2>
+                    <h2 class="yd-ed-title text-white font-normal leading-[1.05]"><%= _title(s) %></h2>
                     <a href="<%= _href(s) %>" class="yd-ed-cta mt-8 inline-flex items-center gap-2 px-8 py-3.5 text-sm font-semibold tracking-wide">
                       <span>자세히 보기</span>
                       <i class="bi bi-arrow-right"></i>
@@ -148,41 +189,15 @@
   </style>
 
 <% } else { %>
-  <%
-    /* banner(테마2): 리졸버가 banners(banner_type='MAIN', 몰 스코프) 행을 그대로 넘긴다.
-       overlay_* 는 관리자가 배너마다 직접 입력한 값이므로 합성하지 않고 그대로 쓴다.
-       banners 에는 영상 컬럼이 없어 media 는 항상 null(= hero_media 가 이미지로 렌더). */
-    var _banners = _slides.map(function (b) {
-      return {
-        media: null,
-        image_url: b.image_url,
-        mobile_image_url: b.mobile_image_url || b.image_url,
-        title: b.title || '',
-        link_url: b.link_url || '',
-        overlay_title: b.overlay_title || '',
-        overlay_subtitle: b.overlay_subtitle || '',
-        overlay_button_text: b.overlay_button_text || '',
-        overlay_button_color: b.overlay_button_color || '',
-        overlay_align: b.overlay_align || 'LEFT'
-      };
-    });
-  %>
-  <%
-    var _feature = (typeof feature !== 'undefined') ? feature : null;
-  %>
-  <% if (_feature) { %>
-    <%# 캡쳐 구조: 배너 슬라이더 + 우측 상품 카드. 카드가 없으면 예전처럼 전체폭으로 둔다. %>
+  <%# 테마2 — 전체폭. 우측 카드가 없는 배치라 콘텐츠만 갈아 끼운다. %>
+  <% if (_isProduct) { %>
     <section class="bg-white">
       <div class="max-w-[1400px] mx-auto px-4 py-4">
-        <div class="flex gap-3">
-          <div class="flex-1 min-w-0">
-            <%- include('./hero_banner', { heroBanners: _banners, mobileHeroBanners: _banners }) %>
-          </div>
-          <%- include('./hero_feature_card', { feature: _feature }) %>
-        </div>
+        <%- include('./hero_showcase_main', { mainSlides: _slides }) %>
       </div>
     </section>
   <% } else { %>
-    <%- include('./hero_banner', { heroBanners: _banners, mobileHeroBanners: _banners }) %>
+    <% var _b2 = _toBanners(_slides); %>
+    <%- include('./hero_banner', { heroBanners: _b2, mobileHeroBanners: _b2 }) %>
   <% } %>
 <% } %>

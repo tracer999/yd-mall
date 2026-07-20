@@ -22,18 +22,20 @@ async function resolve({ shared, config, locals }) {
     const vis = visibilityClause(shared.hasUser);
     const mallId = shared.mallId || 1;
 
-    // 1) 이 몰에 상품이 걸린 브랜드만 추린다(글로벌 브랜드 × 이 몰 상품).
+    // 1) 이 몰에 상품이 걸린 브랜드만 추린다(브랜드 × 이 몰 상품).
+    //    브랜드 범위는 글로벌(0) + 이 몰 소유분 — 샘플 시더로 찍어낸 몰은 자기 브랜드를 갖는다.
+    //    글로벌만 보면 그런 몰에서 "상품이 등록된 브랜드 카테고리가 없습니다"로 섹션이 사라진다.
     const [rows] = await pool.query(`
         SELECT c.id, c.name, c.logo_image_path, COUNT(p.id) AS product_count
         FROM categories c
         JOIN products p
                ON p.brand_category_id = c.id AND p.mall_id = ? AND ${P_STATUS} AND ${vis}
-        WHERE c.type = 'BRAND' AND c.is_active = 1 AND c.mall_id = ?
+        WHERE c.type = 'BRAND' AND c.is_active = 1 AND c.mall_id IN (?, ?)
         GROUP BY c.id, c.name, c.logo_image_path
         HAVING product_count > 0
         ORDER BY c.display_order ASC, c.id ASC
         LIMIT ?
-    `, [mallId, GLOBAL_CATEGORY_MALL_ID, brandLimit]);
+    `, [mallId, GLOBAL_CATEGORY_MALL_ID, mallId, brandLimit]);
 
     if (!rows || rows.length === 0) return null;
 

@@ -1,0 +1,333 @@
+<%
+  /* 외부몰 연동 · 가져온 상품 상세 (공급처 원본 스냅샷)
+     detailHtmlSafe / noticeHtmlSafe 는 컨트롤러에서 htmlSanitizer 를 통과한 값이다. */
+  const p = product;
+  const won = (v) => (v == null ? '-' : Number(v).toLocaleString('ko-KR') + '원');
+  const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR') : '-');
+  const yn = (v) => (v == null ? '미확인' : (v ? '예' : '아니오'));
+  const dash = (v) => (v == null || v === '' ? '-' : v);
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <a href="/admin/sourcing/staging" class="text-sm text-gray-500 hover:text-indigo-600">
+      <i class="bi bi-arrow-left"></i> 가져온 상품 목록
+    </a>
+    <h1 class="mt-2 text-2xl font-bold text-gray-900"><%= p.title %></h1>
+    <p class="mt-1 text-sm text-gray-500">
+      <%= supplierLabel[p.supplier] || p.supplier %> · 상품번호 <%= p.supplier_item_no %>
+      <% if (p.source_url) { %>
+        · <a href="<%= p.source_url %>" target="_blank" rel="noopener" class="text-indigo-600 hover:underline">공급처에서 보기</a>
+      <% } %>
+    </p>
+  </div>
+
+  <% if (msg) { %>
+    <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800"><%= msg %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800"><%= error %></div>
+  <% } %>
+
+  <% if (p.resale_allowed === 0) { %>
+    <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+      <i class="bi bi-exclamation-triangle mr-1"></i>
+      <b>공급처가 오픈마켓 재판매를 금지한 상품입니다.</b> 스마트스토어 등록 시 제재 대상이 될 수 있습니다.
+      <% if (p.resale_msg) { %><div class="mt-1 text-xs whitespace-pre-line"><%= p.resale_msg %></div><% } %>
+    </div>
+  <% } %>
+  <% if (p.import_status === 'FAILED') { %>
+    <div class="mb-6 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+      <i class="bi bi-x-circle mr-1"></i> 상세 수집에 실패한 상품입니다: <%= p.last_error || '원인 미상' %>
+    </div>
+  <% } %>
+
+  <!-- 우리 몰 상품으로 등록 -->
+  <div class="mb-6 bg-white shadow-sm rounded-lg border-2 <%= p.mall_product_id ? 'border-gray-200' : 'border-emerald-200' %>">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h2 class="text-lg font-bold text-gray-800">우리 몰 상품으로 등록</h2>
+      <p class="mt-1 text-xs text-gray-500">
+        이 공급처 상품을 <b>우리 몰에서 파는 상품</b>으로 만듭니다. (스마트스토어 등록과는 별개입니다)
+      </p>
+    </div>
+
+    <% if (p.mall_product_id) { %>
+      <div class="p-6 text-sm">
+        <div class="rounded-md bg-gray-50 border border-gray-200 px-4 py-3 text-gray-700">
+          <i class="bi bi-check-circle text-green-600 mr-1"></i>
+          이미 등록되었습니다 — 상품번호 <b><%= p.mall_product_id %></b>
+          <span class="text-xs text-gray-500">(<%= dt(p.published_at) %><%= p.published_by ? ' · ' + p.published_by : '' %>)</span>
+          <a href="/admin/products/edit/<%= p.mall_product_id %>" class="ml-2 text-indigo-600 hover:underline">상품 수정으로 이동</a>
+        </div>
+      </div>
+    <% } else { %>
+      <form method="post" action="/admin/sourcing/staging/<%= p.id %>/publish" class="p-6 space-y-4"
+            onsubmit="if(!this.category_id.value){alert('우리 몰 카테고리를 선택하세요.');return false;}">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-sm text-gray-600 mb-1">우리 몰 카테고리 <span class="text-red-500">*</span></label>
+            <%- include('_category_picker', { tree: categoryTree, pickerId: 'catOne', fieldName: 'category_id', compact: false }) %>
+            <p class="mt-1 text-xs text-gray-400">
+              공급처 분류(<%= dash(p.category_name) %>)와 우리 몰 분류 체계가 다르므로 직접 골라야 합니다.
+            </p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">마진율(%)</label>
+            <input type="number" step="0.01" min="0" name="margin_rate"
+                   value="<%= defaultMargin != null ? defaultMargin : '' %>"
+                   placeholder="<%= defaultMargin != null ? '' : '기본값 미설정' %>"
+                   class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+            <p class="mt-1 text-xs text-gray-400">
+              비우면 몰 기본 마진율을 사용합니다.
+              <% if (defaultMargin == null) { %>
+                <span class="text-amber-600">기본값이 없으니 직접 입력하세요.</span>
+              <% } %>
+            </p>
+          </div>
+        </div>
+
+        <!-- 판매가 미리보기 -->
+        <div class="rounded-md bg-gray-50 border border-gray-200 px-4 py-3 text-sm">
+          <span class="text-gray-500">공급가</span>
+          <b class="ml-1 text-gray-900"><%= won(p.supply_price) %></b>
+          <span class="mx-2 text-gray-300">→</span>
+          <span class="text-gray-500">예상 판매가</span>
+          <b class="ml-1 text-indigo-700" id="price-preview" data-supply="<%= Number(p.supply_price) || 0 %>">-</b>
+          <span class="ml-2 text-xs text-gray-400">(10원 단위 반올림<%= variants.length ? ', 옵션별 추가금은 각 SKU 에 반영' : '' %>)</span>
+        </div>
+
+        <% if (p.resale_allowed === 0) { %>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+            <i class="bi bi-exclamation-triangle mr-1"></i>
+            공급처가 <b>온라인 재판매를 금지</b>한 상품입니다. 우리 몰 판매도 문제가 될 수 있으니 확인 후 진행하세요.
+          </div>
+        <% } %>
+
+        <div class="flex items-center gap-3">
+          <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
+            <i class="bi bi-box-arrow-in-down"></i> 우리 몰 상품으로 등록
+          </button>
+          <span class="text-xs text-gray-500">
+            등록 시 <b>판매중지(OFF)</b> 상태로 만들어집니다 — 내용 확인 후 상품 관리에서 판매를 켜세요.
+            <% if (variants.length) { %> 옵션 <%= variants.filter((v) => !v.is_hidden && v.available).length %>개가 SKU 로 생성됩니다.<% } %>
+          </span>
+        </div>
+      </form>
+    <% } %>
+  </div>
+
+  <!-- 액션 -->
+  <div class="mb-6 flex flex-wrap gap-2">
+    <form method="post" action="/admin/sourcing/staging/<%= p.id %>/refresh">
+      <button type="submit"
+        class="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+        <i class="bi bi-arrow-repeat"></i> 공급처에서 다시 가져오기
+      </button>
+    </form>
+    <form method="post" action="/admin/sourcing/staging/<%= p.id %>/delete"
+          onsubmit="return confirm('이 상품을 중간 테이블에서 삭제할까요? (공급처 원본에는 영향 없음)');">
+      <button type="submit"
+        class="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+        <i class="bi bi-trash"></i> 삭제
+      </button>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- 좌: 기본 정보 -->
+    <div class="lg:col-span-2 space-y-6">
+
+      <div class="bg-white shadow-sm rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-bold text-gray-800">기본 정보</h2>
+        </div>
+        <dl class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+          <div><dt class="text-gray-500">공급가</dt><dd class="mt-0.5 font-bold text-gray-900 text-base"><%= won(p.supply_price) %></dd></div>
+          <div><dt class="text-gray-500">재고</dt><dd class="mt-0.5 text-gray-900"><%= p.inventory_qty != null ? p.inventory_qty.toLocaleString('ko-KR') : '-' %></dd></div>
+          <div><dt class="text-gray-500">최소구매수량(MOQ)</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.moq) %></dd></div>
+          <div><dt class="text-gray-500">구매단위</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.unit_qty) %></dd></div>
+          <div><dt class="text-gray-500">공급처 상태</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.status_text) %></dd></div>
+          <div><dt class="text-gray-500">과세 구분</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.tax_type) %></dd></div>
+          <div><dt class="text-gray-500">공급처 카테고리</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.category_name) %> <span class="text-xs text-gray-400"><%= dash(p.category_code) %></span></dd></div>
+          <div><dt class="text-gray-500">상품정보 고시 유형</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.info_duty_type) %></dd></div>
+          <div><dt class="text-gray-500">원산지</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.country) %></dd></div>
+          <div><dt class="text-gray-500">제조사</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.manufacturer) %></dd></div>
+          <div><dt class="text-gray-500">모델명</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.model_name) %></dd></div>
+          <div><dt class="text-gray-500">재판매 허용</dt><dd class="mt-0.5 <%= p.resale_allowed === 0 ? 'text-amber-700 font-semibold' : 'text-gray-900' %>"><%= yn(p.resale_allowed) %></dd></div>
+          <div><dt class="text-gray-500">성인용품</dt><dd class="mt-0.5 text-gray-900"><%= p.adult_only ? '예' : '아니오' %></dd></div>
+          <div><dt class="text-gray-500">해외 발송</dt><dd class="mt-0.5 text-gray-900"><%= p.from_oversea ? '예' : '아니오' %></dd></div>
+        </dl>
+      </div>
+
+      <!-- 옵션 -->
+      <div class="bg-white shadow-sm rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 class="text-lg font-bold text-gray-800">옵션 (SKU) <span class="text-indigo-600"><%= variants.length %></span>건</h2>
+          <span class="text-xs text-gray-400">옵션 유형: <%= dash(p.option_type) %></span>
+        </div>
+        <% if (!variants.length) { %>
+          <div class="p-8 text-center text-sm text-gray-500">단일 상품입니다(옵션 없음).</div>
+        <% } else { %>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="bg-gray-50 text-gray-600">
+                <tr>
+                  <th class="px-4 py-3 w-20 text-left">코드</th>
+                  <th class="px-4 py-3 text-left">옵션명</th>
+                  <th class="px-4 py-3 w-28 text-right">추가금</th>
+                  <th class="px-4 py-3 w-28 text-right">합계 공급가</th>
+                  <th class="px-4 py-3 w-20 text-right">재고</th>
+                  <th class="px-4 py-3 w-24 text-center">상태</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <% variants.forEach((v) => { %>
+                  <tr class="<%= (v.is_hidden || !v.available) ? 'bg-gray-50 text-gray-400' : 'hover:bg-gray-50' %>">
+                    <td class="px-4 py-2.5 font-mono text-xs"><%= v.opt_code %></td>
+                    <td class="px-4 py-2.5"><%= v.opt_name %></td>
+                    <td class="px-4 py-2.5 text-right"><%= Number(v.extra_price) ? '+' + won(v.extra_price) : '-' %></td>
+                    <td class="px-4 py-2.5 text-right font-medium">
+                      <%= won(Number(p.supply_price || 0) + Number(v.extra_price || 0)) %>
+                    </td>
+                    <td class="px-4 py-2.5 text-right"><%= v.qty != null ? v.qty.toLocaleString('ko-KR') : '-' %></td>
+                    <td class="px-4 py-2.5 text-center">
+                      <% if (v.is_hidden) { %>
+                        <span class="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600">숨김</span>
+                      <% } else if (!v.available) { %>
+                        <span class="rounded bg-red-50 px-2 py-0.5 text-xs text-red-600">판매불가</span>
+                      <% } else { %>
+                        <span class="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700">판매중</span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+          <div class="px-6 py-3 border-t border-gray-200 text-xs text-gray-500">
+            '추가금'은 기본 공급가에 더해지는 금액입니다(공급처 원본 기준). 판매가 산정은 등록 단계에서 마진 정책을 적용합니다.
+          </div>
+        <% } %>
+      </div>
+
+      <!-- 상세 설명 -->
+      <div class="bg-white shadow-sm rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-bold text-gray-800">공급처 상세 설명</h2>
+          <p class="mt-1 text-xs text-gray-500">외부 HTML 이라 위험 태그를 제거한 뒤 표시합니다(원본은 raw_json 에 보존).</p>
+        </div>
+        <div class="p-6">
+          <% if (!detailHtmlSafe) { %>
+            <p class="text-sm text-gray-500">상세 설명이 없습니다.</p>
+          <% } else { %>
+            <div class="prose prose-sm max-w-none overflow-x-auto"><%- detailHtmlSafe %></div>
+          <% } %>
+        </div>
+      </div>
+
+      <% if (noticeHtmlSafe) { %>
+        <div class="bg-white shadow-sm rounded-lg">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-bold text-gray-800">공급처 공지/안내</h2>
+          </div>
+          <div class="p-6"><div class="prose prose-sm max-w-none overflow-x-auto"><%- noticeHtmlSafe %></div></div>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- 우: 이미지 · 배송 · 판매자 · 수집 -->
+    <div class="space-y-6">
+
+      <div class="bg-white shadow-sm rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-sm font-bold text-gray-800">대표 이미지</h2>
+        </div>
+        <div class="p-4">
+          <% if (p.thumb_url) { %>
+            <img src="<%= p.thumb_url %>" alt="" class="w-full rounded border border-gray-200">
+          <% } else { %>
+            <div class="aspect-square rounded bg-gray-100"></div>
+          <% } %>
+        </div>
+        <% if (images.length) { %>
+          <div class="px-4 pb-4">
+            <div class="mb-2 text-xs text-gray-500">상세 이미지 <%= images.length %>장</div>
+            <div class="grid grid-cols-3 gap-2">
+              <% images.slice(0, 9).forEach((src) => { %>
+                <a href="<%= src %>" target="_blank" rel="noopener">
+                  <img src="<%= src %>" alt="" class="aspect-square w-full rounded object-cover border border-gray-200" loading="lazy">
+                </a>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="bg-white shadow-sm rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200"><h2 class="text-sm font-bold text-gray-800">배송</h2></div>
+        <dl class="p-6 space-y-3 text-sm">
+          <div><dt class="text-gray-500">배송 방법</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.deli_method) %></dd></div>
+          <div><dt class="text-gray-500">배송비 부담</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.deli_pay) %></dd></div>
+          <div><dt class="text-gray-500">요금 방식</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.deli_fee_type) %></dd></div>
+          <div><dt class="text-gray-500">요금표(원문)</dt><dd class="mt-0.5 font-mono text-xs text-gray-700"><%= dash(p.deli_fee_table) %></dd></div>
+          <div><dt class="text-gray-500">제주 / 도서산간 추가</dt><dd class="mt-0.5 text-gray-900"><%= won(p.deli_fee_jeju) %> / <%= won(p.deli_fee_islands) %></dd></div>
+        </dl>
+      </div>
+
+      <div class="bg-white shadow-sm rounded-lg" id="seller-card">
+        <div class="px-6 py-4 border-b border-gray-200"><h2 class="text-sm font-bold text-gray-800">공급 판매자</h2></div>
+        <dl class="p-6 space-y-3 text-sm">
+          <div><dt class="text-gray-500">아이디</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.seller_id) %></dd></div>
+          <div><dt class="text-gray-500">상호</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.seller_nick) %></dd></div>
+          <div><dt class="text-gray-500">사업자명</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.seller_company) %></dd></div>
+        </dl>
+      </div>
+
+      <div class="bg-white shadow-sm rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200"><h2 class="text-sm font-bold text-gray-800">수집 정보</h2></div>
+        <dl class="px-6 pt-4 text-sm">
+          <div><dt class="text-gray-500">우리 몰 등록</dt>
+            <dd class="mt-0.5">
+              <% if (p.mall_product_id) { %>
+                <a href="/admin/products/edit/<%= p.mall_product_id %>" class="text-indigo-600 hover:underline">
+                  상품 #<%= p.mall_product_id %>
+                </a>
+              <% } else { %>
+                <span class="text-gray-400">미등록</span>
+              <% } %>
+            </dd>
+          </div>
+        </dl>
+        <dl class="p-6 space-y-3 text-sm">
+          <div><dt class="text-gray-500">수집 상태</dt><dd class="mt-0.5 text-gray-900"><%= p.import_status %></dd></div>
+          <div><dt class="text-gray-500">가져온 시각</dt><dd class="mt-0.5 text-gray-900"><%= dt(p.imported_at) %></dd></div>
+          <div><dt class="text-gray-500">상세 수집 시각</dt><dd class="mt-0.5 text-gray-900"><%= dt(p.detail_fetched_at) %></dd></div>
+          <div><dt class="text-gray-500">실행자</dt><dd class="mt-0.5 text-gray-900"><%= dash(p.imported_by) %></dd></div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* 판매가 미리보기 — 서버 계산식(10원 단위 반올림)과 동일하게 맞춘다.
+     실제 저장값은 서버가 다시 계산하므로 여기 값은 참고용이다. */
+  (function () {
+    var out = document.getElementById('price-preview');
+    if (!out) return;
+    var supply = Number(out.dataset.supply || 0);
+    var input = document.querySelector('input[name="margin_rate"]');
+
+    function render() {
+      var m = Number(input && input.value !== '' ? input.value : NaN);
+      if (!isFinite(m) || m < 0) { out.textContent = '마진율을 입력하세요'; return; }
+      var p = Math.max(Math.round((supply * (1 + m / 100)) / 10) * 10, 0);
+      out.textContent = p.toLocaleString('ko-KR') + '원';
+    }
+    if (input) input.addEventListener('input', render);
+    render();
+  })();
+</script>

@@ -100,63 +100,73 @@ const CLASSIC_HEADER_BY_MENU_MODE = {
     unified: 'compact_drawer_v1',
 };
 
+/*
+ * 새 몰의 GNB 기본 세트.
+ *
+ * 여기 없는 gnb 메뉴는 applyFeatureMenus 가 is_enabled=0 으로 꺼 둔다(행은 남으므로
+ * 관리자 → 메뉴 관리에서 언제든 다시 켤 수 있다. is_required=1 은 목록과 무관하게 항상 ON).
+ *
+ * EXHIBITION(기획전) · SPECIALTY(전문관) 은 뺐다 — 갓 만든 몰엔 기획전·전문관 콘텐츠가
+ * 없어서 메뉴만 뜨고 눌러 보면 빈 화면이다. 운영자가 콘텐츠를 넣고 직접 켜는 쪽이 맞다.
+ */
 const FEATURE_MENUS = [
     'CATEGORY', 'SHOPPING_DEAL', 'BEST', 'NEW_PRODUCT',
-    'EVENT', 'EXHIBITION', 'BRAND', 'SPECIALTY',
+    'EVENT', 'BRAND',
 ];
 
 const PRESETS = {
-    /* ── 테마 1: 상품 배너 슬라이드쇼 ─────────────────────────────────
-     * 현재 디자인 그대로. 최상단 히어로가 상품 쇼케이스(hero_slide 상품 슬라이드)다.
-     * 신상품·특가를 이미지가 아니라 "상품"으로 크게 돌리고 싶은 몰에 맞는다.
+    /*
+     * ── 테마는 "배치 뼈대"만 정한다 ─────────────────────────────────
+     * 히어로에 무엇이 들어가는지(상품 쇼케이스 / 이미지 배너)는 테마가 아니라
+     * 배너 관리 > 메인 슬라이더에서 고른다(site_settings.hero_variant).
+     * 예전엔 테마가 콘텐츠 종류까지 강제해서, 테마를 바꾸면 등록해 둔 배너·상품이
+     * 통째로 안 보였다. 두 축을 분리한 뒤로는 3×2 조합이 모두 성립한다.
      */
+
+    /* ── 테마 1: 좌 히어로 + 우 상품 카드 ─────────────────────────── */
     theme_product: {
         key: 'theme_product',
-        label: '테마 1 — 상품 배너 슬라이드쇼',
-        summary: '현재 기본 디자인. 최상단에 상품을 크게 돌리는 상품 쇼케이스 히어로가 놓이고, 그 아래 베스트·쇼핑특가·베스트 카테고리·베스트 브랜드 캐러셀이 자동 배치됩니다.',
-        skinLabel: '상품형',
+        label: '테마 1 — 좌 히어로 + 우 상품 카드',
+        summary: '히어로를 두 칸으로 나눠 왼쪽에 큰 슬라이드, 오른쪽에 추천 상품 카드를 세웁니다. 슬라이드 내용(상품/이미지 배너)은 메인 슬라이더에서 고릅니다.',
+        skinLabel: '2단형',
         navigation: CLASSIC_NAV,
         headerLayoutByMenuMode: CLASSIC_HEADER_BY_MENU_MODE,
         featureMenus: FEATURE_MENUS,
         theme: CLASSIC_THEME,
         homeSections: [
-            { type: 'theme_hero', title: null, config: { layout: 'showcase' } },
+            { type: 'theme_hero', title: null, config: { layout: 'split_feature' } },
             ...DEFAULT_CAROUSELS,
             { type: 'recent_product', title: '최근 본 상품' },
             { type: 'kakao_cta', title: null },
         ],
     },
 
-    /* ── 테마 2: 일반 배너 슬라이드쇼 ─────────────────────────────────
-     * 현재 디자인 그대로. 최상단 히어로가 전체폭 이미지 배너 슬라이드다.
-     * 프로모션 이미지를 큼직하게 거는 가장 보편적인 형태.
-     */
+    /* ── 테마 2: 전체폭 히어로 ──────────────────────────────────────── */
     theme_banner: {
         key: 'theme_banner',
-        label: '테마 2 — 일반 배너 슬라이드쇼',
-        summary: '현재 기본 디자인. 최상단에 전체폭 이미지 배너 슬라이드가 놓이고, 그 아래 베스트·쇼핑특가·베스트 카테고리·베스트 브랜드 캐러셀이 자동 배치됩니다.',
-        skinLabel: '배너형',
+        label: '테마 2 — 전체폭 히어로',
+        summary: '히어로를 가로 전체폭 한 칸으로 크게 씁니다. 우측 카드 없이 슬라이드에 집중하는 가장 보편적인 형태입니다. 슬라이드 내용(상품/이미지 배너)은 메인 슬라이더에서 고릅니다.',
+        skinLabel: '전체폭',
         navigation: CLASSIC_NAV,
         headerLayoutByMenuMode: CLASSIC_HEADER_BY_MENU_MODE,
         featureMenus: FEATURE_MENUS,
         theme: CLASSIC_THEME,
         homeSections: [
-            { type: 'theme_hero', title: null, config: { layout: 'banner' } },
+            { type: 'theme_hero', title: null, config: { layout: 'full_width' } },
             ...DEFAULT_CAROUSELS,
             { type: 'recent_product', title: '최근 본 상품' },
             { type: 'kakao_cta', title: null },
         ],
     },
 
-    /* ── 테마 3: 에디토리얼 ───────────────────────────────────────────
-     * 완전히 다른 룩. 투명 오버레이 헤더 + 풀블리드(뷰포트 높이) 히어로 + 디스플레이 폰트.
-     * 라이프스타일/럭셔리 브랜드 무드. 캐러셀은 동일 4종을 쓰되 스킨 CSS 로 외형이 달라진다.
+    /* ── 테마 3: 풀블리드 + 오버레이 헤더 ─────────────────────────────
+     * 배치뿐 아니라 헤더·폰트까지 다른 유일한 테마다(투명 오버레이 + 디스플레이 세리프).
      */
     theme_editorial: {
         key: 'theme_editorial',
-        label: '테마 3 — 에디토리얼(풀블리드)',
-        summary: '투명 오버레이 헤더 + 화면을 꽉 채우는 풀블리드 히어로 + 디스플레이 세리프 폰트의 라이프스타일 무드. 그 아래 베스트·쇼핑특가·베스트 카테고리·베스트 브랜드 캐러셀이 자동 배치됩니다.',
-        skinLabel: '에디토리얼',
+        label: '테마 3 — 풀블리드(에디토리얼)',
+        summary: '투명 오버레이 헤더 위로 화면을 꽉 채우는 풀블리드 히어로를 깝니다. 디스플레이 세리프 폰트의 라이프스타일 무드. 슬라이드 내용(상품/이미지 배너)은 메인 슬라이더에서 고릅니다.',
+        skinLabel: '풀블리드',
         navigation: {
             nav_mode: 'split',
             header_layout_type: 'editorial_overlay_v1',
@@ -193,7 +203,7 @@ const PRESETS = {
             skin: 'editorial',
         },
         homeSections: [
-            { type: 'theme_hero', title: null, config: { layout: 'editorial' } },
+            { type: 'theme_hero', title: null, config: { layout: 'full_bleed' } },
             ...DEFAULT_CAROUSELS,
         ],
     },

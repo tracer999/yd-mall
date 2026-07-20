@@ -24,11 +24,12 @@ async function resolve({ shared, config, locals }) {
 
     const np = newArrival.newProductPredicate('p');
 
-    // 활성 NORMAL 카테고리 전체 → 서브트리 구성용
+    // 활성 NORMAL 카테고리 전체 → 서브트리 구성용.
+    // 글로벌(0) + 이 몰 소유분 둘 다 본다 — 카테고리 글로벌화 이후 이 몰만 보면 0건이 된다.
     const [cats] = await pool.query(`
         SELECT id, name, parent_id
         FROM categories
-        WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1
+        WHERE type = 'NORMAL' AND mall_id IN (0, ?) AND is_active = 1
         ORDER BY display_order ASC, id ASC
     `, [mallId]);
     if (!cats.length) return null;

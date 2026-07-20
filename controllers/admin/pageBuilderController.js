@@ -186,8 +186,12 @@ exports.getEditor = async (req, res) => {
       });
     });
 
-    // 테마 설정 탭용 — 현재 몰의 마지막 테마 + 테마 목록.
+    // 테마 설정 탭용 — 현재 몰의 테마 + 메뉴 구성 방식(몰 관리에서 이 탭으로 이관).
     const [[mallRow]] = await pool.query('SELECT preset_key FROM mall WHERE id = ?', [mallId]);
+    const [[navRow]] = await pool.query('SELECT nav_mode FROM navigation_config WHERE mall_id = ? LIMIT 1', [mallId]);
+    const currentMenuMode = (navRow && presets.isValidMenuMode(navRow.nav_mode))
+      ? navRow.nav_mode
+      : presets.DEFAULT_MENU_MODE;
 
     // 페이지 설정 > 이지모드 탭용 — 번들 카드(섹션을 사람이 읽을 라벨로 풀어 준다).
     const pageBundles = presets.bundleList().map((b) => ({
@@ -203,7 +207,10 @@ exports.getEditor = async (req, res) => {
       subtitle: '섹션을 추가·삭제·재정렬한 뒤 발행해야 스토어프론트에 반영됩니다.',
       page, pages, sections, palette: buildPalette(), productGroups, revisions, dirty, linkTargets,
       mallId, presetList: presets.list(), currentPreset: (mallRow && mallRow.preset_key) || presets.DEFAULT_KEY,
+      menuModeList: presets.menuModeList(), currentMenuMode,
       pageBundles,
+      // ?tab=theme 로 들어오면 테마 설정 탭을 펼친 채 연다(몰 관리에서 넘어오는 링크).
+      initialTab: req.query.tab === 'theme' ? 'theme' : 'page',
       notice: req.query.notice || null,
       errorMsg: req.query.error || null,
     });

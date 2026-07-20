@@ -1,0 +1,129 @@
+<%
+  /* 우리 몰 카테고리 3단 계단식 선택기 (공용 파티션)
+   *
+   * 왜 계단식인가: NORMAL 카테고리가 2,300개가 넘어서 한 셀렉트에 다 넣으면 못 고른다.
+   * 대분류(15) → 중분류(242) → 소분류(2,094) 로 좁혀 들어간다.
+   *
+   * 실제로 폼에 전송되는 값은 hidden 하나(fieldName)이며, **가장 깊게 고른 카테고리 id** 다.
+   * 중분류까지만 고르고 소분류를 비워도 중분류 id 로 등록된다(소분류가 없는 가지도 있으므로).
+   *
+   * locals:
+   *   tree      : publishService.getMallCategoryTree() 결과 [{i,n,k:[...]}]
+   *   pickerId  : 화면에 2개 이상 놓을 때 구분용 접두어
+   *   fieldName : hidden input name (기본 category_id)
+   *   compact   : true 면 라벨을 줄여 한 줄로 (목록 화면 일괄등록용)
+   */
+  const _tree = tree || [];
+  const _pid = pickerId || 'catpick';
+  const _field = fieldName || 'category_id';
+  const _compact = !!compact;
+  // </script> 로 스크립트가 조기 종료되는 사고를 막으려 < 를 유니코드로 이스케이프한다.
+  const _treeJson = JSON.stringify(_tree).replace(/</g, '\\u003c');
+%>
+
+<div id="<%= _pid %>-wrap" data-field="<%= _field %>">
+  <input type="hidden" name="<%= _field %>" id="<%= _pid %>-value" value="">
+
+  <div class="grid grid-cols-1 <%= _compact ? 'sm:grid-cols-3' : 'sm:grid-cols-3' %> gap-2">
+    <select id="<%= _pid %>-l0" data-level="0"
+            class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      <option value="">대분류 선택</option>
+    </select>
+    <select id="<%= _pid %>-l1" data-level="1" disabled
+            class="w-full rounded-md border border-gray-300 text-sm px-3 py-2 disabled:bg-gray-100 disabled:text-gray-400">
+      <option value="">중분류 선택</option>
+    </select>
+    <select id="<%= _pid %>-l2" data-level="2" disabled
+            class="w-full rounded-md border border-gray-300 text-sm px-3 py-2 disabled:bg-gray-100 disabled:text-gray-400">
+      <option value="">소분류 선택</option>
+    </select>
+  </div>
+
+  <p class="mt-1.5 text-xs">
+    <span id="<%= _pid %>-path" class="text-indigo-700 font-medium hidden"></span>
+    <span id="<%= _pid %>-empty" class="text-gray-400">대분류부터 차례로 선택하세요. 중분류까지만 골라도 등록됩니다.</span>
+  </p>
+</div>
+
+<script type="application/json" id="<%= _pid %>-data"><%- _treeJson %></script>
+<script>
+  (function () {
+    var PID = '<%= _pid %>';
+    var wrap = document.getElementById(PID + '-wrap');
+    if (!wrap) return;
+
+    var TREE = JSON.parse(document.getElementById(PID + '-data').textContent || '[]');
+    var hidden = document.getElementById(PID + '-value');
+    var pathEl = document.getElementById(PID + '-path');
+    var emptyEl = document.getElementById(PID + '-empty');
+    var sels = [0, 1, 2].map(function (i) { return document.getElementById(PID + '-l' + i); });
+
+    function fill(sel, nodes, placeholder) {
+      sel.innerHTML = '';
+      var ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = placeholder;
+      sel.appendChild(ph);
+      (nodes || []).forEach(function (n) {
+        var o = document.createElement('option');
+        o.value = String(n.i);
+        o.textContent = n.n;
+        sel.appendChild(o);
+      });
+      sel.disabled = !(nodes && nodes.length);
+    }
+
+    function nodeAt(level) {
+      // 해당 레벨에서 선택된 노드를 찾아 반환한다.
+      var nodes = TREE;
+      var picked = null;
+      for (var i = 0; i <= level; i++) {
+        var v = sels[i].value;
+        if (!v) return null;
+        picked = null;
+        for (var j = 0; j < nodes.length; j++) {
+          if (String(nodes[j].i) === v) { picked = nodes[j]; break; }
+        }
+        if (!picked) return null;
+        nodes = picked.k || [];
+      }
+      return picked;
+    }
+
+    function sync() {
+      var id = '';
+      var names = [];
+      for (var i = 0; i < 3; i++) {
+        if (sels[i].value) {
+          id = sels[i].value;
+          names.push(sels[i].options[sels[i].selectedIndex].textContent);
+        }
+      }
+      hidden.value = id;
+      if (id) {
+        pathEl.textContent = '선택: ' + names.join(' > ');
+        pathEl.classList.remove('hidden');
+        emptyEl.classList.add('hidden');
+      } else {
+        pathEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+      }
+    }
+
+    sels[0].addEventListener('change', function () {
+      var n = nodeAt(0);
+      fill(sels[1], n && n.k, '중분류 선택');
+      fill(sels[2], null, '소분류 선택');
+      sync();
+    });
+    sels[1].addEventListener('change', function () {
+      var n = nodeAt(1);
+      fill(sels[2], n && n.k, '소분류 선택');
+      sync();
+    });
+    sels[2].addEventListener('change', sync);
+
+    fill(sels[0], TREE, '대분류 선택');
+    sync();
+  })();
+</script>

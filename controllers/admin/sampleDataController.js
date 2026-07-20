@@ -47,14 +47,49 @@ function pathOrNull(v, max = 255) {
     return s === '' ? null : s;
 }
 
+/** 공용 카탈로그가 사는 mall_id. services/catalog/categoryScope.js 와 같은 값. */
+const GLOBAL_CATEGORY_MALL_ID = 0;
+
+/**
+ * 샘플이 가리킬 수 있는 **공용 카테고리 후보**를 타입별로 읽는다.
+ * NORMAL 은 계층이 보이도록 "부모 > 자식" 라벨을 붙인다(같은 이름의 하위가 많다).
+ */
+async function loadGlobalCategoryOptions() {
+    const [rows] = await pool.query(
+        `SELECT id, name, parent_id, type, depth FROM categories
+          WHERE mall_id = ? AND type IN ('NORMAL', 'BRAND')
+          ORDER BY type, depth, display_order, id`,
+        [GLOBAL_CATEGORY_MALL_ID]);
+
+    const nameById = new Map(rows.map((r) => [r.id, r.name]));
+    const label = (r) => {
+        const parts = [];
+        let cursor = r.parent_id;
+        // 최대 3뎁스라 반복은 사실상 2회 — 그래도 순환 데이터 방어로 상한을 둔다.
+        for (let i = 0; i < 3 && cursor; i++) {
+            if (!nameById.has(cursor)) break;
+            parts.unshift(nameById.get(cursor));
+            cursor = (rows.find((x) => x.id === cursor) || {}).parent_id;
+        }
+        parts.push(r.name);
+        return parts.join(' > ');
+    };
+
+    return {
+        normal: rows.filter((r) => r.type === 'NORMAL').map((r) => ({ id: r.id, label: label(r) })),
+        brand: rows.filter((r) => r.type === 'BRAND').map((r) => ({ id: r.id, label: r.name })),
+    };
+}
+
 exports.getSamples = async (req, res) => {
     try {
         const [categories] = await pool.query(
-            `SELECT id, sample_key, type, name, image_path, display_order, is_active
+            `SELECT id, sample_key, type, name, image_path, display_order, is_active, global_category_id
                FROM sample_category WHERE type = 'NORMAL' ORDER BY display_order, id`);
         const [brands] = await pool.query(
-            `SELECT id, sample_key, type, name, image_path, display_order, is_active
+            `SELECT id, sample_key, type, name, image_path, display_order, is_active, global_category_id
                FROM sample_category WHERE type = 'BRAND' ORDER BY display_order, id`);
+        const globalOptions = await loadGlobalCategoryOptions();
         const [products] = await pool.query(
             `SELECT id, sample_key, category_key, brand_key, name, price, original_price,
                     badge, main_image, deal_price, is_new, display_order, is_active
@@ -69,7 +104,7 @@ exports.getSamples = async (req, res) => {
             layout: 'layouts/admin_layout',
             title: '샘플 데이터 관리',
             subtitle: '몰 생성 시 "샘플 데이터 포함"으로 새 몰에 복제되는 원본입니다. 이미 만들어진 몰에는 영향이 없습니다.',
-            categories, brands, products, heroes,
+            categories, brands, products, heroes, globalOptions,
             saved: req.query.saved === '1',
             msg: req.query.msg || '',
             error: req.query.error || '',
@@ -104,15 +139,19 @@ exports.postSaveSamples = async (req, res) => {
         const catNames = toArray(req.body.cat_name);
         const catImages = toArray(req.body.cat_image);
         const catOrders = toArray(req.body.cat_order);
+        const catGlobals = toArray(req.body.cat_global);
         const catActive = new Set(toArray(req.body.cat_active).map(String));
         for (let i = 0; i < catIds.length; i++) {
             const id = toInt(catIds[i]);
             if (!id) continue;
+            // 0/빈값 = "지정 안 함" → NULL. 시더가 이름으로 재탐색 후 미분류로 폴백한다.
+            const globalId = toInt(catGlobals[i]) || null;
             await conn.query(
-                `UPDATE sample_category SET name = ?, image_path = ?, display_order = ?, is_active = ?
+                `UPDATE sample_category
+                    SET name = ?, image_path = ?, display_order = ?, is_active = ?, global_category_id = ?
                   WHERE id = ?`,
                 [cleanStr(catNames[i], 100), cleanStr(catImages[i], 255) || null,
-                 toInt(catOrders[i]), catActive.has(String(id)) ? 1 : 0, id]);
+                 toInt(catOrders[i]), catActive.has(String(id)) ? 1 : 0, globalId, id]);
         }
 
         // 2) 상품

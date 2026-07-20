@@ -11,16 +11,8 @@ const { validCategoryIdSet } = require('../../services/catalog/categoryScope');
 
 const { getAiStatus, getOpenAIClient } = require('../../services/ai/aiStatus');
 
-function slugify(text) {
-    if (!text) return '';
-    let slug = text.toString().toLowerCase();
-    slug = slug
-        .replace(/[^a-z0-9가-힣\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    return slug;
-}
+// slug 규칙은 services/catalog/slugService 로 옮겼다(공급처 상품 이관과 공용).
+const { slugify, generateUniqueSlugFromName } = require('../../services/catalog/slugService');
 
 function normalizeVisibility(value) {
     const allowed = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
@@ -102,37 +94,7 @@ async function resolveTaxonomyField(selectedId, freeText, type, mallId, fallback
     return null;
 }
 
-async function generateUniqueSlugFromName(name, requestedSlug, excludeId) {
-    const baseSource = (requestedSlug && requestedSlug.trim()) ? requestedSlug : name;
-    let baseSlug = slugify(baseSource);
-    if (!baseSlug) {
-        baseSlug = 'product';
-    }
-
-    const likePattern = baseSlug + '%';
-    let query = 'SELECT slug FROM products WHERE slug LIKE ?';
-    const params = [likePattern];
-    if (excludeId) {
-        query += ' AND id <> ?';
-        params.push(excludeId);
-    }
-
-    const [rows] = await pool.query(query, params);
-    const used = new Set(rows.map(r => r.slug));
-
-    if (!used.has(baseSlug)) {
-        return baseSlug;
-    }
-
-    let counter = 1;
-    while (true) {
-        const candidate = `${baseSlug}-${counter}`;
-        if (!used.has(candidate)) {
-            return candidate;
-        }
-        counter++;
-    }
-}
+// generateUniqueSlugFromName 은 services/catalog/slugService 에서 가져온다(위 require).
 
 exports.generateAIRecommendation = async (req, res) => {
     const { name, category_name, provider } = req.body;

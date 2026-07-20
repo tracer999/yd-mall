@@ -26,6 +26,13 @@ function visibilityClause(hasUser) {
 /**
  * 홈 카테고리 탭용: 이 몰에 상품이 1건 이상 있는 NORMAL 카테고리.
  * NORMAL 카테고리는 전 몰 공통(글로벌)이라 상품(products.mall_id) 기준으로 이 몰 것만 집계한다.
+ *
+ * 카테고리 범위는 `mall_id IN (0, 이 몰)` 이다. 원칙은 글로벌 한 벌이고, 샘플 시더도 이제
+ * 공용 카테고리를 가리키기만 한다(2026-07-20). 그런데도 `IN (0, 이 몰)` 을 유지하는 이유는
+ * **그 전에 찍어낸 몰**에 몰 스코프 NORMAL 행이 남아 있어서다 — 글로벌만 보면 그런 몰에서
+ * 섹션이 통째로 사라진다("상품이 담긴 카테고리가 없습니다").
+ * 정리 후에도 THEME/OUTLET 은 여전히 몰 소유라 이 범위는 그대로 두는 게 맞다.
+ * (정리: scripts/migrations/20260720_cleanup_mall_scoped_sample_categories.sql)
  */
 async function loadHomeCategories(hasUser, mallId = 1) {
     const vis = visibilityClause(hasUser);
@@ -33,11 +40,11 @@ async function loadHomeCategories(hasUser, mallId = 1) {
     SELECT c.id, c.name, COUNT(p.id) AS product_count
     FROM categories c
     JOIN products p ON p.category_id = c.id AND p.mall_id = ? AND ${P_STATUS} AND ${vis}
-    WHERE c.type = 'NORMAL' AND c.mall_id = ? AND c.is_active = 1
+    WHERE c.type = 'NORMAL' AND c.mall_id IN (?, ?) AND c.is_active = 1
     GROUP BY c.id, c.name
     HAVING product_count > 0
     ORDER BY c.display_order ASC
-  `, [mallId, GLOBAL_CATEGORY_MALL_ID]);
+  `, [mallId, GLOBAL_CATEGORY_MALL_ID, mallId]);
     return rows;
 }
 
@@ -64,13 +71,14 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
     const visible = await visibleCategoryIdSet(mallId);
     if (!visible.size) return [];
 
-    // 트리 구성용 글로벌 NORMAL 카테고리 전체 — 쿼리 1회
+    // 트리 구성용 NORMAL 카테고리 전체 — 쿼리 1회.
+    // 글로벌(0) + 이 몰 소유분. 샘플 시더로 만든 몰은 후자를 쓴다(위 loadHomeCategories 주석 참고).
     const [cats] = await pool.query(`
         SELECT id, name, parent_id
         FROM categories
-        WHERE type = 'NORMAL' AND mall_id = ? AND is_active = 1
+        WHERE type = 'NORMAL' AND mall_id IN (?, ?) AND is_active = 1
         ORDER BY display_order ASC, id ASC
-    `, [GLOBAL_CATEGORY_MALL_ID]);
+    `, [GLOBAL_CATEGORY_MALL_ID, mallId]);
     if (!cats.length) return [];
 
     // parent_id → children 맵 (parent_id NULL 은 키 0)

@@ -17,6 +17,7 @@
   <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 space-y-1">
     <div><i class="bi bi-info-circle mr-1"></i> <b>이미 만들어진 몰에는 영향이 없습니다.</b> 여기서 바꾼 값은 <b>앞으로 생성될 몰</b>에만 복제됩니다.</div>
     <div><i class="bi bi-image mr-1"></i> 이미지 경로는 반드시 <code>/images/...</code> 로 시작해야 합니다. <code>/uploads/...</code> 는 <code>.gitignore</code> 라 <b>납품본에서 깨집니다.</b> 파일은 <code>public/images/sample/</code> 에 두세요.</div>
+    <div><i class="bi bi-diagram-3 mr-1"></i> <b>샘플 카테고리는 새로 만들어지지 않습니다.</b> 아래에서 지정한 <b>공용 카테고리</b>에 샘플 상품이 그대로 연결됩니다. 지정하지 않으면 같은 이름의 공용 카테고리를 찾고, 그래도 없으면 <b>미분류</b>로 들어갑니다.</div>
   </div>
 
   <form method="post" action="/admin/service/samples">
@@ -31,6 +32,7 @@
               <th class="py-2 px-3">구분</th>
               <th class="py-2 px-3">키</th>
               <th class="py-2 px-3">이름</th>
+              <th class="py-2 px-3">연결할 공용 카테고리</th>
               <th class="py-2 px-3">이미지 경로</th>
               <th class="py-2 px-3 w-20">순서</th>
               <th class="py-2 px-3 w-16">사용</th>
@@ -40,7 +42,7 @@
           <tbody>
             <% const allCats = (categories || []).concat(brands || []); %>
             <% if (!allCats.length) { %>
-              <tr><td colspan="7" class="py-6 text-center text-gray-400">샘플 카테고리가 없습니다.</td></tr>
+              <tr><td colspan="8" class="py-6 text-center text-gray-400">샘플 카테고리가 없습니다.</td></tr>
             <% } else { allCats.forEach(function(c){ %>
               <tr class="border-b last:border-0">
                 <td class="py-2 px-3">
@@ -51,6 +53,12 @@
                 </td>
                 <td class="py-2 px-3 font-mono text-xs text-gray-500"><%= c.sample_key %></td>
                 <td class="py-2 px-3"><input type="text" name="cat_name" value="<%= c.name %>" class="w-full text-sm"></td>
+                <td class="py-2 px-3">
+                  <select name="cat_global" class="w-full text-sm js-global-cat"
+                          data-type="<%= c.type %>" data-selected="<%= c.global_category_id || '' %>">
+                    <option value="">— 지정 안 함 —</option>
+                  </select>
+                </td>
                 <td class="py-2 px-3"><input type="text" name="cat_image" value="<%= c.image_path || '' %>" class="w-full text-sm font-mono text-xs" placeholder="/images/sample/..."></td>
                 <td class="py-2 px-3"><input type="number" name="cat_order" value="<%= c.display_order %>" class="w-16 text-sm"></td>
                 <td class="py-2 px-3"><input type="checkbox" name="cat_active" value="<%= c.id %>" <%= c.is_active ? 'checked' : '' %> class="w-4 h-4"></td>
@@ -193,3 +201,41 @@
     </div>
   </form>
 </div>
+
+<%
+  /* 공용 카테고리 후보는 NORMAL 수천 · BRAND 천여 건이라 행마다 option 을 찍으면
+     페이지가 수 MB 로 불어난다. 목록은 한 번만 내려보내고 select 는 JS 로 채운다. */
+%>
+<script id="global-cat-options" type="application/json"><%- JSON.stringify(globalOptions || { normal: [], brand: [] }).replace(/</g, '\\u003c') %></script>
+<script>
+(function () {
+  var raw = document.getElementById('global-cat-options');
+  if (!raw) return;
+  var opts;
+  try { opts = JSON.parse(raw.textContent); } catch (e) { return; }
+
+  var cache = {};
+  function fragmentFor(type) {
+    if (cache[type]) return cache[type].cloneNode(true);
+    var list = (type === 'BRAND' ? opts.brand : opts.normal) || [];
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < list.length; i++) {
+      var o = document.createElement('option');
+      o.value = list[i].id;
+      o.textContent = list[i].label;
+      frag.appendChild(o);
+    }
+    cache[type] = frag;
+    return frag.cloneNode(true);
+  }
+
+  var selects = document.querySelectorAll('select.js-global-cat');
+  for (var i = 0; i < selects.length; i++) {
+    var sel = selects[i];
+    sel.appendChild(fragmentFor(sel.dataset.type));
+    var want = sel.dataset.selected;
+    // 가리키던 카테고리가 삭제됐으면 '지정 안 함' 으로 남는다(시더가 이름·미분류로 폴백).
+    if (want) sel.value = want;
+  }
+})();
+</script>

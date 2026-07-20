@@ -64,38 +64,17 @@
         <% _pcGnb.forEach(function (m) {
              var active = m.href && m.href !== '#' && (typeof currentPath !== 'undefined') && currentPath === m.href;
              var kids = _pcKids(m); %>
-          <div class="yd-ed-item relative flex items-center h-full">
+          <div class="yd-ed-item relative flex items-center h-full<%= kids.length ? ' has-sub' : '' %>">
             <a href="<%= m.href %>" <%- m.newWindow ? 'target="_blank" rel="noopener noreferrer"' : '' %>
                class="yd-ed-navlink relative text-sm font-medium <%= active ? 'is-active' : '' %>">
               <%= m.name %>
+              <% if (kids.length) { %><i class="bi bi-chevron-down yd-ed-caret" aria-hidden="true"></i><% } %>
               <% if (m.badgeType) { %><span class="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-[var(--gh-accent)]"></span><% } %>
             </a>
 
             <%# 하위메뉴 드롭다운 — 있을 때만. 투명 헤더 위라 패널은 흰 배경·어두운 글자로 되돌린다. %>
             <% if (kids.length) { %>
-              <div class="yd-ed-panel absolute left-0 top-full z-40 min-w-[180px] rounded-b-lg border border-gray-100 border-t-0 bg-white shadow-xl py-2">
-                <ul>
-                  <% kids.forEach(function (c) { %>
-                    <li>
-                      <a href="<%= c.href %>" class="block px-4 py-2 text-sm text-gray-600 hover:text-[var(--gh-primary)] hover:bg-gray-50 whitespace-nowrap">
-                        <%= c.name %>
-                      </a>
-                      <% var grand = _pcKids(c); %>
-                      <% if (grand.length) { %>
-                        <ul class="pb-1">
-                          <% grand.forEach(function (g) { %>
-                            <li>
-                              <a href="<%= g.href %>" class="block pl-7 pr-4 py-1.5 text-xs text-gray-400 hover:text-[var(--gh-primary)] whitespace-nowrap">
-                                <%= g.name %>
-                              </a>
-                            </li>
-                          <% }); %>
-                        </ul>
-                      <% } %>
-                    </li>
-                  <% }); %>
-                </ul>
-              </div>
+              <%- include('./_gnb_dropdown', { kids: kids, pcKids: _pcKids, panelClass: 'yd-ed-panel' }) %>
             <% } %>
           </div>
         <% }); %>
@@ -155,13 +134,23 @@
   @media (min-width: 768px)    { .yd-ed-ico.yd-ed-ico--mo { display: none; } }
 
   /*
-   * PC 하위메뉴 드롭다운 — 마우스 오버·키보드 포커스에서만 펼친다(1뎁스는 상시 노출).
-   * 드로어형 스킨(_compact_drawer.ejs .yd-gnb__panel)과 같은 규칙이되, 이 헤더는 투명 상태에서
-   * 흰 글자 + text-shadow 를 자손에 상속시키므로 패널 안에서 그걸 되돌린다(흰 배경에 흰 글자 방지).
+   * PC 하위메뉴 드롭다운 — 모양·모션·여닫기는 ./_gnb_dropdown_style 이 공용으로 담당한다.
+   * 여기서는 이 헤더에만 있는 문제 두 가지를 처리한다.
+   *   1) 투명 상태에서 흰 글자 + text-shadow 를 자손에 상속시킨다 → 패널 안에서 되돌린다.
+   *      (안 되돌리면 흰 배경에 흰 글자가 된다)
+   *   2) 하위가 있는 항목의 캐럿.
    */
-  .yd-ed-panel { display: none; }
-  .yd-ed-item:hover .yd-ed-panel,
-  .yd-ed-item:focus-within .yd-ed-panel { display: block; }
+  .yd-ed-caret {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 9px;
+    opacity: .6;
+    transition: transform .28s cubic-bezier(.22, 1, .36, 1), opacity .18s ease;
+  }
+  .yd-ed-item:hover .yd-ed-caret,
+  .yd-ed-item:focus-within .yd-ed-caret { opacity: 1; transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) { .yd-ed-caret { transition-duration: .01ms !important; } }
+
   .yd-ed-hdr .yd-ed-panel,
   .yd-ed-hdr.is-solid .yd-ed-panel,
   body.yd-overlay-header .yd-ed-hdr:not(.is-solid) .yd-ed-panel { color: #374151; text-shadow: none; }
@@ -187,6 +176,9 @@
   body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-ico,
   body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-logo { color: #14110d; }
 </style>
+
+<%# 드롭다운 패널의 모양·모션·위치 보정 — 드로어형 스킨과 공용 %>
+<%- include('./_gnb_dropdown_style') %>
 <script>
   (function () {
     var h = document.querySelector('.yd-ed-hdr');

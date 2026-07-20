@@ -11,6 +11,8 @@
   var _isHome = page.page_type === 'home';
   var _pl = (typeof presetList !== 'undefined') ? presetList : [];
   var _cur = (typeof currentPreset !== 'undefined') ? currentPreset : '';
+  var _mm = (typeof menuModeList !== 'undefined') ? menuModeList : [];
+  var _curMenu = (typeof currentMenuMode !== 'undefined') ? currentMenuMode : '';
   var _bundles = (typeof pageBundles !== 'undefined') ? pageBundles : [];
 %>
 
@@ -34,34 +36,77 @@
     <span class="text-xs text-gray-400">테마 설정 = 히어로·색·폰트 · 페이지 설정 = 메인에 표시할 캐러셀 구성</span>
   </div>
 
-  <!-- ── 테마 설정 탭 ── -->
+  <!-- ── 테마 설정 탭 — 히어로 배치 + 메뉴 구성 방식 ── -->
   <div id="pb-pane-theme" class="hidden">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-2xl">
-      <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-        <h2 class="text-sm font-semibold text-gray-800">테마로 메인 화면 다시 구성</h2>
-        <p class="mt-0.5 text-xs text-gray-500">테마를 고르면 <strong>홈 섹션이 그 테마의 기본 구성(베스트·쇼핑특가·베스트 카테고리·베스트 브랜드)으로 교체·발행</strong>됩니다. 현재 홈 섹션은 삭제됩니다.</p>
-      </div>
-      <form method="POST" action="/admin/malls/<%= mallId %>/provision" class="p-5 space-y-3"
-            onsubmit="return confirm('선택한 테마의 기본 구성으로 메인 화면을 다시 만듭니다.\n현재 홈 섹션은 삭제됩니다. 계속할까요?');">
-        <input type="hidden" name="include_home" value="1">
-        <input type="hidden" name="return_to" value="page-builder">
-        <% _pl.forEach(function (p) { %>
-          <label class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50/40">
-            <input type="radio" name="preset_key" value="<%= p.key %>" <%= _cur === p.key ? 'checked' : '' %> class="mt-1 w-4 h-4 border-gray-300">
-            <span class="flex-1">
-              <span class="flex items-center gap-2">
-                <span class="text-sm font-semibold text-gray-900"><%= p.label %></span>
-                <% if (p.skinLabel) { %><span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100"><%= p.skinLabel %></span><% } %>
+    <form method="POST" action="/admin/malls/<%= mallId %>/provision" class="max-w-2xl space-y-4" id="themeForm">
+      <input type="hidden" name="return_to" value="page-builder">
+
+      <%#
+        테마는 이제 '배치 뼈대'만 정한다. 히어로에 무엇이 들어가는지는 배너 관리 > 메인 슬라이더
+        소관이라, 테마를 바꿔도 등록해 둔 배너·상품은 그대로 남는다.
+        홈 섹션 전체 교체는 파괴적이라 아래 체크박스로 분리했다(기본 꺼짐).
+      %>
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+          <h2 class="text-sm font-semibold text-gray-800">테마 — 히어로 배치</h2>
+          <p class="mt-0.5 text-xs text-gray-500">
+            홈 상단 히어로를 <strong>어떻게 배치할지</strong>만 고릅니다.
+            안에 넣을 내용은 <a href="/admin/banners/hero-slides" class="underline">배너 관리 &gt; 메인 슬라이더</a>에서 정합니다.
+          </p>
+        </div>
+        <div class="p-5 space-y-3">
+          <% _pl.forEach(function (p) { %>
+            <label class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50/40">
+              <input type="radio" name="preset_key" value="<%= p.key %>" <%= _cur === p.key ? 'checked' : '' %> class="mt-1 w-4 h-4 border-gray-300">
+              <span class="flex-1">
+                <span class="flex items-center gap-2">
+                  <span class="text-sm font-semibold text-gray-900"><%= p.label %></span>
+                  <% if (p.skinLabel) { %><span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100"><%= p.skinLabel %></span><% } %>
+                </span>
+                <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= p.summary %></span>
               </span>
-              <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= p.summary %></span>
+            </label>
+          <% }); %>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+          <h2 class="text-sm font-semibold text-gray-800">메뉴 구성 방식</h2>
+          <p class="mt-0.5 text-xs text-gray-500">상단 GNB 에서 카테고리와 일반 메뉴를 나눌지, 한 줄로 합칠지 정합니다.</p>
+        </div>
+        <div class="p-5 space-y-3">
+          <% _mm.forEach(function (m) { %>
+            <label class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50/40">
+              <input type="radio" name="menu_mode" value="<%= m.key %>" <%= _curMenu === m.key ? 'checked' : '' %> class="mt-1 w-4 h-4 border-gray-300">
+              <span class="flex-1">
+                <span class="block text-sm font-semibold text-gray-900"><%= m.label %></span>
+                <span class="mt-0.5 block text-xs text-gray-500 leading-relaxed"><%= m.summary %></span>
+              </span>
+            </label>
+          <% }); %>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-5">
+          <label class="flex items-start gap-2 p-3 rounded-lg border border-red-200 bg-red-50/50 cursor-pointer">
+            <input type="checkbox" name="include_home" value="1" id="includeHome" class="mt-0.5 w-4 h-4 rounded border-red-300">
+            <span class="text-xs text-red-800 leading-relaxed">
+              <strong>홈 섹션까지 기본 구성으로 교체</strong> — 히어로 아래 캐러셀들이
+              <strong>테마 기본 구성(베스트·쇼핑특가·베스트 카테고리·베스트 브랜드)으로 교체</strong>됩니다.
+              현재 홈 섹션은 삭제되며 <span class="font-semibold">되돌릴 수 없습니다.</span>
+              <span class="block mt-1">체크하지 않아도 <strong>히어로 배치와 메뉴 구성은 바뀝니다</strong> — 꾸며둔 섹션은 그대로 유지됩니다.</span>
             </span>
           </label>
-        <% }); %>
-        <div class="flex justify-end pt-1">
-          <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700"><i class="bi bi-magic mr-1.5"></i>이 테마로 다시 구성</button>
+          <div class="mt-4 flex justify-end">
+            <button type="submit" class="inline-flex items-center h-[38px] px-5 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+              <i class="bi bi-check2 mr-1.5"></i>적용
+            </button>
+          </div>
         </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 <% } %>
 
@@ -161,7 +206,7 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
   <!-- 좌: 섹션 목록 + 추가 -->
-  <div class="lg:col-span-4 space-y-3">
+  <div class="lg:col-span-5 space-y-3">
     <div class="bg-white rounded-lg shadow-sm p-3">
       <div class="flex items-center gap-2">
         <select id="pb-add-type" class="flex-1 border border-gray-300 rounded-md text-sm px-2 py-1.5">
@@ -185,29 +230,40 @@
     </div>
   </div>
 
-  <!-- 중: 미리보기 -->
-  <div class="lg:col-span-5">
-    <div class="bg-white rounded-lg shadow-sm p-3">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-sm font-medium text-gray-700">미리보기 <span class="text-xs text-gray-400">(발행 전 작업본)</span></span>
-        <div class="flex items-center gap-1">
-          <button data-device="pc" class="pb-device-btn px-2 py-1 text-xs rounded border border-gray-300 bg-blue-50 text-blue-700">PC</button>
-          <button data-device="mobile" class="pb-device-btn px-2 py-1 text-xs rounded border border-gray-300 text-gray-600">모바일</button>
-        </div>
-      </div>
-      <div class="border border-gray-200 rounded-lg overflow-hidden bg-gray-100 flex justify-center">
-        <iframe id="pb-preview" src="/admin/page-builder/preview?page=<%= page.id %>"
-          class="bg-white transition-all" style="width:100%;height:680px;border:0;"></iframe>
-      </div>
-    </div>
-  </div>
-
   <!-- 우: 선택 섹션 설정 -->
-  <div class="lg:col-span-3">
+  <div class="lg:col-span-7">
     <div id="pb-settings" class="bg-white rounded-lg shadow-sm p-4">
       <p class="text-sm text-gray-400 text-center py-8">
         <i class="bi bi-arrow-left-circle mr-1"></i>왼쪽에서 섹션을 선택하면<br>설정이 여기에 표시됩니다.
       </p>
+    </div>
+  </div>
+</div>
+
+<%/* 미리보기는 편집 영역 아래 전체 폭으로 둔다. 예전엔 3단 그리드의 가운데 칸(≈500px)에
+     끼워 넣어서, PC 를 골라도 iframe 뷰포트가 데스크톱 브레이크포인트에 못 미쳐
+     모바일 레이아웃이 그려졌다. 이제 PC 는 1440px 뷰포트로 렌더한 뒤 축소해서 보여준다. */%>
+<div class="mt-4 bg-white rounded-lg shadow-sm p-3">
+  <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+    <span class="text-sm font-medium text-gray-700">
+      미리보기 <span class="text-xs text-gray-400">(발행 전 작업본)</span>
+      <span id="pb-preview-scale" class="ml-1 text-xs text-gray-400"></span>
+    </span>
+    <div class="flex items-center gap-1">
+      <button data-device="pc" data-w="1440" data-h="900"
+        class="pb-device-btn px-2 py-1 text-xs rounded border border-gray-300 bg-blue-50 text-blue-700">PC 1440</button>
+      <button data-device="tablet" data-w="820" data-h="1100"
+        class="pb-device-btn px-2 py-1 text-xs rounded border border-gray-300 text-gray-600">태블릿 820</button>
+      <button data-device="mobile" data-w="390" data-h="844"
+        class="pb-device-btn px-2 py-1 text-xs rounded border border-gray-300 text-gray-600">모바일 390</button>
+    </div>
+  </div>
+  <div id="pb-preview-stage" class="border border-gray-200 rounded-lg overflow-hidden bg-gray-100 flex justify-center">
+    <%/* flex-shrink:0 — 없으면 flex 아이템이 1440px 를 스테이지 폭까지 줄여버려서
+         iframe 뷰포트가 다시 좁아진다(= 모바일 레이아웃). */%>
+    <div id="pb-preview-viewport" style="transform-origin:top center;flex:none;">
+      <iframe id="pb-preview" src="/admin/page-builder/preview?page=<%= page.id %>"
+        class="bg-white" style="width:100%;height:100%;border:0;display:block;"></iframe>
     </div>
   </div>
 </div>
@@ -281,6 +337,24 @@
       }
       tabs.forEach(function (t) {
         t.addEventListener('click', function () { activateTab(t.getAttribute('data-pb-tab')); });
+      });
+      // 몰 관리 등에서 ?tab=theme 로 넘어오면 테마 설정을 펼친 채 연다.
+      activateTab('<%= (typeof initialTab !== "undefined" && initialTab) ? initialTab : "page" %>');
+    }
+
+    /*
+     * 테마 적용 확인 — 파괴적일 때만 경고한다.
+     * 홈 섹션 교체를 체크하지 않으면 배치·메뉴만 바뀌고 꾸며둔 섹션은 남으므로,
+     * 매번 "삭제됩니다" 를 띄우면 운영자가 경고를 무시하게 된다.
+     */
+    var themeForm = document.getElementById('themeForm');
+    var includeHome = document.getElementById('includeHome');
+    if (themeForm && includeHome) {
+      themeForm.addEventListener('submit', function (e) {
+        if (!includeHome.checked) return;
+        if (!confirm('홈 섹션을 테마 기본 구성으로 교체합니다.\n현재 홈 섹션은 삭제되며 되돌릴 수 없습니다.\n\n계속할까요?')) {
+          e.preventDefault();
+        }
       });
     }
 

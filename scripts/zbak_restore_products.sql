@@ -13,22 +13,30 @@
 --       src_code='test_02' 인 6건은 category_id/brand_category_id 가 몰 전용 카테고리를
 --       가리켜 FK 오류가 난다. 쓰려면 해당 두 컬럼도 NULL 로 바꿔야 한다.
 
-SET @target_code = IFNULL(@target_code, 'main');   -- 상품을 넣을 몰 코드
+-- 이 DB 는 sql_mode 가 비어 있다(비엄격). 그대로 두면 NOT NULL 컬럼에 NULL 을 넣어도
+-- 에러 없이 0 으로 바뀌어 들어간다 → mall_id=0 고아 상품이 조용히 생긴다. 세션만 엄격으로 올린다.
+SET SESSION sql_mode = 'STRICT_ALL_TABLES';
+
+SET @target_code = IFNULL(@target_code, 'general'); -- 상품을 넣을 몰 코드
 SET @src_code    = IFNULL(@src_code, 'general');   -- 백업본에서 꺼낼 원본 몰 코드
 SET @limit       = IFNULL(@limit, 50);             -- 가져올 건수
 
-SET @new_mall = (SELECT id FROM mall WHERE code = @target_code);
+-- COLLATE 명시 이유는 아래 PREPARE 쪽 주석 참고(사용자 변수 vs 컬럼 콜레이션 불일치).
+SET @new_mall = (SELECT id FROM mall WHERE code COLLATE utf8mb4_general_ci = @target_code);
 
--- 대상 몰 코드가 틀리면 @new_mall 이 NULL 이 되고, products.mall_id 는 NOT NULL 이라
--- 아래 INSERT 가 "Column 'mall_id' cannot be null" 로 즉시 실패한다(조용한 오삽입 없음).
+-- 대상 몰 코드가 틀리면 @new_mall 이 NULL 이다. 아래 zbak_pick 채우기에서 걸러
+-- 0건으로 끝내고(아무것도 안 넣고), 마지막 SELECT 의 복원상품수 0 으로 드러난다.
 
 DROP TEMPORARY TABLE IF EXISTS zbak_pick;
 CREATE TEMPORARY TABLE zbak_pick (id INT PRIMARY KEY);
 
 SET @sql = CONCAT(
     'INSERT INTO zbak_pick SELECT id FROM zbak_products ',
-    'WHERE src_mall_code = ', QUOTE(@src_code),
+    -- COLLATE 명시: 사용자 변수는 utf8mb4_0900_ai_ci, 컬럼은 utf8mb4_general_ci 라 그냥 두면
+    -- "Illegal mix of collations" 로 죽는다.
+    'WHERE src_mall_code COLLATE utf8mb4_general_ci = ', QUOTE(@src_code),
     '   AND id NOT IN (SELECT id FROM products) ',
+    '   AND ', IF(@new_mall IS NULL, '1=0', '1=1'), ' ',   -- 몰 코드 오타 시 0건으로 안전 종료
     ' ORDER BY id LIMIT ', CAST(@limit AS CHAR));
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 

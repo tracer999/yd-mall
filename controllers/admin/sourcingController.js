@@ -12,6 +12,10 @@ const pool = require('../../config/db');
 const cred = require('../../services/sourcing/credential');
 const { CHANNEL_META, validateConnection, resolveCredentialChannel } = require('../../services/sourcing/adapters');
 const naverTaxonomy = require('../../services/sourcing/naverTaxonomySync');
+const importService = require('../../services/sourcing/importService');
+const { sanitize } = require('../../services/display/htmlSanitizer');
+const domeggookCategories = require('../../services/sourcing/supplier/domeggook/categories');
+const publishService = require('../../services/sourcing/publishService');
 
 const BASE = '/admin/sourcing/connections';
 const NAVER_BASE = '/admin/sourcing/naver-taxonomy';
@@ -148,16 +152,6 @@ function placeholder(title, subtitle, note) {
     });
 }
 
-exports.getImport = placeholder(
-    '상품 가져오기',
-    '도매꾹/온채널에서 상품을 검색·가져와 중간 테이블에 적재합니다.',
-    '공급처 어댑터(Phase 2)에서 구현됩니다.'
-);
-exports.getStaging = placeholder(
-    '가져온 상품(중간 테이블)',
-    '적재된 상품을 확인하고 선택하여 "상품 등록"합니다. (가져오기 ≠ 상품 등록)',
-    'Phase 2~3에서 구현됩니다.'
-);
 exports.getPublish = placeholder(
     '스마트스토어 등록',
     '편집한 상품을 네이버에 등록하고 검수 상태를 추적합니다.',
@@ -173,6 +167,260 @@ exports.getSync = placeholder(
     '"가져오기" 버튼으로 재고·주문을 그 시점에 조회·동기화합니다. (1차, 배치 없음)',
     'Phase 3~5에서 구현됩니다.'
 );
+
+// ---------------------------------------------------------------------------
+// 상품 가져오기 — 공급처 검색 → 선택 → 중간 테이블 적재 (Phase 2)
+//
+// ⚠ "가져오기 ≠ 상품 등록"이다. 여기서는 공급처 원본을 supplier_product 에 적재만 한다.
+//   빌더 상품 변환·스마트스토어 등록은 Phase 3.
+// ---------------------------------------------------------------------------
+
+const IMPORT_BASE = '/admin/sourcing/import';
+const STAGING_BASE = '/admin/sourcing/staging';
+
+function actorOf(req) {
+    return (req.session && req.session.admin && req.session.admin.username) || null;
+}
+
+// 검색은 GET 쿼리로 받는다 — 뒤로가기·새로고침·URL 공유가 그대로 동작해야 하므로.
+exports.getImport = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const supplier = ['DOMEGGOOK', 'DOMEME'].includes(req.query.supplier) ? req.query.supplier : 'DOMEGGOOK';
+    const keyword = (req.query.q || '').trim();
+    const categoryCode = (req.query.cat || '').trim();
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const size = Math.min(Math.max(Number(req.query.size) || 20, 5), 100);
+
+    // 검색 폼을 눌렀는지(제출) vs 메뉴로 처음 들어왔는지를 구분한다.
+    // 빈 검색어로 제출했을 때 초기 화면을 그대로 다시 그리면 "아무 반응 없음"으로 보인다.
+    const submitted = Object.prototype.hasOwnProperty.call(req.query, 'q')
+        || Object.prototype.hasOwnProperty.call(req.query, 'cat');
+    const searched = !!(keyword || categoryCode);
+
+    // 검색 결과는 외부 실시간 데이터다. 조건이 같아 본문이 동일하면 브라우저가 304 로
+    // 캐시를 재사용해 화면이 멈춘 것처럼 보이므로 캐시를 끈다.
+    res.set('Cache-Control', 'no-store');
+
+    const view = {
+        layout: 'layouts/admin_layout',
+        title: '외부몰 연동 · 상품 가져오기',
+        subtitle: '도매꾹·도매매에서 상품을 검색해 선택한 건만 중간 테이블로 가져옵니다. (가져오기 ≠ 상품 등록)',
+        supplier, keyword, categoryCode, page, size, searched,
+        result: null,
+        maxBatch: importService.MAX_IMPORT_BATCH,
+        msg: req.query.msg || '',
+        error: req.query.error || '',
+    };
+
+    if (!searched) {
+        // 빈 조건으로 제출한 경우에만 이유를 알려준다(첫 진입은 안내 문구만 보여준다).
+        if (submitted) view.error = '검색어 또는 카테고리 코드를 입력한 뒤 [검색]을 눌러주세요.';
+        return res.render('admin/sourcing/import', view);
+    }
+
+    try {
+        view.result = await importService.searchSupplier(mallId, {
+            supplier, keyword, categoryCode, page, size,
+        });
+        await importService.logImport(mallId, {
+            supplier, action: 'SEARCH', keyword, categoryCode,
+            requested: view.result.items.length, success: view.result.items.length,
+            actor: actorOf(req),
+        });
+    } catch (e) {
+        view.error = e.message;
+    }
+    res.render('admin/sourcing/import', view);
+};
+
+// 선택 상품 가져오기 — 완료 후 결과 요약을 들고 '가져온 상품' 으로 보낸다.
+exports.postImportRun = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const supplier = ['DOMEGGOOK', 'DOMEME'].includes(req.body.supplier) ? req.body.supplier : 'DOMEGGOOK';
+    // 체크박스는 1건일 때 문자열, 여러 건일 때 배열로 온다.
+    const raw = req.body.item_no;
+    const itemNos = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+
+    // 검색 조건을 유지해 돌아갈 수 있도록 쿼리를 보존한다.
+    const back = `${IMPORT_BASE}?supplier=${encodeURIComponent(supplier)}`
+        + `&q=${encodeURIComponent(req.body.q || '')}`
+        + `&cat=${encodeURIComponent(req.body.cat || '')}`
+        + `&page=${encodeURIComponent(req.body.page || 1)}`;
+
+    try {
+        const r = await importService.importItems(mallId, { supplier, itemNos, actor: actorOf(req) });
+
+        let msg = `${r.success}건 가져오기 완료`;
+        if (r.failed) msg += ` · ${r.failed}건 실패`;
+        if (r.truncated) msg += ` (한 번에 최대 ${r.limit}건까지만 처리됩니다 — 나머지는 다시 선택해 주세요)`;
+
+        const blocked = r.results.filter((x) => x.ok && x.resaleAllowed === 0).length;
+        if (blocked) msg += ` · 재판매 금지 ${blocked}건 포함(등록 전 확인 필요)`;
+
+        res.redirect(`${STAGING_BASE}?msg=` + encodeURIComponent(msg));
+    } catch (e) {
+        res.redirect(`${back}&error=` + encodeURIComponent(e.message));
+    }
+};
+
+// 도매꾹 카테고리 트리(JSON) — 가져오기 화면의 단계별 선택기가 호출한다.
+// 사용자는 카테고리 코드를 알 수 없으므로 이름으로 고르게 하고 코드는 내부에서 채운다.
+exports.getDomeggookCategories = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const c = await importService.resolveCredential(mallId, 'DOMEGGOOK');
+        const tree = await domeggookCategories.getTree(c, req.query.refresh === '1');
+        // 자주 바뀌지 않는 정적 리소스 성격이라 브라우저 캐시를 허용한다.
+        res.set('Cache-Control', 'private, max-age=3600');
+        res.json({ success: true, tree });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+};
+
+// ---------------------------------------------------------------------------
+// 가져온 상품 (중간 테이블)
+// ---------------------------------------------------------------------------
+
+exports.getStaging = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const filters = {
+            supplier: ['DOMEGGOOK', 'DOMEME', 'ONCHANNEL'].includes(req.query.supplier) ? req.query.supplier : '',
+            status: ['DETAILED', 'LISTED', 'FAILED'].includes(req.query.status) ? req.query.status : '',
+            q: (req.query.q || '').trim(),
+            published: ['Y', 'N'].includes(req.query.published) ? req.query.published : '',
+            page: req.query.page,
+            size: req.query.size,
+        };
+        const [list, stats, categoryTree, defaultMargin] = await Promise.all([
+            importService.listStaging(mallId, filters),
+            importService.getStats(mallId),
+            publishService.getMallCategoryTree(mallId),
+            publishService.getDefaultMarginRate(mallId),
+        ]);
+        res.render('admin/sourcing/staging', {
+            layout: 'layouts/admin_layout',
+            title: '외부몰 연동 · 가져온 상품',
+            subtitle: '공급처에서 가져온 원본 스냅샷입니다. 확인·재수집 후 우리 몰 상품으로 등록합니다.',
+            list, stats, filters, categoryTree, defaultMargin,
+            supplierLabel: importService.SUPPLIER_LABEL,
+            msg: req.query.msg || '',
+            error: req.query.error || '',
+        });
+    } catch (e) {
+        res.status(500).render('admin/sourcing/placeholder', {
+            layout: 'layouts/admin_layout',
+            title: '외부몰 연동 · 가져온 상품',
+            subtitle: '',
+            note: '목록을 불러오지 못했습니다: ' + e.message,
+        });
+    }
+};
+
+exports.getStagingDetail = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const data = await importService.getStaging(mallId, Number(req.params.id));
+        if (!data) return res.redirect(`${STAGING_BASE}?error=` + encodeURIComponent('상품을 찾을 수 없습니다.'));
+
+        // 공급처 상세 HTML 은 외부에서 온 신뢰할 수 없는 마크업이다.
+        // 관리자 화면이라도 그대로 렌더하면 저장형 XSS 가 되므로 반드시 새니타이즈한다.
+        const detailHtmlSafe = sanitize(data.product.detail_html || '');
+        const noticeHtmlSafe = sanitize(data.product.notice_html || '');
+
+        // images_json 은 드라이버/버전에 따라 문자열로 올 수 있어 방어적으로 파싱한다.
+        let images = data.product.images_json || [];
+        if (typeof images === 'string') {
+            try { images = JSON.parse(images); } catch (e) { images = []; }
+        }
+        if (!Array.isArray(images)) images = [];
+
+        const [categoryTree, defaultMargin] = await Promise.all([
+            publishService.getMallCategoryTree(mallId),
+            publishService.getDefaultMarginRate(mallId),
+        ]);
+
+        res.render('admin/sourcing/staging_detail', {
+            layout: 'layouts/admin_layout',
+            title: '가져온 상품 상세',
+            subtitle: data.product.title,
+            product: data.product,
+            variants: data.variants,
+            detailHtmlSafe, noticeHtmlSafe, images,
+            categoryTree, defaultMargin,
+            supplierLabel: importService.SUPPLIER_LABEL,
+            msg: req.query.msg || '',
+            error: req.query.error || '',
+        });
+    } catch (e) {
+        res.redirect(`${STAGING_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+// 재수집 — 공급처의 현재 가격·재고·옵션으로 스냅샷을 갱신한다.
+exports.postStagingRefresh = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    try {
+        await importService.refreshItem(mallId, id, actorOf(req));
+        res.redirect(`${STAGING_BASE}/${id}?msg=` + encodeURIComponent('공급처에서 다시 가져왔습니다.'));
+    } catch (e) {
+        res.redirect(`${STAGING_BASE}/${id}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+// ---------------------------------------------------------------------------
+// 우리 몰 상품으로 등록 (스마트스토어 등록 아님)
+// supplier_product → products/product_sku/product_option*/product_images
+// ---------------------------------------------------------------------------
+
+exports.postPublishToMall = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const raw = req.body.id || req.params.id;
+    const ids = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    // 상세 화면에서 눌렀으면 그 화면으로, 목록에서 눌렀으면 목록으로 돌아간다.
+    const back = req.params.id ? `${STAGING_BASE}/${req.params.id}` : STAGING_BASE;
+
+    try {
+        const r = await publishService.publishMany(mallId, ids, {
+            categoryId: req.body.category_id,
+            // 비어 있으면 publishService 가 mall_channel_setting.default_margin_rate 를 쓴다.
+            marginRate: req.body.margin_rate === '' ? null : req.body.margin_rate,
+            status: req.body.status,
+            visibility: req.body.visibility,
+            actor: actorOf(req),
+        });
+
+        if (!r.success) {
+            const first = r.results.find((x) => !x.ok);
+            return res.redirect(`${back}?error=` + encodeURIComponent(first ? first.error : '등록에 실패했습니다.'));
+        }
+
+        let msg = `${r.success}건을 우리 몰 상품으로 등록했습니다.`;
+        if (r.skipped) msg += ` (이미 등록된 ${r.skipped}건은 건너뛰었습니다)`;
+        if (r.failed) msg += ` (${r.failed}건 실패)`;
+        const imgFailed = r.results.reduce((a, x) => a + (x.imageFailed || 0), 0);
+        if (imgFailed) msg += ` 이미지 ${imgFailed}장은 가져오지 못했습니다.`;
+        msg += ' 판매 상태는 안전을 위해 기본 "판매중지"이니 상품 관리에서 확인 후 켜주세요.';
+
+        res.redirect(`${back}?msg=` + encodeURIComponent(msg));
+    } catch (e) {
+        res.redirect(`${back}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+exports.postStagingDelete = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const raw = req.body.id || req.params.id;
+    const ids = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    try {
+        const n = await importService.deleteStaging(mallId, ids);
+        res.redirect(`${STAGING_BASE}?msg=` + encodeURIComponent(`${n}건 삭제했습니다. (공급처 원본에는 영향 없음)`));
+    } catch (e) {
+        res.redirect(`${STAGING_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
 
 // ---------------------------------------------------------------------------
 // 네이버 카테고리 리소스 — 수집 현황 · 수동 수집 · 스케줄

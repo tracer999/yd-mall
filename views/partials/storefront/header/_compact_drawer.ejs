@@ -97,39 +97,20 @@
                             <li aria-hidden="true" class="h-3.5 w-px bg-gray-200 -mx-2"></li>
                         <% } %>
                         <% const kids = _pcKids(m); %>
-                        <li class="yd-gnb__item relative h-full flex items-center">
+                        <li class="yd-gnb__item relative h-full flex items-center<%= kids.length ? ' has-sub' : '' %>">
                             <a href="<%= m.href %>" <%= Number(m.newWindow) ? 'target="_blank" rel="noopener"' : '' %>
-                               class="flex items-center gap-1 text-[15px] whitespace-nowrap text-gray-800 hover:text-[var(--gh-primary)] transition-colors">
+                               class="yd-gnb__link flex items-center gap-1 text-[15px] whitespace-nowrap text-gray-800">
                                 <%= m.name %>
+                                <% if (kids.length) { %>
+                                    <i class="bi bi-chevron-down yd-gnb__caret" aria-hidden="true"></i>
+                                <% } %>
                                 <% if (m.badgeType) { %>
                                     <span class="yd-dw__badge is-<%= String(m.badgeType).toLowerCase() %>"><%= m.badgeType %></span>
                                 <% } %>
                             </a>
 
                             <% if (kids.length) { %>
-                                <div class="yd-gnb__panel absolute left-0 top-full z-40 min-w-[180px] rounded-b-lg border border-gray-100 border-t-0 bg-white shadow-lg py-2">
-                                    <ul>
-                                        <% kids.forEach(function (c) { %>
-                                            <li>
-                                                <a href="<%= c.href %>" class="block px-4 py-2 text-sm text-gray-600 hover:text-[var(--gh-primary)] hover:bg-gray-50 whitespace-nowrap">
-                                                    <%= c.name %>
-                                                </a>
-                                                <% const grand = _pcKids(c); %>
-                                                <% if (grand.length) { %>
-                                                    <ul class="pb-1">
-                                                        <% grand.forEach(function (g) { %>
-                                                            <li>
-                                                                <a href="<%= g.href %>" class="block pl-7 pr-4 py-1.5 text-xs text-gray-400 hover:text-[var(--gh-primary)] whitespace-nowrap">
-                                                                    <%= g.name %>
-                                                                </a>
-                                                            </li>
-                                                        <% }); %>
-                                                    </ul>
-                                                <% } %>
-                                            </li>
-                                        <% }); %>
-                                    </ul>
-                                </div>
+                                <%- include('./_gnb_dropdown', { kids: kids, pcKids: _pcKids, panelClass: 'yd-gnb__panel' }) %>
                             <% } %>
                         </li>
                     <% }); %>
@@ -150,8 +131,40 @@
     <%- include('./_drawer') %>
 
     <style>
-      /* PC GNB 드롭다운 — 마우스 오버·키보드 포커스에서만 펼친다(1뎁스는 상시 노출) */
-      .yd-gnb__panel { display: none; }
-      .yd-gnb__item:hover .yd-gnb__panel,
-      .yd-gnb__item:focus-within .yd-gnb__panel { display: block; }
+      /*
+       * PC GNB 1뎁스 — 하단 인디케이터가 가운데에서 좌우로 자란다. 색만 바뀌던 예전보다
+       * 어느 항목에 있는지가 분명하고, 아래에서 열리는 패널과 한 덩어리로 읽힌다.
+       */
+      .yd-gnb__link { transition: color .18s ease; }
+      /* 인디케이터는 링크가 아니라 <li> 에 붙인다 — 링크는 세로 중앙 정렬이라 그 기준으로 잡으면
+         GNB 줄 아래(nav 바깥)로 삐져나온다. <li> 는 h-full 이라 바닥이 정확히 GNB 하단이다. */
+      .yd-gnb__item::after {
+        content: '';
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 2px;
+        background: var(--gh-primary, #2f6b46);
+        transform: scaleX(0);
+        transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+      }
+      .yd-gnb__item:hover .yd-gnb__link,
+      .yd-gnb__item:focus-within .yd-gnb__link { color: var(--gh-primary, #2f6b46); }
+      .yd-gnb__item:hover::after,
+      .yd-gnb__item:focus-within::after { transform: scaleX(1); }
+
+      /* 하위가 있다는 표시. 열리면 뒤집힌다 — 패널이 이 항목에서 나왔음을 잇는다. */
+      .yd-gnb__caret {
+        font-size: 10px;
+        opacity: .45;
+        transition: transform .28s cubic-bezier(.22, 1, .36, 1), opacity .18s ease;
+      }
+      .yd-gnb__item:hover .yd-gnb__caret,
+      .yd-gnb__item:focus-within .yd-gnb__caret { opacity: 1; transform: rotate(180deg); }
+
+      @media (prefers-reduced-motion: reduce) {
+        .yd-gnb__link, .yd-gnb__item::after, .yd-gnb__caret { transition-duration: .01ms !important; }
+      }
     </style>
+
+    <%# 드롭다운 패널의 모양·모션·위치 보정 — 에디토리얼 스킨과 공용 %>
+    <%- include('./_gnb_dropdown_style') %>

@@ -1,0 +1,265 @@
+<%
+  /*
+   * GNB 뎁스 드롭다운 — 스타일 + 위치 보정 스크립트. _gnb_dropdown.ejs 와 한 쌍.
+   *
+   * 스킨(드로어형/에디토리얼형)은 동시에 렌더되지 않으므로, 각 스킨이 이 파일을 한 번 include 하면
+   * 문서에 <style> 이 한 벌만 들어간다.
+   *
+   * 여닫기는 예전과 같이 순수 CSS(:hover / :focus-within)다. JS 로 열게 만들면 스크립트가 한 번
+   * 실패했을 때 메뉴 전체가 죽는다 — 내비게이션은 JS 없이도 동작해야 한다. JS 는 화면 밖으로
+   * 넘치는 패널을 뒤집는 일만 맡는다(패널 폭이 데이터에 따라 달라 CSS 로는 미리 알 수 없다).
+   */
+%>
+<style>
+  /* ── 패널 본체 ────────────────────────────────────────────────────────────
+     display 토글이 아니라 opacity/visibility 로 여닫는다. display:none 은 트랜지션이 걸리지
+     않아 예전 드롭다운이 뚝 끊겨 나타났다. visibility 를 함께 쓰는 이유는 닫힌 패널이
+     투명한 채로 클릭·탭 순서를 먹지 않게 하기 위해서다. */
+  .yd-md {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 40;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition:
+      opacity .22s cubic-bezier(.22, 1, .36, 1),
+      transform .28s cubic-bezier(.22, 1, .36, 1),
+      visibility 0s linear .28s;
+    background: #fff;
+    color: #3f3f46;
+    border: 1px solid rgba(24, 24, 27, .07);
+    border-top: 0;
+    border-radius: 0 0 14px 14px;
+    box-shadow:
+      0 1px 1px rgba(24, 24, 27, .04),
+      0 20px 44px -18px rgba(24, 24, 27, .30);
+  }
+
+  /* 링크와 패널 사이 1px 틈에서도 hover 가 끊기지 않게 위쪽으로 브릿지를 깐다.
+     패널에 overflow:hidden 을 걸면 이 브릿지가 잘려 나가므로 걸지 않는다. */
+  .yd-md::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -10px;
+    height: 10px;
+  }
+
+  /* 상단 헤어라인 액센트 — 패널이 헤더에서 "자라 나온" 느낌을 만드는 한 줄. */
+  .yd-md::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 2px;
+    width: 100%;
+    background: linear-gradient(90deg, var(--gh-primary, #2f6b46), var(--gh-accent, #d97706));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform .42s cubic-bezier(.22, 1, .36, 1) .06s;
+  }
+
+  /* 열림 — 두 스킨의 항목 클래스를 여기서 함께 받는다. 스킨이 늘면 이 목록에만 추가한다. */
+  .yd-gnb__item:hover > .yd-md,
+  .yd-gnb__item:focus-within > .yd-md,
+  .yd-ed-item:hover > .yd-md,
+  .yd-ed-item:focus-within > .yd-md {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition:
+      opacity .22s cubic-bezier(.22, 1, .36, 1),
+      transform .28s cubic-bezier(.22, 1, .36, 1),
+      visibility 0s;
+  }
+  .yd-gnb__item:hover > .yd-md::after,
+  .yd-gnb__item:focus-within > .yd-md::after,
+  .yd-ed-item:hover > .yd-md::after,
+  .yd-ed-item:focus-within > .yd-md::after { transform: scaleX(1); }
+
+  /* 화면 오른쪽 끝 메뉴는 패널이 잘린다 → 아래 스크립트가 이 클래스를 붙여 우측 정렬로 뒤집는다. */
+  .yd-md.is-flip { left: auto; right: 0; }
+
+  /* ── 안쪽 레이아웃 ────────────────────────────────────────────────────────
+     메가: 2뎁스가 컬럼 제목, 3뎁스가 그 아래 목록. 컴팩트: 2뎁스만 있는 좁은 단일 목록. */
+  .yd-md__inner {
+    padding: 22px 26px 24px;
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    border-radius: inherit;
+  }
+
+  .yd-md.is-mega .yd-md__inner {
+    display: grid;
+    grid-template-columns: repeat(var(--md-cols, 3), minmax(148px, 1fr));
+    gap: 4px 30px;
+    min-width: max-content;
+    max-width: min(78vw, 940px);
+  }
+
+  .yd-md.is-compact .yd-md__inner {
+    padding: 8px;
+    min-width: 208px;
+    max-width: 300px;
+  }
+
+  /* 컬럼이 순서대로 살짝 늦게 따라 들어온다. 한 번에 다 나타나는 것보다 시선이 왼쪽에서
+     오른쪽으로 자연스럽게 흐른다. 닫힐 때는 지연 없이 한꺼번에 사라진다. */
+  .yd-md__col {
+    opacity: 0;
+    transform: translateY(-5px);
+    transition: opacity .2s ease, transform .2s ease;
+  }
+  .yd-gnb__item:hover > .yd-md .yd-md__col,
+  .yd-gnb__item:focus-within > .yd-md .yd-md__col,
+  .yd-ed-item:hover > .yd-md .yd-md__col,
+  .yd-ed-item:focus-within > .yd-md .yd-md__col {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity .34s cubic-bezier(.22, 1, .36, 1) calc(var(--i, 0) * 45ms + 50ms),
+      transform .34s cubic-bezier(.22, 1, .36, 1) calc(var(--i, 0) * 45ms + 50ms);
+  }
+
+  /* ── 2뎁스 제목 (메가 모드) ── */
+  .yd-md__head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 0 9px;
+    margin-bottom: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    color: #18181b;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(24, 24, 27, .09);
+    transition: color .18s ease;
+  }
+  .yd-md__head::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    height: 1px;
+    width: 100%;
+    background: var(--gh-primary, #2f6b46);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform .3s cubic-bezier(.22, 1, .36, 1);
+  }
+  .yd-md__head:hover { color: var(--gh-primary, #2f6b46); }
+  .yd-md__head:hover::after { transform: scaleX(1); }
+
+  /* ── 3뎁스 목록 ── */
+  .yd-md__list { list-style: none; margin: 0; padding: 0; }
+  .yd-md__link {
+    display: block;
+    padding: 5px 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #71717a;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color .16s ease, transform .16s ease;
+  }
+  .yd-md__link:hover {
+    color: var(--gh-primary, #2f6b46);
+    transform: translateX(3px);
+  }
+
+  /* ── 컴팩트 모드 — 3뎁스가 없는 메뉴. 제목이 아니라 그냥 항목이므로 행 스타일로 되돌린다. ── */
+  .yd-md.is-compact .yd-md__head {
+    padding: 9px 12px;
+    margin: 0;
+    border: 0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #52525b;
+    transition: color .16s ease, background-color .16s ease;
+  }
+  .yd-md.is-compact .yd-md__head::after { display: none; }
+  .yd-md.is-compact .yd-md__head:hover {
+    color: var(--gh-primary, #2f6b46);
+    background: rgba(24, 24, 27, .04);
+  }
+  /* 화살표는 평소 숨어 있다가 hover 에서 미끄러져 들어온다 — 클릭 가능하다는 신호. */
+  .yd-md__head-arrow {
+    font-size: 11px;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .yd-md.is-compact .yd-md__head:hover .yd-md__head-arrow {
+    opacity: .75;
+    transform: translateX(0);
+  }
+  /* 메가 모드의 3뎁스 없는 컬럼 제목엔 화살표를 쓰지 않는다(컬럼 제목 줄이 어지러워진다). */
+  .yd-md.is-mega .yd-md__head-arrow { display: none; }
+
+  /* 키보드 이동 — 포커스 링이 패널 안에서도 보이게. */
+  .yd-md__head:focus-visible,
+  .yd-md__link:focus-visible {
+    outline: 2px solid var(--gh-primary, #2f6b46);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .yd-md,
+    .yd-md::after,
+    .yd-md__col,
+    .yd-md__head,
+    .yd-md__head::after,
+    .yd-md__link,
+    .yd-md__head-arrow,
+    .yd-gnb__item:hover > .yd-md,
+    .yd-ed-item:hover > .yd-md,
+    .yd-gnb__item:hover > .yd-md .yd-md__col,
+    .yd-ed-item:hover > .yd-md .yd-md__col { transition-duration: .01ms !important; transition-delay: 0s !important; }
+  }
+</style>
+<script>
+  (function () {
+    /*
+     * 위치 보정만 담당한다(여닫기는 CSS).
+     *
+     * 오른쪽 끝 메뉴는 넓은 메가 패널이 뷰포트를 넘어 잘린다. 넘치면 우측 정렬로 뒤집는다.
+     * 패널은 display:none 이 아니라 visibility:hidden 이므로 닫힌 상태에서도 실측이 된다
+     * — 그래서 hover 를 기다리지 않고 로드 시점에 한 번에 계산할 수 있다(열리는 순간의 튐이 없다).
+     */
+    var panels = [].slice.call(document.querySelectorAll('.yd-gnb__item > .yd-md, .yd-ed-item > .yd-md'));
+    if (!panels.length) return;
+
+    function place() {
+      panels.forEach(function (panel) {
+        panel.classList.remove('is-flip');
+        var width = panel.getBoundingClientRect().width;
+        var left = panel.parentElement.getBoundingClientRect().left;
+        if (left + width > window.innerWidth - 16) panel.classList.add('is-flip');
+      });
+    }
+
+    place();
+    var t = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(t);
+      t = setTimeout(place, 150);
+    });
+
+    /* ESC — 키보드로 펼친 패널을 닫는다. 여는 조건이 :focus-within 이라 포커스를 빼면 닫힌다. */
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var item = document.activeElement && document.activeElement.closest
+        ? document.activeElement.closest('.yd-gnb__item, .yd-ed-item')
+        : null;
+      if (item) document.activeElement.blur();
+    });
+  })();
+</script>

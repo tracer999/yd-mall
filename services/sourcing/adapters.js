@@ -97,7 +97,17 @@ async function validateConnection(cred) {
         }
     }
 
-    // TODO(Phase 2~3): 공급처(도매꾹/도매매) 실 API 어댑터 붙으면 여기서 검증.
+    // 도매꾹·도매매는 Open API 로 1건 조회해 키 유효성을 실제로 확인한다.
+    if (cred.channel === 'DOMEGGOOK' || cred.channel === 'DOMEME') {
+        try {
+            const domeggook = require('./supplier/domeggook');
+            await domeggook.verify(cred);
+            return { ok: true, message: '도매꾹 Open API 호출 성공 — 연결 확인됨(도매매 공용)' };
+        } catch (e) {
+            return { ok: false, message: `도매꾹 연결 실패: ${e.message}` };
+        }
+    }
+
     return { ok: true, message: '자격증명 형식 확인됨 (실 API 연결 검증은 어댑터 구현 후 지원)' };
 }
 

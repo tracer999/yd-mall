@@ -63,6 +63,34 @@ async function getCredential(mallId, id) {
     };
 }
 
+/*
+ * 채널 코드로 사용 가능한 자격증명 1건을 찾는다(어댑터 주입용).
+ * 도매매(DOMEME)처럼 다른 채널과 키를 공유하는 별칭 채널은 호출부에서
+ * adapters.resolveCredentialChannel 로 원본 채널을 넘겨야 한다.
+ * ACTIVE 를 우선하되, 미검증(자격증명은 있으나 아직 [검증] 안 누른) 건도 후보로 둔다.
+ */
+async function getCredentialByChannel(mallId, channel) {
+    const [rows] = await pool.query(
+        `SELECT * FROM mall_channel_credential
+          WHERE mall_id = ? AND channel = ? AND status <> 'DISABLED'
+          ORDER BY (status = 'ACTIVE') DESC, id ASC
+          LIMIT 1`,
+        [mallId, channel]
+    );
+    if (!rows.length) return null;
+    const r = rows[0];
+    return {
+        id: r.id,
+        mallId: r.mall_id,
+        channel: r.channel,
+        accountLabel: r.account_label,
+        clientId: r.client_id,
+        secret: decSecret(r.secret_enc),
+        extra: r.extra_json || null,
+        status: r.status,
+    };
+}
+
 // upsert — UNIQUE(mall_id, channel, account_label). 시크릿 미입력 시 기존 값 유지.
 async function saveCredential(mallId, { id, channel, accountLabel, clientId, secret, extraJson }) {
     if (!CHANNELS.includes(channel)) throw new Error('알 수 없는 채널: ' + channel);
@@ -140,6 +168,7 @@ module.exports = {
     CHANNELS,
     listCredentials,
     getCredential,
+    getCredentialByChannel,
     saveCredential,
     deleteCredential,
     updateVerifyResult,

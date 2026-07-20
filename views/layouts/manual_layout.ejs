@@ -49,6 +49,44 @@
             .manual-body { flex-direction: column; }
             .manual-sidebar { width: 100%; min-width: 100%; border-right: none; border-bottom: 1px solid #e2e8f0; }
         }
+
+        /* ── 관리자 화면 바로가기 버튼 ─────────────────────────────
+           매뉴얼 마크다운 안에서 <a class="manual-goto"> 로 사용한다.
+           여러 개를 묶을 때는 <div class="manual-goto-bar"> 로 감싼다. */
+        .manual-main .manual-doc .manual-goto-bar {
+            display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;
+            padding: 0.85rem 1rem; background: #f8fafc;
+            border: 1px solid #e2e8f0; border-left: 4px solid #1d4ed8; border-radius: 0.5rem;
+        }
+        .manual-main .manual-doc .manual-goto-bar > .manual-goto-label {
+            width: 100%; font-size: 0.8125rem; font-weight: 600; color: #64748b; letter-spacing: 0.02em;
+        }
+        .manual-main .manual-doc a.manual-goto {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.5rem 0.9rem; border-radius: 0.5rem;
+            background: #1d4ed8; color: #fff; font-size: 0.9rem; font-weight: 600;
+            text-decoration: none; border: 1px solid #1d4ed8; line-height: 1.3;
+            transition: background 0.15s ease, box-shadow 0.15s ease;
+        }
+        .manual-main .manual-doc a.manual-goto:hover {
+            background: #1e40af; box-shadow: 0 2px 6px rgba(29,78,216,0.25);
+        }
+        .manual-main .manual-doc a.manual-goto::after { content: '↗'; font-size: 0.85em; opacity: 0.85; }
+        /* 보조(회색) 버튼 — 관련 화면·참고 매뉴얼로 이동 */
+        .manual-main .manual-doc a.manual-goto.is-sub {
+            background: #fff; color: #1d4ed8; border-color: #bfdbfe;
+        }
+        .manual-main .manual-doc a.manual-goto.is-sub:hover { background: #eff6ff; box-shadow: none; }
+
+        /* ── 단계 안내 박스 ───────────────────────────────────── */
+        .manual-main .manual-doc .manual-steps {
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem;
+            padding: 0.5rem 1rem; margin: 1rem 0;
+        }
+        .manual-main .manual-doc .manual-path {
+            display: inline-block; background: #eff6ff; color: #1e40af;
+            padding: 0.2rem 0.55rem; border-radius: 0.35rem; font-size: 0.875rem; font-weight: 600;
+        }
     </style>
 </head>
 <body>

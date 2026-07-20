@@ -1,0 +1,333 @@
+<%
+  /* 외부몰 연동 · 가져온 상품(중간 테이블) 목록 */
+  const L = list || { rows: [], total: 0, page: 1, totalPages: 1 };
+  const f = filters || {};
+  const won = (v) => (v == null ? '-' : Number(v).toLocaleString('ko-KR') + '원');
+  const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR') : '-');
+  const qs = (over) => {
+    const p = new URLSearchParams({
+      supplier: f.supplier || '', status: f.status || '', q: f.q || '',
+      published: f.published || '',
+      page: String(L.page), size: String(L.size || 20),
+    });
+    Object.entries(over || {}).forEach(([k, v]) => p.set(k, String(v)));
+    return '/admin/sourcing/staging?' + p.toString();
+  };
+  const STATUS_CLS = {
+    DETAILED: 'bg-green-50 text-green-700',
+    LISTED: 'bg-gray-100 text-gray-600',
+    FAILED: 'bg-red-50 text-red-700',
+  };
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <div class="mb-3 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
+      <i class="bi bi-shop text-lg text-indigo-600"></i>
+      <span class="text-sm font-medium text-indigo-700">현재 편집 몰</span>
+      <span class="text-lg font-bold text-indigo-900"><%= (adminMall && adminMall.name) || ('mall #' + adminMallId) %></span>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+        <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
+      </div>
+      <a href="/admin/sourcing/import"
+         class="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+        <i class="bi bi-download"></i> 상품 가져오기
+      </a>
+    </div>
+  </div>
+
+  <% if (msg) { %>
+    <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800"><%= msg %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800"><%= error %></div>
+  <% } %>
+
+  <!-- 요약 -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+    <div class="bg-white shadow-sm rounded-lg p-4">
+      <div class="text-xs text-gray-500">전체 적재</div>
+      <div class="mt-1 text-2xl font-bold text-gray-900"><%= (stats.total || 0).toLocaleString('ko-KR') %></div>
+    </div>
+    <div class="bg-white shadow-sm rounded-lg p-4">
+      <div class="text-xs text-gray-500">수집 실패</div>
+      <div class="mt-1 text-2xl font-bold <%= stats.failed ? 'text-red-600' : 'text-gray-900' %>">
+        <%= (stats.failed || 0).toLocaleString('ko-KR') %>
+      </div>
+    </div>
+    <div class="bg-white shadow-sm rounded-lg p-4">
+      <div class="text-xs text-gray-500">재판매 금지</div>
+      <div class="mt-1 text-2xl font-bold <%= stats.resaleBlocked ? 'text-amber-600' : 'text-gray-900' %>">
+        <%= (stats.resaleBlocked || 0).toLocaleString('ko-KR') %>
+      </div>
+    </div>
+    <a href="/admin/sourcing/staging?published=Y" class="bg-white shadow-sm rounded-lg p-4 hover:ring-2 hover:ring-emerald-300">
+      <div class="text-xs text-gray-500">우리 몰 등록됨</div>
+      <div class="mt-1 text-2xl font-bold text-emerald-700"><%= (stats.published || 0).toLocaleString('ko-KR') %></div>
+    </a>
+    <a href="/admin/sourcing/staging?published=N" class="bg-white shadow-sm rounded-lg p-4 hover:ring-2 hover:ring-indigo-300">
+      <div class="text-xs text-gray-500">미등록</div>
+      <div class="mt-1 text-2xl font-bold text-indigo-700"><%= (stats.unpublished || 0).toLocaleString('ko-KR') %></div>
+    </a>
+  </div>
+
+  <% if (stats.resaleBlocked) { %>
+    <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+      <i class="bi bi-exclamation-triangle mr-1"></i>
+      <b>재판매 금지 <%= stats.resaleBlocked %>건</b>이 포함되어 있습니다. 공급처가 오픈마켓 재판매를 막은 상품이므로
+      스마트스토어에 등록하면 제재 대상이 될 수 있습니다. 등록 전에 반드시 확인하세요.
+    </div>
+  <% } %>
+
+  <!-- 필터 -->
+  <div class="bg-white shadow-sm rounded-lg mb-6">
+    <form method="get" action="/admin/sourcing/staging" class="p-5 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+      <div class="sm:col-span-3">
+        <label class="block text-sm text-gray-600 mb-1">공급처</label>
+        <select name="supplier" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="">전체</option>
+          <option value="DOMEGGOOK" <%= f.supplier === 'DOMEGGOOK' ? 'selected' : '' %>>도매꾹</option>
+          <option value="DOMEME" <%= f.supplier === 'DOMEME' ? 'selected' : '' %>>도매매</option>
+          <option value="ONCHANNEL" <%= f.supplier === 'ONCHANNEL' ? 'selected' : '' %>>온채널</option>
+        </select>
+      </div>
+      <div class="sm:col-span-3">
+        <label class="block text-sm text-gray-600 mb-1">수집 상태</label>
+        <select name="status" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="">전체</option>
+          <option value="DETAILED" <%= f.status === 'DETAILED' ? 'selected' : '' %>>상세 수집 완료</option>
+          <option value="FAILED" <%= f.status === 'FAILED' ? 'selected' : '' %>>수집 실패</option>
+          <option value="LISTED" <%= f.status === 'LISTED' ? 'selected' : '' %>>목록만</option>
+        </select>
+      </div>
+      <div class="sm:col-span-3">
+        <label class="block text-sm text-gray-600 mb-1">우리 몰 등록 여부</label>
+        <select name="published" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="">전체</option>
+          <option value="N" <%= f.published === 'N' ? 'selected' : '' %>>미등록만</option>
+          <option value="Y" <%= f.published === 'Y' ? 'selected' : '' %>>등록됨만</option>
+        </select>
+      </div>
+      <div class="sm:col-span-3">
+        <label class="block text-sm text-gray-600 mb-1">상품명 / 상품번호</label>
+        <input type="text" name="q" value="<%= f.q || '' %>"
+               class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div class="sm:col-span-12 flex items-center gap-2">
+        <button type="submit"
+          class="rounded-md bg-gray-800 px-5 py-2 text-sm font-medium text-white hover:bg-black">검색</button>
+        <a href="/admin/sourcing/staging?published=N"
+           class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+          미등록만 빠르게 보기
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- 목록 -->
+  <form method="post" action="/admin/sourcing/staging/delete" id="staging-form">
+    <div class="bg-white shadow-sm rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-lg font-bold text-gray-800">
+          가져온 상품 <span class="text-indigo-600"><%= (L.total || 0).toLocaleString('ko-KR') %></span>건
+        </h2>
+        <button type="submit"
+          class="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+          <i class="bi bi-trash"></i> 선택 삭제
+        </button>
+      </div>
+
+      <!-- 우리 몰 상품으로 일괄 등록 (스마트스토어 등록 아님) -->
+      <div class="px-6 py-4 bg-emerald-50/60 border-b border-emerald-100">
+        <div class="space-y-3">
+          <div class="flex flex-wrap items-start gap-4">
+            <div class="flex-1 min-w-[420px]">
+              <label class="block text-xs text-gray-600 mb-1">우리 몰 카테고리 <span class="text-red-500">*</span></label>
+              <%- include('_category_picker', { tree: categoryTree, pickerId: 'catBulk', fieldName: 'category_id', compact: true }) %>
+            </div>
+            <div class="w-32">
+              <label class="block text-xs text-gray-600 mb-1">마진율(%)</label>
+              <input type="number" step="0.01" min="0" name="margin_rate"
+                     value="<%= defaultMargin != null ? defaultMargin : '' %>"
+                     class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+            </div>
+            <div class="pt-5">
+              <!-- 체크박스를 삭제 폼과 공유하므로 별도 폼을 만들지 않고 formaction 으로 전송처만 바꾼다. -->
+              <button type="submit" id="publish-btn" formaction="/admin/sourcing/staging/publish"
+                class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                <i class="bi bi-box-arrow-in-down"></i> 선택 상품을 우리 몰에 등록
+              </button>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500">
+            선택한 상품 전부에 <b>같은 카테고리·마진율</b>이 적용됩니다. 상품마다 다르게 하려면 상세 화면에서 개별 등록하세요.
+            등록 결과는 <b>판매중지(OFF)</b> 상태이며, <b>이미 등록된 상품은 선택할 수 없습니다.</b>
+          </p>
+        </div>
+      </div>
+
+      <% if (!L.rows.length) { %>
+        <div class="p-10 text-center">
+          <i class="bi bi-inbox text-3xl text-gray-300"></i>
+          <p class="mt-3 text-sm text-gray-500">아직 가져온 상품이 없습니다.</p>
+          <a href="/admin/sourcing/import" class="mt-2 inline-block text-sm text-indigo-600 hover:underline">상품 가져오기로 이동</a>
+        </div>
+      <% } else { %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600">
+              <tr>
+                <th class="px-4 py-3 w-10 text-left"><input type="checkbox" id="chk-all" class="h-4 w-4"></th>
+                <th class="px-4 py-3 w-16 text-left">이미지</th>
+                <th class="px-4 py-3 text-left">상품명</th>
+                <th class="px-4 py-3 w-24 text-left">공급처</th>
+                <th class="px-4 py-3 w-28 text-right">공급가</th>
+                <th class="px-4 py-3 w-20 text-right">재고</th>
+                <th class="px-4 py-3 w-20 text-right">옵션</th>
+                <th class="px-4 py-3 w-28 text-center">상태</th>
+                <th class="px-4 py-3 w-28 text-center">우리 몰</th>
+                <th class="px-4 py-3 w-36 text-left">가져온 시각</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <% L.rows.forEach((row) => { %>
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-3 align-top">
+                    <%# 체크박스는 삭제 폼과 공용이라 비활성화하지 않는다(등록된 것도 삭제는 가능해야 한다).
+                        재등록 방지는 '등록' 제출 시 published 항목을 빼는 방식으로 처리한다. %>
+                    <input type="checkbox" name="id" value="<%= row.id %>" class="chk-item h-4 w-4"
+                           data-published="<%= row.mall_product_id ? '1' : '' %>"
+                           <%= row.mall_product_id ? 'title="이미 우리 몰에 등록됨 — 등록 대상에서 제외됩니다"' : '' %>>
+                  </td>
+                  <td class="px-4 py-3 align-top">
+                    <% if (row.thumb_url) { %>
+                      <img src="<%= row.thumb_url %>" alt="" class="h-12 w-12 rounded object-cover border border-gray-200" loading="lazy">
+                    <% } else { %>
+                      <div class="h-12 w-12 rounded bg-gray-100"></div>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top">
+                    <a href="/admin/sourcing/staging/<%= row.id %>" class="font-medium text-gray-900 hover:text-indigo-600 hover:underline">
+                      <%= row.title %>
+                    </a>
+                    <div class="mt-0.5 text-xs text-gray-400">
+                      상품번호 <%= row.supplier_item_no %>
+                      <% if (row.category_name) { %> · <%= row.category_name %><% } %>
+                    </div>
+                    <% if (row.resale_allowed === 0) { %>
+                      <span class="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">
+                        <i class="bi bi-exclamation-triangle"></i> 재판매 금지
+                      </span>
+                    <% } %>
+                    <% if (row.import_status === 'FAILED' && row.last_error) { %>
+                      <div class="mt-1 text-xs text-red-600"><%= row.last_error %></div>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-gray-600"><%= supplierLabel[row.supplier] || row.supplier %></td>
+                  <td class="px-4 py-3 align-top text-right font-medium text-gray-900"><%= won(row.supply_price) %></td>
+                  <td class="px-4 py-3 align-top text-right text-gray-600">
+                    <%= row.inventory_qty != null ? row.inventory_qty.toLocaleString('ko-KR') : '-' %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-right text-gray-600"><%= row.variant_count %></td>
+                  <td class="px-4 py-3 align-top text-center">
+                    <span class="rounded px-2 py-1 text-xs <%= STATUS_CLS[row.import_status] || 'bg-gray-100 text-gray-600' %>">
+                      <%= row.import_status %>
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 align-top text-center">
+                    <% if (row.mall_product_id) { %>
+                      <a href="/admin/products/edit/<%= row.mall_product_id %>"
+                         class="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700 hover:underline">
+                        등록됨 #<%= row.mall_product_id %>
+                      </a>
+                    <% } else { %>
+                      <span class="text-xs text-gray-300">미등록</span>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-xs text-gray-500"><%= dt(row.imported_at) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+          <span class="text-xs text-gray-500">삭제해도 공급처 원본에는 영향이 없습니다.</span>
+          <div class="flex items-center gap-2">
+            <% if (L.page > 1) { %>
+              <a href="<%= qs({ page: L.page - 1 }) %>"
+                 class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">이전</a>
+            <% } %>
+            <span class="text-sm text-gray-600"><%= L.page %> / <%= L.totalPages %></span>
+            <% if (L.page < L.totalPages) { %>
+              <a href="<%= qs({ page: L.page + 1 }) %>"
+                 class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">다음</a>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </form>
+
+  <p class="mt-4 text-xs text-gray-400">
+    다음 단계: 가져온 상품을 빌더 상품으로 변환하고 스마트스토어에 등록합니다(스마트스토어 등록 화면 — Phase 3).
+  </p>
+</div>
+
+<script>
+  (function () {
+    var all = document.getElementById('chk-all');
+    if (all) {
+      all.addEventListener('change', function () {
+        document.querySelectorAll('.chk-item').forEach(function (c) { c.checked = all.checked; });
+      });
+    }
+    var form = document.getElementById('staging-form');
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        var n = document.querySelectorAll('.chk-item:checked').length;
+        // 삭제 폼과 등록 버튼이 체크박스를 공유하므로 누른 버튼으로 분기한다.
+        var isPublish = e.submitter && e.submitter.id === 'publish-btn';
+
+        if (n === 0) {
+          e.preventDefault();
+          alert(isPublish ? '등록할 상품을 선택하세요.' : '삭제할 상품을 선택하세요.');
+          return;
+        }
+
+        if (isPublish) {
+          var catVal = document.getElementById('catBulk-value');
+          var catPath = document.getElementById('catBulk-path');
+          if (!catVal || !catVal.value) { e.preventDefault(); alert('우리 몰 카테고리를 선택하세요.'); return; }
+
+          // 재등록 방지 — 이미 등록된 항목은 전송 대상에서 뺀다(서버에도 동일 가드가 있다).
+          var checked = Array.prototype.slice.call(document.querySelectorAll('.chk-item:checked'));
+          var already = checked.filter(function (c) { return c.dataset.published === '1'; });
+          var fresh = checked.length - already.length;
+
+          if (fresh === 0) {
+            e.preventDefault();
+            alert('선택한 상품이 모두 이미 등록되어 있습니다. 미등록 상품을 선택해 주세요.');
+            return;
+          }
+
+          var label = (catPath && catPath.textContent.replace('선택: ', '')) || '선택한 카테고리';
+          var msg = fresh + '건을 [' + label + '] 카테고리로 우리 몰 상품에 등록할까요?\n판매중지(OFF) 상태로 만들어집니다.';
+          if (already.length) msg += '\n\n※ 이미 등록된 ' + already.length + '건은 제외됩니다.';
+
+          if (!confirm(msg)) { e.preventDefault(); return; }
+
+          // disabled 인 입력은 전송되지 않는다 — 이걸 이용해 등록된 항목을 제외한다.
+          already.forEach(function (c) { c.disabled = true; });
+          return;
+        }
+
+        if (!confirm(n + '건을 중간 테이블에서 삭제할까요? (공급처 원본에는 영향 없음)')) e.preventDefault();
+      });
+    }
+  })();
+</script>

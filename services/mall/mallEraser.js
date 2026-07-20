@@ -17,8 +17,9 @@ const pool = require('../../config/db');
  *
  * ⭐ 글로벌 카탈로그는 보존한다: 카테고리·브랜드(categories NORMAL·BRAND = mall_id 0)와
  *    brand_profile, 네이버 동기화 마스터(naver_brand·naver_category·naver_taxonomy_*)는
- *    전 몰 공통이라 몰 삭제 대상이 아니다. 아래 categories DELETE 는 `mall_id = <대상몰>` 만
- *    지우므로(대상 ≠ 0) 글로벌 행(mall 0)은 건드리지 않는다. THEME/OUTLET 등 몰별 타입만 삭제.
+ *    전 몰 공통이라 몰 삭제 대상이 아니다. 아래 categories DELETE 는 `mall_id = <대상몰>` 이면서
+ *    `type IN ('THEME','OUTLET')` 인 것만 지운다 — 몰이 실제로 소유하는 타입은 그 둘뿐이다.
+ *    글로벌 행(mall 0)은 두 조건 모두에서 빠지므로 이중으로 안전하다.
  *
  * 순서 제약(딱 하나): deal → deal_category 가 RESTRICT 라 deal 을 먼저 지운다.
  * FK CHECK 는 반드시 켜둔 채로 순서대로 지운다 — 끄면 CASCADE 가 돌지 않아
@@ -47,6 +48,19 @@ const MALL_SCOPED_TABLES = [
     'hero_slide', 'product_group', 'recommend_group',
     'mall_feature_menu', 'navigation_config', 'custom_menu',
     'shipping_policy', 'site_settings', 'theme',
+    /*
+     * 외부몰 연동(도매꾹·온채널 → 우리 몰) — 몰 스코프 데이터.
+     *   supplier_product  : 가져온 공급처 상품 스냅샷.
+     *                       supplier_variant 는 fk_sv_product ON DELETE CASCADE 라 따라 지워진다
+     *                       (mall_id 컬럼이 없어 이 목록에 넣을 수 없고, 넣을 필요도 없다).
+     *   supplier_import_log : 가져오기 실행 이력.
+     *   mall_channel_setting: 몰별 연동 사용여부·기본 마진율.
+     *
+     * ⚠ mall_channel_credential 은 **일부러 뺐다**. 몰을 지워도 외부 계정 자격증명은
+     *   참조용으로 남긴다(같은 키로 몰을 다시 만들 때 재입력하지 않기 위함).
+     *   대신 삭제된 몰의 API 키가 DB 에 남으므로, 완전히 정리하려면 수동으로 지워야 한다.
+     */
+    'supplier_product', 'supplier_import_log', 'mall_channel_setting',
 ];
 
 /**
@@ -64,11 +78,26 @@ async function cascadeDeleteMall(mallId) {
             await conn.query(`DELETE FROM \`${table}\` WHERE mall_id = ?`, [mallId]);
         }
 
-        // 카테고리: 깊은 depth 부터 지워 parent_id 정합성을 지킨다(마지막 줄은 depth NULL 안전망).
-        await conn.query('DELETE FROM categories WHERE mall_id = ? AND depth = 3', [mallId]);
-        await conn.query('DELETE FROM categories WHERE mall_id = ? AND depth = 2', [mallId]);
-        await conn.query('DELETE FROM categories WHERE mall_id = ? AND depth = 1', [mallId]);
-        await conn.query('DELETE FROM categories WHERE mall_id = ?', [mallId]);
+        /*
+         * 카테고리: 깊은 depth 부터 지워 parent_id 정합성을 지킨다(마지막 줄은 depth NULL 안전망).
+         *
+         * type 을 THEME/OUTLET 으로 **명시 한정**한다. 그게 몰이 실제로 소유하는 타입이고
+         * (categoryController.js:271), NORMAL·BRAND 는 글로벌 한 벌(mall_id 0)이라 애초에
+         * 대상이 아니다. 예전엔 type 필터가 없어 위 주석("몰별 타입만 삭제")과 실제 동작이
+         * 달랐다 — 샘플 시더가 몰 스코프로 찍어낸 NORMAL/BRAND 를 같이 지우고 있었다.
+         * 시더가 공용 참조로 바뀐 지금은 지울 몰 스코프 NORMAL/BRAND 자체가 생기지 않는다.
+         * 필터를 명시해 두면 나중에 누가 몰 스코프 NORMAL 을 만들더라도 공용 카탈로그를
+         * 실수로 지우는 경로가 열리지 않는다.
+         */
+        const OWNED_CATEGORY_TYPES = ['THEME', 'OUTLET'];
+        for (const depth of [3, 2, 1]) {
+            await conn.query(
+                'DELETE FROM categories WHERE mall_id = ? AND type IN (?) AND depth = ?',
+                [mallId, OWNED_CATEGORY_TYPES, depth]);
+        }
+        await conn.query(
+            'DELETE FROM categories WHERE mall_id = ? AND type IN (?)',
+            [mallId, OWNED_CATEGORY_TYPES]);
 
         // page → page_section·page_revision CASCADE
         await conn.query('DELETE FROM page WHERE mall_id = ?', [mallId]);

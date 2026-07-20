@@ -238,18 +238,42 @@
   /* 하위 목록은 좌측 라인으로 계층을 보인다(들여쓰기만으로는 3뎁스에서 구분이 흐려진다) */
   .yd-dw__sub { border-left: 1px solid #f3f4f6; margin-left: .125rem; padding-left: .5rem; }
 
-  /* 항목명 = 아코디언 토글. 캐럿은 접힘 ▾ / 펼침 ▴ 로 회전한다 */
-  .yd-dw__caret { font-size: .75rem; color: #9ca3af; transition: transform .2s; }
-  .yd-dw__name[aria-expanded="true"] .yd-dw__caret { transform: rotate(180deg); }
-  @media (prefers-reduced-motion: reduce) { .yd-dw__caret { transition: none; } }
-
-  /* 행 끝의 [>] — 하위가 있는 메뉴에서 해당 메뉴로 가는 유일한 진입점 */
-  .yd-dw__go {
-    flex: 0 0 auto; width: 2rem; height: 2rem;
-    display: flex; align-items: center; justify-content: center;
-    color: #9ca3af; border-radius: 9999px; transition: color .15s, background-color .15s;
+  /*
+   * 항목명 = 아코디언 토글. 우측 아이콘은 [+](접힘) → [⌄](펼침) 하나뿐이다.
+   * 두 아이콘을 grid 로 같은 칸에 겹쳐 두고 opacity 로 교차시킨다 — 자리를 서로 밀지 않아
+   * 전환 중에도 글자 폭이 흔들리지 않는다.
+   */
+  .yd-dw__toggle {
+    flex: 0 0 auto; margin-left: auto;
+    display: grid; place-items: center;
+    width: 1.25rem; height: 1.25rem;
+    color: #9ca3af;
   }
-  .yd-dw__go:hover { color: var(--gh-primary); background: #f9fafb; }
+  .yd-dw__toggle > i {
+    grid-area: 1 / 1;
+    font-size: .75rem; line-height: 1;
+    transition: opacity .18s ease, transform .22s cubic-bezier(.16, 1, .3, 1);
+  }
+  .yd-dw__toggle-plus { opacity: 1; transform: rotate(0deg); }
+  .yd-dw__toggle-chev { opacity: 0; transform: rotate(-90deg); }
+  .yd-dw__name[aria-expanded="true"] .yd-dw__toggle-plus { opacity: 0; transform: rotate(90deg); }
+  .yd-dw__name[aria-expanded="true"] .yd-dw__toggle-chev { opacity: 1; transform: rotate(0deg); }
+  .yd-dw__name[aria-expanded="true"] .yd-dw__toggle { color: var(--gh-primary); }
+  .yd-dw__name:hover .yd-dw__toggle { color: #4b5563; }
+  @media (prefers-reduced-motion: reduce) { .yd-dw__toggle > i { transition: none; } }
+
+  /*
+   * "OOO 전체" — 하위 목록 맨 위. 이 메뉴 자체로 가는 진입점이다(예전 행 끝 [>] 의 대체).
+   * 형제 항목과 같은 크기로 두면 그냥 하위 하나로 읽히므로, 색과 화살표로 성격을 구분한다.
+   */
+  .yd-dw__all { color: var(--gh-primary); font-weight: 600; }
+  .yd-dw__all:hover { color: var(--gh-primary-dark, var(--gh-primary)); }
+  .yd-dw__all-arrow {
+    font-size: .6875rem; opacity: .55;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+  .yd-dw__all:hover .yd-dw__all-arrow { opacity: 1; transform: translateX(3px); }
+  @media (prefers-reduced-motion: reduce) { .yd-dw__all-arrow { transition: none; } }
 
   .yd-dw__badge {
     font-size: 9px; font-weight: 800; line-height: 1;
@@ -303,7 +327,7 @@
     }
 
     // 아코디언 — 항목명(<button.yd-dw__name>)을 누르면 그 행 다음의 <ul.yd-dw__sub> 를 펼친다.
-    // 해당 메뉴로 이동하는 링크는 행 끝의 [>](a.yd-dw__go) 다: 상위 카테고리로 갈 방법이 사라지면 안 된다.
+    // 해당 메뉴로 이동하는 링크는 펼친 목록 맨 위의 "OOO 전체"(a.yd-dw__all) 다.
     drawer.addEventListener('click', function (e) {
       var btn = e.target.closest('.yd-dw__name');
       if (!btn) return;

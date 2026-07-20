@@ -68,17 +68,49 @@
             </div>
           </div>
 
-          <!-- 연결 상품 (상품배너일 때만) -->
+          <!-- 연결 상품 (상품배너일 때만) — ID 를 외워 넣지 않고 검색해서 고른다 -->
           <div id="productIdField" class="<%= _isProductKind ? '' : 'hidden' %>">
-            <label class="block text-sm font-medium text-gray-700 mb-2">연결 상품 ID</label>
-            <input type="number" name="product_id" placeholder="예: 293"
-              value="<%= slide && slide.product_id ? slide.product_id : '' %>"
-              class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
-            <% if (slide && slide.product_id) { %>
-              <p class="mt-1 text-xs text-gray-500">현재 연결: #<%= slide.product_id %> <span class="font-medium"><%= slide.product_name || '(삭제된 상품)' %></span></p>
-            <% } else { %>
-              <p class="mt-1 text-xs text-gray-400">상품 상세의 URL(/products/view/<b>293</b>) 또는 상품 목록에서 상품 ID를 확인해 입력하세요. 가격·할인율·대표이미지는 이 상품에서 가져옵니다.</p>
-            <% } %>
+            <label class="block text-sm font-medium text-gray-700 mb-2">연결 상품</label>
+            <input type="hidden" name="product_id" id="productIdInput"
+                   value="<%= slide && slide.product_id ? slide.product_id : '' %>">
+
+            <div id="pickedProduct" class="<%= (slide && slide.product_id) ? '' : 'hidden' %> flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+              <img id="pickedImage" src="<%= (slide && slide.main_image) ? slide.main_image : '' %>" alt=""
+                   class="w-12 h-12 object-cover rounded border border-gray-200 bg-white">
+              <div class="flex-1 min-w-0">
+                <p id="pickedName" class="text-sm font-medium text-gray-900 truncate"><%= (slide && slide.product_name) ? slide.product_name : '' %></p>
+                <p id="pickedMeta" class="text-xs text-gray-400">#<%= (slide && slide.product_id) ? slide.product_id : '' %></p>
+              </div>
+              <button type="button" id="clearProduct"
+                      class="shrink-0 h-[32px] px-3 text-xs rounded-md border border-gray-300 text-gray-600 hover:bg-white">해제</button>
+            </div>
+
+            <button type="button" id="openSlideProductPicker"
+                    class="mt-2 inline-flex items-center gap-1.5 h-[38px] px-4 text-sm font-medium rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50">
+              <i class="bi bi-search"></i> <span id="pickBtnLabel"><%= (slide && slide.product_id) ? '다른 상품으로 변경' : '상품 검색해서 고르기' %></span>
+            </button>
+            <p class="mt-1 text-xs text-gray-400">가격·할인율·대표이미지는 이 상품에서 가져옵니다.</p>
+          </div>
+
+          <!-- 상품 검색 팝업 (이 폼 전용 · 단일 선택) -->
+          <div id="slideProductPicker" class="hidden fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-xl mt-12 mb-12">
+              <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-base font-bold text-gray-900">상품 검색</h3>
+                <button type="button" id="closeSlidePicker" class="text-gray-400 hover:text-gray-600"><i class="bi bi-x-lg"></i></button>
+              </div>
+              <div class="px-5 py-4 space-y-3">
+                <div class="flex gap-2">
+                  <input type="text" id="slidePickerQuery" placeholder="상품명 또는 상품코드로 검색"
+                         class="flex-1 text-sm border-gray-300 rounded-md" autocomplete="off">
+                  <button type="button" id="slidePickerSearch"
+                          class="shrink-0 h-[38px] px-4 text-sm font-medium rounded-md bg-gray-800 text-white hover:bg-gray-900">검색</button>
+                </div>
+                <div id="slidePickerResults" class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                  <p class="p-4 text-sm text-gray-400">검색어를 입력하고 검색을 누르세요. 비워두고 검색하면 최근 등록 상품이 나옵니다.</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- 라벨 -->
@@ -99,15 +131,42 @@
               class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
           </div>
 
+          <!-- 미디어 유형 -->
+          <%
+            /* MAIN 슬롯만 영상을 지원한다 — 우측 FEATURE 카드는 렌더러가 이미지로만 그린다. */
+            const _isVideo = !!(slide && slide.media_type === 'VIDEO');
+          %>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">미디어 유형</label>
+            <div class="flex gap-3">
+              <label class="flex-1 flex items-center gap-2 border rounded-lg px-4 py-3 cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input type="radio" name="media_type" value="IMAGE" <%= _isVideo ? '' : 'checked' %>
+                       class="h-4 w-4 text-blue-600 border-gray-300" data-media-type>
+                <span class="text-sm text-gray-800"><i class="bi bi-image mr-1"></i> 이미지</span>
+              </label>
+              <label class="flex-1 flex items-center gap-2 border rounded-lg px-4 py-3 cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input type="radio" name="media_type" value="VIDEO" <%= _isVideo ? 'checked' : '' %>
+                       class="h-4 w-4 text-blue-600 border-gray-300" data-media-type>
+                <span class="text-sm text-gray-800"><i class="bi bi-camera-video mr-1"></i> 영상</span>
+              </label>
+            </div>
+            <p class="mt-1 text-xs text-gray-400">영상은 중앙 슬라이더(MAIN)에서만 재생됩니다. 우측 카드(FEATURE)는 항상 이미지로 표시됩니다.</p>
+          </div>
+
           <!-- 이미지 -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">프로모션 이미지 <span class="text-gray-400 font-normal">(선택)</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              프로모션 이미지 <span class="text-gray-400 font-normal">(선택)</span>
+            </label>
             <input type="file" name="slide_image" id="slideImageInput" accept="image/*"
               class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-gray-300" />
+            <input type="hidden" name="slide_image_url" id="slide_image_url" value="">
+            <div data-url-upload data-target="#slide_image_url" data-dest="hero" data-kind="image"
+                 data-preview="#previewImage"></div>
             <p class="mt-1 text-xs text-gray-400"><span data-kind-only="product">비우면 연결 상품의 대표이미지를 사용합니다. </span><span data-kind-only="plain">일반배너는 이미지가 없으면 슬라이드가 비어 보입니다. </span>중앙 슬라이더는 원형으로 노출되므로 정사각형(1:1) 이미지를 권장합니다.</p>
             <p class="mt-1 text-xs text-blue-700">최대 업로드 용량: <%= maxUploadFileMb || 20 %>MB</p>
             <% if (slide && slide.image_url) { %>
-              <input type="hidden" name="existing_image" value="<%= slide.image_url %>">
+              <input type="hidden" name="existing_slide_image" value="<%= slide.image_url %>">
             <% } %>
             <div id="previewContainer" class="mt-4 <%= slide && slide.image_url ? '' : 'hidden' %>">
               <p class="text-sm text-gray-700 mb-2 font-medium">미리보기</p>
@@ -116,6 +175,60 @@
                   class="max-w-full h-auto object-contain" style="max-height: 240px;">
               </div>
             </div>
+          </div>
+
+          <!-- 영상 (media_type=VIDEO 일 때만) -->
+          <%
+            /*
+             * 영상 칸 정의 — name 은 routes/admin/banners.js 의 upload.fields 선언과
+             * **정확히 같아야** 한다. 어긋나면 multer 가 LIMIT_UNEXPECTED_FILE 로 400 을 낸다.
+             *   field  : file input name. hidden 은 `${field}_url`(URL 가져오기 결과),
+             *            `existing_${field}`(기존 값), `clear_${field}`(비우기)
+             *   current: 수정 화면에서 이미 저장된 경로
+             */
+            const _videoSlots = [
+              { field: 'slide_video_mp4',        label: 'PC 영상 · MP4',      accept: 'video/mp4',  kind: 'video',
+                current: slide && slide.video_mp4_url,        hint: '필수. 가장 호환성이 넓습니다.' },
+              { field: 'slide_video_webm',       label: 'PC 영상 · WebM',     accept: 'video/webm', kind: 'video',
+                current: slide && slide.video_webm_url,       hint: '선택. 있으면 더 가볍게 재생됩니다.' },
+              { field: 'slide_mobile_video_mp4', label: '모바일 영상 · MP4',  accept: 'video/mp4',  kind: 'video',
+                current: slide && slide.mobile_video_mp4_url, hint: '선택. 비우면 PC 영상을 그대로 씁니다.' },
+              { field: 'slide_mobile_video_webm',label: '모바일 영상 · WebM', accept: 'video/webm', kind: 'video',
+                current: slide && slide.mobile_video_webm_url,hint: '선택.' },
+              { field: 'slide_poster',           label: '포스터 이미지',      accept: 'image/*',    kind: 'image',
+                current: slide && slide.poster_url,           hint: '영상이 로드되기 전에 보이는 정지 이미지. 넣어두면 화면이 깜빡이지 않습니다.' },
+            ];
+          %>
+          <div id="videoFields" class="<%= _isVideo ? '' : 'hidden' %> space-y-5 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+            <p class="text-sm font-medium text-gray-800"><i class="bi bi-camera-video mr-1 text-blue-600"></i> 영상 파일</p>
+            <p class="text-xs text-gray-500 -mt-3">파일을 직접 올리거나, 영상 주소를 붙여넣어 가져올 수 있습니다. 가져온 영상은 우리 서버에 저장됩니다.</p>
+
+            <% _videoSlots.forEach(function (s) { %>
+              <div class="rounded-md border border-gray-200 bg-white p-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1.5"><%= s.label %></label>
+
+                <input type="file" name="<%= s.field %>" accept="<%= s.accept %>"
+                  class="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-gray-300" />
+
+                <input type="hidden" name="<%= s.field %>_url" id="<%= s.field %>_url" value="">
+                <div data-url-upload data-target="#<%= s.field %>_url" data-dest="hero" data-kind="<%= s.kind %>"></div>
+
+                <% if (s.current) { %>
+                  <input type="hidden" name="existing_<%= s.field %>" value="<%= s.current %>">
+                  <p class="mt-1.5 text-xs text-gray-600">
+                    현재: <span class="font-mono text-gray-500"><%= s.current %></span>
+                  </p>
+                  <label class="mt-1 inline-flex items-center gap-1.5 text-xs text-red-600">
+                    <input type="checkbox" name="clear_<%= s.field %>" value="1" class="h-3.5 w-3.5 rounded border-gray-300">
+                    이 항목 비우기
+                  </label>
+                <% } %>
+
+                <p class="mt-1 text-xs text-gray-400"><%= s.hint %></p>
+              </div>
+            <% }); %>
+
+            <p class="text-xs text-blue-700">영상 최대 업로드 용량: <%= maxVideoUploadMb || 80 %>MB (URL 가져오기는 8MB)</p>
           </div>
 
           <!-- 링크 -->
@@ -156,6 +269,25 @@
   </div>
 </div>
 
+<%# URL 가져오기 위젯([data-url-upload]) — 이 폼이 첫 사용처다. %>
+<script src="/js/admin/url-upload.js"></script>
+<script>
+  /* 미디어 유형 라디오 → 영상 칸 표시/숨김. 서버도 media_type 을 보고 영상 컬럼을
+     비우므로, 여기서 숨기기만 해도 이미지로 되돌린 슬라이드에 영상이 남지 않는다. */
+  (function () {
+    var videoBox = document.getElementById('videoFields');
+    if (!videoBox) return;
+    var radios = document.querySelectorAll('[data-media-type]');
+
+    function sync() {
+      var picked = document.querySelector('[data-media-type]:checked');
+      videoBox.classList.toggle('hidden', !picked || picked.value !== 'VIDEO');
+    }
+
+    radios.forEach(function (r) { r.addEventListener('change', sync); });
+    sync();
+  })();
+</script>
 <script>
   (function () {
     const maxUploadMb = Number('<%= maxUploadFileMb || 20 %>');
@@ -202,8 +334,12 @@
       if (productField) {
         productField.classList.toggle('hidden', !isProduct);
         // 감춘 칸의 값은 보내지 않는다 — 종류를 바꿨는데 예전 상품이 남아 붙는 걸 막는다.
-        const input = productField.querySelector('input[name="product_id"]');
-        if (input && !isProduct) input.value = '';
+        const input = document.getElementById('productIdInput');
+        if (input && !isProduct) {
+          input.value = '';
+          const card = document.getElementById('pickedProduct');
+          if (card) card.classList.add('hidden');
+        }
       }
       document.querySelectorAll('[data-kind-only]').forEach(function (el) {
         el.classList.toggle('hidden', el.getAttribute('data-kind-only') !== (isProduct ? 'product' : 'plain'));
@@ -223,5 +359,92 @@
 
     kindRadios.forEach(function (r) { r.addEventListener('change', applyKind); });
     applyKind();
+
+    /*
+     * 연결 상품 고르기 — 단일 선택. 목록의 '상품 골라 추가'(다건)와 달리 여기선 한 건만 물린다.
+     * 고른 값은 hidden(product_id)에만 담고, 화면에는 카드로 보여 준다.
+     * 상품명은 textContent 로만 넣는다(HTML 주입 차단).
+     */
+    var pickModal  = document.getElementById('slideProductPicker');
+    var pickIdEl   = document.getElementById('productIdInput');
+    if (pickModal && pickIdEl) {
+      var pQuery   = document.getElementById('slidePickerQuery');
+      var pResults = document.getElementById('slidePickerResults');
+      var card     = document.getElementById('pickedProduct');
+      var cardImg  = document.getElementById('pickedImage');
+      var cardName = document.getElementById('pickedName');
+      var cardMeta = document.getElementById('pickedMeta');
+      var btnLabel = document.getElementById('pickBtnLabel');
+
+      function openPick()  { pickModal.classList.remove('hidden'); pQuery.focus(); if (!pResults.dataset.loaded) pSearch(); }
+      function closePick() { pickModal.classList.add('hidden'); }
+
+      document.getElementById('openSlideProductPicker').addEventListener('click', openPick);
+      document.getElementById('closeSlidePicker').addEventListener('click', closePick);
+      pickModal.addEventListener('click', function (e) { if (e.target === pickModal) closePick(); });
+
+      document.getElementById('clearProduct').addEventListener('click', function () {
+        pickIdEl.value = '';
+        card.classList.add('hidden');
+        btnLabel.textContent = '상품 검색해서 고르기';
+      });
+
+      function choose(p) {
+        pickIdEl.value = p.id;
+        cardImg.src = p.main_image || '/images/placeholder.png';
+        cardName.textContent = p.name;
+        cardMeta.textContent = '#' + p.id + (p.product_code ? ' · ' + p.product_code : '');
+        card.classList.remove('hidden');
+        btnLabel.textContent = '다른 상품으로 변경';
+        closePick();
+      }
+
+      function pRow(p) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50';
+        var img = document.createElement('img');
+        img.src = p.main_image || '/images/placeholder.png';
+        img.className = 'w-10 h-10 object-cover rounded border border-gray-200 bg-gray-50';
+        img.alt = '';
+        var box = document.createElement('div');
+        box.className = 'flex-1 min-w-0';
+        var nm = document.createElement('p');
+        nm.className = 'text-sm text-gray-900 truncate';
+        nm.textContent = p.name;
+        var mt = document.createElement('p');
+        mt.className = 'text-xs text-gray-400';
+        mt.textContent = (p.product_code ? p.product_code + ' · ' : '')
+          + Number(p.price || 0).toLocaleString() + '원';
+        box.appendChild(nm); box.appendChild(mt);
+        b.appendChild(img); b.appendChild(box);
+        b.addEventListener('click', function () { choose(p); });
+        return b;
+      }
+
+      function pSearch() {
+        pResults.dataset.loaded = '1';
+        pResults.innerHTML = '<p class="p-4 text-sm text-gray-400">검색 중…</p>';
+        fetch('/admin/banners/hero-slides/product-search?q=' + encodeURIComponent(pQuery.value.trim()))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var list = (data && data.products) || [];
+            pResults.innerHTML = '';
+            if (list.length === 0) {
+              pResults.innerHTML = '<p class="p-4 text-sm text-gray-400">검색 결과가 없습니다. (이미 슬라이드에 등록된 상품은 제외됩니다)</p>';
+              return;
+            }
+            list.forEach(function (p) { pResults.appendChild(pRow(p)); });
+          })
+          .catch(function () {
+            pResults.innerHTML = '<p class="p-4 text-sm text-red-500">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</p>';
+          });
+      }
+
+      document.getElementById('slidePickerSearch').addEventListener('click', pSearch);
+      pQuery.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); pSearch(); }
+      });
+    }
   })();
 </script>

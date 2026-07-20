@@ -32,9 +32,24 @@ router.post('/connections/copy', requireMenuAccess('/admin/sourcing/connections'
 router.post('/connections/:id/verify', requireNumericId(), requireMenuAccess('/admin/sourcing/connections'), c.postConnectionVerify);
 router.post('/connections/:id/delete', requireNumericId(), requireMenuAccess('/admin/sourcing/connections'), c.postConnectionDelete);
 
-// 1차 나머지 화면 (골격 플레이스홀더)
+// 상품 가져오기 — 검색(GET) / 선택 적재(POST)
 router.get('/import', requireMenuAccess('/admin/sourcing/import'), c.getImport);
+router.post('/import/run', requireMenuAccess('/admin/sourcing/import'), c.postImportRun);
+// 카테고리 선택기용 트리(JSON) — 사용자가 코드를 몰라도 이름으로 고를 수 있게 한다.
+router.get('/domeggook-categories', requireMenuAccess('/admin/sourcing/import'), c.getDomeggookCategories);
+
+// 가져온 상품(중간 테이블) — 목록·상세·재수집·삭제.
+// Express 5: 정적 세그먼트('/delete')를 :id 보다 먼저 선언한다.
 router.get('/staging', requireMenuAccess('/admin/sourcing/staging'), c.getStaging);
+router.post('/staging/delete', requireMenuAccess('/admin/sourcing/staging'), c.postStagingDelete);
+// 우리 몰 상품으로 등록(스마트스토어 등록 아님) — 목록 일괄 / 상세 단건
+router.post('/staging/publish', requireMenuAccess('/admin/sourcing/staging'), c.postPublishToMall);
+router.post('/staging/:id/publish', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postPublishToMall);
+router.get('/staging/:id', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.getStagingDetail);
+router.post('/staging/:id/refresh', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postStagingRefresh);
+router.post('/staging/:id/delete', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postStagingDelete);
+
+// 1차 나머지 화면 (골격 플레이스홀더)
 router.get('/publish', requireMenuAccess('/admin/sourcing/publish'), c.getPublish);
 router.get('/channel-import', requireMenuAccess('/admin/sourcing/channel-import'), c.getChannelImport);
 router.get('/sync', requireMenuAccess('/admin/sourcing/sync'), c.getSync);

@@ -1,0 +1,47 @@
+<%
+  /*
+   * GNB 뎁스 드롭다운 패널 — 드로어형(_compact_drawer)·에디토리얼형(_editorial_overlay) 공용.
+   *
+   * 왜 공용인가: 두 스킨이 같은 마크업을 각자 복사해 두고 있었다. 한쪽만 고치면 다른 쪽이
+   * 조용히 옛 디자인으로 남는다. 구조는 여기 한 곳, 스킨별 차이는 panelClass 로만 가른다.
+   *
+   * 받는 locals
+   *   kids       : 2뎁스 노드 배열 (호출부에서 pcVisible 필터를 이미 끝낸 것)
+   *   pcKids(n)  : 노드의 PC 노출 자식만 돌려주는 함수 (3뎁스 조회용)
+   *   panelClass : 스킨이 hover 로 여닫는 클래스 — 'yd-gnb__panel' | 'yd-ed-panel'
+   *
+   * 레이아웃은 데이터가 정한다.
+   *   3뎁스가 하나라도 있으면 → 메가(컬럼) 모드. 2뎁스가 컬럼 제목, 3뎁스가 그 아래 목록.
+   *   전부 2뎁스뿐이면      → 콤팩트 모드. 좁은 단일 컬럼 목록.
+   * 예전엔 두 경우가 한 덩어리로 나와, 3뎁스가 2뎁스 밑에 들여쓴 회색 잔글씨로 눌려 있었다.
+   */
+  const _mdKids = kids || [];
+  const _mdHasGrand = _mdKids.some((c) => pcKids(c).length > 0);
+  /* 컬럼은 최대 4열까지만 한 줄에 둔다 — 그 이상은 헤더보다 패널이 넓어져 화면을 벗어난다. */
+  const _mdCols = Math.min(Math.max(_mdKids.length, 1), 4);
+%>
+<div class="<%= panelClass %> yd-md <%= _mdHasGrand ? 'is-mega' : 'is-compact' %>"
+     style="--md-cols: <%= _mdCols %>;">
+  <div class="yd-md__inner">
+    <% _mdKids.forEach(function (c, ci) { %>
+      <% const _mdGrand = pcKids(c); %>
+      <div class="yd-md__col" style="--i: <%= ci %>;">
+        <a href="<%= c.href %>" <%= Number(c.newWindow) ? 'target="_blank" rel="noopener"' : '' %>
+           class="yd-md__head<%= _mdGrand.length ? '' : ' is-leaf' %>">
+          <span class="yd-md__head-text"><%= c.name %></span>
+          <% if (!_mdGrand.length) { %><i class="bi bi-arrow-right yd-md__head-arrow" aria-hidden="true"></i><% } %>
+        </a>
+        <% if (_mdGrand.length) { %>
+          <ul class="yd-md__list">
+            <% _mdGrand.forEach(function (g) { %>
+              <li>
+                <a href="<%= g.href %>" <%= Number(g.newWindow) ? 'target="_blank" rel="noopener"' : '' %>
+                   class="yd-md__link"><%= g.name %></a>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+      </div>
+    <% }); %>
+  </div>
+</div>

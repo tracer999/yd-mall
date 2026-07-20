@@ -550,12 +550,45 @@
     });
   }
 
+  // ---------- 미리보기 디바이스 ----------
+  // iframe 을 실제 기기 폭(PC 1440 / 태블릿 820 / 모바일 390)으로 렌더한 뒤, 화면에 안 들어가면
+  // transform 으로 축소한다. iframe 폭을 직접 줄이면 사이트가 그 폭을 뷰포트로 인식해
+  // PC 를 골라도 모바일 레이아웃이 나온다.
+  var stageEl = document.getElementById('pb-preview-stage');
+  var viewportEl = document.getElementById('pb-preview-viewport');
+  var scaleLabel = document.getElementById('pb-preview-scale');
+  var device = { w: 1440, h: 900 };
+
+  function applyDevice() {
+    if (!stageEl || !viewportEl) return;
+    // flex:none — stage 가 flex 컨테이너라 이걸 안 주면 1440px 뷰포트가 stage 폭까지
+    // 줄어들어(flex-shrink 기본 1) iframe 이 다시 모바일 폭으로 렌더된다.
+    viewportEl.style.flex = 'none';
+    viewportEl.style.width = device.w + 'px';
+    viewportEl.style.height = device.h + 'px';
+    // clientWidth 는 테두리를 뺀 실제 내부 폭. 여백 8px 은 축소 후에도 좌우가 붙지 않게.
+    var avail = stageEl.clientWidth - 8;
+    var scale = Math.min(1, avail / device.w);
+    viewportEl.style.transform = scale < 1 ? 'scale(' + scale + ')' : '';
+    // 축소하면 시각적 높이만 줄고 레이아웃 높이는 그대로라 stage 밑에 빈 공간이 남는다.
+    stageEl.style.height = Math.round(device.h * scale) + 'px';
+    if (scaleLabel) scaleLabel.textContent = scale < 1 ? '· ' + Math.round(scale * 100) + '% 축소' : '· 100%';
+  }
+
   document.querySelectorAll('.pb-device-btn').forEach(function (b) {
     b.addEventListener('click', function () {
       document.querySelectorAll('.pb-device-btn').forEach(function (x) { x.classList.remove('bg-blue-50', 'text-blue-700'); x.classList.add('text-gray-600'); });
       b.classList.add('bg-blue-50', 'text-blue-700'); b.classList.remove('text-gray-600');
-      previewEl.style.width = b.dataset.device === 'mobile' ? '390px' : '100%';
+      device = { w: Number(b.dataset.w) || 1440, h: Number(b.dataset.h) || 900 };
+      applyDevice();
     });
+  });
+
+  applyDevice();
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(applyDevice, 120);
   });
 
   // 간단 토스트

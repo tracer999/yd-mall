@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS `carts` (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS `categories` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '카테고리 ID (PK)',
-  `mall_id` bigint NOT NULL DEFAULT '1' COMMENT '몰 ID(멀티몰 대비)',
+  `mall_id` bigint NOT NULL DEFAULT '1' COMMENT '소유 몰. 0=전 몰 공용(NORMAL/BRAND). THEME/OUTLET 만 몰별',
   `name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '카테고리명',
   `slug` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'URL 슬러그',
   `display_order` int DEFAULT '0' COMMENT '노출 순서',

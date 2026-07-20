@@ -42,11 +42,13 @@ module.exports = {
   theme_hero: {
     view: 'partials/sections/theme_hero',
     label: '테마 히어로',
-    description: '몰 전용 히어로 슬라이드(hero_slide)를 표현별로 노출한다. 상품 쇼케이스 / 이미지 배너 / 풀블리드 에디토리얼.',
+    description: '홈 최상단 히어로의 **배치**를 정한다. 안에 무엇이 들어가는지(상품 쇼케이스/이미지 배너)는 배너 관리 > 메인 슬라이더에서 고른다.',
     dataSource: null,
     fields: [
-      { key: 'layout', label: '표현', type: 'select', options: ['showcase', 'banner', 'editorial'], default: 'banner' }
-      // 에디토리얼 하단 흐름문구(마퀴)는 '배너 관리 > 메인 슬라이더' 화면에서 편집한다
+      // 배치만 고른다. 콘텐츠 종류는 site_settings.hero_variant 소관 — 두 축을 섞으면
+      // 테마를 바꿀 때마다 등록해 둔 배너·상품이 사라진다(그래서 분리했다).
+      { key: 'layout', label: '배치', type: 'select', options: ['split_feature', 'full_width', 'full_bleed'], default: 'full_width' }
+      // 풀블리드 하단 흐름문구(마퀴)도 '배너 관리 > 메인 슬라이더' 화면에서 편집한다
       // (site_settings.marquee_*). 즉시 반영이 필요해 페이지빌더 발행 흐름에서 분리했다.
     ]
   },
