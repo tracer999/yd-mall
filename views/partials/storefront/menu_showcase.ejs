@@ -15,20 +15,34 @@
 <% if (_showcases.length > 0) { %>
 <style>
   /* peek — 트랙 좌우 여백만큼 이전/다음 카드가 걸쳐 보인다. scroll-padding 으로 스냅 위치를 맞춘다. */
+  /*
+   * 모바일에서는 배너를 1장씩 보여준다.
+   * 폭 360px 기준으로 2장을 넣으면 카드가 114px 까지 줄어, 이미지는 알아볼 수 없고
+   * 카드 위에 얹은 제목이 카드를 덮는다. 배너는 가로형 이미지라 좁아지는 것에 특히 약하다.
+   * 상품 카드는 좁아도 읽히므로 모바일에서도 2장 그대로다.
+   * per-view 는 섹션 인라인 변수로 받는다 — 모바일 --yd-sc-per-sm, 데스크톱 --yd-sc-per-lg.
+   */
   .yd-showcase {
-    --yd-sc-gap: 1.25rem;
-    --yd-sc-peek: 2.5rem;
-    --yd-sc-per: 2;
+    --yd-sc-gap: 1rem;
+    --yd-sc-peek: 1.5rem;
+    --yd-sc-per: var(--yd-sc-per-sm, 2);
   }
-  /* per-view 는 쇼케이스마다 다르다(배너 2 / 상품 3). 섹션 인라인 --yd-sc-per-lg 로 받는다. */
+  @media (min-width: 640px) {
+    .yd-showcase { --yd-sc-gap: 1.25rem; --yd-sc-peek: 2.5rem; --yd-sc-per: 2; }
+  }
   @media (min-width: 1024px) {
     .yd-showcase { --yd-sc-per: var(--yd-sc-per-lg, 3); --yd-sc-peek: 4rem; }
   }
   .yd-showcase__track {
     display: grid;
     grid-auto-flow: column;
+    /*
+     * peek 은 여기서 빼지 않는다. 이 트랙은 padding-inline 으로 peek 을 이미 확보했고,
+     * grid 의 100% 는 padding 을 제외한 content 폭이라 여기서 또 빼면 두 번 깎인다
+     * (모바일 390px 에서 카드가 화면의 65% 밖에 되지 않던 원인).
+     */
     grid-auto-columns: calc(
-      (100% - var(--yd-sc-peek) * 2 - var(--yd-sc-gap) * (var(--yd-sc-per) - 1)) / var(--yd-sc-per)
+      (100% - var(--yd-sc-gap) * (var(--yd-sc-per) - 1)) / var(--yd-sc-per)
     );
     gap: var(--yd-sc-gap);
     overflow-x: auto;
@@ -68,9 +82,14 @@
   .yd-showcase__banner { position: relative; display: block; border-radius: .75rem; overflow: hidden; }
   .yd-showcase__banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .yd-showcase__banner figcaption {
-    position: absolute; left: 0; right: 0; bottom: 0; padding: 1rem 1.25rem;
+    position: absolute; left: 0; right: 0; bottom: 0; padding: .75rem .875rem;
     background: linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0));
-    color: #fff; font-weight: 700; font-size: 1.05rem; line-height: 1.35;
+    color: #fff; font-weight: 700; font-size: .9375rem; line-height: 1.35;
+    /* 제목이 길어도 카드를 덮지 않도록 2줄에서 자른다 */
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
+  @media (min-width: 640px) {
+    .yd-showcase__banner figcaption { padding: 1rem 1.25rem; font-size: 1.05rem; }
   }
   /* 연달아 놓이면 경계선이 겹친다 — 마지막 것만 남긴다 */
   .yd-showcase + .yd-showcase { border-top: 0; padding-top: 0; }
@@ -80,7 +99,8 @@
      const _items = _s.items || [];
      const _perView = Number(_s.perView) || 3;
 %>
-<section class="yd-showcase py-8 bg-white border-b border-gray-100" style="--yd-sc-per-lg: <%= _perView %>;">
+<section class="yd-showcase py-8 bg-white border-b border-gray-100"
+         style="--yd-sc-per-sm: <%= _s.kind === 'banner' ? 1 : 2 %>; --yd-sc-per-lg: <%= _perView %>;">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
     <% if (_s.title) { %>
       <h2 class="text-2xl font-extrabold text-gray-900 mb-5"><%= _s.title %></h2>
