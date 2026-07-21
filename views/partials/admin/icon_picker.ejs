@@ -1,0 +1,196 @@
+<%
+  /*
+   * 아이콘 선택기 (Bootstrap Icons)
+   *
+   * 관리자에게 `bi bi-grid-1x2-fill` 같은 CSS 클래스명을 타이핑시키지 않기 위한 공용 모달이다.
+   * (CLAUDE.md §33 — 코드·식별자를 사용자에게 입력시키지 않는다)
+   *
+   * 쓰는 쪽 규약:
+   *   1) 값은 hidden input 에 담는다.
+   *   2) 열기 버튼에 `data-icon-picker` 를 달고, 같은 행 안에 hidden 과 `.icon-preview` 를 둔다.
+   *   3) 이 파티셜을 페이지에 **한 번만** include 한다.
+   *
+   * 자유 입력 시절 실제 DB 에 `fas fa-shopping-bag`(다른 아이콘셋), `bi-truck`(bi 접두어 누락)
+   * 같은 값이 저장돼 있었다 — 목록에 없는 값도 "현재 값"으로 보존해 조용히 바뀌지 않게 한다.
+   */
+%>
+<div id="iconPickerModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/40 px-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="text-base font-bold text-gray-800">아이콘 선택</h3>
+      <button type="button" id="iconPickerClose" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+
+    <div class="px-5 py-3 border-b border-gray-100">
+      <input type="text" id="iconPickerSearch" autocomplete="off"
+             placeholder="이름으로 찾기 (예: 상품, 주문, 설정)"
+             class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+    </div>
+
+    <div id="iconPickerGrid" class="p-4 overflow-y-auto grow"></div>
+
+    <div class="px-5 py-3 border-t border-gray-100 flex justify-between items-center">
+      <button type="button" id="iconPickerClear" class="text-xs text-gray-500 hover:text-gray-700">아이콘 없음으로</button>
+      <span class="text-xs text-gray-400">아이콘을 클릭하면 바로 적용됩니다</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  /* 관리자 메뉴에 쓸 만한 아이콘 묶음. 이름(한글)으로 검색된다. */
+  var ICONS = [
+    { g: '자주 쓰는',   items: [
+      ['bi bi-grid-1x2-fill','대시보드'], ['bi bi-speedometer2','계기판'], ['bi bi-house-door-fill','홈'],
+      ['bi bi-box-seam-fill','상품 상자'], ['bi bi-tags-fill','태그 · 카테고리'], ['bi bi-receipt','주문서 · 영수증'],
+      ['bi bi-truck','배송 · 택배'], ['bi bi-people-fill','회원'], ['bi bi-person-badge','운영자'],
+      ['bi bi-gear-fill','설정'], ['bi bi-sliders','조정'], ['bi bi-sliders2','조정2'],
+      ['bi bi-shop','상점'], ['bi bi-toggles','기능 켜고 끄기']
+    ]},
+    { g: '상품 · 판매', items: [
+      ['bi bi-box','상자'], ['bi bi-box-seam','상품 상자 (선)'], ['bi bi-boxes','상자 여러개'],
+      ['bi bi-bag-fill','쇼핑백'], ['bi bi-cart-fill','장바구니'], ['bi bi-basket-fill','바구니'],
+      ['bi bi-shop-window','매장 진열'], ['bi bi-tag','태그'], ['bi bi-tags','태그 여러개'],
+      ['bi bi-upc-scan','바코드'], ['bi bi-clipboard-check','검수'],
+      ['bi bi-graph-up-arrow','매출 상승'], ['bi bi-bar-chart-fill','막대 그래프'], ['bi bi-pie-chart-fill','원 그래프'],
+      ['bi bi-currency-dollar','금액'], ['bi bi-coin','포인트 · 적립금'], ['bi bi-piggy-bank-fill','저금통']
+    ]},
+    { g: '프로모션',    items: [
+      ['bi bi-ticket-perforated-fill','쿠폰'], ['bi bi-gift','선물 · 이벤트'], ['bi bi-megaphone-fill','공지 · 홍보'],
+      ['bi bi-stars','추천 · 기획'], ['bi bi-lightning-charge-fill','특가 · 번개'], ['bi bi-trophy','베스트 · 랭킹'],
+      ['bi bi-award','수상 · 등급'], ['bi bi-broadcast','라이브 방송'], ['bi bi-fire','인기'],
+      ['bi bi-percent','할인율'], ['bi bi-calendar-event','일정 · 기간']
+    ]},
+    { g: '화면 · 디자인', items: [
+      ['bi bi-images','배너 · 이미지'], ['bi bi-image','이미지'], ['bi bi-columns-gap','레이아웃'],
+      ['bi bi-layout-text-window-reverse','페이지'], ['bi bi-palette','디자인 · 테마'], ['bi bi-brush','꾸미기'],
+      ['bi bi-collection','모음'], ['bi bi-window-stack','창'], ['bi bi-eye','미리보기'],
+      ['bi bi-list-nested','메뉴 트리'], ['bi bi-list-check','목록'], ['bi bi-diagram-3','계층 구조'],
+      ['bi bi-signpost-split','내비게이션']
+    ]},
+    { g: '고객 · 소통', items: [
+      ['bi bi-person-fill','회원 1명'], ['bi bi-people','회원 (선)'], ['bi bi-person-plus-fill','회원 가입'],
+      ['bi bi-person-check','회원 승인'], ['bi bi-headset','고객센터'],
+      ['bi bi-chat-square-text-fill','문의 · 게시판'], ['bi bi-chat-dots-fill','채팅'], ['bi bi-envelope-fill','메일'],
+      ['bi bi-bell-fill','알림'], ['bi bi-question-circle','도움말 · FAQ'], ['bi bi-star-fill','리뷰 · 별점'], ['bi bi-star','별 (선)'],
+      ['bi bi-heart-fill','찜'], ['bi bi-hand-thumbs-up-fill','좋아요']
+    ]},
+    { g: '문서 · 시스템', items: [
+      ['bi bi-file-text-fill','문서 · 약관'], ['bi bi-file-earmark-text','파일'], ['bi bi-journal-text','기록'],
+      ['bi bi-building','회사 · 브랜드'], ['bi bi-shield-lock-fill','보안 · 권한'], ['bi bi-key-fill','열쇠'],
+      ['bi bi-database-fill','데이터'], ['bi bi-hdd-network-fill','연동 · 서버'], ['bi bi-hdd-network','연동 · 서버 (선)'],
+      ['bi bi-arrow-repeat','동기화'], ['bi bi-arrow-counterclockwise','되돌리기 · 반품'],
+      ['bi bi-clock-history','이력'], ['bi bi-tools','도구'], ['bi bi-gear-wide-connected','연동 설정'],
+      ['bi bi-plug-fill','외부 연결'], ['bi bi-plugin','플러그인'],
+      ['bi bi-cloud-arrow-down-fill','가져오기'], ['bi bi-cloud-download','내려받기'],
+      ['bi bi-cloud-arrow-up-fill','내보내기'], ['bi bi-inboxes','수집함'],
+      ['bi bi-box-arrow-in-down-right','반입'], ['bi bi-arrow-down-left-square','들여오기']
+    ]}
+  ];
+
+  var modal   = document.getElementById('iconPickerModal');
+  var grid    = document.getElementById('iconPickerGrid');
+  var search  = document.getElementById('iconPickerSearch');
+  if (!modal || !grid) return;
+
+  var targetRow = null; // 지금 편집 중인 행
+
+  function hiddenOf(row) { return row ? row.querySelector('input[name="icon_class[]"]') : null; }
+
+  /* 현재 값이 목록에 없으면(예전 자유 입력분) 맨 위에 "현재 값" 묶음으로 얹는다. */
+  function groupsFor(current) {
+    var known = ICONS.some(function (g) {
+      return g.items.some(function (it) { return it[0] === current; });
+    });
+    if (current && !known) {
+      return [{ g: '현재 값 (목록에 없는 아이콘)', items: [[current, current]] }].concat(ICONS);
+    }
+    return ICONS;
+  }
+
+  function render(keyword) {
+    var cur = (hiddenOf(targetRow) || {}).value || '';
+    var kw  = (keyword || '').trim().toLowerCase();
+    var html = '';
+
+    groupsFor(cur).forEach(function (group) {
+      var items = group.items.filter(function (it) {
+        if (!kw) return true;
+        return it[1].toLowerCase().indexOf(kw) >= 0 || it[0].toLowerCase().indexOf(kw) >= 0;
+      });
+      if (!items.length) return;
+
+      html += '<div class="mb-4">';
+      html += '<p class="text-[11px] font-semibold text-gray-400 mb-2">' + group.g + '</p>';
+      html += '<div class="grid grid-cols-4 sm:grid-cols-6 gap-2">';
+      items.forEach(function (it) {
+        var on = it[0] === cur;
+        html += '<button type="button" data-icon="' + it[0] + '" title="' + it[1] + '"'
+             +  ' class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-center transition-colors '
+             +  (on ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50') + '">'
+             +  '<i class="' + it[0] + ' text-xl text-gray-700"></i>'
+             +  '<span class="text-[10px] text-gray-500 leading-tight truncate w-full">' + it[1] + '</span>'
+             +  '</button>';
+      });
+      html += '</div></div>';
+    });
+
+    grid.innerHTML = html || '<p class="text-sm text-gray-400 text-center py-8">검색 결과가 없습니다.</p>';
+  }
+
+  function open(row) {
+    targetRow = row;
+    search.value = '';
+    render('');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    search.focus();
+  }
+
+  function close() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    targetRow = null;
+  }
+
+  /* 선택값을 행에 반영 — hidden(저장값) + 미리보기 아이콘 + 버튼 안 아이콘 */
+  function apply(value) {
+    if (!targetRow) return close();
+    var hidden = hiddenOf(targetRow);
+    if (hidden) hidden.value = value;
+
+    var preview = targetRow.querySelector('.icon-preview');
+    if (preview) preview.className = 'icon-preview text-lg ' + (value || 'bi bi-circle');
+
+    var btnIcon = targetRow.querySelector('[data-icon-picker] .picked-icon');
+    if (btnIcon) btnIcon.className = 'picked-icon ' + (value || 'bi bi-circle');
+
+    var btnText = targetRow.querySelector('[data-icon-picker] .picked-label');
+    if (btnText) btnText.textContent = value ? '아이콘 변경' : '아이콘 선택';
+
+    close();
+  }
+
+  // 열기 버튼은 동적으로 추가되는 행에도 있어야 하므로 문서 위임으로 받는다.
+  document.addEventListener('click', function (e) {
+    var opener = e.target.closest('[data-icon-picker]');
+    if (opener) {
+      e.preventDefault();
+      var row = opener.closest('.menu-row') || opener.closest('[data-icon-row]');
+      if (row) open(row);
+      return;
+    }
+    var pick = e.target.closest('#iconPickerGrid [data-icon]');
+    if (pick) { apply(pick.getAttribute('data-icon')); return; }
+    if (e.target === modal) close();
+  });
+
+  document.getElementById('iconPickerClose').addEventListener('click', close);
+  document.getElementById('iconPickerClear').addEventListener('click', function () { apply(''); });
+  search.addEventListener('input', function () { render(search.value); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+  });
+})();
+</script>

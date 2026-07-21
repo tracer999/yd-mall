@@ -1,0 +1,80 @@
+<%
+  /*
+   * 공용 리치 에디터 (TinyMCE 6)
+   *
+   * 관리자에게 생 HTML 을 타이핑시키지 않기 위한 공용 파티셜이다.
+   * (CLAUDE.md §33 — 코드를 사용자에게 입력시키지 않는다)
+   *
+   * 쓰는 쪽 규약: 페이지 끝에서 이 파티셜을 include 하고 selector 를 넘긴다.
+   *   (EJS 태그 예시는 여기 적지 않는다 — 주석 안이라도 닫는 태그로 인식돼 파싱이 깨진다)
+   *   - selector : 에디터로 바꿀 textarea 의 CSS 선택자 (필수)
+   *   - height   : 에디터 높이 px (선택, 기본 320)
+   *   - 페이지당 **한 번만** include 한다. 여러 필드는 선택자 하나로 묶어서 잡는다.
+   *
+   * 나중에 추가되는 textarea(동적 행)는 `window.ydRichEditor.attach(el)` 로 붙인다.
+   *
+   * TINYMCE_KEY 가 없으면 에디터를 로드하지 않고 평범한 textarea 로 남긴다 —
+   * 그 경우에도 화면은 동작해야 하므로 font-mono 를 떼어 "코드처럼 보이지 않게" 한다.
+   */
+  var _sel = typeof selector !== 'undefined' ? selector : 'textarea[data-rich]';
+  var _h   = typeof height   !== 'undefined' ? height   : 320;
+  var _key = process.env.TINYMCE_KEY || '';
+%>
+
+<% if (_key) { %>
+<script src="https://cdn.tiny.cloud/1/<%= _key %>/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+(function () {
+  var SELECTOR = <%- JSON.stringify(_sel) %>;
+  var HEIGHT   = <%- JSON.stringify(_h) %>;
+
+  var BASE = {
+    plugins: 'image link lists table code',
+    toolbar: 'undo redo | blocks | bold italic | alignleft aligncenter alignright | bullist numlist | link image | code',
+    menubar: false,
+    height: HEIGHT,
+    branding: false,
+    language: 'ko_KR',
+    /* 붙여넣기로 들어온 서식은 살리되, 서버가 저장 시 위험 태그를 다시 걷어낸다. */
+    convert_urls: false
+  };
+
+  function attach(el) {
+    if (!el || el.dataset.richBound === '1') return;
+    el.dataset.richBound = '1';
+    tinymce.init(Object.assign({}, BASE, { target: el }));
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll(SELECTOR).forEach(attach);
+  });
+
+  /*
+   * 폼 제출 직전에 에디터 내용을 원래 textarea 로 되쓴다.
+   * JS 로 form.submit() 을 호출하면 TinyMCE 의 자동 저장이 걸리지 않아
+   * **빈 값이 저장되는** 사고가 난다. 캡처 단계에서 한 번 더 확실히 처리한다.
+   */
+  document.addEventListener('submit', function () {
+    if (window.tinymce) tinymce.triggerSave();
+  }, true);
+
+  window.ydRichEditor = { attach: attach };
+})();
+</script>
+<% } else { %>
+<script>
+(function () {
+  // TINYMCE_KEY 미설정 — 에디터 없이 일반 textarea 로 동작한다.
+  var SELECTOR = <%- JSON.stringify(_sel) %>;
+  function plain(el) {
+    if (!el) return;
+    el.classList.remove('font-mono');
+    if (el.rows < 8) el.rows = 8;
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll(SELECTOR).forEach(plain);
+  });
+  window.ydRichEditor = { attach: plain };
+})();
+</script>
+<% } %>

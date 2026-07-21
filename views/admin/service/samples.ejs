@@ -16,7 +16,7 @@
 
   <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 space-y-1">
     <div><i class="bi bi-info-circle mr-1"></i> <b>이미 만들어진 몰에는 영향이 없습니다.</b> 여기서 바꾼 값은 <b>앞으로 생성될 몰</b>에만 복제됩니다.</div>
-    <div><i class="bi bi-image mr-1"></i> 이미지 경로는 반드시 <code>/images/...</code> 로 시작해야 합니다. <code>/uploads/...</code> 는 <code>.gitignore</code> 라 <b>납품본에서 깨집니다.</b> 파일은 <code>public/images/sample/</code> 에 두세요.</div>
+    <div><i class="bi bi-image mr-1"></i> 이미지·영상은 <b>목록에서 고릅니다</b>(경로를 직접 적지 않습니다). 목록에 없는 파일을 쓰려면 개발자가 <code>public/images/sample/</code> 에 넣고 커밋해야 합니다 — <code>/uploads/...</code> 는 <code>.gitignore</code> 라 <b>납품본에서 깨집니다.</b></div>
     <div><i class="bi bi-diagram-3 mr-1"></i> <b>샘플 카테고리는 새로 만들어지지 않습니다.</b> 아래에서 지정한 <b>공용 카테고리</b>에 샘플 상품이 그대로 연결됩니다. 지정하지 않으면 같은 이름의 공용 카테고리를 찾고, 그래도 없으면 <b>미분류</b>로 들어갑니다.</div>
   </div>
 
@@ -59,7 +59,7 @@
                     <option value="">— 지정 안 함 —</option>
                   </select>
                 </td>
-                <td class="py-2 px-3"><input type="text" name="cat_image" value="<%= c.image_path || '' %>" class="w-full text-sm font-mono text-xs" placeholder="/images/sample/..."></td>
+                <td class="py-2 px-3"><%- include('../../partials/admin/asset_select', { name: 'cat_image', value: c.image_path, options: sampleImages }) %></td>
                 <td class="py-2 px-3"><input type="number" name="cat_order" value="<%= c.display_order %>" class="w-16 text-sm"></td>
                 <td class="py-2 px-3"><input type="checkbox" name="cat_active" value="<%= c.id %>" <%= c.is_active ? 'checked' : '' %> class="w-4 h-4"></td>
                 <td class="py-2 px-3">
@@ -108,7 +108,7 @@
                 <td class="py-2 px-3"><input type="number" name="prod_original" value="<%= p.original_price == null ? p.price : p.original_price %>" class="w-24 text-sm"></td>
                 <td class="py-2 px-3"><input type="number" name="prod_deal" value="<%= p.deal_price == null ? '' : p.deal_price %>" class="w-24 text-sm" placeholder="없음"></td>
                 <td class="py-2 px-3"><input type="text" name="prod_badge" value="<%= p.badge || '' %>" class="w-24 text-sm" placeholder="BEST"></td>
-                <td class="py-2 px-3"><input type="text" name="prod_image" value="<%= p.main_image || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="/images/sample/products/..."></td>
+                <td class="py-2 px-3"><%- include('../../partials/admin/asset_select', { name: 'prod_image', value: p.main_image, options: sampleImages }) %></td>
                 <td class="py-2 px-3"><input type="checkbox" name="prod_new" value="<%= p.id %>" <%= p.is_new ? 'checked' : '' %> class="w-4 h-4"></td>
                 <td class="py-2 px-3"><input type="number" name="prod_order" value="<%= p.display_order %>" class="w-16 text-sm"></td>
                 <td class="py-2 px-3"><input type="checkbox" name="prod_active" value="<%= p.id %>" <%= p.is_active ? 'checked' : '' %> class="w-4 h-4"></td>
@@ -168,17 +168,17 @@
                   <% } %>
                 </td>
                 <td class="py-2 px-3 space-y-1">
-                  <input type="text" name="hero_image" value="<%= h.image_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="/images/sample/banners/… (정지 이미지)">
-                  <input type="text" name="hero_mobile_image" value="<%= h.mobile_image_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="모바일 이미지(선택) — 영상이어도 모바일은 이걸로">
+                  <%- include('../../partials/admin/asset_select', { name: 'hero_image', value: h.image_path, options: sampleImages, empty: '정지 이미지 선택' }) %>
+                  <%- include('../../partials/admin/asset_select', { name: 'hero_mobile_image', value: h.mobile_image_path, options: sampleImages, empty: '모바일 이미지(선택)' }) %>
                 </td>
                 <%# 모바일 폴백 순서: 모바일 영상 → 모바일 이미지 → 데스크톱 영상. 가로 영상을 모바일에
                     그대로 쓰면 좌우가 잘리므로 세로(1080×1920) 영상을 따로 둔다. %>
                 <td class="py-2 px-3 space-y-1">
-                  <input type="text" name="hero_video_webm" value="<%= h.video_webm_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="PC .webm (먼저 시도됨)">
-                  <input type="text" name="hero_video_mp4" value="<%= h.video_mp4_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="PC .mp4 (호환 폴백)">
-                  <input type="text" name="hero_mo_video_webm" value="<%= h.mobile_video_webm_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="모바일 세로 .webm (선택)">
-                  <input type="text" name="hero_mo_video_mp4" value="<%= h.mobile_video_mp4_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="모바일 세로 .mp4 (선택)">
-                  <input type="text" name="hero_poster" value="<%= h.poster_path || '' %>" class="w-full text-xs font-mono min-w-48" placeholder="포스터(비면 이미지 경로 사용)">
+                  <%- include('../../partials/admin/asset_select', { name: 'hero_video_webm', value: h.video_webm_path, options: sampleVideos, empty: 'PC .webm (먼저 시도됨)' }) %>
+                  <%- include('../../partials/admin/asset_select', { name: 'hero_video_mp4', value: h.video_mp4_path, options: sampleVideos, empty: 'PC .mp4 (호환 폴백)' }) %>
+                  <%- include('../../partials/admin/asset_select', { name: 'hero_mo_video_webm', value: h.mobile_video_webm_path, options: sampleVideos, empty: '모바일 .webm (선택)' }) %>
+                  <%- include('../../partials/admin/asset_select', { name: 'hero_mo_video_mp4', value: h.mobile_video_mp4_path, options: sampleVideos, empty: '모바일 .mp4 (선택)' }) %>
+                  <%- include('../../partials/admin/asset_select', { name: 'hero_poster', value: h.poster_path, options: sampleImages, empty: '포스터(비면 이미지 사용)' }) %>
                 </td>
                 <td class="py-2 px-3"><input type="number" name="hero_order" value="<%= h.sort_order %>" class="w-16 text-sm"></td>
                 <td class="py-2 px-3"><input type="checkbox" name="hero_active" value="<%= h.id %>" <%= h.is_active ? 'checked' : '' %> class="w-4 h-4"></td>

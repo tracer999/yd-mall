@@ -206,13 +206,18 @@ module.exports = {
       Object.assign({}, FIELD.maxCount, { label: '표시 상품 수', max: 20, default: 8 })
     ]
   },
+  /*
+   * 유일하게 남겨 둔 "코드를 직접 쓰는" 섹션이다.
+   * 다른 화면의 HTML 입력은 전부 에디터로 바꿨지만(§33), 이건 위 섹션들로 표현할 수 없을 때의
+   * 탈출구라 존치한다. 대신 **개발자용**임을 이름에 박아 일반 사용자 동선에서 분리한다.
+   */
   custom_html: {
     view: 'partials/sections/custom_html',
-    label: '커스텀 HTML',
-    description: '직접 작성한 HTML을 그대로 넣는다. 위 섹션들로 표현할 수 없을 때의 마지막 수단.',
+    label: '커스텀 HTML (개발자용)',
+    description: 'HTML 을 직접 작성해 넣습니다. 위 섹션으로 표현할 수 없을 때만 쓰는 마지막 수단이며, HTML 을 아는 사람이 다뤄야 합니다.',
     dataSource: null,
     fields: [
-      { key: 'html', label: '커스텀 HTML (저장·렌더 시 새니타이즈)', type: 'textarea', default: '' }
+      { key: 'html', label: 'HTML 코드 (저장·렌더 시 위험 태그 제거)', type: 'textarea', default: '' }
     ]
   },
 

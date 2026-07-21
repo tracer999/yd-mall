@@ -50,7 +50,6 @@ const CHANNEL_META = {
         needsSecret: true,
         clientIdLabel: 'client_id',
         secretLabel: 'client_secret',
-        extraHint: '스토어채널ID·반품지코드 등',
         help: '커머스API 애플리케이션의 client_id / client_secret. 인증은 전자서명 OAuth2 방식.',
     },
 };

@@ -22,16 +22,77 @@ const themeData = require('../../middleware/themeData');
  */
 
 
+/*
+ * 선택지 정의 — 사용자는 CSS 를 쓰지 않는다.
+ *
+ * 화면은 "각지게 / 보통 / 둥글게" 같은 **말**로 고르고, `0.5rem` 같은 CSS 문자열은
+ * 여기 value 에만 존재한다. 값 자체는 예전 자유 입력과 동일한 형식이라
+ * `themeService.TOKENS[].test` 검증·기존 저장값과 100% 호환된다.
+ */
+
+/** 모서리 — 버튼·카드·입력창 공용 */
+const RADIUS_OPTIONS = [
+    { value: '0', label: '각지게' },
+    { value: '0.25rem', label: '아주 살짝 둥글게' },
+    { value: '0.375rem', label: '살짝 둥글게' },
+    { value: '0.5rem', label: '보통' },
+    { value: '0.75rem', label: '둥글게' },
+    { value: '1rem', label: '많이 둥글게' },
+    { value: '1.5rem', label: '아주 많이 둥글게' },
+];
+
+/** 알약형(태그·필터칩) — 완전 둥근 형태가 기본이라 목록을 따로 둔다 */
+const PILL_OPTIONS = [
+    { value: '9999px', label: '완전 둥글게 (알약형)' },
+    { value: '0.5rem', label: '조금 둥근 사각형' },
+    { value: '0.25rem', label: '거의 각진 사각형' },
+    { value: '0', label: '각지게' },
+];
+
+/*
+ * 폰트 — **레이아웃이 실제로 불러오는 폰트만** 노출한다.
+ * `views/layouts/main_layout.ejs` 가 Pretendard(로컬) + Google Fonts 로
+ * Nanum Myeongjo·Playfair Display 를 로드한다. 그 밖의 이름을 고르게 하면
+ * 저장은 되는데 화면은 안 바뀌는 "먹통 설정"이 된다.
+ */
+const FONT_OPTIONS = [
+    { value: "'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif", label: '프리텐다드 (기본 · 고딕)' },
+    { value: "'Nanum Myeongjo', serif", label: '나눔명조 (명조 · 고급스러운 느낌)' },
+    { value: "'Playfair Display', serif", label: 'Playfair Display (영문 세리프)' },
+    { value: 'system-ui, -apple-system, sans-serif', label: '기기 기본 폰트' },
+];
+
+/** 섹션 간격 — 세로 여백 */
+const SPACING_OPTIONS = [
+    { value: '1.5rem', label: '아주 좁게' },
+    { value: '2rem', label: '좁게' },
+    { value: '3rem', label: '보통' },
+    { value: '4rem', label: '넓게' },
+    { value: '5rem', label: '아주 넓게' },
+];
+
+/** 본문 최대 너비 */
+const WIDTH_OPTIONS = [
+    { value: '64rem', label: '좁게 (1024px)' },
+    { value: '72rem', label: '보통 (1152px)' },
+    { value: '80rem', label: '넓게 (1280px)' },
+    { value: '90rem', label: '아주 넓게 (1440px)' },
+    { value: '100%', label: '화면 전체' },
+];
+
 /** 폼에 노출할 토큰 (themeService.TOKENS 와 1:1) */
 const FIELDS = [
-    { key: 'fontFamily', label: '폰트 패밀리', hint: '예: \'Pretendard\', sans-serif — 따옴표·쉼표·하이픈·점만 허용, 200자 이내' },
-    { key: 'buttonRadius', label: '버튼 모서리', hint: '예: 0.5rem, 8px, 0' },
-    { key: 'cardRadius', label: '카드 모서리', hint: '예: 0.5rem' },
-    { key: 'pillRadius', label: '알약형 모서리', hint: '예: 9999px' },
-    { key: 'inputRadius', label: '입력창 모서리', hint: '예: 0.375rem' },
-    { key: 'sectionSpacing', label: '섹션 간격', hint: '예: 3rem' },
-    { key: 'containerWidth', label: '본문 최대 너비', hint: '예: 72rem' },
+    { key: 'fontFamily', label: '본문 폰트', options: FONT_OPTIONS, hint: '쇼핑몰 전체 글꼴입니다.' },
+    { key: 'buttonRadius', label: '버튼 모서리', options: RADIUS_OPTIONS, hint: '' },
+    { key: 'cardRadius', label: '카드 모서리', options: RADIUS_OPTIONS, hint: '상품 카드·배너 등의 모서리입니다.' },
+    { key: 'pillRadius', label: '태그·칩 모서리', options: PILL_OPTIONS, hint: '' },
+    { key: 'inputRadius', label: '입력창 모서리', options: RADIUS_OPTIONS, hint: '' },
+    { key: 'sectionSpacing', label: '섹션 간격', options: SPACING_OPTIONS, hint: '메인 화면 섹션 사이의 세로 여백입니다.' },
+    { key: 'containerWidth', label: '본문 최대 너비', options: WIDTH_OPTIONS, hint: '넓을수록 한 줄에 상품이 더 많이 들어갑니다.' },
 ];
+
+/** 카드 스타일 — 열거값에 사람이 읽는 이름을 붙인다 */
+const CARD_STYLE_LABELS = { shadow: '그림자', border: '테두리', flat: '민무늬' };
 
 function parseConfig(v) {
     if (!v) return {};
@@ -74,6 +135,7 @@ exports.getEdit = async (req, res) => {
             fields: FIELDS,
             defaults: themeService.DEFAULTS,
             cardStyles: themeService.CARD_STYLES,
+            cardStyleLabels: CARD_STYLE_LABELS,
             saved: req.query.saved === '1',
             errors: req.query.errors ? String(req.query.errors).split('|') : [],
         });

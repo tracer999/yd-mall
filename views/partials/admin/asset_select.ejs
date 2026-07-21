@@ -1,0 +1,25 @@
+<%
+  /*
+   * 커밋된 정적 파일(/images/...) 선택 select.
+   *
+   * 샘플 데이터 화면 전용이다. 이 화면의 이미지·영상은 git 에 커밋되는 경로여야 해서
+   * 업로드가 아니라 "이미 있는 파일 중 고르기"로 받는다(sampleDataController.listAssets 참고).
+   *
+   * 넘겨받는 값: name(필드명) · value(현재 값) · options(경로 배열) · empty(빈 선택 라벨)
+   * 현재 값이 목록에 없으면 맨 위에 그대로 얹어 저장 한 번에 조용히 바뀌지 않게 한다.
+   */
+  var _name  = name;
+  var _value = String(value || '');
+  var _opts  = options || [];
+  var _empty = typeof empty !== 'undefined' ? empty : '선택 안 함';
+  var _known = _opts.indexOf(_value) >= 0;
+%>
+<select name="<%= _name %>" class="w-full text-xs rounded border border-gray-200 px-2 py-1.5">
+  <option value=""><%= _empty %></option>
+  <% if (_value && !_known) { %>
+    <option value="<%= _value %>" selected>현재 값 유지 — <%= _value %> (파일 없음)</option>
+  <% } %>
+  <% _opts.forEach(function (p) { %>
+    <option value="<%= p %>" <%= _known && p === _value ? 'selected' : '' %>><%= p.replace('/images/', '') %></option>
+  <% }); %>
+</select>

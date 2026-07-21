@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { generateUniqueCode } = require('../../shared/codeGen');
 
 /*
  * 특가 카테고리 관리 (쇼핑특가 §7)
@@ -50,10 +51,16 @@ const normalizeScheduleType = (v) =>
 const normalizeBadgeColor = (v) =>
     BADGE_COLORS.includes(String(v)) ? String(v) : null;
 
-/** 폼 → 저장값. @returns {{error:string}|{value:object}} */
+/**
+ * 폼 → 저장값.
+ *
+ * 코드는 **필수 입력이 아니다** — 비면 생성 시 카테고리명에서 서버가 만든다(§33).
+ * 수정 시에는 아예 받지 않는다(스토어프론트 URL `/deals/{코드}` 가 이미 나가 있어 바꾸면 깨진다).
+ *
+ * @returns {{error:string}|{value:object}}
+ */
 function normalizeForm(body) {
     const code = normalizeCode(body.code);
-    if (!code) return { error: '코드를 입력하세요. (영문 대문자·숫자·언더스코어)' };
 
     const name = String(body.name ?? '').trim();
     if (!name) return { error: '카테고리명을 입력하세요.' };
@@ -165,12 +172,27 @@ exports.postCreate = async (req, res) => {
         if (out.error) return redirectWith(res, `${BASE}/new`, 'error', out.error);
         const v = out.value;
 
+        // 코드를 비워 냈으면 카테고리명에서 만든다. 직접 적었으면 그 값을 존중한다.
+        const code = await generateUniqueCode({
+            name: v.name,
+            requested: v.code,
+            prefix: 'DEAL',
+            maxLen: 40,
+            exists: async (c) => {
+                const [[row]] = await pool.query(
+                    'SELECT 1 FROM deal_category WHERE mall_id = ? AND code = ? LIMIT 1',
+                    [mallId, c]
+                );
+                return !!row;
+            },
+        });
+
         const [r] = await pool.query(`
             INSERT INTO deal_category
                 (mall_id, code, name, description, schedule_type, badge_text, badge_color, sort_order, is_active)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            mallId, v.code, v.name, v.description, v.schedule_type,
+            mallId, code, v.name, v.description, v.schedule_type,
             v.badge_text, v.badge_color, v.sort_order, v.is_active,
         ]);
 
@@ -197,13 +219,14 @@ exports.postUpdate = async (req, res) => {
         if (out.error) return redirectWith(res, back, 'error', out.error);
         const v = out.value;
 
+        // 코드는 수정하지 않는다 — 스토어프론트 URL `/deals/{코드}` 가 이미 나가 있다.
         await pool.query(`
             UPDATE deal_category
-               SET code = ?, name = ?, description = ?, schedule_type = ?,
+               SET name = ?, description = ?, schedule_type = ?,
                    badge_text = ?, badge_color = ?, sort_order = ?, is_active = ?
              WHERE id = ? AND mall_id = ?
         `, [
-            v.code, v.name, v.description, v.schedule_type,
+            v.name, v.description, v.schedule_type,
             v.badge_text, v.badge_color, v.sort_order, v.is_active,
             id, mallId,
         ]);

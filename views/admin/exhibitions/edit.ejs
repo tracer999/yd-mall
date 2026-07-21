@@ -79,7 +79,7 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">
-              slug <span class="text-xs font-normal text-gray-400">(비우면 기획전명에서 자동 생성)</span>
+              고객 화면 주소 <span class="text-xs font-normal text-gray-400">(비우면 기획전명에서 자동 생성)</span>
             </label>
             <div class="flex items-center gap-1">
               <span class="text-xs text-gray-400 shrink-0">/exhibition/</span>
@@ -98,10 +98,10 @@
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">
-            상세 설명 <span class="text-xs font-normal text-gray-400">(HTML 허용 — 저장 시 위험 태그는 제거됩니다)</span>
+            상세 설명
           </label>
-          <textarea name="description" rows="5"
-                    class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono"><%= exhibition.description || '' %></textarea>
+          <textarea name="description" rows="5" data-rich
+                    class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm"><%= exhibition.description || '' %></textarea>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -257,10 +257,10 @@
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">
-            안내 · 유의사항 <span class="text-xs font-normal text-gray-400">(HTML 허용 — 상세 하단에 노출)</span>
+            안내 · 유의사항 <span class="text-xs font-normal text-gray-400">(상세 하단에 노출)</span>
           </label>
-          <textarea name="notice" rows="4"
-                    class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono"><%= _cfg.notice || '' %></textarea>
+          <textarea name="notice" rows="4" data-rich
+                    class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm"><%= _cfg.notice || '' %></textarea>
         </div>
 
       </div>
@@ -310,10 +310,15 @@
                   <input type="text" name="sections[<%= i %>][section_name]" value="<%= s.section_name %>" maxlength="100"
                          class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
                 </div>
+                <%#
+                  섹션 코드는 탭 주소(?tab=)로 쓰이는 식별자다. 사용자가 지어내지 않는다(§33).
+                  서버가 표시명에서 만들며(exhibitionController: `section_code || name`),
+                  기존 행은 값을 그대로 실어 보내 주소가 바뀌지 않게 한다.
+                %>
                 <div class="sm:col-span-3">
-                  <label class="block text-xs text-gray-500 mb-1">코드 <span class="text-gray-300">(?tab= 값)</span></label>
-                  <input type="text" name="sections[<%= i %>][section_code]" value="<%= s.section_code %>" maxlength="100"
-                         class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+                  <input type="hidden" name="sections[<%= i %>][section_code]" value="<%= s.section_code %>">
+                  <label class="block text-xs text-gray-500 mb-1">탭 주소</label>
+                  <p class="px-2.5 py-1.5 text-sm text-gray-400 truncate" title="<%= s.section_code %>">?tab=<%= s.section_code %></p>
                 </div>
                 <div class="sm:col-span-2">
                   <label class="block text-xs text-gray-500 mb-1">유형</label>
@@ -342,9 +347,9 @@
                 </div>
               </div>
               <div class="mt-3 <%= s.section_type === 'HTML' ? '' : 'hidden' %>" data-html-panel>
-                <label class="block text-xs text-gray-500 mb-1">HTML 내용 <span class="text-gray-300">(위험 태그는 저장 시 제거)</span></label>
-                <textarea name="sections[<%= i %>][html]" rows="3"
-                          class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm font-mono"><%= (s.config && s.config.html) || '' %></textarea>
+                <label class="block text-xs text-gray-500 mb-1">내용</label>
+                <textarea name="sections[<%= i %>][html]" rows="3" data-rich
+                          class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm"><%= (s.config && s.config.html) || '' %></textarea>
               </div>
             </div>
           <% }); %>
@@ -516,9 +521,9 @@
                  class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
         </div>
         <div class="sm:col-span-3">
-          <label class="block text-xs text-gray-500 mb-1">코드 <span class="text-gray-300">(비우면 자동)</span></label>
-          <input type="text" name="sections[${i}][section_code]" maxlength="100" placeholder="md-pick"
-                 class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm">
+          <input type="hidden" name="sections[${i}][section_code]" value="">
+          <label class="block text-xs text-gray-500 mb-1">탭 주소</label>
+          <p class="px-2.5 py-1.5 text-sm text-gray-400">표시명에서 자동 생성</p>
         </div>
         <div class="sm:col-span-2">
           <label class="block text-xs text-gray-500 mb-1">유형</label>
@@ -541,11 +546,13 @@
         </div>
       </div>
       <div class="mt-3 hidden" data-html-panel>
-        <label class="block text-xs text-gray-500 mb-1">HTML 내용</label>
-        <textarea name="sections[${i}][html]" rows="3" class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm font-mono"></textarea>
+        <label class="block text-xs text-gray-500 mb-1">내용</label>
+        <textarea name="sections[${i}][html]" rows="3" data-rich class="w-full px-2.5 py-1.5 rounded border border-gray-200 text-sm"></textarea>
       </div>`;
     list.appendChild(row);
     bindSectionType(row);
+    // 새로 추가된 행의 내용 입력칸도 에디터로 바꾼다(페이지 로드 후 생긴 요소라 직접 붙여야 한다).
+    if (window.ydRichEditor) row.querySelectorAll('textarea[data-rich]').forEach(window.ydRichEditor.attach);
     const empty = document.getElementById('sectionEmpty');
     if (empty) empty.style.display = 'none';
   });
@@ -672,3 +679,5 @@
   });
 })();
 </script>
+
+<%- include('../../partials/admin/tinymce', { selector: 'textarea[data-rich]', height: 300 }) %>

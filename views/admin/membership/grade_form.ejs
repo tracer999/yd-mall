@@ -13,8 +13,26 @@
         <input type="text" name="grade_name" required value="<%= g.grade_name || '' %>" class="w-full border rounded-lg px-3 h-[38px]">
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">등급 코드 <span class="text-red-500">*</span></label>
-        <input type="text" name="grade_code" <%= isEdit ? 'readonly' : 'required' %> value="<%= g.grade_code || '' %>" class="w-full border rounded-lg px-3 h-[38px] <%= isEdit ? 'bg-gray-100 text-gray-500' : '' %>" placeholder="BASIC / SILVER ...">
+        <%#
+          등급 코드는 시스템 내부 식별자다. 사용자가 지어낼 필요가 없다(§33).
+          - 등록: 비워 두면 서버가 등급명에서 만든다. 직접 정하고 싶을 때만 펼쳐서 입력.
+          - 수정: 이미 다른 데이터가 이 코드를 참조하므로 바꿀 수 없다(기존 동작 유지).
+        %>
+        <% if (isEdit) { %>
+          <label class="block text-sm font-medium text-gray-700 mb-1">등급 코드</label>
+          <input type="text" name="grade_code" readonly value="<%= g.grade_code || '' %>"
+                 class="w-full border rounded-lg px-3 h-[38px] bg-gray-100 text-gray-500">
+          <p class="mt-1 text-xs text-gray-400">등록 후에는 바꿀 수 없습니다.</p>
+        <% } else { %>
+          <label class="block text-sm font-medium text-gray-700 mb-1">등급 코드</label>
+          <div class="h-[38px] flex items-center text-sm text-gray-500">
+            등급명에서 자동으로 만들어집니다.
+            <button type="button" id="gradeCodeToggle" class="ml-2 text-indigo-600 hover:underline">직접 지정</button>
+          </div>
+          <input type="text" name="grade_code" id="gradeCodeInput" value="" hidden
+                 placeholder="영문 대문자·숫자 (예: SILVER)"
+                 class="w-full border rounded-lg px-3 h-[38px]">
+        <% } %>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">순위 (1이 최상위)</label>
@@ -143,3 +161,17 @@
     <button type="submit" class="inline-flex items-center h-[38px] px-5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">저장</button>
   </div>
 </form>
+
+<script>
+(function () {
+  // "직접 지정"을 눌렀을 때만 등급 코드 입력칸을 보인다. 기본은 서버 자동 생성.
+  var toggle = document.getElementById('gradeCodeToggle');
+  var input = document.getElementById('gradeCodeInput');
+  if (!toggle || !input) return;
+  toggle.addEventListener('click', function () {
+    input.hidden = false;
+    toggle.closest('div').hidden = true;
+    input.focus();
+  });
+})();
+</script>

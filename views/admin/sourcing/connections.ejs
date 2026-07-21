@@ -173,11 +173,14 @@
           <input type="password" id="in-secret" name="secret" autocomplete="new-password" placeholder="변경 시에만 입력"
                  class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
         </div>
-        <div class="sm:col-span-2" id="fld-extra">
-          <label id="lbl-extra" for="in-extra" class="block text-sm text-gray-600 mb-1">부가 설정(JSON, 선택)</label>
-          <input type="text" id="in-extra" name="extra_json" placeholder='{"channelId":"..."}'
-                 class="w-full rounded-md border border-gray-300 text-sm px-3 py-2 font-mono">
-        </div>
+        <%#
+          부가 설정(JSON) 입력칸은 제거했다.
+          - 운영자에게 JSON 을 적게 하지 않는다(CLAUDE.md §33).
+          - 게다가 이 값을 읽어 쓰는 코드가 없었다. credential.js 가 저장·복사만 하고
+            어떤 어댑터도 참조하지 않는다(저장된 행도 전부 NULL 이었다).
+          실제로 필요한 부가값(스토어채널ID 등)이 생기면 **이름 있는 필드 하나**로 추가하고
+          서버가 JSON 으로 조립한다 — 네이버 고시 입력(§6.4)과 같은 방식.
+        %>
       </div>
       <div>
         <button class="inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">계정 저장</button>
@@ -222,10 +225,7 @@
         text: function (m) { return m.clientIdLabel || 'client_id / API Key'; } },
       { box: 'fld-secret', label: 'lbl-secret', input: 'in-secret',
         on: function (m) { return !!m.needsSecret; },
-        text: function (m) { return (m.secretLabel || 'client_secret') + ' — 변경 시에만 입력'; } },
-      { box: 'fld-extra', label: 'lbl-extra', input: 'in-extra',
-        on: function (m) { return !!m.extraHint; },
-        text: function (m) { return '부가 설정(JSON, 선택) — ' + (m.extraHint || ''); } }
+        text: function (m) { return (m.secretLabel || 'client_secret') + ' — 변경 시에만 입력'; } }
     ];
 
     function apply() {

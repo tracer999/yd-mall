@@ -106,10 +106,14 @@
                 <input type="hidden" name="id[]" value="<%= menu.id %>">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-2">아이콘 클래스 (Bootstrap Icons)</label>
-                    <input type="text" name="icon_class[]" value="<%- menu.icon_class || '' %>" placeholder="예: bi bi-grid-1x2-fill"
-                      class="font-mono">
-                    <p class="mt-1.5 text-[11px] text-gray-400"><a href="https://icons.getbootstrap.com/" target="_blank" rel="noopener" class="text-blue-500 hover:underline">Bootstrap Icons</a> 클래스명을 입력하세요.</p>
+                    <label class="block text-xs font-medium text-gray-600 mb-2">아이콘</label>
+                    <input type="hidden" name="icon_class[]" value="<%- menu.icon_class || '' %>">
+                    <button type="button" data-icon-picker
+                      class="inline-flex items-center gap-2 h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                      <i class="picked-icon <%= menu.icon_class || 'bi bi-circle' %> text-lg"></i>
+                      <span class="picked-label"><%= menu.icon_class ? '아이콘 변경' : '아이콘 선택' %></span>
+                    </button>
+                    <p class="mt-1.5 text-[11px] text-gray-400">목록에서 골라 주세요. 직접 입력하지 않습니다.</p>
                   </div>
                   <div>
                     <label class="block text-xs font-medium text-gray-600 mb-2">접근 가능한 역할</label>
@@ -263,14 +267,7 @@
     list.addEventListener('dragend', onDragEnd);
   }
 
-  // Icon preview
-  function updateIconPreview(row) {
-    const input = row.querySelector('input[name="icon_class[]"]');
-    const preview = row.querySelector('.icon-preview');
-    if (!input || !preview) return;
-    const value = (input.value || '').trim();
-    preview.className = 'icon-preview text-lg ' + (value || 'bi bi-circle');
-  }
+  // 아이콘 미리보기는 선택기(partials/admin/icon_picker)가 직접 갱신한다.
 
   function syncVisibleRoles(row) {
     const hidden = row.querySelector('input[name="visible_roles[]"]');
@@ -299,8 +296,6 @@
   }
 
   function setupRow(row) {
-    const iconInput = row.querySelector('input[name="icon_class[]"]');
-    if (iconInput) iconInput.addEventListener('input', () => updateIconPreview(row));
     initRolesForRow(row);
     const activeCheckbox = row.querySelector('.active-checkbox');
     if (activeCheckbox) {
@@ -355,9 +350,13 @@
         <input type="hidden" name="id[]" value="">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-2">아이콘 클래스 (Bootstrap Icons)</label>
-            <input type="text" name="icon_class[]" placeholder="예: bi bi-grid-1x2-fill"
-              class="font-mono">
+            <label class="block text-xs font-medium text-gray-600 mb-2">아이콘</label>
+            <input type="hidden" name="icon_class[]" value="">
+            <button type="button" data-icon-picker
+              class="inline-flex items-center gap-2 h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+              <i class="picked-icon bi bi-circle text-lg"></i>
+              <span class="picked-label">아이콘 선택</span>
+            </button>
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-2">접근 가능한 역할</label>
@@ -439,3 +438,5 @@
   list?.addEventListener('dragend', updateRowNumbers);
 })();
 </script>
+
+<%- include("../../partials/admin/icon_picker") %>

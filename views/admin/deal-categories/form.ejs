@@ -46,11 +46,27 @@
       <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">코드</label>
-          <input type="text" name="code" value="<%= category.code || '' %>" maxlength="40" required
-                 placeholder="TODAY / TIME / SEASON"
-                 class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm font-mono uppercase">
-          <p class="mt-1 text-xs text-gray-400">영문 대문자·숫자·언더스코어만. 소문자·특수문자는 자동 변환됩니다. 스토어프론트 URL(<code>/deals/{코드}</code>)에 쓰입니다.</p>
+          <%#
+            코드는 스토어프론트 URL(/deals/{코드})에 쓰이는 식별자다.
+            사용자가 지어내지 않는다(§33) — 비우면 카테고리명에서 서버가 만든다.
+            등록 후에는 URL 이 이미 나가 있으므로 바꾸지 않는다.
+          %>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">주소 코드</label>
+          <% if (category.id) { %>
+            <input type="text" value="<%= category.code || '' %>" readonly
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm bg-gray-100 text-gray-500">
+            <p class="mt-1 text-xs text-gray-400">
+              고객 화면 주소: <code>/deals/<%= category.code %></code> — 등록 후에는 바꿀 수 없습니다.
+            </p>
+          <% } else { %>
+            <div class="h-[38px] flex items-center text-sm text-gray-500">
+              카테고리명에서 자동으로 만들어집니다.
+              <button type="button" id="dealCodeToggle" class="ml-2 text-indigo-600 hover:underline">직접 지정</button>
+            </div>
+            <input type="text" name="code" id="dealCodeInput" value="" maxlength="40" hidden
+                   placeholder="영문 대문자·숫자 (예: TODAY)"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm uppercase">
+          <% } %>
         </div>
 
         <div>
@@ -141,3 +157,17 @@
     </div>
   </form>
 </div>
+
+<script>
+(function () {
+  // "직접 지정"을 눌렀을 때만 코드 입력칸을 보인다. 기본은 서버 자동 생성.
+  var toggle = document.getElementById('dealCodeToggle');
+  var input = document.getElementById('dealCodeInput');
+  if (!toggle || !input) return;
+  toggle.addEventListener('click', function () {
+    input.hidden = false;
+    toggle.parentElement.hidden = true;
+    input.focus();
+  });
+})();
+</script>

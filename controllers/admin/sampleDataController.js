@@ -19,6 +19,37 @@ const pool = require('../../config/db');
 
 const BASE = '/admin/service/samples';
 
+const fs = require('fs');
+const path = require('path');
+
+const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg'];
+const VIDEO_EXT = ['.mp4', '.webm'];
+
+/*
+ * `public/images/` 안의 파일 목록.
+ *
+ * 이 화면의 이미지·영상은 **반드시 git 에 커밋되는 `/images/...`** 여야 한다.
+ * `/uploads/` 는 .gitignore 라 납품본에서 깨지므로, 여기만은 업로드 UI 를 쓰면 안 된다.
+ * 그래서 "업로드" 대신 "이미 커밋된 파일 중에서 고르기"로 푼다 — 경로를 손으로 적지 않으면서
+ * 커밋 경로 제약도 지킨다. 파일 추가는 개발자가 `public/images/sample/` 에 넣고 커밋한다.
+ */
+function listAssets(exts) {
+    const root = path.join(__dirname, '..', '..', 'public', 'images');
+    const out = [];
+    const walk = (dir) => {
+        let entries;
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+            const full = path.join(dir, e.name);
+            if (e.isDirectory()) { walk(full); continue; }
+            if (!exts.includes(path.extname(e.name).toLowerCase())) continue;
+            out.push('/images/' + path.relative(root, full).split(path.sep).join('/'));
+        }
+    };
+    walk(root);
+    return out.sort();
+}
+
 function toArray(v) {
     if (v === undefined || v === null) return [];
     return Array.isArray(v) ? v : [v];
@@ -105,6 +136,9 @@ exports.getSamples = async (req, res) => {
             title: '샘플 데이터 관리',
             subtitle: '몰 생성 시 "샘플 데이터 포함"으로 새 몰에 복제되는 원본입니다. 이미 만들어진 몰에는 영향이 없습니다.',
             categories, brands, products, heroes, globalOptions,
+            // 경로를 손으로 적지 않도록 `public/images/` 안의 실제 파일을 골라 쓰게 한다(§33).
+            sampleImages: listAssets(IMAGE_EXT),
+            sampleVideos: listAssets(VIDEO_EXT),
             saved: req.query.saved === '1',
             msg: req.query.msg || '',
             error: req.query.error || '',

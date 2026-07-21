@@ -11,6 +11,7 @@ const membershipService = require('../../services/membership/membershipService')
 const evaluationService = require('../../services/membership/evaluationService');
 const gradeCouponService = require('../../services/membership/gradeCouponService');
 const membershipConfigService = require('../../services/membership/membershipConfigService');
+const { generateUniqueCode } = require('../../shared/codeGen');
 
 const LAYOUT = 'layouts/admin_layout';
 function actor(req) {
@@ -121,10 +122,21 @@ exports.postGradeSave = async (req, res) => {
         if (id) {
             await gradeService.updateGrade(id, req.body);
         } else {
-            if (!req.body.grade_code || !String(req.body.grade_code).trim()) {
-                return res.redirect('/admin/membership/grades/new?error=' + encodeURIComponent('등급 코드를 입력하세요.'));
-            }
-            gradeId = await gradeService.createGrade(mallId, req.body);
+            // 등급 코드는 사용자가 지어내지 않는다 — 비면 등급명에서 서버가 만든다(§33).
+            const code = await generateUniqueCode({
+                name: req.body.grade_name,
+                requested: req.body.grade_code,
+                prefix: 'GRADE',
+                maxLen: 30,
+                exists: async (c) => {
+                    const [[row]] = await pool.query(
+                        'SELECT 1 FROM membership_grade WHERE mall_id = ? AND grade_code = ? LIMIT 1',
+                        [mallId, c]
+                    );
+                    return !!row;
+                },
+            });
+            gradeId = await gradeService.createGrade(mallId, { ...req.body, grade_code: code });
         }
         // 등급 진입 쿠폰(쿠폰팩) + 생일 쿠폰 연결 저장. 미선택 시 빈 배열 → 전체 해제.
         const asArray = (v) => (v ? (Array.isArray(v) ? v : [v]) : []);

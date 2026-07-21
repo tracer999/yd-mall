@@ -71,9 +71,8 @@
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">상세 본문</label>
-                        <textarea name="description" rows="10"
-                                  class="w-full border-gray-300 rounded-md shadow-sm text-sm font-mono"><%= g.description || '' %></textarea>
-                        <p class="mt-1 text-xs text-gray-400">HTML 을 쓸 수 있습니다. 저장할 때 위험한 태그는 제거됩니다.</p>
+                        <textarea name="description" rows="10" data-rich
+                                  class="w-full border-gray-300 rounded-md shadow-sm text-sm"><%= g.description || '' %></textarea>
                     </div>
 
                     <div>
@@ -487,3 +486,5 @@
         </script>
     <% } %>
 </div>
+
+<%- include('../../partials/admin/tinymce', { selector: 'textarea[data-rich]', height: 320 }) %>

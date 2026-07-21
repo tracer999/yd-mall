@@ -182,8 +182,21 @@ exports.postAdd = async (req, res) => {
     const conn = await pool.getConnection();
     let newMallId = null;
     try {
-        // 기본몰인데 코드를 비워 두면 자동 부여(단일몰 납품 편의). 기본몰이 아니면 종전대로 필수.
-        if (!code && wantDefault) code = await ensureUniqueCode(conn, 'main');
+        /*
+         * 코드를 비워 두면 자동 부여한다 — 사용자가 식별자를 지어내지 않는다(§33).
+         *   기본몰      → 'main'
+         *   그 밖의 몰  → 몰 이름에서 뽑은 영문·숫자. 한글뿐이라 뽑을 게 없으면 'mall'.
+         * 이름이 한글일 때 로마자 변환은 하지 않는다(읽을 수 없는 코드가 된다) — 순번이 정직하다.
+         */
+        if (!code) {
+            const fromName = String(name || '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 40);
+            const base = wantDefault ? 'main' : (fromName.length >= 2 ? fromName : 'mall');
+            code = await ensureUniqueCode(conn, base);
+        }
 
         const draft = {
             id: null, code, name, domain: req.body.domain,

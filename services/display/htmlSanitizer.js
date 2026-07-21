@@ -48,6 +48,18 @@ const OPTIONS = Object.freeze({
             padding: [/^[\d.\s a-z%]+$/i],
             width: [/^\d+(\.\d+)?(px|rem|em|%)$/],
             'max-width': [/^\d+(\.\d+)?(px|rem|em|%)$/],
+            /*
+             * 표 테두리 — 에디터의 [표] 버튼이 만들어 내는 스타일이다.
+             * 이게 없으면 표는 저장되는데 화면에서는 선이 사라져 "칸이 안 나뉜 글 뭉치"로 보인다.
+             * 값은 표현용이라 위험하지 않다(expression() 등은 아래 패턴에서 걸러진다).
+             */
+            border: [/^[\d.]+(px|rem|em)?\s+(solid|dashed|dotted|double|none)\s+[#\w(),.\s]+$/i, /^none$/i],
+            'border-collapse': [/^(collapse|separate)$/i],
+            'border-color': [/^#[0-9a-f]{3,8}$/i, /^rgba?\(/i, /^[a-z]+$/i],
+            'border-width': [/^[\d.]+(px|rem|em)$/],
+            'border-style': [/^(solid|dashed|dotted|double|none)$/i],
+            height: [/^\d+(\.\d+)?(px|rem|em|%)$/],
+            'vertical-align': [/^(top|middle|bottom|baseline)$/i],
         },
     },
     // 외부 링크는 새 창 + noopener 강제

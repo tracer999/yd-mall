@@ -87,8 +87,10 @@ function decorate(row) {
 
 async function getSetting(mallId = 1) {
     const [rows] = await pool.query('SELECT * FROM outlet_setting WHERE mall_id = ?', [mallId]);
-    if (!rows.length) return { mall_id: mallId, ...DEFAULT_SETTING };
-    const s = rows[0];
+    // 설정 행이 없는 몰(=갓 만들어진 몰)도 **같은 정규화**를 거쳐야 한다.
+    // 예전에는 기본값을 그대로 반환해 allowedTypes(배열)가 없었고,
+    // 화면이 `setting.allowedTypes.includes(...)` 에서 터져 아웃렛 관리가 500 이었다.
+    const s = rows.length ? rows[0] : { mall_id: mallId, ...DEFAULT_SETTING };
     s.allowedTypes = String(s.allowed_types || '')
         .split(',')
         .map((v) => v.trim())

@@ -50,8 +50,11 @@
   </header>
 
   <% if (noticeHtml) { %>
-    <div class="mb-6 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
-      <i class="bi bi-info-circle-fill mr-1.5"></i><%- noticeHtml %>
+    <%# 관리자가 에디터로 쓰므로 <p> 같은 블록이 들어온다 — 아이콘과 나란히 두려면 flex 로 감싼다.
+        (마지막 문단의 아래 여백만 죽여 배지 높이가 들뜨지 않게 한다) %>
+    <div class="mb-6 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900 flex items-start gap-1.5">
+      <i class="bi bi-info-circle-fill mt-0.5 shrink-0"></i>
+      <div class="min-w-0 [&>p:last-child]:mb-0"><%- noticeHtml %></div>
     </div>
   <% } %>
 

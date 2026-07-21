@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const svc = require('../../services/outlet/outletService');
 const navigationService = require('../../services/menu/navigationService');
+const { sanitize } = require('../../services/display/htmlSanitizer');
 const { assertDepthAllowed, wouldCreateCycle, recalcSubtreeDepth, getCategoryMaxDepth, DepthLimitError } =
     require('../../services/tree/depthGuard');
 
@@ -269,7 +270,9 @@ exports.postSetting = async (req, res) => {
         minDiscountRate: req.body.min_discount_rate,
         minProductCount: req.body.min_product_count,
         showInNormalList: req.body.show_in_normal_list === '1' || req.body.show_in_normal_list === 'on',
-        noticeHtml: String(req.body.notice_html || '').trim() || null,
+        // 공통 고지는 에디터로 입력받아 스토어프론트에서 raw 로 렌더된다(`<%- noticeHtml %>`).
+        // 기획전·공동구매·라이브와 같은 규칙으로 저장 시 위험 태그를 걷어낸다.
+        noticeHtml: sanitize(String(req.body.notice_html || '').trim()) || null,
     });
 
     // min_product_count 가 바뀌면 노출 판정이 즉시 달라진다.
