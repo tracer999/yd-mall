@@ -191,9 +191,11 @@
 
 ## 7. 상품 상세 조회 (GET /admin/products/detail/:id)
 
-- **동작:** products JOIN categories로 상품 1건 조회, 없으면 `/admin/products` 리다이렉트  
+- **동작:** products JOIN categories(카테고리명 `category_name` + 브랜드명 `brand_name`, `brand_category_id` 조인)로 상품 1건 조회, 없으면 `/admin/products` 리다이렉트  
 - **추가 조회:** `product_images`(서브 이미지), 해당 상품의 판매이력(`order_items` JOIN `orders`, 상태 PAID/PREPARING/SHIPPED/DELIVERED)  
-- **뷰 전달:** `product`(images 포함), `productUrl`, `salesHistory`, `title: '상품 상세 정보'`
+- **뷰 전달:** `product`(images 포함), `productUrl`, `salesHistory`, `title: '상품 상세 정보'`  
+- **뷰 구성:** 상단 이미지·가격 위젯 아래에 관리자용 읽기전용 요약 블록(기본 설정 / 가격 정보). enum·SET 값은 뷰에서 한글 라벨로 매핑하며, 원가(`purchase_price`)는 관리자에게만 노출된다.  
+- **날짜 포맷 주의:** `sale_start_date`·`badge_expire_date` 는 DATE 컬럼이라 mysql2 가 **로컬(KST) 자정 Date** 로 반환한다. `toISOString()` 을 쓰면 하루 밀리므로 `getFullYear/getMonth/getDate` 로 찍는다(상세·수정폼 공통).
 
 ---
 
