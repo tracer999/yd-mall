@@ -10,7 +10,10 @@
   const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR') : '-');
   const totalPages = Math.max(Math.ceil((total || 0) / (pageSize || 30)), 1);
   const qs = (over) => {
-    const p = new URLSearchParams({ q: f.q || '', state: f.state || '', ready: f.ready || '', page: String(page || 1) });
+    const p = new URLSearchParams({
+      q: f.q || '', state: f.state || '', ready: f.ready || '',
+      nocat: f.nocat || '', category_id: f.category_id || '', page: String(page || 1),
+    });
     Object.entries(over || {}).forEach(([k, v]) => p.set(k, String(v)));
     return '/admin/sourcing/publish?' + p.toString();
   };
@@ -117,28 +120,104 @@
     </div>
   </div>
 
+  <%# 네이버 카테고리 일괄 상속 — 채울 게 있을 때만 노출한다.
+      네이버는 리프 카테고리만 받으므로 "카테고리에 네이버 ID 가 있다"와 "등록 가능하다"는 다르다.
+      그 차이를 숫자로 그대로 보여 준다. %>
+  <% if (inherit && (inherit.eligible || inherit.nonLeaf)) { %>
+  <div class="mb-6 bg-white shadow-sm rounded-lg border-l-4 border-indigo-400 p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="text-sm font-semibold text-gray-900">
+          <i class="bi bi-diagram-3"></i> 네이버 카테고리 일괄 지정 (우리 카테고리 → 상품)
+        </div>
+        <p class="mt-1 text-xs text-gray-500">
+          상품이 속한 카테고리에 연결된 네이버 카테고리를 상품으로 내려 줍니다.
+          이미 지정된 상품은 덮어쓰지 않습니다. <b>네이버 호출 없이 우리 DB 안에서만</b> 처리됩니다.
+        </p>
+        <p class="mt-2 text-xs">
+          <span class="text-indigo-700 font-semibold">지금 지정 가능 <%= (inherit.eligible || 0).toLocaleString('ko-KR') %>건</span>
+          <% if (inherit.nonLeaf) { %>
+            · <span class="text-amber-700"><%= inherit.nonLeaf.toLocaleString('ko-KR') %>건은 카테고리가 <b>리프가 아니라</b> 불가</span>
+          <% } %>
+          <% if (inherit.noCategoryMap) { %>
+            · <span class="text-gray-500"><%= inherit.noCategoryMap.toLocaleString('ko-KR') %>건은 카테고리에 네이버 매핑 없음</span>
+          <% } %>
+          <% if (inherit.alreadySet) { %>
+            · <span class="text-gray-500"><%= inherit.alreadySet.toLocaleString('ko-KR') %>건 이미 지정됨</span>
+          <% } %>
+        </p>
+        <% if (inherit.nonLeaf) { %>
+          <p class="mt-1 text-xs text-amber-700">
+            네이버는 <b>리프(최하위) 카테고리만</b> 받습니다. 대·중분류에 걸린 상품은 상품 수정 화면에서
+            네이버 카테고리를 직접 검색해 지정해야 합니다.
+          </p>
+        <% } %>
+      </div>
+      <form method="post" action="/admin/sourcing/publish/inherit-category"
+            onsubmit="return confirm('카테고리에서 네이버 리프 카테고리를 <%= (inherit.eligible || 0) %>건에 지정합니다. 진행할까요?');">
+        <button type="submit" <%= inherit.eligible ? '' : 'disabled' %>
+                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:bg-gray-300">
+          카테고리에서 일괄 지정
+        </button>
+      </form>
+    </div>
+  </div>
+  <% } %>
+
   <!-- 네이버 등록 기본값(프로필) -->
   <details class="mb-6 bg-white shadow-sm rounded-lg" <%= profileMissing.length ? 'open' : '' %>>
     <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900 select-none">
       <i class="bi bi-sliders"></i> 네이버 등록 기본값
-      <span class="ml-2 text-xs font-normal text-gray-500">상품마다 네이버가 요구하는 판매자 정보 — 몰당 한 번만 설정</span>
+      <span class="ml-2 text-xs font-normal text-gray-500">상품마다 네이버가 요구하는 판매자 정보 — <b>몰당 한 번만</b> 설정하면 이후 모든 등록에 자동 적용</span>
     </summary>
     <form method="post" action="/admin/sourcing/publish/profile" class="border-t border-gray-100 p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <% var inh = (profile._inherited || []); %>
+      <% if (inh.length) { %>
+        <div class="lg:col-span-3 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+          <i class="bi bi-magic"></i> 비어 있던 항목을 <b>몰 사이트 설정 · 배송 정책</b>에서 자동으로 채웠습니다.
+          그대로 저장하면 확정됩니다. 값을 바꾸려면 해당 화면에서 고치거나 여기서 직접 수정하세요.
+        </div>
+      <% } %>
       <div>
-        <label class="block text-xs font-medium text-gray-700">A/S 전화번호 <span class="text-red-500">*</span></label>
+        <label class="block text-xs font-medium text-gray-700">
+          A/S 전화번호 <span class="text-red-500">*</span>
+          <% if (inh.indexOf('as_telephone') >= 0) { %><span class="ml-1 text-emerald-600 font-normal">사이트 설정에서 가져옴</span><% } %>
+        </label>
         <input name="as_telephone" value="<%= profile.as_telephone || '' %>" placeholder="1588-0000"
                class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <p class="mt-1 text-xs text-gray-400">
+          비워 두면 <a href="/admin/site-settings" class="text-indigo-600 underline">사이트 설정</a>의 대표 전화번호를 사용합니다.
+        </p>
       </div>
       <div class="lg:col-span-2">
-        <label class="block text-xs font-medium text-gray-700">A/S 안내 <span class="text-red-500">*</span></label>
+        <label class="block text-xs font-medium text-gray-700">
+          A/S 안내 <span class="text-red-500">*</span>
+          <% if (inh.indexOf('as_guide_content') >= 0) { %><span class="ml-1 text-emerald-600 font-normal">사이트 설정에서 가져옴</span><% } %>
+        </label>
         <input name="as_guide_content" value="<%= profile.as_guide_content || '' %>" placeholder="평일 09:00~18:00 고객센터로 문의해 주세요."
                class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <p class="mt-1 text-xs text-gray-400">
+          비워 두면 사이트 설정의 <b>고객센터 운영시간</b>을 사용합니다.
+        </p>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700">원산지 코드 <span class="text-red-500">*</span></label>
-        <input name="origin_area_code" value="<%= profile.origin_area_code || '' %>" placeholder="0200037"
+      <%# 원산지는 네이버가 정한 코드값이라 사람이 알 수 없다 — 반드시 검색·선택으로 받는다.
+          목록은 [외부몰 연동 · 네이버 리소스]에서 수집해 둔 naver_origin_area 를 쓴다. %>
+      <div class="relative">
+        <label class="block text-xs font-medium text-gray-700">원산지 <span class="text-red-500">*</span></label>
+        <input type="text" id="origin-search" autocomplete="off"
+               value="<%= originAreaName || '' %>"
+               placeholder="예: 국산, 강원도, 중국 … 두 글자 이상"
                class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
-        <p class="mt-1 text-xs text-gray-400">네이버 원산지 코드. 수입산이면 수입사도 필요합니다.</p>
+        <input type="hidden" name="origin_area_code" id="origin-code" value="<%= profile.origin_area_code || '' %>">
+        <div id="origin-results"
+             class="absolute z-20 mt-1 hidden max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg"></div>
+        <p id="origin-picked" class="mt-1 text-xs <%= profile.origin_area_code ? 'text-sky-700 font-medium' : 'text-gray-400' %>">
+          <% if (profile.origin_area_code) { %>
+            선택됨 — <%= originAreaName || '(수집 목록에 없는 코드)' %> (<%= profile.origin_area_code %>)
+          <% } else { %>
+            선택된 원산지 없음
+          <% } %>
+        </p>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700">원산지 상세</label>
@@ -174,37 +253,114 @@
                class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
       </div>
       <div>
-        <label class="block text-xs font-medium text-gray-700">택배사 코드</label>
-        <input name="delivery_company" value="<%= profile.delivery_company || '' %>" placeholder="CJGLS"
-               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <label class="block text-xs font-medium text-gray-700">기본 택배사</label>
+        <select name="delivery_company" class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="">선택 안 함 (네이버 기본값)</option>
+          <% deliveryCompanies.forEach(function (d) { %>
+            <option value="<%= d.code %>" <%= profile.delivery_company === d.code ? 'selected' : '' %>><%= d.name %></option>
+          <% }); %>
+        </select>
+        <p class="mt-1 text-xs text-gray-400">
+          <b>상품에 표기되는 기본 배송 정보</b>입니다. 실제 발송 때 쓰는 택배사·송장번호는
+          주문마다 출고 시점에 따로 등록하며, 이 값과 달라도 됩니다.
+        </p>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700">출고지 주소록 번호</label>
-        <input name="release_address_no" value="<%= profile.release_address_no || '' %>"
-               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700">반품지 주소록 번호</label>
-        <input name="refund_address_no" value="<%= profile.refund_address_no || '' %>"
-               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
-        <p class="mt-1 text-xs text-gray-400">네이버 판매자 주소록의 번호입니다(주소 직접 입력 아님).</p>
+      <%#
+        출고지·반품지는 네이버가 부여한 주소록 **번호**다. 사람이 알 수 없는 값이라
+        직접 타이핑하게 두면 오타 한 자가 상품 등록 400 으로 돌아온다(§34).
+        [주소록 불러오기] 로 네이버에서 목록을 받아 고른다. 목록은 저장하지 않는다 —
+        몰마다 다른 운영 데이터라 미리 시드하면 납품된 몰에서 틀린 값이 된다(§31).
+      %>
+      <div class="sm:col-span-2">
+        <div class="flex items-center justify-between">
+          <label class="block text-xs font-medium text-gray-700">출고지 · 반품지 주소록</label>
+          <button type="button" id="addr-load"
+                  class="inline-flex items-center h-[30px] px-3 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+            <i class="bi bi-arrow-repeat mr-1"></i> 주소록 불러오기
+          </button>
+        </div>
+        <p id="addr-msg" class="mt-1 text-xs text-gray-400">
+          [주소록 불러오기]를 누르면 네이버 판매자센터의 주소록을 받아 옵니다.
+        </p>
+
+        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">출고지</label>
+            <select id="release-select" data-target="release_address_no"
+                    class="w-full rounded-md border border-gray-300 text-sm px-3 py-2" disabled>
+              <% if (profile.release_address_no) { %>
+                <option selected>현재 설정 (번호 <%= profile.release_address_no %>)</option>
+              <% } else { %>
+                <option>먼저 주소록을 불러오세요</option>
+              <% } %>
+            </select>
+            <input type="hidden" name="release_address_no" id="release_address_no"
+                   value="<%= profile.release_address_no || '' %>">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">반품지</label>
+            <select id="refund-select" data-target="refund_address_no"
+                    class="w-full rounded-md border border-gray-300 text-sm px-3 py-2" disabled>
+              <% if (profile.refund_address_no) { %>
+                <option selected>현재 설정 (번호 <%= profile.refund_address_no %>)</option>
+              <% } else { %>
+                <option>먼저 주소록을 불러오세요</option>
+              <% } %>
+            </select>
+            <input type="hidden" name="refund_address_no" id="refund_address_no"
+                   value="<%= profile.refund_address_no || '' %>">
+          </div>
+        </div>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700">상품정보제공고시 유형</label>
-        <input name="notice_type" value="<%= profile.notice_type || '' %>" placeholder="DIET_FOOD"
-               class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <select name="notice_type" id="notice-type" class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="">선택 안 함 (기타로 등록)</option>
+          <% noticeTypes.forEach(function (t) { %>
+            <option value="<%= t.notice_type %>" <%= profile.notice_type === t.notice_type ? 'selected' : '' %>>
+              <%= t.label %> (<%= t.notice_type %>)
+            </option>
+          <% }); %>
+        </select>
         <p class="mt-1 text-xs text-gray-400">
-          건강기능식품은 <b>DIET_FOOD</b> 입니다(HEALTH_FUNCTIONAL_FOOD 는 없습니다). 비우면 ETC.
+          건강기능식품은 <b>건강기능식품(DIET_FOOD)</b> 입니다. 유형을 고르면 아래에 입력 항목이 나타납니다.
         </p>
       </div>
+
+      <%# 고시정보 — 상품군 스키마로 폼을 그린다. 관리자가 JSON 을 적는 화면은 없다.
+          아래 script 의 데이터는 "화면 렌더 재료"이지 사용자 입력이 아니다. %>
       <div class="lg:col-span-3">
-        <label class="block text-xs font-medium text-gray-700">고시정보 기본값 (JSON)</label>
-        <textarea name="notice_defaults_json" rows="4" placeholder='{"productName":"...","producer":"..."}'
-                  class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2 font-mono"><%= profile.notice_defaults_json ? JSON.stringify(profile.notice_defaults_json, null, 2) : '' %></textarea>
-        <p class="mt-1 text-xs text-gray-400">
-          상품군마다 필수 항목이 다릅니다. 비운 공통 항목은 "상품상세 참조"로 자동 저장됩니다.
-        </p>
+        <div class="rounded-md border border-gray-200">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
+            <div class="text-xs font-semibold text-gray-700">
+              <i class="bi bi-card-checklist"></i> 상품정보제공고시 기본값
+              <span class="ml-1 font-normal text-gray-500">상품마다 비워 두면 이 값이 쓰입니다</span>
+            </div>
+            <%# form 중첩은 브라우저가 안쪽 태그를 버려 바깥 폼(프로필 저장)이 제출된다.
+                목록의 [상태 확인] 버튼과 같은 formaction 패턴으로 처리한다. %>
+            <button type="submit" formaction="/admin/sourcing/publish/notice-schema/refresh" formmethod="post"
+                    class="shrink-0 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100">
+              <i class="bi bi-arrow-repeat"></i> 네이버에서 상품군 수집
+            </button>
+          </div>
+          <% if (noticeMissing && noticeMissing.length) { %>
+            <div class="border-b border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <i class="bi bi-exclamation-triangle"></i> 네이버 필수 항목이 비어 있습니다 —
+              <b><%= noticeMissing.join(', ') %></b>. 이대로 등록하면 400 으로 거부됩니다.
+            </div>
+          <% } %>
+          <div id="notice-fields" class="p-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+          <p class="px-3 pb-3 text-xs text-gray-400">
+            아래 5개 공통 항목은 비워 두면 네이버에 <b>"상품상세 참조"</b>로 저장됩니다.
+          </p>
+        </div>
       </div>
+
+      <script type="application/json" id="notice-catalog"><%- JSON.stringify({
+        types: noticeTypes,
+        common: noticeCommonFields,
+        values: profile.notice_defaults_json || {}
+      }) %></script>
       <%# 체크박스는 해제 시 값 자체가 전송되지 않아 "끄기"가 저장되지 않는다. select 로 명시 전송한다. %>
       <div>
         <label class="block text-xs font-medium text-gray-700">네이버쇼핑 노출</label>
@@ -243,9 +399,12 @@
         <option value="FAILED" <%= f.state === 'FAILED' ? 'selected' : '' %>>실패만</option>
       </select>
     </div>
-    <div class="flex items-end gap-2">
+    <div class="flex items-end gap-3">
       <label class="inline-flex items-center gap-2 text-sm">
         <input type="checkbox" name="ready" value="Y" <%= f.ready === 'Y' ? 'checked' : '' %>> 등록 가능만
+      </label>
+      <label class="inline-flex items-center gap-2 text-sm">
+        <input type="checkbox" name="nocat" value="Y" <%= f.nocat === 'Y' ? 'checked' : '' %>> 카테고리 미지정만
       </label>
       <button class="ml-auto rounded-md bg-gray-800 px-4 py-2 text-sm text-white">검색</button>
     </div>
@@ -253,6 +412,36 @@
 
   <!-- 목록 + 일괄 등록 -->
   <form method="post" action="/admin/sourcing/publish/run" id="publish-form">
+
+    <%# 선택 상품에 네이버 리프 카테고리를 직접 지정한다.
+        [카테고리에서 일괄 지정]으로 못 채우는 상품(우리 카테고리가 대·중분류)을 위한 경로.
+        form 중첩 대신 formaction 으로 같은 폼의 선택값을 재사용한다. %>
+    <div class="mb-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="min-w-[18rem] flex-1 relative">
+          <label class="block text-xs font-medium text-gray-700">
+            선택 상품에 네이버 카테고리 지정
+            <span class="ml-1 font-normal text-gray-500">— 리프(최하위)만 검색됩니다</span>
+          </label>
+          <input type="text" id="cat-search" autocomplete="off" placeholder="예: 홍삼, 비타민 … 두 글자 이상 입력"
+                 class="mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <input type="hidden" name="assign_naver_category_id" id="cat-picked-id">
+          <div id="cat-results"
+               class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg"></div>
+          <p id="cat-picked" class="mt-1 text-xs text-gray-400">선택된 카테고리 없음</p>
+        </div>
+        <button type="submit" id="assign-btn" disabled
+                formaction="/admin/sourcing/publish/assign-category" formmethod="post"
+                class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+          선택 상품에 지정
+        </button>
+      </div>
+      <p class="mt-2 text-xs text-gray-500">
+        이미 지정된 상품도 <b>덮어씁니다</b>(재지정 목적). 위 필터의 <b>카테고리 미지정만</b> 으로 대상을 좁힌 뒤
+        전체선택하면 한 화면(<%= pageSize %>건)씩 처리됩니다.
+      </p>
+    </div>
+
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
       <div class="text-sm text-gray-600">총 <b><%= (total || 0).toLocaleString('ko-KR') %></b>건</div>
       <div class="flex items-center gap-3">
@@ -381,6 +570,272 @@
 </div>
 
 <script>
+/*
+ * 검색형 선택 위젯 — 코드값을 사람이 외우지 않게 한다.
+ * 네이버가 정한 코드(원산지·카테고리)는 반드시 이 방식으로 받는다.
+ */
+function attachCodePicker(opts) {
+  var input = document.getElementById(opts.inputId);
+  var box = document.getElementById(opts.resultsId);
+  var hidden = document.getElementById(opts.hiddenId);
+  var picked = document.getElementById(opts.pickedId);
+  if (!input || !box || !hidden) return;
+
+  var timer = null, seq = 0;
+  function close() { box.classList.add('hidden'); box.innerHTML = ''; }
+
+  function choose(item) {
+    hidden.value = opts.valueOf(item);
+    input.value = opts.labelOf(item);
+    if (picked) {
+      picked.textContent = '선택됨 — ' + opts.labelOf(item) + ' (' + opts.valueOf(item) + ')';
+      picked.className = 'mt-1 text-xs text-sky-700 font-medium';
+    }
+    if (opts.onPick) opts.onPick(item);
+    close();
+  }
+
+  input.addEventListener('input', function () {
+    hidden.value = '';
+    if (picked) {
+      picked.textContent = opts.emptyText;
+      picked.className = 'mt-1 text-xs text-gray-400';
+    }
+    if (opts.onClear) opts.onClear();
+
+    var q = input.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) { close(); return; }
+    timer = setTimeout(function () {
+      var my = ++seq;
+      fetch(opts.url + encodeURIComponent(q) + '&limit=20')
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (my !== seq) return;      // 늦게 온 응답이 최신 결과를 덮지 않게
+          var rows = (j && j.data) || [];
+          box.innerHTML = '';
+          if (!rows.length) {
+            var none = document.createElement('div');
+            none.className = 'px-3 py-2 text-xs text-gray-500';
+            none.textContent = '검색 결과가 없습니다. 리소스 화면에서 수집했는지 확인하세요.';
+            box.appendChild(none);
+          } else {
+            rows.forEach(function (item) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'block w-full text-left px-3 py-2 text-xs hover:bg-sky-50 border-b border-gray-100';
+              b.innerHTML = '<div class="text-gray-800"></div><div class="text-gray-400"></div>';
+              b.children[0].textContent = opts.labelOf(item);
+              b.children[1].textContent = opts.valueOf(item);
+              b.addEventListener('click', function () { choose(item); });
+              box.appendChild(b);
+            });
+          }
+          box.classList.remove('hidden');
+        })
+        .catch(close);
+    }, 250);
+  });
+
+  document.addEventListener('click', function (e) {
+    if (e.target !== input && !box.contains(e.target)) close();
+  });
+}
+
+attachCodePicker({
+  inputId: 'origin-search', resultsId: 'origin-results',
+  hiddenId: 'origin-code', pickedId: 'origin-picked',
+  url: '/admin/sourcing/naver-taxonomy/origin-areas/search?q=',
+  labelOf: function (r) { return r.name; },
+  valueOf: function (r) { return r.code; },
+  emptyText: '선택된 원산지 없음',
+});
+
+/*
+ * 네이버 리프 카테고리 검색 → 선택 상품 일괄 지정.
+ * 검색 API 는 is_leaf=1 · is_active=1 만 돌려주므로 목록에 뜬 것은 전부 지정 가능하다
+ * (서버도 리프를 한 번 더 검증한다 — 폼 값은 조작될 수 있다).
+ */
+(function () {
+  var input = document.getElementById('cat-search');
+  var box = document.getElementById('cat-results');
+  var hidden = document.getElementById('cat-picked-id');
+  var picked = document.getElementById('cat-picked');
+  var btn = document.getElementById('assign-btn');
+  if (!input || !box || !hidden || !btn) return;
+
+  var timer = null;
+  var seq = 0;
+
+  function close() { box.classList.add('hidden'); box.innerHTML = ''; }
+
+  function choose(item) {
+    hidden.value = item.naver_category_id;
+    picked.textContent = '선택됨 — ' + item.whole_category_name + ' (ID ' + item.naver_category_id + ')';
+    picked.className = 'mt-1 text-xs text-sky-700 font-medium';
+    btn.disabled = false;
+    input.value = item.whole_category_name;
+    close();
+  }
+
+  function search(q) {
+    var my = ++seq;
+    fetch('/admin/sourcing/naver-taxonomy/search?q=' + encodeURIComponent(q) + '&limit=20')
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (my !== seq) return;            // 늦게 온 이전 요청이 최신 결과를 덮지 않게
+        var rows = (j && j.data) || [];
+        box.innerHTML = '';
+        if (!rows.length) {
+          var none = document.createElement('div');
+          none.className = 'px-3 py-2 text-xs text-gray-500';
+          none.textContent = '검색 결과가 없습니다. 다른 낱말로 찾아보세요.';
+          box.appendChild(none);
+        } else {
+          rows.forEach(function (item) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'block w-full text-left px-3 py-2 text-xs hover:bg-sky-50 border-b border-gray-100';
+            b.innerHTML = '<div class="text-gray-800">' + item.whole_category_name + '</div>' +
+                          '<div class="text-gray-400">ID ' + item.naver_category_id + '</div>';
+            b.addEventListener('click', function () { choose(item); });
+            box.appendChild(b);
+          });
+        }
+        box.classList.remove('hidden');
+      })
+      .catch(function () { close(); });
+  }
+
+  input.addEventListener('input', function () {
+    hidden.value = '';
+    btn.disabled = true;
+    picked.textContent = '선택된 카테고리 없음';
+    picked.className = 'mt-1 text-xs text-gray-400';
+
+    var q = input.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) { close(); return; }
+    timer = setTimeout(function () { search(q); }, 250);
+  });
+
+  document.addEventListener('click', function (e) {
+    if (e.target !== input && !box.contains(e.target)) close();
+  });
+
+  btn.addEventListener('click', function (e) {
+    var n = document.querySelectorAll('.row-check:checked').length;
+    if (!n) {
+      e.preventDefault();
+      alert('카테고리를 지정할 상품을 선택하세요.');
+      return;
+    }
+    if (!confirm('선택한 ' + n + '건에 네이버 카테고리를 지정합니다.\n\n' + input.value + '\n\n이미 지정된 상품도 덮어씁니다.')) {
+      e.preventDefault();
+    }
+  });
+})();
+
+/*
+ * 고시정보 입력폼 렌더러.
+ * 상품군마다 필드가 달라 서버가 넘긴 스키마를 순회해 일반 입력폼을 만든다.
+ * 관리자는 JSON 을 보지 않는다 — 값은 notice[필드명] 으로 전송되고 서버가 조립한다.
+ */
+(function () {
+  var holder = document.getElementById('notice-fields');
+  var select = document.getElementById('notice-type');
+  var raw = document.getElementById('notice-catalog');
+  if (!holder || !select || !raw) return;
+
+  var catalog = JSON.parse(raw.textContent || '{}');
+  var values = catalog.values || {};
+
+  function el(tag, cls) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    return n;
+  }
+
+  function field(f, isCommon) {
+    var wrap = el('div', f.type === 'textarea' ? 'sm:col-span-2 lg:col-span-3' : '');
+    var label = el('label', 'block text-xs font-medium text-gray-700');
+    label.textContent = f.label || f.name;
+    if (f.required) {
+      var star = el('span', 'text-red-500');
+      star.textContent = ' *';
+      label.appendChild(star);
+    }
+    if (isCommon) {
+      var hint = el('span', 'ml-1 text-xs font-normal text-gray-400');
+      hint.textContent = '(비우면 "상품상세 참조")';
+      label.appendChild(hint);
+    }
+    wrap.appendChild(label);
+
+    var input;
+    var cls = 'mt-1 w-full rounded-md border border-gray-300 text-sm px-3 py-2';
+    var cur = values[f.name];
+
+    if (f.type === 'boolean') {
+      input = el('select', cls);
+      [['', '선택 안 함'], ['1', '예'], ['0', '아니오']].forEach(function (o) {
+        var opt = document.createElement('option');
+        opt.value = o[0];
+        opt.textContent = o[1];
+        if (cur === true && o[0] === '1') opt.selected = true;
+        if (cur === false && o[0] === '0') opt.selected = true;
+        input.appendChild(opt);
+      });
+    } else if (f.type === 'textarea') {
+      input = el('textarea', cls);
+      input.rows = 2;
+      input.value = cur == null ? '' : cur;
+    } else {
+      input = el('input', cls);
+      // 네이버 fieldType 을 그대로 옮긴 위젯 — LocalDate/YearMonth/Integer 대응.
+      input.type = f.type === 'date' ? 'date'
+                 : f.type === 'month' ? 'month'
+                 : f.type === 'number' ? 'number' : 'text';
+      input.value = cur == null ? '' : cur;
+      if (f.maxLength && input.type === 'text') input.maxLength = f.maxLength;
+    }
+    input.name = 'notice[' + f.name + ']';
+    wrap.appendChild(input);
+
+    // 네이버가 준 부가설명(fieldAddDescription) — 법령 근거 등이 들어 있어 그대로 보여 준다.
+    if (f.hint) {
+      var hintEl = el('p', 'mt-1 text-xs text-gray-400 whitespace-pre-line');
+      hintEl.textContent = f.hint;
+      wrap.appendChild(hintEl);
+    }
+    return wrap;
+  }
+
+  function render() {
+    holder.innerHTML = '';
+    var type = select.value;
+    var schema = (catalog.types || []).filter(function (t) { return t.notice_type === type; })[0];
+
+    if (!type) {
+      var note = el('p', 'sm:col-span-2 lg:col-span-3 text-xs text-gray-500');
+      note.textContent = '상품군을 먼저 선택하세요. 상품군마다 네이버가 요구하는 항목이 다릅니다.';
+      holder.appendChild(note);
+    } else if (!schema) {
+      var warn = el('p', 'sm:col-span-2 lg:col-span-3 text-xs text-amber-700');
+      warn.textContent = '이 상품군의 입력 항목이 아직 수집되지 않았습니다. [네이버에서 상품군 수집] 을 먼저 실행하세요.';
+      holder.appendChild(warn);
+    } else {
+      (schema.fields || []).forEach(function (f) { holder.appendChild(field(f, false)); });
+    }
+
+    // 공통 5필드는 상품군과 무관하게 항상 같이 받는다.
+    (catalog.common || []).forEach(function (f) { holder.appendChild(field(f, true)); });
+  }
+
+  select.addEventListener('change', render);
+  render();
+})();
+
 (function () {
   var all = document.getElementById('check-all');
   var form = document.getElementById('publish-form');
@@ -411,6 +866,89 @@
     }
     var btn = document.getElementById('publish-btn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 전송 중… (건당 2~4초)'; }
+  });
+})();
+</script>
+
+<script>
+/*
+ * 주소록 불러오기 — 출고지·반품지 번호를 타이핑하지 않고 고르게 한다(§34).
+ * 목록은 저장하지 않고 누를 때마다 네이버에서 받아 온다(§31 — 몰별 운영 데이터).
+ */
+(function () {
+  var btn = document.getElementById('addr-load');
+  var msg = document.getElementById('addr-msg');
+  if (!btn || !msg) return;
+
+  var selects = [
+    { el: document.getElementById('release-select'), hidden: document.getElementById('release_address_no'), prefer: 'RELEASE' },
+    { el: document.getElementById('refund-select'),  hidden: document.getElementById('refund_address_no'),  prefer: 'REFUND'  }
+  ];
+
+  function label(it) {
+    var bits = [it.name];
+    if (it.typeLabel) bits.push('[' + it.typeLabel + ']');
+    if (it.address) bits.push(it.address);
+    return bits.join(' · ') + ' (번호 ' + it.no + ')';
+  }
+
+  function fill(items) {
+    selects.forEach(function (s) {
+      if (!s.el || !s.hidden) return;
+      var cur = s.hidden.value;
+      s.el.innerHTML = '';
+
+      var none = document.createElement('option');
+      none.value = '';
+      none.textContent = '선택 안 함';
+      s.el.appendChild(none);
+
+      items.forEach(function (it) {
+        var o = document.createElement('option');
+        o.value = it.no;
+        o.textContent = label(it);
+        if (String(it.no) === String(cur)) o.selected = true;
+        s.el.appendChild(o);
+      });
+
+      // 저장된 번호가 주소록에 없으면(판매자센터에서 지웠을 때) 값을 조용히 버리지 않는다.
+      if (cur && !items.some(function (it) { return String(it.no) === String(cur); })) {
+        var keep = document.createElement('option');
+        keep.value = cur;
+        keep.textContent = '현재 설정 유지 (번호 ' + cur + ' — 주소록에 없음)';
+        keep.selected = true;
+        s.el.insertBefore(keep, s.el.firstChild.nextSibling);
+      }
+
+      s.el.disabled = false;
+      s.el.onchange = function () { s.hidden.value = s.el.value; };
+    });
+  }
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    msg.className = 'mt-1 text-xs text-gray-400';
+    msg.textContent = '네이버에서 주소록을 받아 오는 중…';
+
+    fetch('/admin/sourcing/publish/addressbooks', { credentials: 'same-origin' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+      .then(function (r) {
+        if (!r.ok || !r.body.ok) throw new Error((r.body && r.body.message) || '조회 실패');
+        if (!r.body.items.length) {
+          msg.className = 'mt-1 text-xs text-amber-700';
+          msg.textContent = '주소록이 비어 있습니다. 네이버 판매자센터에서 출고지·반품지를 먼저 등록하세요.';
+          return;
+        }
+        fill(r.body.items);
+        msg.className = 'mt-1 text-xs text-emerald-700';
+        msg.textContent = '주소록 ' + r.body.items.length + '건을 불러왔습니다. 위에서 고른 뒤 [프로필 저장]을 누르세요.';
+      })
+      .catch(function (e) {
+        msg.className = 'mt-1 text-xs text-red-600';
+        msg.textContent = '주소록을 불러오지 못했습니다 — ' + e.message
+          + ' (네이버 API 는 허용된 IP 에서만 응답합니다. 기존에 저장된 번호는 그대로 유지됩니다.)';
+      })
+      .finally(function () { btn.disabled = false; });
   });
 })();
 </script>

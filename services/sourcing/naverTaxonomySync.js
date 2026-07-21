@@ -120,8 +120,26 @@ async function syncCategories(opts = {}) {
         );
         const deactivated = deac.affectedRows || 0;
 
+        /*
+         * 새로 들어온 리프는 고시 유형이 NULL 이다(upsert 가 notice_type 을 건드리지 않으므로
+         * 기존 값은 보존된다). 미지정으로 두면 등록 때 몰 폴백 유형이 쓰여 **틀린 고시**가 나간다.
+         * 그래서 수집 직후 규칙을 자동 적용한다. 사람이 지정한 값(MANUAL)은 보존된다.
+         * 실패해도 수집 자체는 SUCCESS — 화면에서 버튼으로 다시 돌릴 수 있다.
+         */
+        let noticeMsg = '';
+        try {
+            const noticeMapping = require('./channel/naverNoticeMapping');
+            const nm = await noticeMapping.applyRules();
+            noticeMsg = `, 고시유형 ${nm.matched}건 배정`
+                + (nm.unmatched ? `(규칙없음 ${nm.unmatched})` : '')
+                + (nm.manualKept ? `(직접지정 ${nm.manualKept} 유지)` : '');
+            console.log(`[naverNoticeMapping] ${noticeMsg.replace(/^, /, '')}`);
+        } catch (e) {
+            console.error('[naverNoticeMapping] 고시유형 자동 배정 실패(수집은 성공):', e.message);
+        }
+
         await finishLog(logId, { status: 'SUCCESS', total: mapped.length, upserted, deactivated,
-            message: `카테고리 ${mapped.length}건 수집(리프 포함), 비활성 ${deactivated}건` });
+            message: `카테고리 ${mapped.length}건 수집(리프 포함), 비활성 ${deactivated}건${noticeMsg}` });
 
         // Phase 4 지속 동기화 — 수집분을 우리 글로벌 카테고리에 반영(신규 추가 + 비활성 정리).
         // 실패해도 수집 자체는 SUCCESS. (설계: 네이버_기반_글로벌_카테고리_재구성_설계.md §5 Phase 4)
@@ -138,6 +156,117 @@ async function syncCategories(opts = {}) {
         await finishLog(logId, { status: 'FAILED', message: e.message });
         return { status: 'FAILED', message: e.message };
     }
+}
+
+// ---- 원산지 코드 -----------------------------------------------------------
+//
+// 상품 등록의 `originAreaInfo.originAreaCode` 에 쓰는 네이버 코드값이다.
+// 운영자가 알 수 없는 값이라 손으로 적게 두면 안 된다(오타 = 등록 400).
+// 카테고리·브랜드와 같은 방식으로 수집해 두고 화면에서 검색·선택하게 한다.
+//
+// 계층은 **코드 길이**로 갈린다: 2 = 대분류, 4 = 중분류, 7 = 시군구.
+// (응답에 parent 필드가 없어 접두어로 계산한다.)
+
+const ORIGIN_AREA_PATH = '/v1/product-origin-areas';
+
+function mapOriginArea(item, fetchedAt) {
+    const code = String((item && item.code) || '').trim();
+    const name = String((item && item.name) || '').trim();
+    if (!code || !name) return null;
+
+    const level = code.length >= 7 ? 3 : code.length >= 4 ? 2 : 1;
+    const parent_code = level === 3 ? code.slice(0, 4) : level === 2 ? code.slice(0, 2) : null;
+    return { code, name, parent_code, level, fetched_at: fetchedAt };
+}
+
+async function upsertOriginAreas(rows) {
+    if (!rows.length) return 0;
+    let affected = 0;
+    // 535건이라 한 번에 넣어도 되지만, 청크로 끊어 두면 데이터가 늘어도 그대로 쓴다.
+    for (let i = 0; i < rows.length; i += 200) {
+        const chunk = rows.slice(i, i + 200);
+        const params = [];
+        const values = chunk.map((r) => {
+            params.push(r.code, r.name, r.parent_code, r.level, r.fetched_at);
+            return '(?, ?, ?, ?, 1, ?)';
+        });
+        const [res] = await pool.query(
+            `INSERT INTO naver_origin_area (code, name, parent_code, level, is_active, fetched_at)
+             VALUES ${values.join(', ')}
+             ON DUPLICATE KEY UPDATE
+                name = VALUES(name), parent_code = VALUES(parent_code), level = VALUES(level),
+                is_active = 1, fetched_at = VALUES(fetched_at)`,
+            params
+        );
+        affected += res.affectedRows || 0;
+    }
+    return affected;
+}
+
+/** 원산지 코드 수집. 카테고리 수집과 같은 로그·비활성 처리 규약을 따른다. */
+async function syncOriginAreas(opts = {}) {
+    const triggerBy = opts.triggerBy === 'MANUAL' ? 'MANUAL' : 'CRON';
+
+    const credential = await pickActiveNaverCredential();
+    if (!credential) {
+        await writeLog({ resource: 'ORIGIN_AREA', triggerBy, credentialId: null, status: 'SKIPPED',
+            message: 'ACTIVE 네이버 자격증명 없음 — 발급·검증 후 수집됩니다.' });
+        return { status: 'SKIPPED', message: 'ACTIVE 네이버 자격증명 없음' };
+    }
+
+    const logId = await startLog({ resource: 'ORIGIN_AREA', triggerBy, credentialId: credential.id });
+    const [[{ now }]] = await pool.query('SELECT NOW() AS now');
+    const runStart = now;
+
+    try {
+        const res = await naverClient.apiGet(credential, ORIGIN_AREA_PATH);
+        const raw = (res && res.originAreaCodeNames) || [];
+        const mapped = raw.map((it) => mapOriginArea(it, runStart)).filter(Boolean);
+
+        const upserted = await upsertOriginAreas(mapped);
+
+        const [deac] = await pool.query(
+            'UPDATE naver_origin_area SET is_active = 0 WHERE fetched_at < ? AND is_active = 1',
+            [runStart]
+        );
+        const deactivated = deac.affectedRows || 0;
+
+        await finishLog(logId, { status: 'SUCCESS', total: mapped.length, upserted, deactivated,
+            message: `원산지 ${mapped.length}건 수집, 비활성 ${deactivated}건` });
+        return { status: 'SUCCESS', total: mapped.length, upserted, deactivated };
+    } catch (e) {
+        await finishLog(logId, { status: 'FAILED', message: e.message });
+        return { status: 'FAILED', message: e.message };
+    }
+}
+
+/** 원산지 검색 — 프로필 화면의 검색 select 가 쓴다. 이름·코드 어느 쪽으로도 찾는다. */
+async function searchOriginAreas(query, limit = 20) {
+    const q = String(query || '').trim();
+    const n = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const where = ['is_active = 1'];
+    const params = [];
+    if (q) {
+        where.push('(name LIKE ? OR code = ?)');
+        params.push(`%${q}%`, q);
+    }
+    const [rows] = await pool.query(
+        `SELECT code, name, level FROM naver_origin_area
+          WHERE ${where.join(' AND ')}
+          ORDER BY level, code
+          LIMIT ?`,
+        [...params, n]
+    );
+    return rows;
+}
+
+/** 코드 하나의 표시명 — 저장된 값을 화면에 되돌려 보여줄 때 쓴다. */
+async function getOriginAreaName(code) {
+    if (!code) return null;
+    const [rows] = await pool.query(
+        'SELECT code, name FROM naver_origin_area WHERE code = ? LIMIT 1', [String(code)]
+    );
+    return rows.length ? rows[0] : null;
 }
 
 // ---- 로그 헬퍼 -------------------------------------------------------------
@@ -185,6 +314,13 @@ async function getStatus() {
             SUM(is_active = 1) AS active_total,
             MAX(fetched_at) AS last_fetched_at
          FROM naver_brand`
+    );
+    const [[originCounts]] = await pool.query(
+        `SELECT
+            COUNT(*) AS total,
+            SUM(is_active = 1) AS active_total,
+            MAX(fetched_at) AS last_fetched_at
+         FROM naver_origin_area`
     );
     const [logs] = await pool.query(
         `SELECT id, resource, trigger_by, status, total_count, upserted_count, deactivated_count,
@@ -250,7 +386,7 @@ async function listCategories(opts = {}) {
     );
     const [rows] = await pool.query(
         `SELECT naver_category_id, name, whole_category_name, category_level,
-                is_leaf, is_active, fetched_at
+                is_leaf, is_active, fetched_at, notice_type, notice_source
            FROM naver_category
            ${whereSql}
           ORDER BY whole_category_name ASC, naver_category_id ASC
@@ -319,6 +455,9 @@ async function searchLeafCategories(query, limit = 20) {
 
 module.exports = {
     syncCategories,
+    syncOriginAreas,
+    searchOriginAreas,
+    getOriginAreaName,
     getStatus,
     searchLeafCategories,
     listCategories,

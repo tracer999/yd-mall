@@ -20,6 +20,7 @@ const naverProducts = require('./naverProducts');
 const naverImages = require('./naverImages');
 const naverProfile = require('./naverProfile');
 const mapper = require('./naverMapper');
+const noticeMapping = require('./naverNoticeMapping');
 const { sanitize } = require('../../display/htmlSanitizer');
 
 /*
@@ -230,6 +231,19 @@ async function publishOne(mallId, productId, opts = {}) {
         const repImageUrl = urlByPath.get(product.main_image);
         const optionalUrls = subImages.map((p) => urlByPath.get(p)).filter(Boolean);
 
+        /*
+         * 3) 고시 유형 결정 — **상품의 네이버 리프 카테고리**가 정한다.
+         *
+         * 고시 항목은 품목군마다 달라서 몰당 하나(profile.notice_type)로는
+         * 종합몰에서 반드시 어느 한쪽이 틀린 고시로 나간다. 리프 카테고리에
+         * 붙여 둔 유형을 쓰고, 없으면 프로필 값으로 폴백한다.
+         * 값도 그 유형의 몰 기본값(mall_notice_default)을 쓴다.
+         */
+        const noticeOverride = await noticeMapping.resolveForProduct(
+            mallId, product.naver_category_id, profile
+        );
+        const storedOverride = existing && existing.override_json ? existing.override_json : null;
+
         // 3) 페이로드 조립
         const payload = mapper.buildProductPayload({
             product: { ...product, description: sanitize(product.description || '') },
@@ -240,7 +254,8 @@ async function publishOne(mallId, productId, opts = {}) {
             optionalUrls,
             imageUrlMap: urlByPath,
             siteOrigin: SITE_ORIGIN,
-            override: existing && existing.override_json ? existing.override_json : null,
+            // 상품별 저장 override 가 있으면 그것이 카테고리 유형보다 우선한다.
+            override: { ...(noticeOverride || {}), ...(storedOverride || {}) },
         });
 
         // 4) 등록

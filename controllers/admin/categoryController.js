@@ -3,6 +3,7 @@ const { syncCategoryById, deleteCategoryFromShopify } = require('../../services/
 const depthGuard = require('../../services/tree/depthGuard');
 const newArrival = require('../../services/catalog/newArrival');
 const { GLOBAL_CATEGORY_MALL_ID, validCategoryIdSet, hiddenCategoryIdSet } = require('../../services/catalog/categoryScope');
+const naverCatInherit = require('../../services/sourcing/channel/naverCategoryInherit');
 // 카테고리·브랜드는 글로벌 한 벌. 관리 화면은 몰 스코핑 없이 글로벌 카탈로그를 다룬다.
 // 상품 카운트(상품 있는 것만 노출)는 전 몰 통틀어 센다.
 
@@ -504,17 +505,44 @@ exports.getDetail = async (req, res) => {
 
         const [[mallRow]] = await pool.query('SELECT name FROM mall WHERE id = ?', [MALL_ID]).catch(() => [[null]]);
 
+        // 네이버 연동용 매핑 현황. 연동을 안 쓰는 몰에서도 화면이 죽지 않게 실패는 흡수한다.
+        const naverMap = await naverCatInherit.categoryMappingInfo(MALL_ID, id).catch(() => null);
+
         res.render('admin/categories/detail', {
             layout: 'layouts/admin_layout',
             title: (category.type === 'BRAND' ? '브랜드' : '카테고리') + ' 상세',
             category, products, total, page, totalPages, perPage: DETAIL_PER_PAGE,
-            unassigned, parentOptions, maxDepth,
+            unassigned, parentOptions, maxDepth, naverMap,
             currentMallName: (mallRow && mallRow.name) || `몰 ${MALL_ID}`,
             saved: req.query.saved === '1', error: req.query.error || '',
+            msg: req.query.msg || '',
         });
     } catch (err) {
         console.error('[category] getDetail:', err.message);
         res.status(500).send('Server Error');
+    }
+};
+
+/**
+ * POST /admin/categories/:id/naver-category — 이 카테고리에 네이버 리프 카테고리를 연결.
+ *
+ * 여기가 네이버 연동에서 **사용자가 의식적으로 입력하는 유일한 지점**이다.
+ * 카테고리당 한 번 지정하면 소속 상품은 상속으로 따라간다(상품 9,680건을 개별 입력할 수 없다).
+ * 고시 유형은 네이버 리프가 정하므로 따로 고를 필요가 없다.
+ */
+exports.postNaverCategory = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    try {
+        const r = await naverCatInherit.setCategoryMapping(MALL_ID, id, req.body.naver_category_id, {
+            applyToProducts: req.body.apply_to_products === '1',
+        });
+        const msg = r.naverCategoryId
+            ? `네이버 카테고리 연결: ${r.categoryPath}` + (r.applied ? ` · 상품 ${r.applied}건에 반영` : '')
+            : '네이버 카테고리 연결을 해제했습니다.';
+        res.redirect(`/admin/categories/${id}?msg=` + encodeURIComponent(msg));
+    } catch (err) {
+        res.redirect(`/admin/categories/${id}?error=` + encodeURIComponent(err.message));
     }
 };
 

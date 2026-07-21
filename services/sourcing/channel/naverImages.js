@@ -64,19 +64,76 @@ function toAbsolute(webPath) {
     return abs;
 }
 
+function isRemote(src) {
+    return /^https?:\/\//i.test(String(src || ''));
+}
+
+/**
+ * 원격 이미지를 받아 온다.
+ *
+ * 왜 필요한가: 우리 `products.main_image` 는 대부분 **공급처 호스트의 외부 URL** 이다
+ * (소싱으로 들어온 상품). 네이버는 외부 URL 을 그대로 받지 않으므로, 우리가 내려받아
+ * 업로드 API 로 다시 올려야 한다. 로컬 파일만 읽던 시절의 코드로는 등록 자체가 불가능했다.
+ */
+const REMOTE_TIMEOUT_MS = 15000;
+const MAX_REMOTE_BYTES = 12 * 1024 * 1024;   // 변환 전 원본 상한
+
+async function fetchRemote(url) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), REMOTE_TIMEOUT_MS);
+    try {
+        const res = await fetch(url, {
+            signal: ac.signal,
+            // 일부 CDN 은 UA 가 없으면 403 을 준다.
+            headers: { 'user-agent': 'Mozilla/5.0 (compatible; yd-mall/1.0)' },
+        });
+        if (!res.ok) throw new Error(`이미지 다운로드 실패(${res.status}): ${url}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (!buf.length) throw new Error(`이미지가 비어 있습니다: ${url}`);
+        if (buf.length > MAX_REMOTE_BYTES) {
+            throw new Error(`이미지가 너무 큽니다(${Math.round(buf.length / 1024 / 1024)}MB): ${url}`);
+        }
+        return buf;
+    } catch (e) {
+        if (e.name === 'AbortError') throw new Error(`이미지 다운로드 시간초과: ${url}`);
+        throw e;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 /**
  * 네이버가 받는 형태로 파일을 준비한다.
+ * 로컬 경로(`/uploads/...`)와 외부 URL(`https://...`) 을 모두 받는다.
  * webp 등 비허용 포맷은 jpeg 로 재인코딩한다(원본은 건드리지 않는다).
+ *
+ * ★ 확장자를 믿지 않는다. 외부 URL 은 확장자가 없거나 실제 포맷과 다른 경우가 흔해
+ *   `sharp` 로 **실제 바이너리 포맷**을 확인한다(제약 6: Content-Type 은 실제 포맷과 일치해야 함).
  * @returns {Promise<{buffer:Buffer, filename:string, contentType:string, hash:string}>}
  */
 async function prepareFile(webPath) {
-    const abs = toAbsolute(webPath);
-    const ext = path.extname(abs).toLowerCase();
-    const base = path.basename(abs, ext);
+    let buffer;
+    let base;
 
-    let buffer = await fs.readFile(abs);
-    let contentType = PASSTHROUGH[ext];
-    let filename = path.basename(abs);
+    if (isRemote(webPath)) {
+        buffer = await fetchRemote(webPath);
+        const name = path.basename(new URL(webPath).pathname) || 'image';
+        base = path.basename(name, path.extname(name)) || 'image';
+    } else {
+        const abs = toAbsolute(webPath);
+        buffer = await fs.readFile(abs);
+        base = path.basename(abs, path.extname(abs));
+    }
+
+    // 실제 포맷으로 판정한다(확장자·Content-Type 헤더가 아니라).
+    let format;
+    try {
+        format = (await sharp(buffer).metadata()).format;
+    } catch (e) {
+        throw new Error(`이미지를 해석할 수 없습니다: ${webPath}`);
+    }
+    let contentType = PASSTHROUGH[`.${format}`];
+    let filename = `${base}.${format}`;
 
     if (!contentType) {
         // webp·avif 등 → jpeg. 알파 채널이 있으면 흰 배경을 깔아야 검게 뭉개지지 않는다.

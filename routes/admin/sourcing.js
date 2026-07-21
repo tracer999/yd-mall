@@ -56,6 +56,11 @@ router.post('/staging/:id/delete', requireNumericId(), requireMenuAccess('/admin
  */
 router.get('/publish', requireMenuAccess('/admin/sourcing/publish'), c.getPublish);
 router.post('/publish/profile', requireMenuAccess('/admin/sourcing/publish'), c.postNaverProfile);
+router.post('/publish/inherit-category', requireMenuAccess('/admin/sourcing/publish'), c.postInheritNaverCategory);
+router.post('/publish/assign-category', requireMenuAccess('/admin/sourcing/publish'), c.postAssignNaverCategory);
+router.post('/publish/notice-schema/refresh', requireMenuAccess('/admin/sourcing/publish'), c.postNoticeSchemaRefresh);
+// 판매자 주소록 — 출고지·반품지 번호를 사용자가 타이핑하지 않도록 네이버에서 바로 받아 온다(§34).
+router.get('/publish/addressbooks', requireMenuAccess('/admin/sourcing/publish'), c.getNaverAddressBooks);
 router.post('/publish/run', requireMenuAccess('/admin/sourcing/publish'), c.postPublishToNaver);
 router.post('/publish/:id/verify', requireNumericId(), requireMenuAccess('/admin/sourcing/publish'), c.postVerifyPublished);
 
@@ -67,5 +72,11 @@ router.get('/naver-taxonomy', requireMenuAccess('/admin/sourcing/naver-taxonomy'
 router.post('/naver-taxonomy/refresh', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverTaxonomyRefresh);
 router.post('/naver-taxonomy/schedule', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverTaxonomySchedule);
 router.get('/naver-taxonomy/search', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.getNaverCategorySearch);
+// 원산지 코드 — 카테고리·브랜드와 같은 리소스로 취급한다(수집 + 검색).
+router.post('/naver-taxonomy/origin-areas/refresh', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverOriginAreaRefresh);
+router.get('/naver-taxonomy/origin-areas/search', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.getNaverOriginAreaSearch);
+// 리프 카테고리별 고시 유형 — 네이버가 알려주지 않아 우리가 규칙으로 만들고 개별 수정한다(§6.5).
+router.post('/naver-taxonomy/notice-rules', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverNoticeRules);
+router.post('/naver-taxonomy/notice-assign', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.postNaverNoticeAssign);
 
 module.exports = router;

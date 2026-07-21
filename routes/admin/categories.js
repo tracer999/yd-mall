@@ -18,6 +18,8 @@ function requireNumericId(req, res, next) {
     next();
 }
 router.get('/:id', requireNumericId, categoryController.getDetail);
+// 네이버 리프 카테고리 연결 — 카테고리당 1회 지정하면 소속 상품이 상속받는다.
+router.post('/:id/naver-category', requireNumericId, categoryController.postNaverCategory);
 router.get('/:id/product-search', requireNumericId, categoryController.getProductSearch);
 router.post('/:id/products', requireNumericId, categoryController.postAssignProducts);
 router.post('/:id/products/remove', requireNumericId, categoryController.postRemoveProduct);

@@ -69,7 +69,8 @@ exports.postConnectionSave = async (req, res) => {
             accountLabel: req.body.account_label,
             clientId: req.body.client_id,
             secret: req.body.secret,
-            extraJson: req.body.extra_json || null,
+            // extraJson 은 더 이상 화면에서 받지 않는다(§33 — 운영자에게 JSON 을 적게 하지 않는다).
+            // 소비처도 없어 전 행 NULL 이었다. 필요해지면 이름 있는 필드로 받아 서버가 조립한다.
         });
         res.redirect(`${BASE}?saved=1`);
     } catch (e) {
@@ -429,7 +430,7 @@ exports.postStagingDelete = async (req, res) => {
 //   그걸 근거로 몰 카테고리를 생성/매핑한다.
 // ---------------------------------------------------------------------------
 
-const NAVER_TABS = ['category', 'brand'];
+const NAVER_TABS = ['category', 'brand', 'origin', 'notice'];
 const NAVER_PAGE_TITLE = '외부몰 연동 · 네이버 리소스 관리';
 
 exports.getNaverTaxonomy = async (req, res) => {
@@ -443,10 +444,35 @@ exports.getNaverTaxonomy = async (req, res) => {
     const leafOnly = req.query.leaf === '1';
 
     try {
-        const status = await naverTaxonomy.getStatus();
-        const list = tab === 'brand'
-            ? await naverTaxonomy.listBrands({ q, activeOnly, page })
-            : await naverTaxonomy.listCategories({ q, activeOnly, leafOnly, page });
+        const [status, noticeTypes] = await Promise.all([
+            naverTaxonomy.getStatus(),
+            naverNotice.listTypes(),
+        ]);
+
+        let list;
+        if (tab === 'brand') {
+            list = await naverTaxonomy.listBrands({ q, activeOnly, page });
+        } else if (tab === 'origin') {
+            // 원산지는 535건이라 페이징 없이 검색 결과만 보여 준다(최대 50건).
+            list = { rows: await naverTaxonomy.searchOriginAreas(q, 50), total: null, page: 1, size: 50, totalPages: 1 };
+        } else if (tab === 'notice') {
+            const filtered = q
+                ? noticeTypes.filter((t) => t.label.includes(q) || t.notice_type.includes(q.toUpperCase()))
+                : noticeTypes;
+            list = { rows: filtered, total: filtered.length, page: 1, size: filtered.length, totalPages: 1 };
+        } else {
+            list = await naverTaxonomy.listCategories({ q, activeOnly, leafOnly, page });
+        }
+
+        // 리프별 고시 유형 배정 현황 — 카테고리 탭 상단에 띄운다.
+        status.noticeMapping = await naverNoticeMapping.stats();
+
+        // 리소스 4종을 한 자리에서 보여 준다 — 어떤 게 비었는지 즉시 드러나야 한다.
+        status.noticeCounts = {
+            total: noticeTypes.length,
+            fields: noticeTypes.reduce((n, t) => n + t.fields.length, 0),
+            fromNaver: noticeTypes.filter((t) => t.source === 'NAVER').length,
+        };
 
         res.render('admin/sourcing/naver_taxonomy', {
             layout: 'layouts/admin_layout',
@@ -455,6 +481,7 @@ exports.getNaverTaxonomy = async (req, res) => {
             status,
             tab,
             list,
+            noticeTypes,
             filters: { q, activeOnly, leafOnly },
             saved: req.query.saved === '1',
             msg: req.query.msg || '',
@@ -469,6 +496,7 @@ exports.getNaverTaxonomy = async (req, res) => {
             status: null,
             tab,
             list: null,
+            noticeTypes: [],
             filters: { q: '', activeOnly: true, leafOnly: false },
             saved: false,
             msg: '',
@@ -484,6 +512,55 @@ exports.postNaverTaxonomyRefresh = async (req, res) => {
         .then((r) => console.log('[naver-taxonomy] 수동 수집 결과:', JSON.stringify(r)))
         .catch((e) => console.error('[naver-taxonomy] 수동 수집 실패:', e.message));
     res.redirect(`${NAVER_BASE}?msg=` + encodeURIComponent('수집을 시작했습니다. 잠시 후 새로고침해 결과를 확인하세요.'));
+};
+
+/**
+ * 원산지 코드 수집. 535건 1회 호출이라 카테고리(5,815건)보다 훨씬 가볍지만,
+ * 같은 로그·비활성 규약을 쓰므로 동작 방식은 동일하다.
+ */
+exports.postNaverOriginAreaRefresh = async (req, res) => {
+    naverTaxonomy.syncOriginAreas({ triggerBy: 'MANUAL' })
+        .then((r) => console.log('[naver-origin-area] 수동 수집 결과:', JSON.stringify(r)))
+        .catch((e) => console.error('[naver-origin-area] 수동 수집 실패:', e.message));
+    res.redirect(`${NAVER_BASE}?tab=origin&msg=` + encodeURIComponent('원산지 수집을 시작했습니다. 잠시 후 새로고침해 결과를 확인하세요.'));
+};
+
+/**
+ * 리프 카테고리에 고시 유형을 규칙으로 일괄 배정.
+ * 네이버가 카테고리별 유형을 알려주지 않아 우리가 경로 규칙으로 만든다(§6.5).
+ * 사람이 지정한 것(MANUAL)은 덮지 않는다.
+ */
+exports.postNaverNoticeRules = async (req, res) => {
+    try {
+        const r = await naverNoticeMapping.applyRules();
+        const parts = [`리프 ${r.leafTotal}건 중 ${r.matched}건 배정`];
+        if (r.unmatched) parts.push(`규칙 없음 ${r.unmatched}건`);
+        if (r.manualKept) parts.push(`직접 지정 ${r.manualKept}건 유지`);
+        res.redirect(`${NAVER_BASE}?tab=category&msg=` + encodeURIComponent(parts.join(' / ')));
+    } catch (e) {
+        res.redirect(`${NAVER_BASE}?tab=category&error=` + encodeURIComponent(e.message));
+    }
+};
+
+/** 리프 카테고리 하나의 고시 유형을 사람이 직접 지정(규칙 재적용에도 보존). */
+exports.postNaverNoticeAssign = async (req, res) => {
+    try {
+        const r = await naverNoticeMapping.setManual(req.body.naver_category_id, req.body.notice_type);
+        res.redirect(`${NAVER_BASE}?tab=category&q=` + encodeURIComponent(r.naverCategoryId)
+            + '&msg=' + encodeURIComponent(`고시 유형을 ${r.noticeType || '미지정'} 으로 저장했습니다.`));
+    } catch (e) {
+        res.redirect(`${NAVER_BASE}?tab=category&error=` + encodeURIComponent(e.message));
+    }
+};
+
+/** 프로필 화면의 원산지 검색 select 가 부르는 API. */
+exports.getNaverOriginAreaSearch = async (req, res) => {
+    try {
+        const rows = await naverTaxonomy.searchOriginAreas(req.query.q, req.query.limit);
+        res.json({ success: true, data: rows });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 };
 
 exports.postNaverTaxonomySchedule = async (req, res) => {
@@ -525,6 +602,10 @@ exports.getNaverCategorySearch = async (req, res) => {
 
 const naverPublish = require('../../services/sourcing/channel/naverPublishService');
 const naverProfileSvc = require('../../services/sourcing/channel/naverProfile');
+const naverCatInherit = require('../../services/sourcing/channel/naverCategoryInherit');
+const naverNotice = require('../../services/sourcing/channel/naverNoticeSchema');
+const naverAddressBook = require('../../services/sourcing/channel/naverAddressBook');
+const naverNoticeMapping = require('../../services/sourcing/channel/naverNoticeMapping');
 
 const PUBLISH_BASE = '/admin/sourcing/publish';
 const PUBLISH_PAGE_SIZE = 30;
@@ -543,6 +624,13 @@ async function listPublishTargets(mallId, filters) {
     else if (filters.state === 'NONE') where.push('m.id IS NULL');
     // 네이버 카테고리가 없으면 애초에 등록할 수 없다 — 걸러 보고 싶을 때가 있다.
     if (filters.ready === 'Y') where.push('p.naver_category_id IS NOT NULL AND p.main_image IS NOT NULL');
+    // 반대로 "카테고리를 지금 지정해야 하는 것"만 모아 일괄 지정하려는 흐름.
+    if (filters.nocat === 'Y') where.push('p.naver_category_id IS NULL');
+    // 같은 우리 카테고리끼리 모으면 리프 하나를 골라 한 번에 지정할 수 있다.
+    if (filters.category_id) {
+        where.push('p.category_id = ?');
+        params.push(Number(filters.category_id));
+    }
 
     const whereSql = where.join(' AND ');
     const page = Math.max(Number(filters.page) || 1, 1);
@@ -602,15 +690,19 @@ exports.getPublish = async (req, res) => {
         q: (req.query.q || '').trim(),
         state: req.query.state || '',
         ready: req.query.ready || '',
+        nocat: req.query.nocat || '',
+        category_id: req.query.category_id || '',
         page: req.query.page,
     };
 
     try {
-        const [profile, list, stats, creds] = await Promise.all([
+        const [profile, list, stats, creds, inherit, noticeTypes] = await Promise.all([
             naverProfileSvc.getProfile(mallId),
             listPublishTargets(mallId, filters),
             publishStats(mallId),
             cred.listCredentials(mallId),
+            naverCatInherit.previewInherit(mallId),
+            naverNotice.listTypes(),
         ]);
 
         const [logs] = await pool.query(
@@ -633,6 +725,19 @@ exports.getPublish = async (req, res) => {
             filters,
             logs,
             batchLimit: naverPublish.BATCH_LIMIT,
+            inherit,
+            noticeTypes,
+            // 저장된 원산지 코드의 표시명 — 화면이 코드 대신 이름을 보여 줘야 한다.
+            originAreaName: profile.origin_area_code
+                ? ((await naverTaxonomy.getOriginAreaName(profile.origin_area_code)) || {}).name || null
+                : null,
+            // 고시 필수 항목 누락 경고 — validateProfile 은 판매자 레벨만 보므로 여기서 따로 본다.
+            noticeMissing: naverNotice.missingRequired(
+                noticeTypes.find((t) => t.notice_type === profile.notice_type),
+                profile.notice_defaults_json || {}
+            ),
+            noticeCommonFields: naverNotice.COMMON_FIELDS,
+            deliveryCompanies: naverProfileSvc.DELIVERY_COMPANIES,
             result: req.session.naverPublishResult || null,
             saved: req.query.saved === '1',
             error: req.query.error || '',
@@ -658,6 +763,76 @@ exports.postNaverProfile = async (req, res) => {
         res.redirect(`${PUBLISH_BASE}?saved=1`);
     } catch (e) {
         res.redirect(`${PUBLISH_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+/**
+ * 카테고리의 네이버 리프 ID 를 상품에 일괄 상속.
+ * 네이버 호출이 아니라 **우리 DB 안에서만** 도는 작업이다(등록 전 준비 단계).
+ * 리프가 아닌 카테고리는 건드리지 않는다 — 비리프 ID 를 박으면 등록이 전량 실패한다.
+ */
+exports.postInheritNaverCategory = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const r = await naverCatInherit.applyInherit(mallId);
+        res.redirect(`${PUBLISH_BASE}?msg=` + encodeURIComponent(naverCatInherit.summarize(r)));
+    } catch (e) {
+        res.redirect(`${PUBLISH_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+/**
+ * 선택한 상품에 네이버 카테고리를 직접 지정.
+ * 상속으로 못 채우는(우리 카테고리가 대·중분류인) 상품용 경로다.
+ */
+exports.postAssignNaverCategory = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const ids = [].concat(req.body.product_ids || []);
+    try {
+        const r = await naverCatInherit.assignCategory(mallId, ids, req.body.assign_naver_category_id);
+        res.redirect(`${PUBLISH_BASE}?msg=` + encodeURIComponent(
+            `${r.updated}건에 네이버 카테고리 지정 — ${r.categoryPath}`
+        ));
+    } catch (e) {
+        res.redirect(`${PUBLISH_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+/**
+ * 고시 상품군·필드 스키마를 네이버에서 수집(카탈로그 갱신).
+ * ⚠ 네이버는 IP 화이트리스트라 개발서버(허용 IP)에서만 성공한다. 로컬은 403.
+ */
+exports.postNoticeSchemaRefresh = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const c = await cred.getCredentialByChannel(mallId, 'NAVER_SMARTSTORE');
+        if (!c) throw new Error('네이버 자격증명이 없습니다. 외부몰 연결에서 먼저 등록하세요.');
+
+        const r = await naverNotice.syncFromNaver(c);
+        const parts = [`상품군 ${r.updated}/${r.total}건 수집`];
+        if (r.skipped.length) parts.push(`건너뜀 ${r.skipped.length}건`);
+        res.redirect(`${PUBLISH_BASE}?msg=` + encodeURIComponent(parts.join(' / ')));
+    } catch (e) {
+        res.redirect(`${PUBLISH_BASE}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+/*
+ * 판매자 주소록 조회 (JSON) — 발행 프로필 화면의 [주소록 불러오기] 버튼이 부른다.
+ *
+ * 출고지·반품지는 네이버가 부여한 **번호**라 사람이 알 수 없다. 예전에는 직접 타이핑했고
+ * 오타 한 자가 상품 등록 400 이었다(§34). 이제 목록을 받아 select 로 고른다.
+ * 저장하지 않는다 — 주소록은 몰마다 다른 운영 데이터라 시드하면 안 된다(§31).
+ */
+exports.getNaverAddressBooks = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const c = await cred.getCredentialByChannel(mallId, 'NAVER_SMARTSTORE');
+        const r = await naverAddressBook.list(c);
+        if (!r.ok) return res.status(400).json({ ok: false, message: r.message });
+        res.json({ ok: true, items: r.items });
+    } catch (e) {
+        res.status(500).json({ ok: false, message: e.message || '주소록 조회에 실패했습니다.' });
     }
 };
 

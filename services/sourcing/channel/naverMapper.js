@@ -52,7 +52,8 @@ const NOTICE_TYPE_TO_KEY = {
     COSMETIC: 'cosmetic', JEWELLERY: 'jewellery',
     FOOD: 'food', GENERAL_FOOD: 'generalFood', DIET_FOOD: 'dietFood',
     KIDS: 'kids', MUSICAL_INSTRUMENT: 'musicalInstrument', SPORTS_EQUIPMENT: 'sportsEquipment',
-    BOOKS: 'books', RENTAL_ETC: 'rentalEtc', DIGITAL_CONTENTS: 'digitalContents',
+    // RENTAL_HA(정수기·비데·공기청정기 대여)는 초기 표에 빠져 있었다. 실호출 목록에 존재한다.
+    BOOKS: 'books', RENTAL_ETC: 'rentalEtc', RENTAL_HA: 'rentalHa', DIGITAL_CONTENTS: 'digitalContents',
     GIFT_CARD: 'giftCard', MOBILE_COUPON: 'mobileCoupon', MOVIE_SHOW: 'movieShow',
     ETC_SERVICE: 'etcService', BIOCHEMISTRY: 'biochemistry', BIOCIDAL: 'biocidal',
     ETC: 'etc',
