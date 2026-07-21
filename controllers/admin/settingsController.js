@@ -293,6 +293,8 @@ exports.updateSystemSettings = async (req, res) => {
         ['naver_client_secret', req.body.naver_client_secret, 'Naver OAuth Client Secret'],
         ['naver_callback_url_dev', req.body.naver_callback_url_dev, 'Naver Dev Callback URL'],
         ['naver_callback_url_prod', req.body.naver_callback_url_prod, 'Naver Prod Callback URL'],
+        // 체크박스는 꺼져 있으면 아예 전송되지 않는다 → 값이 없으면 '0' 으로 저장한다.
+        ['email_enabled', req.body.email_enabled ? '1' : '0', '이메일 발송 사용 여부 (0=모든 발송 차단)'],
         ['smtp_host', req.body.smtp_host, 'SMTP 메일 서버 주소'],
         ['smtp_port', req.body.smtp_port, 'SMTP 포트'],
         ['smtp_is_gmail', req.body.smtp_is_gmail, '지메일 사용 여부 (1=지메일, 0=기타)'],
