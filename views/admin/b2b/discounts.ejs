@@ -32,7 +32,7 @@ const pct = n => Number(n || 0).toFixed(2).replace(/\.00$/, '');
         <tr>
           <th class="px-6 py-3">거래처</th>
           <th class="px-6 py-3">사업자번호</th>
-          <th class="px-6 py-3">계정</th>
+          <th class="px-6 py-3">과세구분</th>
           <th class="px-6 py-3 w-56">추가 할인율 (%)</th>
         </tr>
       </thead>
@@ -44,7 +44,9 @@ const pct = n => Number(n || 0).toFixed(2).replace(/\.00$/, '');
                 <a href="/admin/b2b/members/<%= r.id %>" class="text-blue-700 hover:underline no-underline"><%= r.company_name %></a>
               </td>
               <td class="px-6 py-4"><%= r.business_number %></td>
-              <td class="px-6 py-4 text-xs"><%= r.email || '-' %></td>
+              <td class="px-6 py-4 text-xs">
+                <%= { TAXABLE:'과세', TAX_FREE:'면세', ZERO_RATED:'영세율' }[r.tax_type || 'TAXABLE'] %>
+              </td>
               <td class="px-6 py-4">
                 <form action="/admin/b2b/discounts" method="POST" class="flex items-center gap-2">
                   <input type="hidden" name="id" value="<%= r.id %>">

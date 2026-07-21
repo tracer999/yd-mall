@@ -51,7 +51,7 @@ exports.getRequest = async (req, res, next) => {
     if (!requireB2b(req, res)) return;
     try {
         const [rows] = await pool.query(
-            `SELECT c.quantity, c.sku_id, p.id AS product_id, p.name, p.price, p.tax_type, p.main_image, p.thumbnail_image
+            `SELECT c.quantity, c.sku_id, p.id AS product_id, p.name, p.price, p.main_image, p.thumbnail_image
                FROM carts c JOIN products p ON c.product_id = p.id
               WHERE c.user_id = ? AND c.cart_type = 'B2B' AND p.status = 'ON'`,
             [req.user.id]
@@ -84,7 +84,7 @@ exports.postRequest = async (req, res, next) => {
         if (productIds.length === 0) return res.redirect('/cart');
 
         const [products] = await pool.query(
-            'SELECT id, name, price, tax_type FROM products WHERE id IN (?)', [productIds.map(Number)]
+            'SELECT id, name, price FROM products WHERE id IN (?)', [productIds.map(Number)]
         );
         const pmap = new Map(products.map(p => [Number(p.id), p]));
 
@@ -99,7 +99,8 @@ exports.postRequest = async (req, res, next) => {
                 skuId: sku ? sku.id : skuId,
                 productName: p.name,
                 skuLabel: sku && !sku.is_default ? await require('../services/catalog/optionService').getSkuOptionLabel(sku.id) : null,
-                taxType: p.tax_type,
+                // 과세구분은 거래처 속성이다. 견적 시점 값을 품목 스냅샷에 박아 둔다.
+                taxType: req.b2b.taxType,
                 quantity: Math.max(1, parseInt(quantities[i], 10) || 1),
                 catalogUnitPrice: Number(p.price),
                 requestedUnitPrice: wishes[i] ? Math.max(0, parseInt(wishes[i], 10)) : null,

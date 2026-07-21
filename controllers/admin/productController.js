@@ -521,7 +521,8 @@ exports.postReorderRecommendations = async (req, res) => {
  *
  * 체크가 꺼져 있으면 설정 행을 지운다 — "행이 없으면 B2B 판매를 안 한다" 는 규칙 하나로
  * 판정이 끝나게 하기 위해서다(is_b2b_sale=0 인 행을 남기면 두 가지 표현이 공존한다).
- * 과세구분은 products 컬럼이라 함께 저장한다.
+ *
+ * 과세구분은 여기서 다루지 않는다 — **거래처 속성**이라 기업회원 승인 화면에서 정한다.
  */
 async function saveB2bSetting(productId, body) {
     const on = !!body.is_b2b_sale;
@@ -537,9 +538,6 @@ async function saveB2bSetting(productId, body) {
                                      min_order_qty = VALUES(min_order_qty)`,
             [productId, rate.toFixed(2), moq]
         );
-    }
-    if (['TAXABLE', 'TAX_FREE', 'ZERO_RATED'].includes(body.tax_type)) {
-        await pool.query('UPDATE products SET tax_type = ? WHERE id = ?', [body.tax_type, productId]);
     }
 }
 

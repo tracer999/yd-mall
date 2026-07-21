@@ -445,7 +445,6 @@
                             const _b2bOn = !!(_b2bSet && _b2bSet.is_b2b_sale);
                             const _b2bRate = _b2bSet ? Number(_b2bSet.discount_rate) : 0;
                             const _b2bMoq = _b2bSet ? Number(_b2bSet.min_order_qty) : 1;
-                            const _taxType = product ? (product.tax_type || 'TAXABLE') : 'TAXABLE';
                             %>
                             <div class="bg-gray-50 p-4 rounded-lg mb-8">
                                 <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4">B2B(사업자) 판매</h6>
@@ -461,7 +460,7 @@
                                 </p>
 
                                 <div id="b2bFields" style="<%= _b2bOn ? '' : 'display:none' %>" class="mt-4 pt-4 border-t border-gray-200">
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label class="block text-xs font-bold text-gray-900 mb-1">B2B 할인율 (%)</label>
                                             <input type="number" name="b2b_discount_rate" id="b2b_discount_rate"
@@ -475,18 +474,10 @@
                                                    class="w-full px-3 py-2 text-right text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                             <p class="text-xs text-gray-500 mt-1">1 이면 1개부터 주문 가능</p>
                                         </div>
-                                        <div>
-                                            <label class="block text-xs font-bold text-gray-900 mb-1">과세 구분</label>
-                                            <select name="tax_type" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                                                <option value="TAXABLE" <%= _taxType === 'TAXABLE' ? 'selected' : '' %>>과세 (세금계산서)</option>
-                                                <option value="TAX_FREE" <%= _taxType === 'TAX_FREE' ? 'selected' : '' %>>면세 (계산서)</option>
-                                                <option value="ZERO_RATED" <%= _taxType === 'ZERO_RATED' ? 'selected' : '' %>>영세율</option>
-                                            </select>
-                                            <p class="text-xs text-gray-500 mt-1">세금계산서 서식이 갈립니다</p>
-                                        </div>
                                     </div>
                                     <p class="text-xs text-gray-500 mt-3">
                                         * 거래처마다 <strong>추가 할인</strong>을 더 줄 수 있습니다(B2B 관리 &gt; 거래처 할인). 두 할인율은 <strong>단순 합산</strong>됩니다.<br>
+                                        * <strong>과세 구분</strong>(세금계산서/계산서)은 상품이 아니라 <strong>거래처</strong>에 정합니다 — B2B 관리 &gt; 기업회원 승인.<br>
                                         * 수량별 단가·납기 같은 조건은 <strong>견적 단계에서 협의</strong>합니다.
                                     </p>
                                 </div>

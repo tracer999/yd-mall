@@ -32,7 +32,7 @@ exports.getDiscounts = async (req, res, next) => {
             params.push(`%${keyword}%`, `%${keyword}%`);
         }
         const [rows] = await pool.query(
-            `SELECT bp.id, bp.company_name, bp.business_number, bp.extra_discount_rate,
+            `SELECT bp.id, bp.company_name, bp.business_number, bp.extra_discount_rate, bp.tax_type,
                     u.email, u.name AS user_name
                FROM business_profile bp
                LEFT JOIN users u ON u.id = bp.user_id

@@ -13,6 +13,9 @@ const pool = require('../../config/db');
  *      전용가 = 판매가 × (1 − (상품 할인율 + 거래처 추가 할인율) / 100)
  *
  * 층이 둘뿐이고 **단순 합산**이다. 상품 30% + 거래처 5% = 35% 할인.
+ *
+ * 세액 구분(과세/면세/영세율)은 **거래처 속성**이다 — 기업회원 승인 화면에서 정한다.
+ * 같은 상품이라도 어느 거래처에 파느냐에 따라 발행 증빙이 달라지기 때문이다.
  * 수량 구간가·등급가·계약가 같은 층은 두지 않는다 — 수량이나 거래 조건에 따라 값이
  * 달라져야 하면 **견적 단계에서 담당자가 협의**한다.
  *
@@ -50,7 +53,7 @@ async function loadSettings(productIds) {
 
     const [rows] = await pool.query(
         `SELECT s.product_id, s.is_b2b_sale, s.discount_rate, s.min_order_qty,
-                p.price AS list_price, p.tax_type
+                p.price AS list_price
            FROM product_b2b_setting s
            JOIN products p ON p.id = s.product_id
           WHERE s.product_id IN (?) AND s.is_b2b_sale = 1`,
@@ -85,7 +88,8 @@ function computePrice(setting, b2b) {
         productRate,
         extraRate,
         priceSource: total > 0 ? 'B2B_DISCOUNT' : 'B2C_FALLBACK',
-        taxType: setting.tax_type || 'TAXABLE',
+        // 과세구분은 **거래처** 속성이다(기업회원 승인에서 정한다). 상품이 아니라 컨텍스트에서 온다.
+        taxType: b2b.taxType || 'TAXABLE',
         minOrderQty: Number(setting.min_order_qty) || 1,
     };
 }

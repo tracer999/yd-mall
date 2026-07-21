@@ -133,18 +133,19 @@ exports.postStatus = async (req, res, next) => {
     }
 };
 
-/** 등급·계약기간·담당 영업·메모 수정. 상태는 여기서 바꾸지 않는다. */
+/** 과세구분·추가 할인율·계약기간·메모 수정. 상태는 여기서 바꾸지 않는다. */
 exports.postUpdate = async (req, res, next) => {
     const { id } = req.params;
-    const { extra_discount_rate, contract_valid_from, contract_valid_to, admin_note } = req.body;
+    const { extra_discount_rate, tax_type, contract_valid_from, contract_valid_to, admin_note } = req.body;
     try {
         const rate = Math.min(99, Math.max(0, Number(extra_discount_rate) || 0));
+        const tax = ['TAXABLE', 'TAX_FREE', 'ZERO_RATED'].includes(tax_type) ? tax_type : 'TAXABLE';
         await pool.query(
             `UPDATE business_profile
-                SET extra_discount_rate = ?, contract_valid_from = ?, contract_valid_to = ?, admin_note = ?
+                SET extra_discount_rate = ?, tax_type = ?, contract_valid_from = ?, contract_valid_to = ?, admin_note = ?
               WHERE id = ?`,
             [
-                rate.toFixed(2),
+                rate.toFixed(2), tax,
                 contract_valid_from || null,
                 contract_valid_to || null,
                 (admin_note || '').trim() || null,

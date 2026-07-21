@@ -65,7 +65,16 @@ const row = (k, v) => `<div class="flex py-3 border-b border-gray-100 last:borde
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
       <h3 class="text-sm font-bold text-gray-900 mb-3">거래 조건</h3>
       <form action="/admin/b2b/members/<%= profile.id %>/update" method="POST" class="space-y-4">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">과세 구분</label>
+            <select name="tax_type" class="mt-1 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="TAXABLE" <%= (profile.tax_type || 'TAXABLE') === 'TAXABLE' ? 'selected' : '' %>>과세 — 세금계산서 발행</option>
+              <option value="TAX_FREE" <%= profile.tax_type === 'TAX_FREE' ? 'selected' : '' %>>면세 — 계산서 발행</option>
+              <option value="ZERO_RATED" <%= profile.tax_type === 'ZERO_RATED' ? 'selected' : '' %>>영세율</option>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">이 거래처 주문의 <strong>공급가·부가세 계산</strong>과 발행 증빙이 갈립니다.</p>
+          </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">추가 할인율 (%)</label>
             <input type="number" name="extra_discount_rate" min="0" max="99" step="0.01"

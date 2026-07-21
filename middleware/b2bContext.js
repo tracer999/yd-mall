@@ -33,6 +33,7 @@ const INACTIVE = Object.freeze({
     companyName: null,
     businessNumber: null,
     extraDiscountRate: 0,
+    taxType: 'TAXABLE',
     taxDisplay: 'INCLUSIVE',
     rejectReason: null,
     permissions: Object.freeze([]),
@@ -133,6 +134,8 @@ function buildContext(profile, user, mallId) {
         businessNumber: profile.business_number,
         // 상품 할인율에 단순 합산되는 거래처 추가 할인율(%)
         extraDiscountRate: Number(profile.extra_discount_rate) || 0,
+        // 이 거래처에 발행할 증빙 구분. B2B 세액 계산(공급가/부가세)의 기준이다.
+        taxType: profile.tax_type || 'TAXABLE',
         taxDisplay: settings.taxDisplay,
         rejectReason: profile.reject_reason || null,
         permissions: [],

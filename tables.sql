@@ -1757,6 +1757,7 @@ CREATE TABLE IF NOT EXISTS `business_profile` (
   `company_address`     varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `company_detailed_address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `tax_invoice_email`   varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '세금계산서 수신 이메일',
+  `tax_type`            enum('TAXABLE','TAX_FREE','ZERO_RATED') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'TAXABLE' COMMENT '발행 증빙 구분. B2B 세액 계산의 기준',
   `manager_name`        varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `manager_phone`       varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `license_file`        varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사업자등록증(storage/ 하위, public 아님)',
