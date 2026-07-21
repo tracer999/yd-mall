@@ -140,9 +140,120 @@
 
             <hr class="my-10 border-gray-100">
 
+            <!-- 관리자 설정 요약 — 수정 화면에 들어가지 않고 기본설정·가격정보를 바로 확인 -->
+            <%
+                // DATE 컬럼은 로컬(KST) 자정 Date 로 올라온다. toISOString 을 쓰면 하루 밀리므로 로컬 기준으로 찍는다.
+                const _fmtDate = (v) => {
+                    if (!v) return '-';
+                    const d = new Date(v);
+                    if (isNaN(d)) return '-';
+                    const p = (n) => String(n).padStart(2, '0');
+                    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+                };
+                const _won = (v) => '₩' + Number(v || 0).toLocaleString();
+                const _statusLabel = { ON: '판매중', OFF: '중지(판매중단)', SOLD_OUT: '품절', COMING_SOON: '판매예정', RESTOCK: '재입고예정' };
+                const _visibilityLabel = { PUBLIC: '노출 (기본)', HIDDEN: '노출중지 (프론트 전체 숨김)', MEMBER_ONLY: '로그인전용 (로그인 회원만 노출)' };
+                const _distLabel = { ONLINE_ONLY: '온라인판매가능', OFFLINE_ONLY: '오프라인판매전용' };
+                const _badgeLabel = { BEST: 'BEST', NEW: 'NEW', RECOMMEND: '추천', DEADLINE_SALE: '기간임박할인', GREENHUB_SPECIAL: '와이디몰특가' };
+                const _badges = (product.product_badge || '').split(',').filter(Boolean);
+            %>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+
+                <!-- 기본 설정 -->
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <h3 class="px-5 py-3 bg-gray-50 border-b border-gray-200 text-base font-bold text-gray-800 flex items-center gap-2">
+                        <i class="bi bi-sliders text-gray-500"></i> 기본 설정
+                    </h3>
+                    <dl class="divide-y divide-gray-100 text-sm">
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">상품코드</dt>
+                            <dd class="text-gray-900 font-mono"><%= product.product_code || '-' %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">카테고리</dt>
+                            <dd class="text-gray-900"><%= product.category_name || '미지정' %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">브랜드</dt>
+                            <dd class="text-gray-900"><%= product.brand_name || '-' %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">판매 상태</dt>
+                            <dd class="text-gray-900 font-medium"><%= _statusLabel[product.status] || product.status || '-' %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">노출 설정</dt>
+                            <dd class="text-gray-900"><%= _visibilityLabel[product.visibility] || '노출 (기본)' %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">재고 수량</dt>
+                            <dd class="text-gray-900 font-medium"><%= (product.stock != null ? product.stock : 0).toLocaleString() %>개</dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">판매 시작일</dt>
+                            <dd class="text-gray-900"><%= _fmtDate(product.sale_start_date) %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">유통채널 구분</dt>
+                            <dd class="text-gray-900"><%= _distLabel[product.distribution_badge] || '미선택 (뱃지 미노출)' %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">상품구분</dt>
+                            <dd class="flex flex-wrap gap-1.5">
+                                <% if (_badges.length > 0) { %>
+                                    <% _badges.forEach(b => { %>
+                                        <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium <%= b === 'DEADLINE_SALE' ? 'bg-red-100 text-red-700' : (b === 'GREENHUB_SPECIAL' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700') %>"><%= _badgeLabel[b] || b %></span>
+                                    <% }) %>
+                                <% } else { %>
+                                    <span class="text-gray-400">-</span>
+                                <% } %>
+                            </dd>
+                        </div>
+                        <% if (_badges.includes('DEADLINE_SALE')) { %>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">기간임박 만료일</dt>
+                            <dd class="text-gray-900"><%= _fmtDate(product.badge_expire_date) %></dd>
+                        </div>
+                        <% } %>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">네이버 카테고리</dt>
+                            <dd class="<%= product.naver_category_id ? 'text-gray-900' : 'text-gray-400' %>"><%= product.naver_category_id ? '설정됨' : '미설정' %></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- 가격 정보 -->
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <h3 class="px-5 py-3 bg-gray-50 border-b border-gray-200 text-base font-bold text-gray-800 flex items-center gap-2">
+                        <i class="bi bi-tag text-gray-500"></i> 가격 정보
+                    </h3>
+                    <dl class="divide-y divide-gray-100 text-sm">
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">판매가</dt>
+                            <dd class="text-gray-900 font-bold"><%= _won(product.price) %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">정가</dt>
+                            <dd class="text-gray-900"><%= product.original_price ? _won(product.original_price) : '-' %></dd>
+                        </div>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">할인율</dt>
+                            <dd class="text-gray-900"><%= (product.discount_rate || 0) %>%</dd>
+                        </div>
+                        <div class="flex px-5 py-2.5 bg-amber-50/60">
+                            <dt class="w-32 shrink-0 text-gray-500">원가 <span class="text-[11px] text-amber-700">(관리자 전용)</span></dt>
+                            <dd class="text-gray-900"><%= product.purchase_price ? _won(product.purchase_price) : '-' %></dd>
+                        </div>
+                    </dl>
+                    <p class="px-5 py-3 text-xs text-gray-400 border-t border-gray-100">
+                        원가는 관리자에게만 보이며 고객 화면에는 노출되지 않습니다.
+                    </p>
+                </div>
+            </div>
+
             <!-- Bottom Section: Detailed Content (상단 상품 기본 정보와 동일 너비) -->
             <div class="w-full space-y-12">
-                
+
                 <!-- Video Section (접힘) -->
                 <% if(product.video_url) { %>
                 <details class="group border border-gray-200 rounded-xl overflow-hidden mb-6">

@@ -146,10 +146,17 @@
                                 </div>
                                 <%
                                     /* 판매 시작일 — 신상품 판정 앵커.
-                                       신규 등록은 오늘로 프리필한다. 비워두면 신상품에서 조용히 빠지기 때문이다. */
-                                    const _todayStr = new Date().toISOString().slice(0, 10);
+                                       신규 등록은 오늘로 프리필한다. 비워두면 신상품에서 조용히 빠지기 때문이다.
+                                       DATE 컬럼은 로컬(KST) 자정 Date 로 올라온다. toISOString 은 하루 밀리므로 로컬 기준으로 찍는다. */
+                                    const _ymd = (v) => {
+                                        const d = new Date(v);
+                                        if (isNaN(d)) return '';
+                                        const p = (n) => String(n).padStart(2, '0');
+                                        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+                                    };
+                                    const _todayStr = _ymd(new Date());
                                     const _saleStart = (product && product.sale_start_date)
-                                        ? new Date(product.sale_start_date).toISOString().slice(0, 10)
+                                        ? _ymd(product.sale_start_date)
                                         : (product ? '' : _todayStr);
                                     const _newDays = (typeof newProductDays !== 'undefined' && newProductDays) ? newProductDays : 100;
                                 %>
@@ -239,7 +246,7 @@
                                 <div id="badgeExpireDateWrap" class="<%= _badges.includes('DEADLINE_SALE') ? '' : 'hidden' %>">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">기간임박할인 만료일</label>
                                     <input type="date" name="badge_expire_date"
-                                        value="<%= (product && product.badge_expire_date) ? new Date(product.badge_expire_date).toISOString().split('T')[0] : '' %>"
+                                        value="<%= (product && product.badge_expire_date) ? _ymd(product.badge_expire_date) : '' %>"
                                         class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
                                     <p class="text-xs text-gray-500 mt-1">만료일이 지나면 자동으로 품절(SOLD_OUT) 처리됩니다.</p>
                                 </div>

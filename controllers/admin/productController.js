@@ -1032,9 +1032,10 @@ exports.getDetail = async (req, res) => {
     const MALL_ID = req.adminMallId || 1;
     try {
         const [rows] = await pool.query(`
-            SELECT p.*, c.name as category_name
+            SELECT p.*, c.name as category_name, b.name as brand_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN categories b ON p.brand_category_id = b.id
             WHERE p.id = ? AND p.mall_id = ?
         `, [id, MALL_ID]);
         if (rows.length === 0) return res.redirect('/admin/products');
