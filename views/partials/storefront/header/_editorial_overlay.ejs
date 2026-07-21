@@ -31,7 +31,11 @@
 %>
 <header class="yd-ed-hdr absolute top-0 left-0 right-0 z-50" data-solid-after="80">
   <div class="max-w-[80rem] mx-auto px-5 lg:px-10">
-    <div class="flex items-center h-20">
+    <%#
+      h-20(80px) 은 GNB 와 드롭다운 사이 빈 띠를 30px 로 벌렸다. 아래 <style> 에서 4.5rem(72px) 로 낮춘다.
+      Tailwind 임의값(h-[4.5rem])을 쓰면 CSS 를 다시 빌드하기 전까지 클래스가 없어 헤더가 통째로 찌그러진다.
+    %>
+    <div class="flex items-center h-20 yd-ed-bar">
       <!-- Logo (left) -->
       <div class="flex-1 min-w-0">
         <a href="/" class="inline-flex items-center gap-2 no-underline">
@@ -154,8 +158,32 @@
   .yd-ed-hdr .yd-ed-panel,
   .yd-ed-hdr.is-solid .yd-ed-panel,
   body.yd-overlay-header .yd-ed-hdr:not(.is-solid) .yd-ed-panel { color: #374151; text-shadow: none; }
-  /* 히어로 위 흰 글자 가독성 */
-  body.yd-overlay-header .yd-ed-hdr:not(.is-solid) { text-shadow: 0 1px 10px rgba(0,0,0,.35); }
+  /*
+   * 히어로 위 흰 글자 가독성 — 주역은 히어로 상단 스크림(theme_hero.ejs 의 .yd-ed-scrim)이다.
+   * 여기 그림자는 보조. 넓게 퍼지는 한 겹만으로는 흰 배너에서 글자 윤곽이 뭉개져,
+   * 가까운 그림자를 한 겹 더해 획을 살린다.
+   */
+  body.yd-overlay-header .yd-ed-hdr:not(.is-solid) {
+    text-shadow: 0 1px 2px rgba(0,0,0,.30), 0 2px 14px rgba(0,0,0,.32);
+  }
+
+  /*
+   * 드롭다운이 GNB 에서 너무 멀었다. 성분이 둘이다 —
+   *   (1) 링크 하단(y50) ~ 패널 상단(y80) 의 빈 띠 30px : 헤더 h-20 안에서 링크가 세로 중앙이라 생긴다.
+   *   (2) 패널 안쪽 top padding 22px.
+   * 합쳐 52px 이라 메뉴와 패널이 따로 노는 느낌이었다.
+   *
+   * (2)만 이 스킨 한정으로 줄인다. _gnb_dropdown_style 의 .yd-md__inner 는 드로어형(테마1·2)과
+   * 카테고리 메가패널이 함께 쓰는 공용 규칙이라 원본을 건드리면 다른 테마까지 따라 바뀐다.
+   * (1)은 둘로 나눠 줄였다 — 헤더 높이를 4.5rem 으로 한 단계 낮추고(로고 h-9·아이콘 24px 에
+   * 여유가 있다), 패널을 6px 끌어올린다. 끌어올린 만큼은 여전히 .yd-ed-item(h-full) 안쪽이라
+   * hover 판정이 끊기지 않는다. 결과적으로 띠 30px → 20px.
+   * hover 연속성은 .yd-md::before 의 10px 브릿지가 그대로 잡는다.
+   */
+  .yd-ed-hdr .yd-ed-bar { height: 4.5rem; }
+  .yd-ed-hdr .yd-md { margin-top: -6px; }
+  .yd-ed-hdr .yd-md.is-mega .yd-md__inner { padding: 15px 26px 18px; }
+  .yd-ed-hdr .yd-md.is-compact .yd-md__inner { padding: 6px; }
   /* 굳은 상태 */
   .yd-ed-hdr.is-solid { background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.06); text-shadow: none; }
   .yd-ed-hdr.is-solid, .yd-ed-hdr.is-solid .yd-ed-navlink, .yd-ed-hdr.is-solid .yd-ed-ico, .yd-ed-hdr.is-solid .yd-ed-logo { color: #14110d; }

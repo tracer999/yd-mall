@@ -146,7 +146,19 @@
     /* 풀블리드 무대 — 데스크톱은 뷰포트를 거의 채우고, 모바일은 세로 비율을 키운다. */
     .yd-ed-hero .yd-ed-stage { height: 88vh; min-height: 520px; max-height: 900px; }
     @media (max-width: 640px) { .yd-ed-hero .yd-ed-stage { height: 82vh; min-height: 460px; } }
-    .yd-ed-scrim { background: linear-gradient(to top, rgba(0,0,0,.60) 0%, rgba(0,0,0,.15) 45%, rgba(0,0,0,.05) 100%); }
+    <%#
+      스크림은 두 겹이다.
+        아래 — 오버레이 텍스트(제목·CTA)를 위한 기존 그라디언트.
+        위   — 헤더용. 오버레이 헤더는 이 히어로 위에 흰 글자로 얹히는데, 예전 위쪽 값이 .05 라
+               사실상 투명이었다. 흰 배경 상품컷 같은 밝은 배너가 오면 로고·GNB·아이콘이 통째로
+               사라졌다(text-shadow 만으로는 흰 바탕에서 못 버틴다).
+               헤더 높이(80px)보다 넉넉한 200px 구간에서 서서히 풀어 띠처럼 보이지 않게 한다.
+    %>
+    .yd-ed-scrim {
+      background:
+        linear-gradient(to bottom, rgba(0,0,0,.52) 0px, rgba(0,0,0,.44) 72px, rgba(0,0,0,.18) 130px, rgba(0,0,0,0) 220px),
+        linear-gradient(to top, rgba(0,0,0,.60) 0%, rgba(0,0,0,.15) 45%, rgba(0,0,0,.05) 100%);
+    }
     <%#
       헤드라인 — 확정 40px(데스크톱). 상한을 40px 로 두어 창을 아무리 넓혀도 그 이상 커지지 않는다
       (상품명이 그대로 들어와 길어지는 일이 많아 커지면 3줄 이상으로 꺾인다).
