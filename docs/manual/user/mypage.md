@@ -72,6 +72,18 @@ PC에서는 화면 위 오른쪽의 **마이쇼핑**, 모바일에서는 아래 
 
 ---
 
+## 사업자(B2B) 고객이 볼 때
+
+일반 회원에게는 **`사업자 회원 신청`** 링크 한 줄만 보입니다. 신청하거나 승인된 회원에게는 다음이 추가됩니다.
+
+- **현재 구매 자격** — `개인 구매` / `기업 구매(상호)` 가 표시되고 **전환 버튼**이 있습니다. 전환하려면 **장바구니를 비워야** 합니다.
+- **사업자 정보** — 신청 상태(심사 대기 · 승인 · 반려 · 정지 · 계약 만료)와 등록한 사업자 내용. 반려된 경우 사유를 보고 다시 신청할 수 있습니다.
+- **견적함** — 진행 중인 견적 목록. **기업 구매 모드일 때만** 보입니다.
+
+자세한 내용은 [사업자(B2B) 구매](/manual/user/b2b)를 보세요.
+
+---
+
 ## 안 보이거나 비어 있을 때
 
 **"쿠폰함이 비어 있습니다"**
@@ -109,6 +121,7 @@ PC에서는 화면 위 오른쪽의 **마이쇼핑**, 모바일에서는 아래 
   <a class="manual-goto is-sub" href="/manual/user/auth">로그인 · 회원가입</a>
   <a class="manual-goto is-sub" href="/manual/admin/sales">판매(주문) 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/claims">클레임 관리</a>
+  <a class="manual-goto is-sub" href="/manual/user/b2b">사업자(B2B) 구매</a>
   <a class="manual-goto is-sub" href="/manual/admin/coupons">쿠폰 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/membership">멤버십 관리</a>
 </div>

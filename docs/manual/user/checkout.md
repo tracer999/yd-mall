@@ -52,6 +52,25 @@
 
 ---
 
+## 사업자(B2B) 주문은 결제하지 않습니다
+
+승인된 사업자가 **기업 구매 모드**로 주문하면 주문서가 이렇게 바뀝니다.
+
+| 일반 주문 | 기업 주문 |
+|---|---|
+| 쿠폰·포인트 사용 | **쿠폰·포인트 입력란이 사라집니다**(전용가는 계약가이므로 중복 적용하지 않습니다) |
+| 최종 결제금액 | **공급가액 / 부가세**를 나눠 표시하고 **주문 금액**으로 표기 |
+| — | **발주번호(PO) · 납기 희망일 · 세금계산서 발행 · 요청사항** 입력란 추가 |
+| `결제하기` → 결제창 | **`주문 요청하기`** → **접수 완료 화면**(결제창 없음) |
+
+접수 뒤 절차는 **담당자 확인 → 승인·입금 안내 → 입금 확인 → 출고** 입니다. 접수 완료 화면에 **입금 계좌와 입금 기한**이 안내되고, 같은 내용이 이메일로도 발송됩니다.
+
+주문번호는 일반 주문의 `ORD-` 대신 **`B2B-`** 로 시작합니다.
+
+자세한 내용은 [사업자(B2B) 구매](/manual/user/b2b)를 보세요.
+
+---
+
 ## 안 보이거나 비어 있을 때
 
 **"결제하기를 눌러도 결제창이 안 뜹니다"**
@@ -89,6 +108,7 @@
   <a class="manual-goto is-sub" href="/manual/user/mypage">마이페이지</a>
   <a class="manual-goto is-sub" href="/manual/admin/coupons">쿠폰 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/points">포인트 관리</a>
+  <a class="manual-goto is-sub" href="/manual/user/b2b">사업자(B2B) 구매</a>
   <a class="manual-goto is-sub" href="/manual/admin/membership">멤버십 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/sales">판매(주문) 관리</a>
 </div>

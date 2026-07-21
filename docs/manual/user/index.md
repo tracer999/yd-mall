@@ -90,6 +90,7 @@ GNB(가로 메뉴줄)에 올라오는 항목은 **세 곳에서** 옵니다.
 | 주문·결제 | `/checkout` | [주문·결제](/manual/user/checkout) |
 | 마이쇼핑 | `/mypage` | [마이쇼핑](/manual/user/mypage) |
 | 로그인·회원가입 | `/auth/login` | [로그인·가입](/manual/user/auth) |
+| 사업자(B2B) 구매 | `/b2b/apply` `/b2b/status` `/quotes` | [사업자 구매](/manual/user/b2b) |
 | 고객센터 | `/cs` | [고객센터](/manual/user/cs) |
 | 1:1 문의 | `/inquiries` | [1:1 문의](/manual/user/inquiries) |
 | 공지사항 | `/notices` | [공지사항](/manual/user/notices) |
