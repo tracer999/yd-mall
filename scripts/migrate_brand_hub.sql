@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS brand_profile (
 -- 2. brand_stat — 집계 캐시 (브랜드 홈 전 섹션의 성능 기반)
 -- ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS brand_stat (
-  category_id       INT           NOT NULL,
+  category_id       INT           NOT NULL PRIMARY KEY,
   mall_id           BIGINT        NOT NULL,
   product_count     INT           NOT NULL DEFAULT 0,
   new_count         INT           NOT NULL DEFAULT 0,
@@ -56,9 +56,6 @@ CREATE TABLE IF NOT EXISTS brand_stat (
   rep_product_ids   JSON          NULL COMMENT '타일 썸네일용 대표 상품 4개',
   last_product_at   DATETIME      NULL,
   calculated_at     DATETIME      NOT NULL,
-  -- 브랜드 마스터는 글로벌 한 벌(mall 0)이고 집계는 몰별이다.
-  -- PK 에 mall_id 가 없으면 두 번째 몰의 집계가 통째로 실패한다(migrate_brand_stat_mall_pk.sql).
-  PRIMARY KEY (mall_id, category_id),
   KEY idx_bs_mall_pop (mall_id, popularity_score DESC),
   KEY idx_bs_mall_count (mall_id, product_count DESC),
   KEY idx_bs_mall_new (mall_id, last_product_at DESC),

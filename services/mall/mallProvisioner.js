@@ -6,7 +6,6 @@ const mallContext = require('../../middleware/mallContext');
 const themeData = require('../../middleware/themeData');
 const navigationService = require('../menu/navigationService');
 const bestRankingService = require('../best/bestRankingService');
-const brandStatService = require('../brand/brandStatService');
 const taxonomyResolver = require('../catalog/taxonomyResolver');
 
 /*
@@ -349,19 +348,6 @@ async function provisionMall(mallId, presetKey, opts = {}) {
         } catch (err) {
             console.error(`[provisionMall] 베스트 초기 집계 실패(몰 ${id}):`, err.message);
         }
-    }
-
-    /*
-     * 브랜드 집계(brand_stat) 초기 적재. 베스트와 같은 이유다 —
-     * /brands 허브는 brand_stat 만 읽으므로(brandService), 몰을 새로 찍어내면
-     * 집계가 없어 브랜드가 1,300개 있어도 "해당하는 브랜드가 없습니다"가 뜬다.
-     * 이 훅이 없으면 관리자가 [집계 재계산]을 누르기 전까지 브랜드관이 영구히 빈다.
-     * 재적용(reapply)에서도 돌려 관리자의 복구 수단으로 쓰이게 한다.
-     */
-    try {
-        await brandStatService.recalcMall(id);
-    } catch (err) {
-        console.error(`[provisionMall] 브랜드 집계 실패(몰 ${id}):`, err.message);
     }
 
     /*

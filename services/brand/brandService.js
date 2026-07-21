@@ -277,9 +277,9 @@ async function getBrand(mallId, brandId) {
                s.min_price, s.max_price, s.rep_product_ids
         FROM categories c
         LEFT JOIN brand_profile bp ON bp.category_id = c.id
-        LEFT JOIN brand_stat s ON s.category_id = c.id AND s.mall_id = ?
-        WHERE c.id = ? AND c.type = 'BRAND' AND c.mall_id IN (0, ?) AND c.is_active = 1
-    `, [mallId, brandId, mallId]);
+        LEFT JOIN brand_stat s ON s.category_id = c.id
+        WHERE c.id = ? AND c.type = 'BRAND' AND c.mall_id = ? AND c.is_active = 1
+    `, [brandId, mallId]);
     if (!row) return null;
     await decorate([row]);
     return row;
@@ -438,8 +438,7 @@ async function getBrandBest(mallId, brandId, { hasUser, limit = 12 } = {}) {
 /** 관련 브랜드 — 같은 대표 카테고리 + 유사 가격대 */
 async function getRelatedBrands(mallId, brandId, limit = 6) {
     const [[base]] = await pool.query(
-        'SELECT top_category_id, min_price, max_price FROM brand_stat WHERE mall_id = ? AND category_id = ?',
-        [mallId, brandId]
+        'SELECT top_category_id, min_price, max_price FROM brand_stat WHERE category_id = ?', [brandId]
     );
     if (!base?.top_category_id) return [];
 
