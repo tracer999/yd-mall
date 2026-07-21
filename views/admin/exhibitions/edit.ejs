@@ -295,6 +295,18 @@
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">
+            상단 추천 영역 제목 <span class="text-xs font-normal text-gray-400">(비우면 '추천 상품')</span>
+          </label>
+          <input type="text" name="recommend_title" value="<%= _cfg.recommend_title || '' %>" maxlength="50"
+                 placeholder="추천 상품"
+                 class="w-full sm:w-80 px-3 py-2 rounded-md border border-gray-200 text-sm">
+          <p class="mt-1 text-xs text-gray-400">
+            상세 화면 맨 위에 나오는 영역의 제목입니다. 아래 상품 연결에서 <strong>추천</strong>을 켠 상품만 이 영역에 노출됩니다.
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">
             안내 · 유의사항 <span class="text-xs font-normal text-gray-400">(상세 하단에 노출)</span>
           </label>
           <textarea name="notice" rows="4" data-rich
@@ -421,6 +433,11 @@
       <p class="mt-0.5 text-xs text-gray-500">
         섹션을 지정하지 않은 상품은 <strong>전체</strong> 탭에만 노출됩니다.
       </p>
+      <p class="mt-1 text-xs text-gray-500">
+        <strong>상단 추천</strong>을 켠 상품은 상세 화면 <strong>맨 위 추천 영역</strong>에 크게 나옵니다(최대 8개).
+        아래 목록에서도 그대로 보입니다.
+        <span id="recommendCount" class="ml-1 font-semibold text-indigo-600"></span>
+      </p>
     </div>
 
     <%#
@@ -473,13 +490,15 @@
               <th class="px-3 py-2.5 w-40">섹션</th>
               <th class="px-3 py-2.5 w-28">배지</th>
               <th class="px-3 py-2.5 w-52">MD 코멘트</th>
+              <%# '고정'(목록 안에서 위로)과 '추천'(상단 별도 영역)은 다른 기능이라 열을 나눈다 %>
+              <th class="px-3 py-2.5 w-20 text-center">상단<br>추천</th>
               <th class="px-3 py-2.5 w-32 text-center">노출 / 구매 / 고정</th>
               <th class="px-3 py-2.5 w-16 text-center">삭제</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
             <% if (products.length === 0) { %>
-              <tr><td colspan="8" class="px-6 py-12 text-center text-gray-500">담긴 상품이 없습니다.</td></tr>
+              <tr><td colspan="9" class="px-6 py-12 text-center text-gray-500">담긴 상품이 없습니다.</td></tr>
             <% } %>
             <% products.forEach(function (p, i) { %>
               <tr>
@@ -518,11 +537,18 @@
                   <input type="text" name="products[<%= i %>][display_comment]" value="<%= p.display_comment || '' %>" maxlength="200"
                          placeholder="MD 한마디" class="w-full px-2 py-1 rounded border border-gray-200 text-sm">
                 </td>
+                <td class="px-3 py-2.5 text-center">
+                  <label title="상세 화면 맨 위 추천 영역에 노출합니다 (최대 8개)">
+                    <input type="checkbox" name="products[<%= i %>][is_recommended]" value="1"
+                           <%= p.is_recommended ? 'checked' : '' %>
+                           class="w-4 h-4 rounded border-gray-300 recommend-check">
+                  </label>
+                </td>
                 <td class="px-3 py-2.5">
                   <div class="flex items-center justify-center gap-2">
                     <label title="노출"><input type="checkbox" name="products[<%= i %>][visible]" value="1" <%= p.visible ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300"></label>
                     <label title="구매 허용"><input type="checkbox" name="products[<%= i %>][purchase_enabled]" value="1" <%= p.purchase_enabled ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300"></label>
-                    <label title="상단 고정"><input type="checkbox" name="products[<%= i %>][is_fixed]" value="1" <%= p.is_fixed ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300"></label>
+                    <label title="이 목록 안에서 위로 고정 (추천 영역과 다릅니다)"><input type="checkbox" name="products[<%= i %>][is_fixed]" value="1" <%= p.is_fixed ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300"></label>
                   </div>
                 </td>
                 <td class="px-3 py-2.5 text-center">
@@ -736,6 +762,23 @@
     if (e.target.closest('[data-remove-row]')) e.target.closest('.section-row').remove();
   });
 
+  /* 상단 추천 개수 — 8개까지만 화면에 나가므로 넘기면 그 자리에서 알려준다. */
+  const RECOMMEND_MAX = 8;
+  const recommendLabel = document.getElementById('recommendCount');
+  if (recommendLabel) {
+    const checks = document.querySelectorAll('.recommend-check');
+    const syncRecommend = () => {
+      const n = [...checks].filter(c => c.checked).length;
+      if (!n) { recommendLabel.textContent = ''; return; }
+      recommendLabel.textContent = n > RECOMMEND_MAX
+        ? `현재 ${n}개 선택 — 앞의 ${RECOMMEND_MAX}개만 노출됩니다`
+        : `현재 ${n}개 선택`;
+      recommendLabel.classList.toggle('text-red-600', n > RECOMMEND_MAX);
+      recommendLabel.classList.toggle('text-indigo-600', n <= RECOMMEND_MAX);
+    };
+    checks.forEach(c => c.addEventListener('change', syncRecommend));
+    syncRecommend();
+  }
 })();
 </script>
 

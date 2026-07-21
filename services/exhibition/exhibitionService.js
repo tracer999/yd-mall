@@ -299,6 +299,9 @@ async function getSections(exhibitionId, { activeOnly = true } = {}) {
     return rows.map(r => Object.assign({}, r, { config: parseJson(r.display_config_json) }));
 }
 
+/** 상세 상단 추천 영역에 세울 최대 개수. 넘치면 스크롤 없이 화면을 다 먹는다. */
+const RECOMMEND_LIMIT = 8;
+
 /**
  * 전시 상품. product_card.ejs 가 요구하는 컬럼을 그대로 뽑는다.
  *
@@ -310,7 +313,7 @@ async function getProducts(exhibitionId, { hideSoldOut = false } = {}) {
     const [rows] = await pool.query(`
         SELECT p.id, p.name, p.provider, p.main_image, p.price, p.original_price,
                p.discount_rate, p.status, p.stock, p.slug, p.product_badge, p.distribution_badge,
-               ep.id AS mapping_id, ep.section_id, ep.sort_order, ep.is_fixed,
+               ep.id AS mapping_id, ep.section_id, ep.sort_order, ep.is_fixed, ep.is_recommended,
                ep.display_badge, ep.display_comment, ep.purchase_enabled
           FROM exhibition_product ep
           JOIN products p ON p.id = ep.product_id
@@ -321,6 +324,21 @@ async function getProducts(exhibitionId, { hideSoldOut = false } = {}) {
     `, [exhibitionId]);
     // 기획전 카드도 활성 특가가로 표시한다.
     return await dealSvc.applyDeals(rows);
+}
+
+/**
+ * 상세 상단 추천 상품.
+ *
+ * **이미 조회한 전시 상품에서 골라낸다** — 따로 쿼리하지 않는다.
+ * getProducts 의 노출 조건(비공개·판매중지·품절숨김)을 그대로 물려받아야
+ * "아래 목록에는 없는데 추천 영역에만 뜨는 상품"이 생기지 않는다.
+ *
+ * 추천 상품은 아래 섹션 목록에서 빼지 않는다 — 위에서 먼저 보여주고 목록에도 그대로 둔다.
+ *
+ * @param {Array} products getProducts 결과
+ */
+function pickRecommended(products) {
+    return (products || []).filter(p => Number(p.is_recommended)).slice(0, RECOMMEND_LIMIT);
 }
 
 /** 조회수 +1. 실패해도 화면은 떠야 하므로 호출부에서 await 하지 않는다. */
@@ -356,5 +374,7 @@ module.exports = {
     getPublicDetailPathById,
     getSections,
     getProducts,
+    pickRecommended,
+    RECOMMEND_LIMIT,
     incrementViewCount,
 };

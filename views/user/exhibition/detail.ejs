@@ -12,6 +12,9 @@
 
 <%- include('../../partials/exhibition/hero', { exhibition: e, descriptionHtml }) %>
 
+<%# 상단 추천 상품 — 고른 상품이 없으면 partial 이 통째로 비어 아무것도 그리지 않는다. %>
+<%- include('../../partials/exhibition/recommend', { exhibition: e, recommended, recommendTitle }) %>
+
 <%- include('../../partials/exhibition/tab_nav', { exhibition: e, tabs, activeCode, productCount }) %>
 
 <div class="bg-white divide-y divide-gray-100">

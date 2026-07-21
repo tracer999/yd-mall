@@ -133,6 +133,8 @@ async function buildBasicFields(req, current = {}, mallId = 1) {
             // 유형=카테고리의 대표 카테고리. 컬럼을 늘리지 않고 여기에 둔다
             // (상품 편성 범위를 좁히는 용도이지 조회 조건이 아니다).
             category_id: await resolveOwnedCategoryId(mallId, b.scope_category_id),
+            // 상세 상단 추천 영역의 제목. 비우면 화면이 '추천 상품'으로 표시한다.
+            recommend_title: String(b.recommend_title || '').trim().slice(0, 50),
         })),
     };
 }
@@ -571,13 +573,14 @@ exports.postSaveProducts = async (req, res) => {
 
             await conn.query(`
                 UPDATE exhibition_product
-                   SET section_id = ?, sort_order = ?, is_fixed = ?, display_badge = ?,
+                   SET section_id = ?, sort_order = ?, is_fixed = ?, is_recommended = ?, display_badge = ?,
                        display_comment = ?, visible = ?, purchase_enabled = ?
                  WHERE id = ? AND exhibition_id = ?
             `, [
                 sectionId,
                 Number.parseInt(p.sort_order, 10) || i + 1,
                 p.is_fixed ? 1 : 0,
+                p.is_recommended ? 1 : 0,
                 String(p.display_badge || '').trim().slice(0, 50) || null,
                 String(p.display_comment || '').trim().slice(0, 200) || null,
                 p.visible ? 1 : 0,

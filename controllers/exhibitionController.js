@@ -189,6 +189,9 @@ exports.getDetail = async (req, res, next) => {
         res.render('user/exhibition/detail', {
             title: exhibition.title,
             exhibition,
+            // 상세 상단 추천 영역. 고른 상품이 없으면 빈 배열이고 뷰가 영역째 감춘다.
+            recommended: svc.pickRecommended(products),
+            recommendTitle: String(config.recommend_title || '').trim() || '추천 상품',
             // 운영자 입력 HTML — 저장 시에 이어 렌더 시에도 통과시킨다(이중 방어)
             descriptionHtml: sanitize(exhibition.description || ''),
             noticeHtml: sanitize(config.notice || ''),

@@ -1,0 +1,53 @@
+<%
+  /*
+   * 기획전 상세 상단 추천 상품
+   * locals: exhibition, recommended(배열), recommendTitle
+   *
+   * 예전에 대표 이미지 배너가 깔려 있던 자리다. 이미지 한 장 대신 **살 수 있는 상품**을
+   * 먼저 보여준다. 운영자가 상품 연결에서 [추천]을 켠 것만 올라온다(최대 8개).
+   *
+   * 아래 섹션 목록에서 이 상품들을 빼지 않는다 — 위에서 한 번 더 보여주는 것이 의도다.
+   * 상품 카드는 공용 partials/product_card.ejs 를 그대로 쓴다.
+   * 기획전 전용 필드(display_badge·display_comment)는 product_section 과 같은 방식으로
+   * 카드 바깥에서 덧그린다.
+   */
+  const _items = recommended || [];
+  const noPurchase = (p) => exhibition.purchaseBlocked || !Number(p.purchase_enabled);
+%>
+
+<% if (_items.length) { %>
+<section class="bg-white border-b border-gray-100 py-8 sm:py-10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="mb-5 flex items-baseline gap-3">
+      <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900"><%= recommendTitle %></h2>
+      <span class="text-sm text-gray-400"><%= _items.length %>개</span>
+    </div>
+
+    <%#
+      한 줄에 최대 4개. 추천은 8개까지라 두 줄을 넘지 않는다.
+      모바일은 2열 — 상단 영역이라도 카드가 읽히는 크기를 지킨다.
+    %>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <% _items.forEach(function (p) { %>
+        <div class="relative">
+          <% if (p.display_badge) { %>
+            <span class="absolute z-10 top-2 right-2 text-[11px] font-bold px-2 py-1 rounded text-white"
+                  style="background: var(--gh-primary);"><%= p.display_badge %></span>
+          <% } %>
+
+          <%- include('../product_card', { product: p }) %>
+
+          <% if (p.display_comment) { %>
+            <p class="mt-1.5 text-xs text-gray-500 leading-relaxed line-clamp-2"><%= p.display_comment %></p>
+          <% } %>
+          <% if (noPurchase(p)) { %>
+            <p class="mt-1 text-xs text-gray-400">이 기획전에서는 구매할 수 없습니다.</p>
+          <% } %>
+        </div>
+      <% }); %>
+    </div>
+
+  </div>
+</section>
+<% } %>
