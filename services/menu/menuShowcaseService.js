@@ -25,6 +25,15 @@ const EXCLUDED = new Set([
     'RANKING',    // /ranking → /best 로 301. 자체 페이지가 없어 노출될 곳이 없다.
 ]);
 
+/*
+ * 하위 경로에는 붙이지 않는 메뉴 — **목록 화면에만** 배너를 건다.
+ *
+ * 기획전은 상세(/exhibition/{slug})가 자체 대표 이미지(hero)를 갖는다. 여기에 목록용
+ * 메뉴 배너까지 얹으면 배너가 두 장 겹친다. 반면 쇼핑특가(/deals/:code)처럼 하위 경로가
+ * 같은 성격의 목록인 메뉴는 지금처럼 이어서 붙어야 하므로 전역으로 바꾸지 않는다.
+ */
+const EXACT_PATH_ONLY = new Set(['EXHIBITION']);
+
 /** 상품형 메뉴의 상품 풀. 관리자 상품 피커가 이 풀로만 후보를 좁힌다. */
 const PRODUCT_POOLS = {
     SHOPPING_DEAL: 'deal',
@@ -71,6 +80,7 @@ async function resolveMenuCode(reqPath) {
     // 정확 일치 우선 — '/new' 가 '/new-xxx' 에 걸리지 않도록 하위 경로는 '/' 구분자를 요구한다.
     if (map.has(reqPath)) return map.get(reqPath);
     for (const [path, code] of map) {
+        if (EXACT_PATH_ONLY.has(code)) continue; // 목록 전용 메뉴 — 상세에는 붙이지 않는다
         if (reqPath.startsWith(path + '/')) return code;
     }
     return null;
@@ -164,5 +174,6 @@ module.exports = {
     resolveMenuCode,
     clearCache,
     EXCLUDED,
+    EXACT_PATH_ONLY,
     PRODUCT_POOLS,
 };

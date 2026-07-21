@@ -71,4 +71,35 @@ async function visibleCategoryIdSet(mallId, { brand = false } = {}) {
     return valid;
 }
 
-module.exports = { GLOBAL_CATEGORY_MALL_ID, validCategoryIdSet, hiddenCategoryIdSet, visibleCategoryIdSet };
+/**
+ * 카테고리 서브트리 id 목록(자기 자신 포함).
+ *
+ * 부모 카테고리를 고르면 하위 뎁스에 달린 상품까지 잡아야 한다 —
+ * 상품 대부분이 2·3뎁스에 붙어 있어 대분류만 비교하면 결과가 0건이 된다.
+ * 관리자 조회용이라 비활성 카테고리도 포함한다.
+ *
+ * @param {number} mallId
+ * @param {number} categoryId
+ * @returns {Promise<number[]>} 잘못된 id 면 빈 배열
+ */
+async function categorySubtreeIds(mallId, categoryId) {
+    const id = Number(categoryId);
+    if (!Number.isInteger(id) || id <= 0) return [];
+    const [rows] = await pool.query(`
+        WITH RECURSIVE sub AS (
+            SELECT id FROM categories WHERE id = ? AND mall_id IN (0, ?)
+            UNION ALL
+            SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+        )
+        SELECT id FROM sub
+    `, [id, mallId]);
+    return rows.map(r => r.id);
+}
+
+module.exports = {
+    GLOBAL_CATEGORY_MALL_ID,
+    validCategoryIdSet,
+    hiddenCategoryIdSet,
+    visibleCategoryIdSet,
+    categorySubtreeIds,
+};

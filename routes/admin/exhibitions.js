@@ -29,9 +29,10 @@ const exhibitionImages = upload.fields([
 router.get('/', c.getList);
 router.get('/add', c.getAdd);
 router.post('/add', exhibitionImages, c.postAdd);
-router.get('/product-search', c.getProductSearch);
 
 router.get('/:id/edit', requireNumericId('id'), c.getEdit);
+// 상품 선택 팝업 — 기획전 유형이 검색 범위를 정하므로 :id 스코프 아래에 둔다.
+router.get('/:id/product-search', requireNumericId('id'), c.getProductSearch);
 router.post('/:id/edit', requireNumericId('id'), exhibitionImages, c.postEdit);
 router.post('/:id/delete', requireNumericId('id'), c.postDelete);
 

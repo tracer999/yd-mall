@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const svc = require('../../services/exhibition/exhibitionService');
 const { sanitize } = require('../../services/display/htmlSanitizer');
+const { categorySubtreeIds } = require('../../services/catalog/categoryScope');
 
 /*
  * 기획전 관리 (1차)
@@ -74,8 +75,37 @@ async function resolveOwnedBrandId(mallId, brandCategoryId) {
     return row ? brandCategoryId : null;
 }
 
+/** 유형=카테고리 기획전의 대표 카테고리. BRAND 와 같은 이유로 소유 검증한다. */
+async function resolveOwnedCategoryId(mallId, categoryId) {
+    const id = Number.parseInt(categoryId, 10);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    const [[row]] = await pool.query(
+        "SELECT id FROM categories WHERE id = ? AND type = 'NORMAL' AND mall_id IN (0, ?)",
+        [id, mallId]
+    );
+    return row ? id : null;
+}
+
+/**
+ * 기획전 유형이 정하는 상품 편성 범위.
+ *
+ * 유형을 고르는 순간 "이 기획전에 담을 수 있는 상품"이 정해진다 —
+ * 브랜드 기획전에 다른 브랜드 상품이 섞이면 그건 브랜드 기획전이 아니다.
+ * 상품 선택 팝업이 이 값으로 검색 조건을 잠근다.
+ *
+ * @returns {{brandId:number|null, categoryId:number|null}} null = 잠그지 않음(자유 선택)
+ */
+function scopeOf(exhibition) {
+    if (!exhibition) return { brandId: null, categoryId: null };
+    const config = svc.parseJson(exhibition.display_config_json);
+    return {
+        brandId: exhibition.exhibition_type === 'BRAND' ? (exhibition.brand_category_id || null) : null,
+        categoryId: exhibition.exhibition_type === 'CATEGORY' ? (Number(config.category_id) || null) : null,
+    };
+}
+
 /** 기본정보 폼 → 컬럼 값 */
-function buildBasicFields(req, current = {}) {
+async function buildBasicFields(req, current = {}, mallId = 1) {
     const b = req.body;
     return {
         title: String(b.title || '').trim().slice(0, 200),
@@ -85,8 +115,9 @@ function buildBasicFields(req, current = {}) {
         exhibition_type: svc.pick(svc.TYPES, b.exhibition_type, 'THEME'),
         // 브랜드 귀속 — 지정하면 그 브랜드의 브랜드관/브랜드 허브에 "브랜드 위크"로 노출된다.
         // 비워두면 편성 상품의 브랜드에 '기획전 참여'로만 잡힌다.
-        brand_category_id: /^\d+$/.test(String(b.brand_category_id || '').trim())
-            ? Number(b.brand_category_id) : null,
+        // P5: 타 몰 브랜드로 귀속하지 못하게 — 이 몰의 BRAND 가 아니면 귀속 해제.
+        brand_category_id: await resolveOwnedBrandId(mallId, /^\d+$/.test(String(b.brand_category_id || '').trim())
+            ? Number(b.brand_category_id) : null),
         status: svc.pick(svc.STATUSES, b.status, 'DRAFT'),
         start_at: toDateTime(b.start_at),
         end_at: toDateTime(b.end_at),
@@ -99,6 +130,9 @@ function buildBasicFields(req, current = {}) {
         display_config_json: JSON.stringify(Object.assign({}, svc.parseJson(current.display_config_json), {
             hide_sold_out: Boolean(b.hide_sold_out),
             notice: sanitize(String(b.notice || '')),
+            // 유형=카테고리의 대표 카테고리. 컬럼을 늘리지 않고 여기에 둔다
+            // (상품 편성 범위를 좁히는 용도이지 조회 조건이 아니다).
+            category_id: await resolveOwnedCategoryId(mallId, b.scope_category_id),
         })),
     };
 }
@@ -149,8 +183,20 @@ exports.getList = async (req, res) => {
 /* ── 등록·수정 폼 ─────────────────────────────────────── */
 
 async function renderForm(req, res, exhibition, extra = {}) {
+    const mallId = req.adminMallId || 1;
     const isNew = !exhibition.id;
     const sections = isNew ? [] : await svc.getSections(exhibition.id, { activeOnly: false });
+
+    /*
+     * 유형별 설정 UI 재료.
+     *   카테고리 트리 — 3뎁스 종속 셀렉트(products/form.ejs 와 같은 방식)
+     * 브랜드는 1,300개가 넘어 select 로 못 쓴다. /admin/brands/search.json 검색형으로 고른다.
+     */
+    const [productCategories] = await pool.query(`
+        SELECT id, name, parent_id, depth FROM categories
+         WHERE type = 'NORMAL' AND mall_id IN (0, ?)
+         ORDER BY depth ASC, display_order ASC, id ASC
+    `, [mallId]);
 
     let products = [];
     if (!isNew) {
@@ -179,6 +225,8 @@ async function renderForm(req, res, exhibition, extra = {}) {
     res.render('admin/exhibitions/edit', Object.assign({
         layout: 'layouts/admin_layout',
         ownedBrandName,
+        productCategories,
+        scope: scopeOf(isNew ? null : exhibition),
         title: isNew ? '기획전 등록' : '기획전 수정',
         subtitle: isNew ? null : exhibition.title,
         exhibition: Object.assign({}, exhibition, {
@@ -190,6 +238,7 @@ async function renderForm(req, res, exhibition, extra = {}) {
         products,
         phase: isNew ? null : svc.derivePhase(exhibition),
         phaseLabels: svc.PHASE_LABELS,
+        notice: null,
         statuses: svc.STATUSES,
         types: svc.TYPES,
         templates: svc.TEMPLATES,
@@ -225,9 +274,7 @@ exports.getAdd = async (req, res) => {
 exports.postAdd = async (req, res) => {
     const mallId = req.adminMallId || 1;
     try {
-        const fields = buildBasicFields(req);
-        // P5: 타 몰 브랜드로 귀속하지 못하게 — 이 몰의 BRAND 가 아니면 귀속 해제
-        fields.brand_category_id = await resolveOwnedBrandId(mallId, fields.brand_category_id);
+        const fields = await buildBasicFields(req, {}, mallId);
         if (!fields.title) return redirectWith(res, `${BASE}/add`, 'error', '기획전명을 입력하세요.');
         if (!fields.start_at) return redirectWith(res, `${BASE}/add`, 'error', '시작일을 입력하세요.');
         if (fields.end_at && fields.end_at < fields.start_at) {
@@ -263,6 +310,7 @@ exports.getEdit = async (req, res) => {
         await renderForm(req, res, exhibition, {
             saved: req.query.saved === '1',
             error: req.query.error || null,
+            notice: req.query.notice || null,
         });
     } catch (err) {
         console.error('[exhibition] getEdit:', err.message);
@@ -279,9 +327,7 @@ exports.postEdit = async (req, res) => {
         const current = await findOwned(mallId, id);
         if (!current) return redirectWith(res, BASE, 'error', '기획전을 찾을 수 없습니다.');
 
-        const fields = buildBasicFields(req, current);
-        // P5: 타 몰 브랜드로 귀속하지 못하게 — 이 몰의 BRAND 가 아니면 귀속 해제
-        fields.brand_category_id = await resolveOwnedBrandId(mallId, fields.brand_category_id);
+        const fields = await buildBasicFields(req, current, mallId);
         if (!fields.title) return redirectWith(res, back, 'error', '기획전명을 입력하세요.');
         if (!fields.start_at) return redirectWith(res, back, 'error', '시작일을 입력하세요.');
         if (fields.end_at && fields.end_at < fields.start_at) {
@@ -420,8 +466,14 @@ async function resolveSectionId(exhibitionId, raw) {
     return row ? sectionId : null;
 }
 
+/** 한 번에 담을 수 있는 상품 수 상한. 팝업에서 전체선택을 눌러도 요청이 터지지 않게. */
+const MAX_ADD_AT_ONCE = 300;
+
 /**
- * POST /admin/exhibitions/:id/products/add — 상품 담기
+ * POST /admin/exhibitions/:id/products/add — 상품 담기 (다중)
+ *
+ * 상품 선택 팝업이 체크한 상품들을 `product_ids[]` 로 보낸다.
+ * (예전 단건 검색 UI 가 쓰던 `product_id` 도 그대로 받는다.)
  *
  * uk_exh_product 는 (exhibition_id, section_id, product_id) 인데 section_id 가 NULL 이면
  * MySQL 유니크가 걸리지 않는다(NULL ≠ NULL). 섹션 미배정 중복은 여기서 막는다(§7-4 주석).
@@ -434,30 +486,53 @@ exports.postAddProduct = async (req, res) => {
         const exhibition = await findOwned(mallId, id);
         if (!exhibition) return redirectWith(res, BASE, 'error', '기획전을 찾을 수 없습니다.');
 
-        const productId = Number.parseInt(req.body.product_id, 10);
-        if (!Number.isFinite(productId)) return res.redirect(back);
+        // qs 는 원소가 20개를 넘으면 배열 대신 인덱스 객체로 준다(arrayLimit 기본값).
+        // 팝업에서 수십 개를 고르는 것이 정상 흐름이므로 두 형태를 모두 받는다.
+        const rawIds = req.body.product_ids;
+        const raw = (rawIds ? (Array.isArray(rawIds) ? rawIds : Object.values(rawIds)) : [])
+            .concat(req.body.product_id || []);
+        const requested = [...new Set(raw
+            .map(v => Number.parseInt(v, 10))
+            .filter(n => Number.isFinite(n) && n > 0))].slice(0, MAX_ADD_AT_ONCE);
+        if (!requested.length) return res.redirect(back);
 
         // 다른 몰 상품을 이 몰의 기획전에 담지 못하게 한다(요청 위조 차단).
-        const [[prod]] = await pool.query('SELECT id FROM products WHERE id = ? AND mall_id = ?', [productId, mallId]);
-        if (!prod) return redirectWith(res, back, 'error', '이 몰의 상품이 아닙니다.');
+        const [owned] = await pool.query(
+            `SELECT id FROM products WHERE mall_id = ? AND id IN (${requested.map(() => '?').join(',')})`,
+            [mallId, ...requested]
+        );
+        const ownedIds = owned.map(r => Number(r.id));
+        if (!ownedIds.length) return redirectWith(res, back, 'error', '이 몰의 상품이 아닙니다.');
 
         const sectionId = await resolveSectionId(id, req.body.section_id);
 
-        const [[dup]] = await pool.query(`
-            SELECT id FROM exhibition_product
-             WHERE exhibition_id = ? AND product_id = ?
-               AND ${sectionId === null ? 'section_id IS NULL' : 'section_id = ?'}
-        `, sectionId === null ? [id, productId] : [id, productId, sectionId]);
-        if (dup) return redirectWith(res, back, 'error', '이미 담긴 상품입니다.');
+        // 같은 섹션에 이미 담긴 것은 조용히 건너뛴다 — 20개를 골랐는데 1개가 중복이라고
+        // 전부 실패시키면 운영자가 무엇이 겹쳤는지 찾아 다시 골라야 한다.
+        const [dups] = await pool.query(`
+            SELECT product_id FROM exhibition_product
+             WHERE exhibition_id = ? AND ${sectionId === null ? 'section_id IS NULL' : 'section_id = ?'}
+               AND product_id IN (${ownedIds.map(() => '?').join(',')})
+        `, sectionId === null ? [id, ...ownedIds] : [id, sectionId, ...ownedIds]);
+        const dupSet = new Set(dups.map(r => Number(r.product_id)));
+
+        const toInsert = ownedIds.filter(pid => !dupSet.has(pid));
+        if (!toInsert.length) {
+            return redirectWith(res, back, 'notice', '선택한 상품이 모두 이미 담겨 있습니다.');
+        }
 
         const [[maxRow]] = await pool.query(
-            'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM exhibition_product WHERE exhibition_id = ?', [id]
+            'SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM exhibition_product WHERE exhibition_id = ?', [id]
         );
+        let order = Number(maxRow.max_order) || 0;
         await pool.query(
-            'INSERT INTO exhibition_product (exhibition_id, section_id, product_id, sort_order) VALUES (?, ?, ?, ?)',
-            [id, sectionId, productId, maxRow.next_order]
+            `INSERT INTO exhibition_product (exhibition_id, section_id, product_id, sort_order) VALUES
+             ${toInsert.map(() => '(?, ?, ?, ?)').join(', ')}`,
+            toInsert.flatMap(pid => [id, sectionId, pid, ++order])
         );
-        res.redirect(`${back}?saved=1`);
+
+        const skipped = requested.length - toInsert.length;
+        redirectWith(res, back, 'notice',
+            `${toInsert.length}개 상품을 담았습니다.${skipped > 0 ? ` (중복·타몰 ${skipped}개 제외)` : ''}`);
     } catch (err) {
         console.error('[exhibition] postAddProduct:', err.message);
         redirectWith(res, back, 'error', '상품 추가 중 오류가 발생했습니다.');
@@ -542,26 +617,90 @@ exports.postRemoveProduct = async (req, res) => {
 };
 
 /**
- * GET /admin/exhibitions/product-search?q=&exhibitionId= — AJAX (상품 선택 모달)
- * productGroupController.getProductSearch 의 응답 형태를 따른다.
+ * GET /admin/exhibitions/:id/product-search — AJAX (상품 선택 팝업)
+ *
+ * 검색어 없이도 조회된다. 팝업을 열면 곧바로 후보가 보여야 하기 때문이다
+ * (상품명을 외우고 있어야만 담을 수 있으면 '선택'이 아니라 '입력'이다).
+ *
+ * 유형이 정한 범위(scopeOf)는 **서버가 강제한다**. 브랜드 기획전이면 요청이 무엇을
+ * 보내든 그 브랜드 상품만 돌려준다. 카테고리 기획전이면 대표 카테고리 서브트리 밖으로
+ * 나갈 수 없고, 그 안에서만 하위 카테고리로 더 좁힐 수 있다.
+ *
+ * 쿼리: q, brandId, categoryId, sectionId(이미 담김 판정 기준), page
  */
 exports.getProductSearch = async (req, res) => {
     const mallId = req.adminMallId || 1;
     try {
+        const exhibition = await findOwned(mallId, req.params.id);
+        if (!exhibition) return res.status(404).json({ products: [], total: 0 });
+
+        const scope = scopeOf(exhibition);
         const q = String(req.query.q || '').trim();
-        if (!q) return res.json({ products: [] });
+        const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+        const limit = 24;
+        const offset = (page - 1) * limit;
 
+        const where = ['p.mall_id = ?'];
+        const params = [mallId];
+
+        if (q) {
+            where.push('(p.name LIKE ? OR p.product_code LIKE ?)');
+            params.push(`%${q}%`, `%${q}%`);
+        }
+
+        // 브랜드 — 유형이 잠갔으면 요청값을 무시한다.
+        const brandId = scope.brandId || (Number.parseInt(req.query.brandId, 10) || null);
+        if (brandId) { where.push('p.brand_category_id = ?'); params.push(brandId); }
+
+        // 카테고리 — 잠긴 서브트리 안에서만 더 좁힐 수 있다.
+        const requestedCategoryId = Number.parseInt(req.query.categoryId, 10) || null;
+        let categoryIds = null;
+        if (scope.categoryId) {
+            const lockedIds = await categorySubtreeIds(mallId, scope.categoryId);
+            categoryIds = lockedIds;
+            if (requestedCategoryId && lockedIds.includes(requestedCategoryId)) {
+                categoryIds = await categorySubtreeIds(mallId, requestedCategoryId);
+            }
+        } else if (requestedCategoryId) {
+            categoryIds = await categorySubtreeIds(mallId, requestedCategoryId);
+        }
+        if (categoryIds) {
+            // 서브트리가 비면(잘못된 id) 전체가 통과하지 않도록 불가능 조건을 건다.
+            if (!categoryIds.length) where.push('1 = 0');
+            else { where.push(`p.category_id IN (${categoryIds.map(() => '?').join(',')})`); params.push(...categoryIds); }
+        }
+
+        const whereSql = where.join(' AND ');
+
+        // 이미 담김 판정은 **대상 섹션 기준**이다 — uk_exh_product 가 (기획전, 섹션, 상품)이라
+        // 같은 상품이라도 다른 섹션에는 담을 수 있다.
+        const sectionId = await resolveSectionId(exhibition.id, req.query.sectionId);
+
+        const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total FROM products p WHERE ${whereSql}`, params);
         const [products] = await pool.query(`
-            SELECT p.id, p.name, p.main_image, p.price, p.status, p.product_badge
+            SELECT p.id, p.name, p.main_image, p.price, p.status, p.product_code,
+                   b.name AS brand_name, c.name AS category_name,
+                   (ep.id IS NOT NULL) AS already_added
               FROM products p
-             WHERE p.mall_id = ? AND p.name LIKE ?
-             ORDER BY p.created_at DESC
-             LIMIT 20
-        `, [mallId, `%${q}%`]);
+              LEFT JOIN categories b ON b.id = p.brand_category_id
+              LEFT JOIN categories c ON c.id = p.category_id
+              LEFT JOIN exhibition_product ep
+                     ON ep.product_id = p.id AND ep.exhibition_id = ? AND ep.section_id <=> ?
+             WHERE ${whereSql}
+             ORDER BY p.created_at DESC, p.id DESC
+             LIMIT ? OFFSET ?
+        `, [exhibition.id, sectionId, ...params, limit, offset]);
 
-        res.json({ products });
+        const total = Number(countRow.total);
+        res.json({
+            products: products.map(p => Object.assign({}, p, { already_added: Boolean(Number(p.already_added)) })),
+            total,
+            page,
+            limit,
+            hasMore: offset + products.length < total,
+        });
     } catch (err) {
         console.error('[exhibition] getProductSearch:', err.message);
-        res.status(500).json({ products: [] });
+        res.status(500).json({ products: [], total: 0 });
     }
 };

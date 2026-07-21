@@ -3,11 +3,16 @@
    * 기획전 상세 대표 비주얼
    * locals: exhibition, descriptionHtml
    *
+   * ── 기획전은 상단 이미지 배너를 걸지 않는다 ──────────
+   * 그 자리는 '기획전 상품 중 추천 상품'을 보여주는 영역이 가져간다. 이미지 한 장을
+   * 크게 까는 것보다 살 수 있는 상품을 먼저 보여주는 편이 전환에 유리하다.
+   * 전문관(SPECIALTY)은 상시 운영되는 매장이라 브랜드 비주얼이 필요해 그대로 둔다.
+   *
    * PC/모바일 이미지는 <picture> 로 분기한다 — 모바일 전용 이미지가 없으면 PC 것을 그대로 쓴다.
    * descriptionHtml 은 이미 새니타이즈된 문자열이다(컨트롤러에서 처리).
    */
   const e = exhibition;
-  const pc = e.pc_hero_image_url;
+  const pc = e.isSpecialty ? e.pc_hero_image_url : null;
   const mo = e.mobile_hero_image_url || pc;
   const fmtFull = (d) => d ? new Date(d).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
 

@@ -67,9 +67,20 @@ exports.getList = async (req, res) => {
          */
         if (result.total === 0 && page === 1) return renderComingSoon(res);
 
+        /*
+         * 메뉴 배너(배너 관리 → 메뉴별 배너 → 기획전)를 **목록 안**에서 그린다.
+         *
+         * 레이아웃은 이 쇼케이스를 body 위에 얹어서(main_layout), 페이지 제목보다도 위로 올라간다.
+         * 기획전 목록에서는 배너가 예전 '추천 기획전' 자리 — 제목 아래, 목록 위 — 에 있어야
+         * 목록의 일부로 읽힌다. 그래서 레이아웃 몫을 비우고 뷰에 넘긴다.
+         */
+        const showcase = res.locals.menuShowcase || [];
+        res.locals.menuShowcase = [];
+
         const { companyName, domain } = siteMeta(res);
         res.render('user/exhibition/list', {
             title: '기획전',
+            showcase,
             exhibitions: result.items,
             pagination: result,
             sorts: svc.LIST_SORTS,

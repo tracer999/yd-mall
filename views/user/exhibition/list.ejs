@@ -7,14 +7,17 @@
    *
    * 카테고리 필터와 예정/진행중/종료 상태 필터는 2차 범위다.
    * 지금은 정렬만 제공하고, 진행 상태는 카드의 배지로만 구분한다.
+   *
+   * 상단 큰 배너는 이 화면이 고르지 않는다. 예전에는 "진행중 기획전 중 첫 번째"를
+   * 임의로 골라 크게 걸었는데, 무엇이 걸릴지 운영자가 정할 수 없었다.
+   * 지금은 **배너 관리 → 메뉴별 배너 → 기획전**(group_key='menu:EXHIBITION')이 그 자리를
+   * 담당한다. 레이아웃이 본문 위(제목보다 위)에 얹지 않도록 컨트롤러가 넘겨받아
+   * 여기 — 제목 아래, 목록 위 — 에서 직접 렌더한다.
    */
-  const _items = exhibitions || [];
+  const _showcase = (typeof showcase !== 'undefined' && showcase) ? showcase : [];
+  const rest = exhibitions || [];
   const _p = pagination;
   const pageUrl = (n) => `/exhibition?sort=${encodeURIComponent(sort)}&page=${n}`;
-
-  // 진행중인 기획전 중 첫 번째를 상단 추천 카드로 크게 보여준다.
-  const featured = (_p.page === 1) ? _items.find(e => e.phase === 'ONGOING') : null;
-  const rest = featured ? _items.filter(e => e.id !== featured.id) : _items;
 %>
 
 <div class="bg-white border-b border-gray-100">
@@ -24,30 +27,12 @@
   </div>
 </div>
 
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+<%# 배너 관리에 등록한 기획전 배너. 자체 컨테이너를 갖는 partial 이라 본문 컨테이너 밖에 둔다. %>
+<% if (_showcase.length) { %>
+  <%- include('../../partials/storefront/menu_showcase', { menuShowcase: _showcase }) %>
+<% } %>
 
-  <%# ── 상단 추천 기획전 ─────────────────────────────── %>
-  <% if (featured) { %>
-    <a href="<%= featured.detailPath %>"
-       class="group relative block rounded-2xl overflow-hidden mb-10 no-underline bg-gray-900">
-      <div class="aspect-[16/9] sm:aspect-[21/8]">
-        <% const heroImg = featured.pc_hero_image_url || featured.list_thumbnail_url; %>
-        <% if (heroImg) { %>
-          <img src="<%= heroImg %>" alt="<%= featured.title %>"
-               class="w-full h-full object-cover opacity-85 transition-transform duration-500 group-hover:scale-[1.02]">
-        <% } %>
-      </div>
-      <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent"></div>
-      <div class="absolute bottom-0 left-0 right-0 p-5 sm:p-8">
-        <span class="inline-block text-[11px] font-bold text-white px-2 py-1 rounded mb-2"
-              style="background: var(--gh-primary);">지금 진행중</span>
-        <h2 class="text-xl sm:text-3xl font-extrabold text-white leading-tight"><%= featured.title %></h2>
-        <% if (featured.summary) { %>
-          <p class="mt-1.5 text-sm text-white/75 line-clamp-1"><%= featured.summary %></p>
-        <% } %>
-      </div>
-    </a>
-  <% } %>
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
   <%# ── 정렬 ────────────────────────────────────────── %>
   <div class="mb-5 flex items-center justify-between gap-4">
@@ -63,7 +48,7 @@
   </div>
 
   <%# ── 카드 리스트 ─────────────────────────────────── %>
-  <% if (rest.length === 0 && !featured) { %>
+  <% if (rest.length === 0) { %>
     <div class="py-24 text-center">
       <i class="bi bi-stars text-4xl text-gray-200"></i>
       <p class="mt-4 text-sm text-gray-500">표시할 기획전이 없습니다.</p>

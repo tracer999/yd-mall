@@ -99,12 +99,29 @@ exports.getList = async (req, res) => {
  * GET /admin/brands/search.json — 브랜드 자동완성 (다른 관리자 화면에서 브랜드를 고를 때)
  *
  * 브랜드가 1,379개라 드롭다운으로 못 쓴다. 기획전의 '브랜드 귀속' 선택 등에서 호출한다.
+ *
+ * 검색어가 없으면 빈 배열이 아니라 **이 몰에 상품이 있는 브랜드**를 상품 많은 순으로 준다.
+ * 호출부가 셀렉트박스처럼 "먼저 목록을 보고 고르는" UI 를 만들 수 있어야 하기 때문이다
+ * (기획전 유형=브랜드 설정). 브랜드명을 알아야만 고를 수 있으면 셀렉트가 아니다.
  */
 exports.searchJson = async (req, res) => {
     const mallId = req.adminMallId || 1;
     try {
         const q = String(req.query.q || '').trim();
-        if (!q) return res.json({ brands: [] });
+        if (!q) {
+            // brand_stat 은 몰에 따라 비어 있을 수 있어(재계산 전) products 에서 직접 집계한다.
+            const [brands] = await pool.query(`
+                SELECT c.id, c.name, c.logo_image_path, bp.name_en, COUNT(p.id) AS product_count
+                  FROM categories c
+                  JOIN products p ON p.brand_category_id = c.id AND p.mall_id = ?
+                  LEFT JOIN brand_profile bp ON bp.category_id = c.id
+                 WHERE c.type = 'BRAND' AND c.mall_id IN (0, ?)
+                 GROUP BY c.id, c.name, c.logo_image_path, bp.name_en
+                 ORDER BY product_count DESC, c.name ASC
+                 LIMIT 30
+            `, [mallId, mallId]);
+            return res.json({ brands });
+        }
         const like = `%${q}%`;
         const [brands] = await pool.query(`
             SELECT c.id, c.name, c.logo_image_path, bp.name_en, s.product_count

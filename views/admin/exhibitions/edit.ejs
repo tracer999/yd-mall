@@ -25,8 +25,9 @@
 
   const IMAGES = [
     { field: 'list_thumbnail',   column: 'list_thumbnail_url',    label: '목록 썸네일',      hint: '기획전 목록 카드에 쓰입니다. 정사각형 권장.' },
-    { field: 'pc_hero_image',    column: 'pc_hero_image_url',     label: 'PC 대표 이미지',   hint: '상세 상단 배너 (와이드).' },
-    { field: 'mobile_hero_image',column: 'mobile_hero_image_url', label: '모바일 대표 이미지', hint: '없으면 PC 이미지를 그대로 씁니다.' },
+    // 기획전 상세는 상단 이미지 배너를 걸지 않는다(그 자리는 추천 상품 영역). 전문관만 노출된다.
+    { field: 'pc_hero_image',    column: 'pc_hero_image_url',     label: 'PC 대표 이미지',   hint: '전문관 상세 상단에만 쓰입니다. 기획전 상세에는 노출되지 않고 공유 미리보기 대체 이미지로만 쓰입니다.' },
+    { field: 'mobile_hero_image',column: 'mobile_hero_image_url', label: '모바일 대표 이미지', hint: '전문관 상세용. 없으면 PC 이미지를 그대로 씁니다.' },
     { field: 'og_image',         column: 'og_image_url',          label: 'OG 이미지',        hint: '카카오·페이스북 공유 미리보기.' },
   ];
 %>
@@ -54,6 +55,11 @@
   <% if (saved) { %>
     <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
       <i class="bi bi-check-circle-fill"></i> 저장되었습니다.
+    </div>
+  <% } %>
+  <% if (typeof notice !== 'undefined' && notice) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex items-center gap-2">
+      <i class="bi bi-info-circle-fill"></i> <%= notice %>
     </div>
   <% } %>
   <% if (error) { %>
@@ -107,39 +113,71 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">기획전 유형</label>
-            <select name="exhibition_type" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <select name="exhibition_type" id="exhibitionType" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
               <% types.forEach(function (t) { %>
                 <option value="<%= t.value %>" <%= exhibition.exhibition_type === t.value ? 'selected' : '' %>><%= t.label %></option>
               <% }); %>
             </select>
+            <p class="mt-1 text-xs text-gray-400">유형을 고르면 오른쪽에 그 유형에 필요한 설정이 나타납니다.</p>
           </div>
 
           <%#
-            브랜드 귀속 — 브랜드 허브(/brands)와 브랜드관이 이 값을 본다.
-            지정하면 그 브랜드의 '브랜드 위크'로, 비워두면 편성 상품의 브랜드에
-            '기획전 참여'로만 잡힌다. 브랜드가 1,379개라 드롭다운이 불가능해 자동완성이다.
+            유형별 편성 범위 — 유형을 고르면 "무엇을 담을 수 있는 기획전인가"가 정해진다.
+            여기서 고른 브랜드·카테고리가 아래 [상품 선택] 팝업의 검색 범위를 잠근다
+            (서버도 같은 값으로 강제한다 — exhibitionController.scopeOf).
           %>
           <div class="sm:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">
-              브랜드 귀속 <span class="text-xs font-normal text-gray-400">(선택 — 브랜드 위크일 때만)</span>
-            </label>
-            <div class="relative">
-              <input type="hidden" name="brand_category_id" id="brandCategoryId"
-                     value="<%= exhibition.brand_category_id || '' %>">
-              <input type="text" id="brandPicker" autocomplete="off"
-                     placeholder="브랜드명·초성으로 검색"
-                     value="<%= typeof ownedBrandName !== 'undefined' && ownedBrandName ? ownedBrandName : '' %>"
-                     class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
-              <button type="button" id="brandClear"
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600 <%= exhibition.brand_category_id ? '' : 'hidden' %>">
-                <i class="bi bi-x-circle-fill text-sm"></i>
-              </button>
-              <div id="brandSuggest"
-                   class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"></div>
+            <%# ── 브랜드 유형 ── 브랜드가 1,300개가 넘어 select 로 못 쓴다. 눌러서 목록을 보고 고르는 검색형. %>
+            <div data-type-panel="BRAND" class="hidden">
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                대상 브랜드 <span class="text-red-500">*</span>
+              </label>
+              <div class="relative">
+                <input type="text" id="brandPicker" autocomplete="off"
+                       placeholder="클릭해서 목록에서 고르거나, 브랜드명·초성으로 검색"
+                       value="<%= typeof ownedBrandName !== 'undefined' && ownedBrandName ? ownedBrandName : '' %>"
+                       class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+                <button type="button" id="brandClear"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600 <%= exhibition.brand_category_id ? '' : 'hidden' %>">
+                  <i class="bi bi-x-circle-fill text-sm"></i>
+                </button>
+                <div id="brandSuggest"
+                     class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"></div>
+              </div>
+              <p class="mt-1 text-xs text-gray-400">
+                <strong>브랜드 위크</strong>로 브랜드관·브랜드 허브 상단에 노출되고, 상품 선택 팝업이
+                <strong>이 브랜드 상품만</strong> 보여줍니다.
+              </p>
             </div>
-            <p class="mt-1 text-xs text-gray-400">
-              지정하면 <strong>브랜드 위크</strong>로 브랜드관·브랜드 허브 상단에 노출됩니다. 비워두면 '기획전 참여'로만 표시됩니다.
-            </p>
+
+            <%# ── 카테고리 유형 ── 3뎁스 종속 셀렉트. 대분류만 골라도 하위 상품까지 잡는다. %>
+            <div data-type-panel="CATEGORY" class="hidden">
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                대상 카테고리 <span class="text-red-500">*</span>
+              </label>
+              <div class="flex flex-col sm:flex-row gap-2" data-cat-cascade="scope">
+                <select data-lv="1" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm"><option value="">대분류</option></select>
+                <select data-lv="2" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm" disabled><option value="">중분류</option></select>
+                <select data-lv="3" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm" disabled><option value="">소분류</option></select>
+              </div>
+              <p class="mt-1 text-xs text-gray-400">
+                고른 분류의 <strong>하위 분류까지</strong> 대상입니다. 대분류만 골라도 그 아래 상품이 모두 후보가 됩니다.
+              </p>
+            </div>
+
+            <%# ── 그 외 유형 ── 범위를 잠그지 않는다. %>
+            <div data-type-panel="FREE" class="hidden">
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">편성 범위</label>
+              <div class="px-3 py-2.5 rounded-md bg-gray-50 border border-gray-200 text-sm text-gray-500">
+                <i class="bi bi-check2-circle text-gray-400"></i>
+                이 유형은 <strong>전체 상품</strong>에서 자유롭게 담을 수 있습니다.
+                상품 선택 팝업에서 브랜드·카테고리로 좁혀 찾으세요.
+              </div>
+            </div>
+
+            <%# 실제 저장값. 패널이 숨겨지면 값도 비워 유형과 어긋나지 않게 한다. %>
+            <input type="hidden" name="brand_category_id" id="brandCategoryId" value="<%= exhibition.brand_category_id || '' %>">
+            <input type="hidden" name="scope_category_id" id="scopeCategoryId" value="<%= _cfg.category_id || '' %>">
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">상태</label>
@@ -385,20 +423,43 @@
       </p>
     </div>
 
-    <%# 상품 검색 · 담기 — 독립 폼(중첩 금지) %>
+    <%#
+      상품 담기 — 검색어를 외워 한 건씩 담던 방식을 팝업 다중 선택으로 바꿨다.
+      담을 섹션을 먼저 고르고 [상품 선택]을 누르면, 그 섹션 기준으로 이미 담긴 상품이 표시된다.
+    %>
     <div class="p-5 border-b border-gray-100 bg-gray-50/40">
-      <label class="block text-sm font-medium text-gray-700 mb-1.5">상품 검색해서 담기</label>
-      <div class="flex flex-col sm:flex-row gap-2">
-        <input type="text" id="exhProductSearch" placeholder="상품명 2글자 이상 입력"
-               class="flex-1 px-3 py-2 rounded-md border border-gray-200 text-sm">
-        <select id="exhTargetSection" class="px-3 py-2 rounded-md border border-gray-200 text-sm">
-          <option value="">전체 탭 (섹션 미배정)</option>
-          <% sections.filter(s => s.is_active).forEach(function (s) { %>
-            <option value="<%= s.id %>"><%= s.section_name %></option>
-          <% }); %>
-        </select>
+      <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+        <div class="sm:w-64">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">담을 위치</label>
+          <select id="exhTargetSection" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <option value="">전체 탭 (섹션 미배정)</option>
+            <% sections.filter(s => s.is_active).forEach(function (s) { %>
+              <option value="<%= s.id %>"><%= s.section_name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <button type="button" id="openProductPicker"
+                class="px-4 py-2 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+          <i class="bi bi-search"></i> 상품 선택
+        </button>
+        <p class="text-xs text-gray-500 sm:pb-2.5">
+          <% if (scope.brandId) { %>
+            <i class="bi bi-lock-fill text-gray-400"></i>
+            <strong>브랜드 기획전</strong>입니다 — <strong><%= ownedBrandName || '지정 브랜드' %></strong> 상품만 담을 수 있습니다.
+          <% } else if (scope.categoryId) { %>
+            <i class="bi bi-lock-fill text-gray-400"></i>
+            <strong>카테고리 기획전</strong>입니다 — 지정한 카테고리와 그 하위 상품만 담을 수 있습니다.
+          <% } else if (exhibition.exhibition_type === 'BRAND') { %>
+            <i class="bi bi-exclamation-triangle-fill text-amber-500"></i>
+            브랜드 기획전인데 <strong>대상 브랜드가 비어 있습니다</strong>. 위에서 지정하면 그 브랜드 상품만 보입니다.
+          <% } else if (exhibition.exhibition_type === 'CATEGORY') { %>
+            <i class="bi bi-exclamation-triangle-fill text-amber-500"></i>
+            카테고리 기획전인데 <strong>대상 카테고리가 비어 있습니다</strong>. 위에서 지정하면 그 범위만 보입니다.
+          <% } else { %>
+            팝업에서 브랜드·카테고리로 좁혀 여러 상품을 한 번에 담을 수 있습니다.
+          <% } %>
+        </p>
       </div>
-      <div id="exhSearchResults" class="mt-2 space-y-1"></div>
     </div>
 
     <form id="productsForm" method="POST" action="/admin/exhibitions/<%= exhibition.id %>/products">
@@ -488,7 +549,121 @@
     </form>
   </div>
 
+  <%# ══════════ 상품 선택 팝업 ══════════
+      #productsForm 밖의 최상위 형제다 — form 중첩이 되지 않도록 반드시 여기에 둔다. %>
+  <div id="productPickerModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="absolute inset-0 bg-black/40" data-picker-close></div>
+
+    <form method="POST" action="/admin/exhibitions/<%= exhibition.id %>/products/add"
+          class="relative mx-auto my-6 w-full max-w-5xl px-4">
+      <input type="hidden" name="section_id" id="pickerSectionId" value="">
+
+      <div class="bg-white rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-3rem)]">
+
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-base font-bold text-gray-800">상품 선택</h3>
+            <p class="mt-0.5 text-xs text-gray-500">
+              담을 위치: <strong id="pickerSectionLabel" class="text-gray-700">전체 탭</strong>
+              <span class="text-gray-300">·</span>
+              체크한 상품을 한 번에 담습니다.
+            </p>
+          </div>
+          <button type="button" data-picker-close class="text-gray-400 hover:text-gray-700">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+
+        <%# ── 필터 ── 유형이 범위를 잠갔으면 그 조건은 바꿀 수 없다(서버도 강제). %>
+        <div class="px-5 py-4 border-b border-gray-100 bg-gray-50/60 space-y-3">
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input type="text" id="pickerQuery" placeholder="상품명 · 상품코드로 검색 (비워두면 전체)"
+                   class="flex-1 px-3 py-2 rounded-md border border-gray-200 text-sm">
+            <button type="button" id="pickerSearchBtn"
+                    class="px-4 py-2 text-sm rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+              검색
+            </button>
+          </div>
+
+          <% if (scope.brandId) { %>
+            <div class="px-3 py-2 rounded-md bg-white border border-gray-200 text-sm text-gray-600">
+              <i class="bi bi-lock-fill text-gray-400"></i>
+              브랜드 <strong class="text-gray-900"><%= ownedBrandName || '지정 브랜드' %></strong> 상품만 표시됩니다.
+            </div>
+          <% } else { %>
+            <div class="relative">
+              <input type="hidden" id="pickerBrandId" value="">
+              <input type="text" id="pickerBrandPicker" autocomplete="off"
+                     placeholder="브랜드로 좁히기 — 클릭해서 목록에서 고르거나 검색"
+                     class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <button type="button" id="pickerBrandClear"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600 hidden">
+                <i class="bi bi-x-circle-fill text-sm"></i>
+              </button>
+              <div id="pickerBrandSuggest"
+                   class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"></div>
+            </div>
+          <% } %>
+
+          <div class="flex flex-col sm:flex-row gap-2" data-cat-cascade="picker"
+               data-root="<%= scope.categoryId || '' %>">
+            <select data-lv="1" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm"><option value="">대분류</option></select>
+            <select data-lv="2" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm" disabled><option value="">중분류</option></select>
+            <select data-lv="3" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm" disabled><option value="">소분류</option></select>
+          </div>
+          <% if (scope.categoryId) { %>
+            <p class="text-xs text-gray-500">
+              <i class="bi bi-lock-fill text-gray-400"></i>
+              카테고리 기획전이라 <strong>지정한 카테고리 안</strong>에서만 좁힐 수 있습니다.
+            </p>
+          <% } %>
+        </div>
+
+        <%# ── 결과 ── %>
+        <div class="px-5 py-2.5 border-b border-gray-100 flex items-center justify-between text-xs text-gray-500">
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" id="pickerCheckAll" class="w-4 h-4 rounded border-gray-300">
+            <span>이 목록 전체 선택</span>
+          </label>
+          <span>
+            <span class="text-gray-400">검색·필터를 바꾸면 선택이 초기화됩니다</span>
+            <span class="text-gray-300 mx-1">·</span>
+            <span id="pickerTotal">—</span>
+          </span>
+        </div>
+
+        <div id="pickerResults" class="flex-1 overflow-y-auto divide-y divide-gray-100 min-h-[12rem]">
+          <p class="py-16 text-center text-sm text-gray-400">불러오는 중…</p>
+        </div>
+
+        <div id="pickerMoreWrap" class="px-5 py-3 border-t border-gray-100 text-center hidden">
+          <button type="button" id="pickerMore"
+                  class="px-4 py-2 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50">
+            더 보기
+          </button>
+        </div>
+
+        <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+          <p class="text-sm text-gray-600"><strong id="pickerCount" class="text-indigo-600">0</strong>개 선택됨</p>
+          <div class="flex items-center gap-2">
+            <button type="button" data-picker-close
+                    class="px-4 py-2 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50">취소</button>
+            <button type="submit" id="pickerSubmit" disabled
+                    class="px-5 py-2 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
+              선택한 상품 담기
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+
   <% } %>
+
+  <%# 유형별 설정·상품 팝업이 함께 쓰는 카테고리 트리(NORMAL, 최대 3뎁스) %>
+  <script id="exh-cat-tree" type="application/json"><%- JSON.stringify((productCategories || []).map(function (c) {
+    return { id: c.id, name: c.name, parent_id: c.parent_id, depth: c.depth };
+  })) %></script>
 </div>
 
 <script>
@@ -561,122 +736,346 @@
     if (e.target.closest('[data-remove-row]')) e.target.closest('.section-row').remove();
   });
 
-  /* 상품 검색 → 담기. 결과 행은 각각 독립 form 이라 #productsForm 과 중첩되지 않는다. */
-  if (!exhibitionId) return;
-  const search = document.getElementById('exhProductSearch');
-  const results = document.getElementById('exhSearchResults');
-  const targetSection = document.getElementById('exhTargetSection');
-  let timer;
-
-  search && search.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = search.value.trim();
-    if (q.length < 2) { results.innerHTML = ''; return; }
-    timer = setTimeout(async () => {
-      const res = await fetch(`/admin/exhibitions/product-search?q=${encodeURIComponent(q)}`);
-      const { products } = await res.json();
-      results.innerHTML = products.length ? '' : '<p class="text-xs text-gray-400 px-1 py-2">검색 결과가 없습니다.</p>';
-      products.forEach(p => {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `/admin/exhibitions/${exhibitionId}/products/add`;
-        form.className = 'flex items-center gap-2 px-2 py-1.5 rounded border border-gray-100 bg-white hover:bg-gray-50';
-
-        const img = document.createElement('img');
-        img.src = p.main_image || '/images/placeholder.png';
-        img.className = 'w-8 h-8 rounded object-cover bg-gray-100';
-
-        const span = document.createElement('span');
-        span.className = 'flex-1 text-sm text-gray-800 truncate';
-        span.textContent = p.name; // textContent — 상품명이 마크업으로 해석되지 않도록
-
-        const price = document.createElement('span');
-        price.className = 'text-xs text-gray-400';
-        price.textContent = Number(p.price || 0).toLocaleString('ko-KR') + '원';
-
-        const pid = document.createElement('input');
-        pid.type = 'hidden'; pid.name = 'product_id'; pid.value = p.id;
-
-        const sid = document.createElement('input');
-        sid.type = 'hidden'; sid.name = 'section_id'; sid.value = targetSection ? targetSection.value : '';
-
-        const btn = document.createElement('button');
-        btn.type = 'submit';
-        btn.className = 'text-xs px-2 py-1 rounded bg-indigo-600 text-white';
-        btn.textContent = '담기';
-
-        form.append(img, span, price, pid, sid, btn);
-        results.append(form);
-      });
-    }, 250);
-  });
-
-  // 섹션 선택을 바꾸면 이미 그려진 결과의 hidden section_id 도 따라간다.
-  targetSection && targetSection.addEventListener('change', () => {
-    results.querySelectorAll('input[name="section_id"]').forEach(i => { i.value = targetSection.value; });
-  });
 })();
 </script>
 
 <script>
-// 브랜드 귀속 자동완성 — 브랜드 1,379개라 드롭다운이 불가능하다.
-(function () {
-  const input = document.getElementById('brandPicker');
-  const hidden = document.getElementById('brandCategoryId');
-  const box = document.getElementById('brandSuggest');
-  const clear = document.getElementById('brandClear');
-  if (!input || !hidden || !box) return;
-  let timer = null;
+/*
+ * 공용 위젯 — 유형별 설정과 상품 선택 팝업이 같은 것을 두 번 만들지 않도록 팩토리로 둔다.
+ *   ydExhBrandPicker  브랜드 검색형 선택. 브랜드가 1,300개가 넘어 select 를 못 쓴다.
+ *                     빈 입력으로 열면 서버가 '이 몰에 상품이 있는 브랜드'를 준다(셀렉트처럼 목록부터 보인다).
+ *   ydExhCascade      카테고리 3뎁스 종속 셀렉트. root 를 주면 그 아래에서만 고른다.
+ */
+window.ydExh = (function () {
+  let CAT_TREE = [];
+  try { CAT_TREE = JSON.parse(document.getElementById('exh-cat-tree').textContent || '[]'); } catch (e) { CAT_TREE = []; }
+  const byId = {};
+  CAT_TREE.forEach(function (c) { byId[c.id] = c; });
+  const childrenOf = (pid) => CAT_TREE.filter(c => (pid == null || pid === '')
+    ? (c.parent_id == null)
+    : String(c.parent_id) === String(pid));
 
-  const close = () => box.classList.add('hidden');
+  /** 브랜드 검색형 선택. onPick(id|'') 로 바깥에 알린다. */
+  function brandPicker(opts) {
+    const { input, hidden, box, clear, onPick } = opts;
+    if (!input || !box) return null;
+    let timer = null;
+    const close = () => box.classList.add('hidden');
+    const notify = () => onPick && onPick(hidden ? hidden.value : '');
 
-  const pick = (b) => {
-    hidden.value = b.id;
-    input.value = b.name;
-    if (clear) clear.classList.remove('hidden');
-    close();
-  };
-
-  input.addEventListener('input', function () {
-    hidden.value = '';                 // 텍스트를 고치면 선택이 풀린다
-    if (clear) clear.classList.add('hidden');
-    const q = input.value.trim();
-    clearTimeout(timer);
-    if (!q) { close(); return; }
-    timer = setTimeout(async function () {
+    async function load(q) {
       try {
-        const res = await fetch('/admin/brands/search.json?q=' + encodeURIComponent(q));
-        const data = await res.json();
-        const rows = data.brands || [];
+        const res = await fetch('/admin/brands/search.json?q=' + encodeURIComponent(q || ''));
+        const rows = (await res.json()).brands || [];
         if (!rows.length) {
-          box.innerHTML = '<div class="px-3 py-3 text-sm text-gray-400">검색 결과가 없습니다.</div>';
+          box.innerHTML = '<div class="px-3 py-3 text-sm text-gray-400">'
+            + (q ? '검색 결과가 없습니다.' : '이 몰에 상품이 등록된 브랜드가 없습니다.') + '</div>';
         } else {
           box.innerHTML = rows.map(function (b) {
-            return '<button type="button" data-id="' + b.id + '" data-name="' + b.name.replace(/"/g, '&quot;') + '" '
+            const name = String(b.name || '');
+            const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({
+              '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+            return '<button type="button" data-id="' + b.id + '" data-name="' + esc(name) + '" '
                  + 'class="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2">'
-                 + '<span class="text-sm text-gray-900">' + b.name + '</span>'
-                 + (b.name_en ? '<span class="text-xs text-gray-400">' + b.name_en + '</span>' : '')
+                 + '<span class="text-sm text-gray-900">' + esc(name) + '</span>'
+                 + (b.name_en ? '<span class="text-xs text-gray-400">' + esc(b.name_en) + '</span>' : '')
                  + '<span class="ml-auto text-xs text-gray-400">상품 ' + Number(b.product_count || 0).toLocaleString() + '</span>'
                  + '</button>';
           }).join('');
         }
         box.classList.remove('hidden');
       } catch (e) { close(); }
-    }, 200);
+    }
+
+    // 클릭만 해도 목록이 열린다 — "브랜드명을 알아야 고를 수 있는" 상태를 만들지 않는다.
+    input.addEventListener('focus', function () { if (!input.value.trim()) load(''); });
+    input.addEventListener('input', function () {
+      if (hidden) hidden.value = '';   // 텍스트를 고치면 선택이 풀린다
+      if (clear) clear.classList.add('hidden');
+      notify();
+      clearTimeout(timer);
+      timer = setTimeout(() => load(input.value.trim()), 200);
+    });
+
+    box.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      if (hidden) hidden.value = btn.dataset.id;
+      input.value = btn.dataset.name;
+      if (clear) clear.classList.remove('hidden');
+      close();
+      notify();
+    });
+
+    if (clear) clear.addEventListener('click', function () {
+      if (hidden) hidden.value = '';
+      input.value = '';
+      clear.classList.add('hidden');
+      close();
+      notify();
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!box.contains(e.target) && e.target !== input) close();
+    });
+
+    return { close };
+  }
+
+  /**
+   * 카테고리 종속 셀렉트.
+   * @param {HTMLElement} root  data-lv=1..3 select 를 가진 컨테이너
+   * @param {{rootId?:string|number, onChange?:Function}} opts rootId 를 주면 그 하위만 고른다
+   * @returns {{value:Function, preselect:Function}} value() = 가장 깊이 고른 id('' 가능)
+   */
+  function cascade(root, opts) {
+    opts = opts || {};
+    const sels = [1, 2, 3].map(n => root.querySelector('[data-lv="' + n + '"]'));
+    if (sels.some(s => !s)) return { value: () => '', preselect: () => {} };
+    const PH = ['대분류', '중분류', '소분류'];
+    const rootId = opts.rootId ? String(opts.rootId) : null;
+
+    function fill(sel, parentId, ph) {
+      sel.innerHTML = '';
+      const o0 = document.createElement('option');
+      o0.value = ''; o0.textContent = ph;
+      sel.appendChild(o0);
+      childrenOf(parentId).forEach(function (c) {
+        const o = document.createElement('option');
+        o.value = String(c.id); o.textContent = c.name;
+        sel.appendChild(o);
+      });
+      // 고를 것이 없으면 비활성 — 3뎁스가 없는 분류에서 빈 셀렉트를 열게 두지 않는다.
+      sel.disabled = sel.options.length <= 1;
+    }
+    function clearFrom(idx) {
+      for (let i = idx; i < 3; i++) {
+        sels[i].innerHTML = '<option value="">' + PH[i] + '</option>';
+        sels[i].value = '';
+        sels[i].disabled = true;
+      }
+    }
+    function value() {
+      for (let i = 2; i >= 0; i--) if (sels[i].value) return sels[i].value;
+      return rootId || '';
+    }
+
+    sels.forEach(function (sel, idx) {
+      sel.addEventListener('change', function () {
+        clearFrom(idx + 1);
+        if (idx < 2 && sel.value) fill(sels[idx + 1], sel.value, PH[idx + 1]);
+        opts.onChange && opts.onChange(value());
+      });
+    });
+
+    function chainOf(id) {
+      const out = [];
+      let cur = byId[id];
+      while (cur) { out.unshift(cur); cur = (cur.parent_id != null) ? byId[cur.parent_id] : null; }
+      return out;
+    }
+
+    /** 저장된 id 로 체인을 되살린다. rootId 아래 상대 경로로 그린다. */
+    function preselect(id) {
+      fill(sels[0], rootId, PH[0]);
+      clearFrom(1);
+      if (!id || !byId[id]) return;
+      let chain = chainOf(id);
+      if (rootId) {
+        const at = chain.findIndex(c => String(c.id) === rootId);
+        chain = at >= 0 ? chain.slice(at + 1) : [];
+      }
+      chain = chain.slice(0, 3);
+      for (let i = 0; i < chain.length; i++) {
+        sels[i].value = String(chain[i].id);
+        if (i < 2) fill(sels[i + 1], chain[i].id, PH[i + 1]);
+      }
+    }
+
+    fill(sels[0], rootId, PH[0]);
+    return { value, preselect };
+  }
+
+  return { brandPicker, cascade, childrenOf };
+})();
+</script>
+
+<script>
+/*
+ * 유형별 설정 — 유형을 고르면 그 유형에 필요한 것만 보인다.
+ *
+ * 숨겨진 패널의 값은 비운다. 브랜드 기획전으로 저장했다가 테마로 바꿨는데 브랜드 귀속이
+ * 남아 있으면, 화면에 보이지 않는 조건이 상품 편성 범위를 계속 잠근다.
+ */
+(function () {
+  const typeSel = document.getElementById('exhibitionType');
+  if (!typeSel) return;
+  const brandHidden = document.getElementById('brandCategoryId');
+  const catHidden = document.getElementById('scopeCategoryId');
+  const panels = {};
+  document.querySelectorAll('[data-type-panel]').forEach(function (el) { panels[el.dataset.typePanel] = el; });
+
+  const brandInput = document.getElementById('brandPicker');
+  window.ydExh.brandPicker({
+    input: brandInput,
+    hidden: brandHidden,
+    box: document.getElementById('brandSuggest'),
+    clear: document.getElementById('brandClear'),
   });
 
-  box.addEventListener('click', function (e) {
-    const btn = e.target.closest('button[data-id]');
-    if (btn) pick({ id: btn.dataset.id, name: btn.dataset.name });
+  const scopeBox = document.querySelector('[data-cat-cascade="scope"]');
+  const scopeCascade = scopeBox && window.ydExh.cascade(scopeBox, {
+    onChange: function (v) { if (catHidden) catHidden.value = v || ''; },
+  });
+  if (scopeCascade && catHidden && catHidden.value) scopeCascade.preselect(Number(catHidden.value));
+
+  function sync() {
+    const t = typeSel.value;
+    const active = (t === 'BRAND' || t === 'CATEGORY') ? t : 'FREE';
+    Object.keys(panels).forEach(function (k) { panels[k].classList.toggle('hidden', k !== active); });
+    // 유형과 맞지 않는 값은 제출하지 않는다.
+    if (active !== 'BRAND' && brandHidden) brandHidden.value = '';
+    if (active !== 'CATEGORY' && catHidden) catHidden.value = '';
+  }
+  typeSel.addEventListener('change', sync);
+  sync();
+})();
+</script>
+
+<script>
+/* 상품 선택 팝업 — 필터는 서버가 유형에 맞게 다시 강제한다(여기 값은 편의일 뿐). */
+(function () {
+  const modal = document.getElementById('productPickerModal');
+  if (!modal) return;
+
+  const exhibitionId = <%- JSON.stringify(exhibition.id) %>;
+  const targetSection = document.getElementById('exhTargetSection');
+  const sectionHidden = document.getElementById('pickerSectionId');
+  const sectionLabel = document.getElementById('pickerSectionLabel');
+  const results = document.getElementById('pickerResults');
+  const totalEl = document.getElementById('pickerTotal');
+  const countEl = document.getElementById('pickerCount');
+  const submitBtn = document.getElementById('pickerSubmit');
+  const checkAll = document.getElementById('pickerCheckAll');
+  const moreWrap = document.getElementById('pickerMoreWrap');
+  const moreBtn = document.getElementById('pickerMore');
+  const queryInput = document.getElementById('pickerQuery');
+  const brandHidden = document.getElementById('pickerBrandId');
+
+  let page = 1, loading = false, hasMore = false;
+
+  const catBox = modal.querySelector('[data-cat-cascade="picker"]');
+  const catCascade = window.ydExh.cascade(catBox, { rootId: catBox.dataset.root || null, onChange: reload });
+
+  const brandInput = document.getElementById('pickerBrandPicker');
+  if (brandInput) {
+    window.ydExh.brandPicker({
+      input: brandInput,
+      hidden: brandHidden,
+      box: document.getElementById('pickerBrandSuggest'),
+      clear: document.getElementById('pickerBrandClear'),
+      onPick: reload,
+    });
+  }
+
+  function refreshCount() {
+    const n = results.querySelectorAll('input[name="product_ids[]"]:checked').length;
+    countEl.textContent = n;
+    submitBtn.disabled = n === 0;
+  }
+
+  function row(p) {
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const el = document.createElement('label');
+    el.className = 'flex items-center gap-3 px-5 py-2.5 cursor-pointer hover:bg-gray-50'
+      + (p.already_added ? ' opacity-50 cursor-not-allowed' : '');
+    el.innerHTML =
+      '<input type="checkbox" name="product_ids[]" value="' + Number(p.id) + '" '
+        + (p.already_added ? 'disabled' : '') + ' class="w-4 h-4 rounded border-gray-300 shrink-0">'
+      + '<img src="' + esc(p.main_image || '/images/placeholder.png') + '" alt="" '
+        + 'class="w-10 h-10 rounded object-cover bg-gray-100 shrink-0">'
+      + '<span class="flex-1 min-w-0">'
+        + '<span class="block text-sm text-gray-900 truncate">' + esc(p.name) + '</span>'
+        + '<span class="block text-xs text-gray-400 truncate">'
+          + (p.brand_name ? esc(p.brand_name) + ' · ' : '')
+          + (p.category_name ? esc(p.category_name) + ' · ' : '')
+          + Number(p.price || 0).toLocaleString('ko-KR') + '원'
+          + (p.status !== 'ON' ? ' · ' + esc(p.status) : '')
+        + '</span>'
+      + '</span>'
+      + (p.already_added ? '<span class="text-xs text-gray-400 shrink-0">담김</span>' : '');
+    return el;
+  }
+
+  async function load(append) {
+    if (loading) return;
+    loading = true;
+    if (!append) {
+      results.innerHTML = '<p class="py-16 text-center text-sm text-gray-400">불러오는 중…</p>';
+      checkAll.checked = false;
+    }
+    const params = new URLSearchParams({ page: String(page) });
+    if (queryInput.value.trim()) params.set('q', queryInput.value.trim());
+    if (brandHidden && brandHidden.value) params.set('brandId', brandHidden.value);
+    const cat = catCascade.value();
+    if (cat) params.set('categoryId', cat);
+    if (sectionHidden.value) params.set('sectionId', sectionHidden.value);
+
+    try {
+      const res = await fetch('/admin/exhibitions/' + exhibitionId + '/product-search?' + params.toString());
+      const data = await res.json();
+      if (!append) results.innerHTML = '';
+      (data.products || []).forEach(p => results.append(row(p)));
+      if (!results.children.length) {
+        results.innerHTML = '<p class="py-16 text-center text-sm text-gray-400">조건에 맞는 상품이 없습니다.</p>';
+      }
+      totalEl.textContent = '전체 ' + Number(data.total || 0).toLocaleString('ko-KR') + '개';
+      hasMore = Boolean(data.hasMore);
+      moreWrap.classList.toggle('hidden', !hasMore);
+    } catch (e) {
+      results.innerHTML = '<p class="py-16 text-center text-sm text-red-500">상품을 불러오지 못했습니다.</p>';
+      moreWrap.classList.add('hidden');
+    } finally {
+      loading = false;
+      refreshCount();
+    }
+  }
+
+  function reload() { page = 1; load(false); }
+
+  document.getElementById('openProductPicker').addEventListener('click', function () {
+    // 담을 위치를 팝업으로 넘긴다 — '이미 담김' 판정 기준이 섹션이라 열 때 확정해야 한다.
+    sectionHidden.value = targetSection ? targetSection.value : '';
+    sectionLabel.textContent = targetSection && targetSection.selectedIndex >= 0
+      ? targetSection.options[targetSection.selectedIndex].text : '전체 탭';
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+    reload();
   });
 
-  if (clear) clear.addEventListener('click', function () {
-    hidden.value = ''; input.value = ''; clear.classList.add('hidden'); close();
+  function close() {
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+  modal.querySelectorAll('[data-picker-close]').forEach(el => el.addEventListener('click', close));
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
   });
 
-  document.addEventListener('click', function (e) {
-    if (!box.contains(e.target) && e.target !== input) close();
+  document.getElementById('pickerSearchBtn').addEventListener('click', reload);
+  queryInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); reload(); }  // 폼 제출로 새지 않게
   });
+
+  moreBtn.addEventListener('click', function () { page += 1; load(true); });
+
+  checkAll.addEventListener('change', function () {
+    results.querySelectorAll('input[name="product_ids[]"]:not([disabled])')
+      .forEach(cb => { cb.checked = checkAll.checked; });
+    refreshCount();
+  });
+  results.addEventListener('change', refreshCount);
 })();
 </script>
 
