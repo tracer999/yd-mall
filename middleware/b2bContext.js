@@ -32,10 +32,7 @@ const INACTIVE = Object.freeze({
     businessProfileId: null,
     companyName: null,
     businessNumber: null,
-    tierId: null,
-    tierCode: null,
-    tierName: null,
-    pricePolicyId: null,
+    extraDiscountRate: 0,
     taxDisplay: 'INCLUSIVE',
     rejectReason: null,
     permissions: Object.freeze([]),
@@ -113,15 +110,9 @@ function contractLive(profile) {
     return true;
 }
 
-/** 사업자 프로필 + 등급을 한 번에 읽는다. */
+/** 사업자 프로필. */
 async function loadProfile(userId) {
-    const [[row]] = await pool.query(
-        `SELECT bp.*, t.tier_code, t.tier_name
-           FROM business_profile bp
-           LEFT JOIN b2b_tier t ON t.id = bp.tier_id
-          WHERE bp.user_id = ?`,
-        [userId]
-    );
+    const [[row]] = await pool.query('SELECT * FROM business_profile WHERE user_id = ?', [userId]);
     return row || null;
 }
 
@@ -140,10 +131,8 @@ function buildContext(profile, user, mallId) {
         businessProfileId: profile.id,
         companyName: profile.company_name,
         businessNumber: profile.business_number,
-        tierId: profile.tier_id || null,
-        tierCode: profile.tier_code || null,
-        tierName: profile.tier_name || null,
-        pricePolicyId: profile.price_policy_id || null,
+        // 상품 할인율에 단순 합산되는 거래처 추가 할인율(%)
+        extraDiscountRate: Number(profile.extra_discount_rate) || 0,
         taxDisplay: settings.taxDisplay,
         rejectReason: profile.reject_reason || null,
         permissions: [],

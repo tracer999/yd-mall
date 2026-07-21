@@ -100,26 +100,14 @@ async function isDuplicateBusinessNumber(businessNumber, excludeProfileId = null
     return rows.length > 0;
 }
 
-/**
- * 승인 시 자동 배정할 기본 등급.
- * 등급은 관리자가 화면에서 만든다 — 하나도 없으면 null 을 돌려주고 등급 없이 승인한다.
- */
-async function getDefaultTierId() {
-    const [[row]] = await pool.query(
-        'SELECT id FROM b2b_tier WHERE is_default = 1 AND is_active = 1 LIMIT 1'
-    );
-    return row ? row.id : null;
-}
-
 async function findByUser(userId) {
     return b2bContext.loadProfile(userId);
 }
 
 async function findById(id) {
     const [[row]] = await pool.query(
-        `SELECT bp.*, t.tier_code, t.tier_name, u.email, u.name AS user_name, u.phone AS user_phone
+        `SELECT bp.*, u.email, u.name AS user_name, u.phone AS user_phone
            FROM business_profile bp
-           LEFT JOIN b2b_tier t ON t.id = bp.tier_id
            LEFT JOIN users u ON u.id = bp.user_id
           WHERE bp.id = ?`,
         [id]
@@ -216,13 +204,11 @@ async function changeStatus(id, to, { adminId = null, reason = null } = {}) {
     }
 
     if (to === 'APPROVED') {
-        const tierId = profile.tier_id || await getDefaultTierId();
         await pool.query(
             `UPDATE business_profile
-                SET status = 'APPROVED', tier_id = ?, reject_reason = NULL,
-                    approved_at = NOW(), approved_by = ?
+                SET status = 'APPROVED', reject_reason = NULL, approved_at = NOW(), approved_by = ?
               WHERE id = ?`,
-            [tierId, adminId, id]
+            [adminId, id]
         );
     } else {
         await pool.query(
@@ -244,9 +230,8 @@ async function listProfiles({ status = null, keyword = null, limit = 50, offset 
         params.push(like, like, like);
     }
     const [rows] = await pool.query(
-        `SELECT bp.*, t.tier_name, u.email, u.name AS user_name
+        `SELECT bp.*, u.email, u.name AS user_name
            FROM business_profile bp
-           LEFT JOIN b2b_tier t ON t.id = bp.tier_id
            LEFT JOIN users u ON u.id = bp.user_id
           WHERE ${where.join(' AND ')}
           ORDER BY FIELD(bp.status,'PENDING','UNDER_REVIEW','APPROVED','SUSPENDED','REJECTED'), bp.applied_at DESC
@@ -276,7 +261,6 @@ module.exports = {
     normalizeBusinessInput,
     validateBusiness,
     isDuplicateBusinessNumber,
-    getDefaultTierId,
     findByUser,
     findById,
     createApplication,

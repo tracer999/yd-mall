@@ -99,12 +99,7 @@ exports.getList = async (req, res) => {
         : "visibility = 'PUBLIC'";
     // P5 몰 스코프 — 이 필터가 없으면 카테고리 없는 목록(/products)·검색에 다른 몰 상품이 샌다.
     const mallId = req.mallId || 1;
-    /*
-     * B2B 전용 상품(sales_channel='B2B_ONLY')은 일반 사용자 목록에서 뺀다.
-     * 사업자 컨텍스트면 빈 문자열이라 쿼리가 예전과 완전히 같다.
-     */
-    const _channelFilter = b2bPricingService.salesChannelFilter(req.b2b, 'products');
-    let query = `SELECT * FROM products WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}${_channelFilter}`;
+    let query = `SELECT * FROM products WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}`;
     const params = [mallId];
 
     /*
@@ -396,20 +391,8 @@ exports.getDetail = async (req, res) => {
         }
         const product = rows[0];
 
-        /*
-         * B2B 전용 상품(sales_channel='B2B_ONLY')은 일반 사용자에게 존재하지 않아야 한다.
-         * visibility 와는 다른 축이다 — visibility 는 회원 전용, 이건 거래 채널 구분이다.
-         */
+        // 사업자 전용가(승인된 사업자에게만 값이 온다). 아니면 null 이라 화면이 바뀌지 않는다.
         const b2bInfo = await b2bPricingService.resolveForProduct({ b2b: req.b2b, productId: product.id });
-        const [[channelRow]] = await pool.query(
-            'SELECT sales_channel FROM product_b2b_setting WHERE product_id = ?', [product.id]
-        );
-        if (channelRow && channelRow.sales_channel === 'B2B_ONLY' && !(req.b2b && req.b2b.active)) {
-            return res.status(404).render('user/404', {
-                title: '상품을 찾을 수 없습니다',
-                seo: { ...res.locals.seo, title: '상품을 찾을 수 없습니다', robots: 'noindex,follow' }
-            });
-        }
 
         // 노출 설정에 따른 접근 제어
         if (product.visibility === 'HIDDEN') {
@@ -620,9 +603,7 @@ exports.getDetail = async (req, res) => {
              * → 일반 사용자 화면은 한 픽셀도 바뀌지 않는다(설계 §6.1).
              */
             b2bInfo,
-            b2bTax: b2bInfo && b2bInfo.visible
-                ? b2bTaxService.split(b2bInfo.unitPrice, b2bInfo.taxType)
-                : null
+            b2bTax: b2bInfo ? b2bTaxService.split(b2bInfo.unitPrice, b2bInfo.taxType) : null
         });
     } catch (err) {
         console.error(err);
@@ -704,7 +685,6 @@ exports.searchPage = async (req, res) => {
                   )
                   AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
                   AND (p.visibility = 'PUBLIC' ${req.user ? "OR p.visibility = 'MEMBER_ONLY'" : ''})
-                  ${b2bPricingService.salesChannelFilter(req.b2b, 'p')}
                 ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT','OFF'), p.created_at DESC
                 LIMIT 50
             `, [mallId, like, like, like, like, like, like]);

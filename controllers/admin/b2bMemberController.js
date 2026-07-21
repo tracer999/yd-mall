@@ -65,16 +65,11 @@ exports.getDetail = async (req, res, next) => {
         const profile = await businessProfileService.findById(req.params.id);
         if (!profile) return res.status(404).send('대상을 찾을 수 없습니다.');
 
-        const [tiers] = await pool.query(
-            'SELECT id, tier_code, tier_name FROM b2b_tier WHERE is_active = 1 ORDER BY rank_order ASC'
-        );
-
         res.render('admin/b2b/member_detail', {
             layout: LAYOUT,
             title: '기업회원 상세',
             subtitle: profile.company_name,
             profile,
-            tiers,
             STATUS_LABEL,
             formatBusinessNumber: businessProfileService.formatBusinessNumber,
             message: req.query.message || null,
@@ -141,14 +136,15 @@ exports.postStatus = async (req, res, next) => {
 /** 등급·계약기간·담당 영업·메모 수정. 상태는 여기서 바꾸지 않는다. */
 exports.postUpdate = async (req, res, next) => {
     const { id } = req.params;
-    const { tier_id, contract_valid_from, contract_valid_to, admin_note } = req.body;
+    const { extra_discount_rate, contract_valid_from, contract_valid_to, admin_note } = req.body;
     try {
+        const rate = Math.min(99, Math.max(0, Number(extra_discount_rate) || 0));
         await pool.query(
             `UPDATE business_profile
-                SET tier_id = ?, contract_valid_from = ?, contract_valid_to = ?, admin_note = ?
+                SET extra_discount_rate = ?, contract_valid_from = ?, contract_valid_to = ?, admin_note = ?
               WHERE id = ?`,
             [
-                tier_id ? Number(tier_id) : null,
+                rate.toFixed(2),
                 contract_valid_from || null,
                 contract_valid_to || null,
                 (admin_note || '').trim() || null,

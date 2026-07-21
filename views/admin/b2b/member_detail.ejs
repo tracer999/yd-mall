@@ -67,16 +67,14 @@ const row = (k, v) => `<div class="flex py-3 border-b border-gray-100 last:borde
       <form action="/admin/b2b/members/<%= profile.id %>/update" method="POST" class="space-y-4">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700">거래처 등급</label>
-            <select name="tier_id" class="mt-1 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">등급 없음</option>
-              <% tiers.forEach(function(t) { %>
-                <option value="<%= t.id %>" <%= profile.tier_id === t.id ? 'selected' : '' %>><%= t.tier_name %></option>
-              <% }); %>
-            </select>
-            <% if (tiers.length === 0) { %>
-              <p class="mt-1 text-xs text-amber-700">등록된 등급이 없습니다. <a href="/admin/b2b/tiers" class="underline">등급 만들기</a></p>
-            <% } %>
+            <label class="block text-sm font-medium text-gray-700">추가 할인율 (%)</label>
+            <input type="number" name="extra_discount_rate" min="0" max="99" step="0.01"
+                   value="<%= Number(profile.extra_discount_rate || 0).toFixed(2).replace(/\.00$/, '') %>"
+                   class="mt-1 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="mt-1 text-xs text-gray-500">
+              상품에 정한 B2B 할인율에 <strong>더해집니다</strong>. 필요 없으면 0.
+              <a href="/admin/b2b/discounts" class="underline">전체 거래처 보기</a>
+            </p>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">계약 시작</label>

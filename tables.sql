@@ -1742,26 +1742,9 @@ CREATE TABLE IF NOT EXISTS `composite_component` (
   CONSTRAINT `fk_comp_sku` FOREIGN KEY (`component_sku_id`) REFERENCES `product_sku` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='복합상품 구성(기존 SKU 참조)';
 
+-- ── B2B(사업자몰) — docs/사이트개선/b2b_사업자몰_구현설계.md ──
+-- (증분 적용은 scripts/migrate_b2b_*.sql. 단순화 반영: migrate_b2b_simplify.sql)
 
--- ── B2B(사업자몰) 1단계 — docs/사이트개선/b2b_사업자몰_구현설계.md §9 ──
--- (증분 적용은 scripts/migrate_b2b_phase1.sql)
-
--- ── 거래처 등급 (관리자가 화면에서 생성. 비어 있어도 동작한다) ──────
-CREATE TABLE IF NOT EXISTS `b2b_tier` (
-  `id`          int NOT NULL AUTO_INCREMENT,
-  `tier_code`   varchar(30) COLLATE utf8mb4_general_ci NOT NULL COMMENT '불변 코드 (DEALER/DEALER_VIP/WHOLESALE)',
-  `tier_name`   varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '노출 등급명',
-  `rank_order`  int NOT NULL DEFAULT '100' COMMENT '작을수록 상위',
-  `is_default`  tinyint(1) NOT NULL DEFAULT '0' COMMENT '승인 시 자동 배정 등급 (없으면 등급 없이 승인)',
-  `is_active`   tinyint(1) NOT NULL DEFAULT '1',
-  `description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `created_at`  timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_tier_code` (`tier_code`),
-  KEY `idx_tier_rank` (`rank_order`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='B2B 거래처 등급 (B2C membership_grade 와 별도 축, 몰 무관)';
-
--- ── 사업자 회원 프로필 (users 1:1, 몰 무관) ───────────────────────
 CREATE TABLE IF NOT EXISTS `business_profile` (
   `id`                  int NOT NULL AUTO_INCREMENT,
   `user_id`             int NOT NULL COMMENT 'users.id (1:1)',
@@ -1771,66 +1754,39 @@ CREATE TABLE IF NOT EXISTS `business_profile` (
   `business_type`       varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '업태',
   `business_category`   varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '종목',
   `company_zipcode`     varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `company_address`     varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사업장 주소',
+  `company_address`     varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `company_detailed_address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `tax_invoice_email`   varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '세금계산서 수신 이메일',
-  `manager_name`        varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '담당자명',
-  `manager_phone`       varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '담당자 연락처',
-  `license_file`        varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사업자등록증 저장 경로(storage/ 하위, public 아님)',
-  `license_original_name` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '업로드 원본 파일명',
-  `tier_id`             int DEFAULT NULL COMMENT 'b2b_tier.id',
-  `price_policy_id`     int DEFAULT NULL COMMENT '전용 계약 정책 (3단계)',
-  `status`              enum('PENDING','UNDER_REVIEW','APPROVED','SUSPENDED','REJECTED') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'PENDING' COMMENT '승인 상태. APPROVED 만 B2B 컨텍스트 활성',
+  `manager_name`        varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `manager_phone`       varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `license_file`        varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '사업자등록증(storage/ 하위, public 아님)',
+  `license_original_name` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `extra_discount_rate` decimal(5,2) NOT NULL DEFAULT '0.00' COMMENT '거래처 추가 할인율(%). 상품 할인율에 단순 합산',
+  `status`              enum('PENDING','UNDER_REVIEW','APPROVED','SUSPENDED','REJECTED') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'PENDING',
   `reject_reason`       varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `contract_valid_from` date DEFAULT NULL COMMENT '계약 시작(NULL=무제한)',
-  `contract_valid_to`   date DEFAULT NULL COMMENT '계약 종료(NULL=무제한)',
+  `contract_valid_from` date DEFAULT NULL,
+  `contract_valid_to`   date DEFAULT NULL,
   `sales_manager_id`    int DEFAULT NULL COMMENT '담당 영업 admins.id',
-  `admin_note`          text COLLATE utf8mb4_general_ci COMMENT '관리자 메모',
-  `applied_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '신청 일시',
+  `admin_note`          text COLLATE utf8mb4_general_ci,
+  `applied_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `approved_at`         datetime DEFAULT NULL,
-  `approved_by`         int DEFAULT NULL COMMENT 'admins.id',
+  `approved_by`         int DEFAULT NULL,
   `created_at`          timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`          timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_bp_user` (`user_id`),
   UNIQUE KEY `uk_bp_bizno` (`business_number`),
   KEY `idx_bp_status` (`status`),
-  KEY `idx_bp_tier` (`tier_id`),
-  CONSTRAINT `fk_bp_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_bp_tier` FOREIGN KEY (`tier_id`) REFERENCES `b2b_tier` (`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_bp_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='사업자 회원 프로필 (users 1:1, 몰 무관)';
 
--- ── 상품별 B2B 판매 설정 (몰 스코프는 products 가 갖는다) ──────────
 CREATE TABLE IF NOT EXISTS `product_b2b_setting` (
-  `product_id`         int NOT NULL COMMENT 'products.id (1:1)',
-  `is_b2b_sale`        tinyint(1) NOT NULL DEFAULT '0' COMMENT 'B2B 판매 여부. 0이면 B2B 컨텍스트에서도 B2C 가격',
-  `sales_channel`      enum('B2C_ONLY','B2B_ONLY','BOTH') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'BOTH' COMMENT '노출 채널. B2B_ONLY 는 일반 사용자에게 404',
-  `b2b_price`          int DEFAULT NULL COMMENT '기본 B2B가(부가세 포함 기준). NULL=전용가 없음',
-  `min_order_qty`      int NOT NULL DEFAULT '1' COMMENT 'MOQ',
-  `order_unit`         int NOT NULL DEFAULT '1' COMMENT '주문 단위(배수)',
-  `max_order_qty`      int DEFAULT NULL COMMENT '상한(NULL=무제한)',
-  `transaction_mode`   enum('DIRECT_ORDER','QUOTE_OPTIONAL','QUOTE_REQUIRED') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'QUOTE_OPTIONAL' COMMENT '거래 방식',
-  `quote_required_qty` int DEFAULT NULL COMMENT '이 수량 이상이면 견적 필수',
-  `price_visibility`   enum('PUBLIC','APPROVED_ONLY','HIDDEN') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'APPROVED_ONLY' COMMENT '전용가 공개 범위',
-  `updated_at`         timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `product_id`    int NOT NULL COMMENT 'products.id (1:1). 행이 없으면 B2B 판매 안 함',
+  `is_b2b_sale`   tinyint(1) NOT NULL DEFAULT '0',
+  `discount_rate` decimal(5,2) NOT NULL DEFAULT '0.00' COMMENT 'B2B 할인율(%). 판매가 대비',
+  `min_order_qty` int NOT NULL DEFAULT '1' COMMENT '최소 주문수량. 1이면 1개부터',
+  `updated_at`    timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`product_id`),
   KEY `idx_pbs_sale` (`is_b2b_sale`),
-  KEY `idx_pbs_channel` (`sales_channel`),
   CONSTRAINT `fk_pbs_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='상품별 B2B 판매 설정 (없으면 B2B 판매 안 함)';
-
--- ── 수량 구간 가격 ───────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS `b2b_volume_price` (
-  `id`           int NOT NULL AUTO_INCREMENT,
-  `product_id`   int NOT NULL,
-  `sku_id`       int DEFAULT NULL COMMENT 'NULL=상품 전체 공통',
-  `tier_id`      int DEFAULT NULL COMMENT 'NULL=전체 사업자 공통',
-  `min_quantity` int NOT NULL COMMENT '이 수량 이상일 때 적용',
-  `unit_price`   int NOT NULL COMMENT '적용 단가(부가세 포함 기준)',
-  `created_at`   timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_vp` (`product_id`,`sku_id`,`tier_id`,`min_quantity`),
-  KEY `idx_vp_lookup` (`product_id`,`min_quantity`),
-  CONSTRAINT `fk_vp_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_vp_tier` FOREIGN KEY (`tier_id`) REFERENCES `b2b_tier` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='수량 구간 가격';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='상품별 B2B 판매 설정 (상품 등록/수정 화면에서 입력)';

@@ -32,18 +32,12 @@ exports.getCart = async (req, res) => {
             const priced = await b2bPricingService.resolveForProducts(req.b2b, rows.map(r => r.product_id));
             for (const r of rows) {
                 const info = priced.get(Number(r.product_id));
-                if (!info || !info.visible || info.priceSource === 'B2C_FALLBACK') continue;
-                // 담은 수량 기준으로 수량구간가를 다시 본다.
-                const atQty = await b2bPricingService.resolveForProduct({ b2b: req.b2b, productId: r.product_id, quantity: r.quantity });
+                if (!info || info.priceSource === 'B2C_FALLBACK') continue;
                 r.b2b_list_price = r.price;
-                r.price = atQty.unitPrice;
-                r.b2b_price_source = atQty.priceSource;
-                r.b2b_min_qty = atQty.minOrderQty;
-                r.b2b_order_unit = atQty.orderUnit;
-                r.b2b_qty_error = b2bPricingService.validateQuantity(
-                    { min_order_qty: atQty.minOrderQty, order_unit: atQty.orderUnit, max_order_qty: atQty.maxOrderQty },
-                    r.quantity
-                );
+                r.price = info.unitPrice;
+                r.b2b_price_source = info.priceSource;
+                r.b2b_min_qty = info.minOrderQty;
+                r.b2b_qty_error = b2bPricingService.validateQuantity({ min_order_qty: info.minOrderQty }, r.quantity);
             }
         }
 

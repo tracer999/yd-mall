@@ -62,7 +62,7 @@ exports.getRequest = async (req, res, next) => {
         const priced = await pricingService.resolveForProducts(req.b2b, rows.map(r => r.product_id));
         for (const r of rows) {
             const info = priced.get(Number(r.product_id));
-            r.b2b_price = info && info.visible ? info.unitPrice : r.price;
+            r.b2b_price = info ? info.unitPrice : r.price;
         }
 
         res.render('user/quote/request', {

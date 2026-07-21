@@ -1,8 +1,8 @@
 /*
- * 거래처 등급 관리 + B2B 운영 설정 (설계 §11.1, §2.4).
+ * 거래처 할인 + B2B 운영 설정.
  *
- * 등급은 **시드하지 않는다.** 관리자가 이 화면에서 만든다 — 새로 찍어낸 몰도 등급 0건에서
- * 시작하고, 그 상태로도 승인·주문이 동작한다(등급 없이 승인).
+ * 상품별 B2B 설정(판매 여부·할인율·최소 수량)은 **상품 등록/수정 화면 안**에 있다.
+ * 여기는 거래처 단위로 얹는 추가 할인율과 몰 공통 설정만 다룬다.
  *
  * 운영 설정은 몰별 테이블이 아니라 `system_settings` 전역 키다. 행이 없으면
  * middleware/b2bContext.js 의 DEFAULTS 가 쓰이므로, 아무것도 저장하지 않아도 정상 동작한다.
@@ -14,85 +14,53 @@ const { loadSystemSettingsAndApplyEnv } = require('../../config/systemSettings')
 
 const LAYOUT = 'layouts/admin_layout';
 
-// ──────────────────────────────── 거래처 등급
+// ──────────────────────────────── 거래처 할인
 
-exports.getTiers = async (req, res, next) => {
+/**
+ * 거래처별 추가 할인율.
+ *
+ * 상품마다 정한 B2B 할인율에 **단순 합산**된다. 상품 30% + 거래처 5% = 35% 할인.
+ * 등급·정책 같은 계층을 두지 않는다 — 조건이 더 복잡해지면 견적에서 협의한다.
+ */
+exports.getDiscounts = async (req, res, next) => {
     try {
+        const keyword = (req.query.q || '').trim();
+        const where = ["bp.status = 'APPROVED'"];
+        const params = [];
+        if (keyword) {
+            where.push('(bp.company_name LIKE ? OR bp.business_number LIKE ?)');
+            params.push(`%${keyword}%`, `%${keyword}%`);
+        }
         const [rows] = await pool.query(
-            `SELECT t.*, (SELECT COUNT(*) FROM business_profile bp WHERE bp.tier_id = t.id) AS member_count
-               FROM b2b_tier t ORDER BY t.rank_order ASC, t.id ASC`
+            `SELECT bp.id, bp.company_name, bp.business_number, bp.extra_discount_rate,
+                    u.email, u.name AS user_name
+               FROM business_profile bp
+               LEFT JOIN users u ON u.id = bp.user_id
+              WHERE ${where.join(' AND ')}
+              ORDER BY bp.extra_discount_rate DESC, bp.company_name ASC`,
+            params
         );
-        res.render('admin/b2b/tiers', {
+        res.render('admin/b2b/discounts', {
             layout: LAYOUT,
-            title: '거래처 등급',
-            subtitle: '기업회원 승인 시 배정할 등급을 정의합니다. 기본 등급을 지정해 두면 승인할 때 자동으로 붙습니다.',
-            rows,
+            title: '거래처 할인',
+            subtitle: '거래처마다 추가로 얹어 줄 할인율입니다. 상품에 정한 B2B 할인율과 단순 합산됩니다.',
+            rows, keyword,
             message: req.query.message || null,
             error: req.query.error || null,
         });
-    } catch (err) {
-        next(err);
-    }
+    } catch (err) { next(err); }
 };
 
-exports.postTierSave = async (req, res, next) => {
-    const { id, tier_code, tier_name, rank_order, is_default, is_active, description } = req.body;
+exports.postDiscount = async (req, res, next) => {
     try {
-        const code = (tier_code || '').trim().toUpperCase();
-        const name = (tier_name || '').trim();
-        if (!code || !name) {
-            return res.redirect('/admin/b2b/tiers?error=' + encodeURIComponent('등급 코드와 등급명을 입력하세요.'));
+        const { id, extra_discount_rate } = req.body;
+        const rate = Number(extra_discount_rate);
+        if (!id || !Number.isFinite(rate) || rate < 0 || rate > 99) {
+            return res.redirect('/admin/b2b/discounts?error=' + encodeURIComponent('할인율은 0~99 사이로 입력하세요.'));
         }
-
-        const conn = await pool.getConnection();
-        try {
-            await conn.beginTransaction();
-            // 기본 등급은 하나뿐이다 — 새로 지정하면 나머지를 내린다.
-            if (is_default) await conn.query('UPDATE b2b_tier SET is_default = 0');
-
-            if (id) {
-                await conn.query(
-                    `UPDATE b2b_tier SET tier_code = ?, tier_name = ?, rank_order = ?, is_default = ?, is_active = ?, description = ?
-                      WHERE id = ?`,
-                    [code, name, Number(rank_order) || 100, is_default ? 1 : 0, is_active ? 1 : 0, (description || '').trim() || null, id]
-                );
-            } else {
-                await conn.query(
-                    `INSERT INTO b2b_tier (tier_code, tier_name, rank_order, is_default, is_active, description)
-                     VALUES (?,?,?,?,?,?)`,
-                    [code, name, Number(rank_order) || 100, is_default ? 1 : 0, is_active ? 1 : 0, (description || '').trim() || null]
-                );
-            }
-            await conn.commit();
-        } catch (e) {
-            await conn.rollback();
-            throw e;
-        } finally {
-            conn.release();
-        }
-        return res.redirect('/admin/b2b/tiers?message=' + encodeURIComponent('저장했습니다.'));
-    } catch (err) {
-        if (err.code === 'ER_DUP_ENTRY') {
-            return res.redirect('/admin/b2b/tiers?error=' + encodeURIComponent('이미 있는 등급 코드입니다.'));
-        }
-        next(err);
-    }
-};
-
-exports.postTierDelete = async (req, res, next) => {
-    try {
-        const { id } = req.body;
-        // 소속 거래처가 있으면 지우지 않는다 — FK 는 SET NULL 이라 조용히 등급이 빠져 버린다.
-        const [[used]] = await pool.query('SELECT COUNT(*) AS cnt FROM business_profile WHERE tier_id = ?', [id]);
-        if (used.cnt > 0) {
-            return res.redirect('/admin/b2b/tiers?error='
-                + encodeURIComponent(`이 등급을 쓰는 거래처가 ${used.cnt}곳 있습니다. 먼저 등급을 변경하세요.`));
-        }
-        await pool.query('DELETE FROM b2b_tier WHERE id = ?', [id]);
-        return res.redirect('/admin/b2b/tiers?message=' + encodeURIComponent('삭제했습니다.'));
-    } catch (err) {
-        next(err);
-    }
+        await pool.query('UPDATE business_profile SET extra_discount_rate = ? WHERE id = ?', [rate.toFixed(2), id]);
+        return res.redirect('/admin/b2b/discounts?message=' + encodeURIComponent('저장했습니다.'));
+    } catch (err) { next(err); }
 };
 
 // ──────────────────────────────── 운영 설정

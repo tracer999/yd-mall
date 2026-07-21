@@ -4,7 +4,6 @@ const memberController = require('../../controllers/admin/b2bMemberController');
 const settingController = require('../../controllers/admin/b2bSettingController');
 const orderController = require('../../controllers/admin/b2bOrderController');
 const quoteController = require('../../controllers/admin/quoteAdminController');
-const pricePolicyController = require('../../controllers/admin/b2bPricePolicyController');
 
 // 기업회원 승인
 router.get('/members', memberController.getList);
@@ -29,21 +28,9 @@ router.post('/quotes/:id/convert', quoteController.postConvert);
 router.get('/quotes/:id/pdf', quoteController.getPdf);
 router.post('/quotes/:id/issue-pdf', quoteController.postIssuePdf);
 
-// 가격 정책 — 등급가·거래처 계약가 (우선순위 2·3층)
-router.get('/price-policies', pricePolicyController.getList);
-router.post('/price-policies/save', pricePolicyController.postSave);
-router.post('/price-policies/delete', pricePolicyController.postDelete);
-router.get('/price-policies/product-search', pricePolicyController.getProductSearch);
-router.get('/price-policies/:id', pricePolicyController.getDetail);
-router.post('/price-policies/:id/items', pricePolicyController.postItemSave);
-router.post('/price-policies/:id/items/delete', pricePolicyController.postItemDelete);
-router.post('/price-policies/:id/items/csv', pricePolicyController.postItemsCsv);
-router.post('/price-policies/:id/assign', pricePolicyController.postAssign);
-
-// 거래처 등급
-router.get('/tiers', settingController.getTiers);
-router.post('/tiers/save', settingController.postTierSave);
-router.post('/tiers/delete', settingController.postTierDelete);
+// 거래처 할인 — 거래처마다 얹는 추가 할인율
+router.get('/discounts', settingController.getDiscounts);
+router.post('/discounts', settingController.postDiscount);
 
 // 운영 설정 (system_settings 전역 키)
 router.get('/settings', settingController.getSettings);

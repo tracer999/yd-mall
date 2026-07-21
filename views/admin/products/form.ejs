@@ -434,6 +434,83 @@
                                     value="<%= product ? product.purchase_price : 0 %>">
                             </div>
 
+                            <!-- B2B(사업자) 판매 -->
+                            <%
+                            /*
+                             * 사업자 고객에게 다른 가격으로 팔 때만 켠다. 꺼 두면(기본) 이 상품은
+                             * 지금까지와 똑같이 일반 판매가로만 팔린다.
+                             * 값은 product_b2b_setting 에 저장된다(controllers/admin/productController).
+                             */
+                            const _b2bSet = locals.b2bSetting || null;
+                            const _b2bOn = !!(_b2bSet && _b2bSet.is_b2b_sale);
+                            const _b2bRate = _b2bSet ? Number(_b2bSet.discount_rate) : 0;
+                            const _b2bMoq = _b2bSet ? Number(_b2bSet.min_order_qty) : 1;
+                            const _taxType = product ? (product.tax_type || 'TAXABLE') : 'TAXABLE';
+                            %>
+                            <div class="bg-gray-50 p-4 rounded-lg mb-8">
+                                <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4">B2B(사업자) 판매</h6>
+
+                                <label class="flex items-center gap-2 text-sm font-medium text-gray-900 cursor-pointer">
+                                    <input type="checkbox" name="is_b2b_sale" id="is_b2b_sale" value="1" <%= _b2bOn ? 'checked' : '' %>
+                                           onchange="document.getElementById('b2bFields').style.display = this.checked ? '' : 'none';"
+                                           class="rounded border-gray-300">
+                                    이 상품을 사업자 고객에게도 판매 (기업 전용가 적용)
+                                </label>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    체크하지 않으면 사업자 고객에게도 <strong>일반 판매가</strong>로 팔립니다. 일반 고객 화면은 어느 쪽이든 바뀌지 않습니다.
+                                </p>
+
+                                <div id="b2bFields" style="<%= _b2bOn ? '' : 'display:none' %>" class="mt-4 pt-4 border-t border-gray-200">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-900 mb-1">B2B 할인율 (%)</label>
+                                            <input type="number" name="b2b_discount_rate" id="b2b_discount_rate"
+                                                   min="0" max="99" step="0.01" value="<%= _b2bRate %>"
+                                                   class="w-full px-3 py-2 text-right text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                            <p class="text-xs text-gray-500 mt-1" id="b2bPricePreview"></p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-900 mb-1">최소 주문수량</label>
+                                            <input type="number" name="b2b_min_order_qty" min="1" value="<%= _b2bMoq %>"
+                                                   class="w-full px-3 py-2 text-right text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                            <p class="text-xs text-gray-500 mt-1">1 이면 1개부터 주문 가능</p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-900 mb-1">과세 구분</label>
+                                            <select name="tax_type" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                                <option value="TAXABLE" <%= _taxType === 'TAXABLE' ? 'selected' : '' %>>과세 (세금계산서)</option>
+                                                <option value="TAX_FREE" <%= _taxType === 'TAX_FREE' ? 'selected' : '' %>>면세 (계산서)</option>
+                                                <option value="ZERO_RATED" <%= _taxType === 'ZERO_RATED' ? 'selected' : '' %>>영세율</option>
+                                            </select>
+                                            <p class="text-xs text-gray-500 mt-1">세금계산서 서식이 갈립니다</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-3">
+                                        * 거래처마다 <strong>추가 할인</strong>을 더 줄 수 있습니다(B2B 관리 &gt; 거래처 할인). 두 할인율은 <strong>단순 합산</strong>됩니다.<br>
+                                        * 수량별 단가·납기 같은 조건은 <strong>견적 단계에서 협의</strong>합니다.
+                                    </p>
+                                </div>
+                            </div>
+                            <script>
+                            (function () {
+                                // 할인율을 입력하면 실제 적용가를 바로 보여 준다 — 저장 후에야 아는 일이 없게.
+                                const rate = document.getElementById('b2b_discount_rate');
+                                const price = document.getElementById('price');
+                                const out = document.getElementById('b2bPricePreview');
+                                if (!rate || !price || !out) return;
+                                function preview() {
+                                    const p = parseInt(String(price.value).replace(/[^0-9]/g, ''), 10) || 0;
+                                    const r = parseFloat(rate.value) || 0;
+                                    out.textContent = (p > 0 && r > 0)
+                                        ? '적용가 ' + Math.floor(p * (1 - r / 100)).toLocaleString() + '원'
+                                        : '할인율 0 이면 일반 판매가와 같습니다';
+                                }
+                                rate.addEventListener('input', preview);
+                                price.addEventListener('input', preview);
+                                preview();
+                            })();
+                            </script>
+
                             <!-- 상세 정보 -->
                             <h6 class="text-base font-semibold text-gray-700 border-b pb-2 mb-4 mt-8">상세 정보 및 이미지</h6>
 

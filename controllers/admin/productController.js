@@ -516,6 +516,33 @@ exports.postReorderRecommendations = async (req, res) => {
     }
 };
 
+/*
+ * 상품 폼의 B2B 판매 섹션 저장.
+ *
+ * 체크가 꺼져 있으면 설정 행을 지운다 — "행이 없으면 B2B 판매를 안 한다" 는 규칙 하나로
+ * 판정이 끝나게 하기 위해서다(is_b2b_sale=0 인 행을 남기면 두 가지 표현이 공존한다).
+ * 과세구분은 products 컬럼이라 함께 저장한다.
+ */
+async function saveB2bSetting(productId, body) {
+    const on = !!body.is_b2b_sale;
+    if (!on) {
+        await pool.query('DELETE FROM product_b2b_setting WHERE product_id = ?', [productId]);
+    } else {
+        const rate = Math.min(99, Math.max(0, Number(body.b2b_discount_rate) || 0));
+        const moq = Math.max(1, parseInt(body.b2b_min_order_qty, 10) || 1);
+        await pool.query(
+            `INSERT INTO product_b2b_setting (product_id, is_b2b_sale, discount_rate, min_order_qty)
+             VALUES (?, 1, ?, ?)
+             ON DUPLICATE KEY UPDATE is_b2b_sale = 1, discount_rate = VALUES(discount_rate),
+                                     min_order_qty = VALUES(min_order_qty)`,
+            [productId, rate.toFixed(2), moq]
+        );
+    }
+    if (['TAXABLE', 'TAX_FREE', 'ZERO_RATED'].includes(body.tax_type)) {
+        await pool.query('UPDATE products SET tax_type = ? WHERE id = ?', [body.tax_type, productId]);
+    }
+}
+
 exports.getAdd = async (req, res) => {
     try {
         const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
@@ -530,6 +557,7 @@ exports.getAdd = async (req, res) => {
             productCategories,
             brands,
             product: null,
+            b2bSetting: null,
             productUrlBase,
             newProductDays: newArrival.newProductDays()
         });
@@ -725,6 +753,8 @@ exports.postAdd = async (req, res) => {
             }
         }
 
+        await saveB2bSetting(productId, req.body);
+
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);
@@ -859,6 +889,8 @@ exports.postEdit = async (req, res) => {
             const deleteIds = Array.isArray(req.body.delete_image_ids) ? req.body.delete_image_ids : [req.body.delete_image_ids];
             await pool.query('DELETE FROM product_images WHERE id IN (?) AND product_id = ?', [deleteIds, id]);
         }
+
+        await saveB2bSetting(id, req.body);
 
         res.redirect('/admin/products');
     } catch (err) {
@@ -1093,6 +1125,9 @@ exports.getEdit = async (req, res) => {
 
         rows[0].images = images;
 
+        // B2B 판매 섹션에 채울 기존 설정. 행이 없으면 체크가 꺼진 상태로 그려진다.
+        const [[b2bSetting]] = await pool.query('SELECT * FROM product_b2b_setting WHERE product_id = ?', [id]);
+
         const domainFromSettings = (global.systemSettings && global.systemSettings.domain) || 'https://dev-mall.ydata.co.kr';
         const domain = domainFromSettings.replace(/\/$/, '');
         const productUrlBase = domain + '/products/';
@@ -1103,6 +1138,7 @@ exports.getEdit = async (req, res) => {
             productCategories,
             brands,
             product: rows[0],
+            b2bSetting: b2bSetting || null,
             productUrlBase,
             newProductDays: newArrival.newProductDays()
         });
