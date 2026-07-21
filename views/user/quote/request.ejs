@@ -1,0 +1,62 @@
+<%
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+%>
+<div class="max-w-3xl mx-auto px-4 py-10">
+  <h1 class="text-2xl font-extrabold text-gray-900 mb-2">견적 요청</h1>
+  <p class="text-sm text-gray-500 mb-6">
+    수량과 희망 단가를 적어 보내시면 담당자가 검토 후 제안 드립니다. 견적 유효기간은 기본 <%= validDays %>일입니다.
+  </p>
+
+  <form action="/quotes/request" method="POST">
+    <div class="bg-white border rounded-xl overflow-hidden mb-6">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-600 border-b">
+          <tr>
+            <th class="text-left px-4 py-3">상품</th>
+            <th class="text-right px-4 py-3">현재 전용가</th>
+            <th class="text-right px-4 py-3 w-28">수량</th>
+            <th class="text-right px-4 py-3 w-36">희망 단가</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% items.forEach(function(it) { %>
+            <tr class="border-b">
+              <td class="px-4 py-3">
+                <input type="hidden" name="product_id" value="<%= it.product_id %>">
+                <input type="hidden" name="sku_id" value="<%= it.sku_id || '' %>">
+                <span class="font-medium text-gray-900"><%= it.name %></span>
+                <p class="text-xs text-gray-400">정가 <%= won(it.price) %>원</p>
+              </td>
+              <td class="px-4 py-3 text-right text-blue-800 font-semibold"><%= won(it.b2b_price) %>원</td>
+              <td class="px-4 py-3">
+                <input type="number" name="quantity" value="<%= it.quantity %>" min="1"
+                       class="w-full text-right border-gray-300 rounded-md text-sm">
+              </td>
+              <td class="px-4 py-3">
+                <input type="number" name="wish_price" min="0" placeholder="선택"
+                       class="w-full text-right border-gray-300 rounded-md text-sm">
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bg-white border rounded-xl p-6 space-y-4 mb-6">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">납기 희망일</label>
+        <input type="date" name="requested_delivery_date" class="mt-1 block w-full border-gray-300 rounded-md text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">요청사항</label>
+        <textarea name="note" rows="4" class="mt-1 block w-full border-gray-300 rounded-md text-sm"
+                  placeholder="납품 조건, 분할 배송, 결제 조건 등 협의가 필요한 내용을 적어주세요"></textarea>
+      </div>
+    </div>
+
+    <button type="submit" class="w-full py-3 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-800 transition">
+      견적 요청하기
+    </button>
+    <p class="mt-3 text-center text-xs text-gray-500">요청 시 기업 장바구니는 비워집니다.</p>
+  </form>
+</div>

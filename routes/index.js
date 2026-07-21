@@ -62,6 +62,11 @@ router.get('/design-guide/user', (req, res) => {
 });
 router.use('/', require('./terms'));
 
+// 사업자 회원 — 전환 신청·상태 (설계 §3). 모든 몰에서 동작한다.
+router.use('/b2b', require('./b2b'));
+// 견적·협상 (설계 §8). 승인 사업자만 진입한다.
+router.use('/quotes', require('./quotes'));
+
 router.use('/products', require('./products'));
 router.use('/brands', require('./brands'));
 router.use('/notices', require('./notices'));

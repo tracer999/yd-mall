@@ -1,0 +1,56 @@
+<%
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+const tone = {
+  DRAFT:'gray', REQUESTED:'amber', UNDER_REVIEW:'blue', SELLER_PROPOSED:'blue',
+  BUYER_COUNTERED:'amber', BUYER_ACCEPTED:'green', SELLER_ACCEPTED:'green',
+  REJECTED:'red', EXPIRED:'gray', CONVERTED_TO_ORDER:'green', CANCELLED:'gray',
+};
+const cls = {
+  gray:'bg-gray-100 text-gray-700 border-gray-300', amber:'bg-amber-100 text-amber-800 border-amber-300',
+  blue:'bg-blue-100 text-blue-800 border-blue-300', green:'bg-green-100 text-green-800 border-green-300',
+  red:'bg-red-100 text-red-800 border-red-300',
+};
+%>
+<div class="max-w-5xl mx-auto px-4 py-10">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-extrabold text-gray-900">견적함</h1>
+    <a href="/cart" class="text-sm text-blue-700 hover:underline no-underline">장바구니에서 견적 요청하기</a>
+  </div>
+
+  <% if (rows.length === 0) { %>
+    <div class="bg-white border rounded-xl py-16 text-center">
+      <p class="text-gray-500 mb-4">진행 중인 견적이 없습니다.</p>
+      <a href="/products" class="inline-block px-6 py-3 rounded-lg bg-blue-700 text-white font-semibold no-underline">상품 둘러보기</a>
+    </div>
+  <% } else { %>
+    <div class="bg-white border rounded-xl overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-600 border-b">
+          <tr>
+            <th class="text-left px-4 py-3">견적번호</th>
+            <th class="text-left px-4 py-3">품목</th>
+            <th class="text-right px-4 py-3">금액</th>
+            <th class="text-left px-4 py-3">상태</th>
+            <th class="text-left px-4 py-3">유효기간</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(function(q) { %>
+            <tr class="border-b hover:bg-gray-50">
+              <td class="px-4 py-3">
+                <a href="/quotes/<%= q.id %>" class="font-semibold text-blue-700 hover:underline no-underline"><%= q.quote_number %></a>
+                <p class="text-xs text-gray-400">v<%= q.version %> · <%= new Date(q.created_at).toLocaleDateString('ko-KR') %></p>
+              </td>
+              <td class="px-4 py-3 text-gray-600"><%= q.item_count %>개 품목</td>
+              <td class="px-4 py-3 text-right font-semibold text-gray-900"><%= won(q.final_total || q.proposed_total || q.catalog_total) %>원</td>
+              <td class="px-4 py-3">
+                <span class="text-xs px-2 py-0.5 rounded border <%= cls[tone[q.status]] %>"><%= STATUS[q.status] %></span>
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-500"><%= q.valid_until ? new Date(q.valid_until).toLocaleDateString('ko-KR') : '-' %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>

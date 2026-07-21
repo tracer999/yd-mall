@@ -6,6 +6,9 @@ const outletService = require('../services/outlet/outletService');
 const optionService = require('../services/catalog/optionService');
 const compositeService = require('../services/catalog/compositeService');
 const categoryScope = require('../services/catalog/categoryScope');
+// B2B 전용가·수량규칙 (설계 §4). 컨텍스트가 비활성이면 전부 null 이라 화면이 바뀌지 않는다.
+const b2bPricingService = require('../services/b2b/b2bPricingService');
+const b2bTaxService = require('../services/b2b/b2bTaxService');
 
 /**
  * 폐기된 THEME 카테고리 → 대체 기능 메뉴.
@@ -96,7 +99,12 @@ exports.getList = async (req, res) => {
         : "visibility = 'PUBLIC'";
     // P5 몰 스코프 — 이 필터가 없으면 카테고리 없는 목록(/products)·검색에 다른 몰 상품이 샌다.
     const mallId = req.mallId || 1;
-    let query = `SELECT * FROM products WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}`;
+    /*
+     * B2B 전용 상품(sales_channel='B2B_ONLY')은 일반 사용자 목록에서 뺀다.
+     * 사업자 컨텍스트면 빈 문자열이라 쿼리가 예전과 완전히 같다.
+     */
+    const _channelFilter = b2bPricingService.salesChannelFilter(req.b2b, 'products');
+    let query = `SELECT * FROM products WHERE mall_id = ? AND status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK') AND ${_visibilityFilter}${_channelFilter}`;
     const params = [mallId];
 
     /*
@@ -337,6 +345,12 @@ exports.getList = async (req, res) => {
             likedProductIds = likeRows.map(r => r.product_id);
         }
 
+        // 카드에 기업 전용가를 얹는다. 비활성 컨텍스트면 아무 필드도 붙지 않는다(설계 §6.2).
+        await b2bPricingService.decorateProducts(req.b2b, products);
+        if (Array.isArray(categoryBest) && categoryBest.length) {
+            await b2bPricingService.decorateProducts(req.b2b, categoryBest);
+        }
+
         res.render('user/products/list', {
             title: pageTitle,
             products,
@@ -381,6 +395,21 @@ exports.getDetail = async (req, res) => {
             });
         }
         const product = rows[0];
+
+        /*
+         * B2B 전용 상품(sales_channel='B2B_ONLY')은 일반 사용자에게 존재하지 않아야 한다.
+         * visibility 와는 다른 축이다 — visibility 는 회원 전용, 이건 거래 채널 구분이다.
+         */
+        const b2bInfo = await b2bPricingService.resolveForProduct({ b2b: req.b2b, productId: product.id });
+        const [[channelRow]] = await pool.query(
+            'SELECT sales_channel FROM product_b2b_setting WHERE product_id = ?', [product.id]
+        );
+        if (channelRow && channelRow.sales_channel === 'B2B_ONLY' && !(req.b2b && req.b2b.active)) {
+            return res.status(404).render('user/404', {
+                title: '상품을 찾을 수 없습니다',
+                seo: { ...res.locals.seo, title: '상품을 찾을 수 없습니다', robots: 'noindex,follow' }
+            });
+        }
 
         // 노출 설정에 따른 접근 제어
         if (product.visibility === 'HIDDEN') {
@@ -585,7 +614,15 @@ exports.getDetail = async (req, res) => {
             shopifyMapping,
             outletInfo,
             productOptions,
-            productSkus
+            productSkus,
+            /*
+             * B2B 전용가 블록. 사업자 컨텍스트가 아니면 null 이고, 뷰는 아무것도 그리지 않는다
+             * → 일반 사용자 화면은 한 픽셀도 바뀌지 않는다(설계 §6.1).
+             */
+            b2bInfo,
+            b2bTax: b2bInfo && b2bInfo.visible
+                ? b2bTaxService.split(b2bInfo.unitPrice, b2bInfo.taxType)
+                : null
         });
     } catch (err) {
         console.error(err);
@@ -667,12 +704,15 @@ exports.searchPage = async (req, res) => {
                   )
                   AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
                   AND (p.visibility = 'PUBLIC' ${req.user ? "OR p.visibility = 'MEMBER_ONLY'" : ''})
+                  ${b2bPricingService.salesChannelFilter(req.b2b, 'p')}
                 ORDER BY FIELD(p.status,'ON','RESTOCK','COMING_SOON','SOLD_OUT','OFF'), p.created_at DESC
                 LIMIT 50
             `, [mallId, like, like, like, like, like, like]);
 
             // 검색 결과 카드도 특가가로 표시한다.
             await dealSvc.applyDeals(rows);
+            // 사업자면 기업 전용가를 얹는다(일반 사용자는 아무 필드도 붙지 않는다).
+            await b2bPricingService.decorateProducts(req.b2b, rows);
             products = rows;
             total = rows.length;
 

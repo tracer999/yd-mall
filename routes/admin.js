@@ -78,6 +78,8 @@ router.use('/lives', requireMenuAccess('/admin/lives'), require('./admin/lives')
 router.use('/deals', requireMenuAccess('/admin/deals'), require('./admin/deals'));
 router.use('/deal-categories', requireMenuAccess('/admin/deal-categories'), require('./admin/deal-categories'));
 router.use('/users', requireMenuAccess('/admin/users'), require('./admin/users'));
+// B2B(사업자몰) — 기업회원 승인·거래처 등급·운영 설정. 모든 몰 공통이라 몰 스코프가 없다.
+router.use('/b2b', requireMenuAccess('/admin/b2b/members'), require('./admin/b2b'));
 router.use('/sales', requireMenuAccess('/admin/sales'), require('./admin/sales'));
 router.use('/shipping', requireMenuAccess('/admin/shipping'), require('./admin/shipping'));
 // 배송비 정책(몰별 기본료·무료배송 기준·지역 할증). /admin/shipping 은 송장 관리다 — 별개 화면.

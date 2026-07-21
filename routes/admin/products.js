@@ -44,6 +44,13 @@ router.get('/category-options', categoryOptionController.getEditor);
 router.get('/category-options/:categoryId', categoryOptionController.getEditor);
 router.post('/category-options/:categoryId', express.json(), categoryOptionController.postSave);
 
+// 상품별 B2B 판매 설정 (전용가·MOQ·수량별 가격) — 옵션 편집기와 같은 별도 화면 방식
+const b2bProductController = require('../../controllers/admin/b2bProductController');
+router.get('/b2b/:id', b2bProductController.getEditor);
+router.post('/b2b/:id', b2bProductController.postSave);
+router.post('/b2b/:id/volume', b2bProductController.postVolumeAdd);
+router.post('/b2b/:id/volume/delete', b2bProductController.postVolumeDelete);
+
 // 옵션·SKU 관리 (옵션상품)
 router.get('/options/:id', productOptionController.getEditor);
 router.get('/options/:id/recommended', productOptionController.getRecommended);

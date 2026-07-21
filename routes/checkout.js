@@ -22,4 +22,7 @@ router.get('/fail', checkoutController.getFail);
 // 주문 완료
 router.get('/complete', checkoutController.getComplete);
 
+// B2B 주문 접수 완료 (즉시 결제가 아니므로 결제창·완료 화면을 타지 않는다)
+router.get('/b2b-received', checkoutController.getB2bReceived);
+
 module.exports = router;

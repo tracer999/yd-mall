@@ -28,15 +28,41 @@
         <input id="password" name="password" type="password" autocomplete="current-password" required
                class="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
       </div>
-      <button type="submit"
+      <%
+      /*
+       * 사업자 로그인 구분 (설계 §3.1).
+       * 로그인 화면을 분리하지 않는다 — 체크박스 하나로 '어느 자격으로 들어왔는지'를 명시하고,
+       * 실제 그 자격이 있는지는 서버(resolveLoginMode)가 확인한다.
+       */
+      const _asBiz = v.asBusiness === true;
+      %>
+      <label id="bizLoginBox"
+             class="flex items-start gap-2 rounded-md border p-3 cursor-pointer transition-colors <%= _asBiz ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100' %>">
+        <input type="checkbox" name="login_as_business" value="1" <%= _asBiz ? 'checked' : '' %>
+               onchange="document.getElementById('bizLoginBox').className = this.checked
+                 ? 'flex items-start gap-2 rounded-md border p-3 cursor-pointer transition-colors border-blue-300 bg-blue-50'
+                 : 'flex items-start gap-2 rounded-md border p-3 cursor-pointer transition-colors border-gray-200 bg-gray-50 hover:bg-gray-100';
+                 document.getElementById('loginSubmit').textContent = this.checked ? '사업자 회원으로 로그인' : '로그인';"
+               class="mt-0.5 rounded border-gray-300" />
+        <span class="text-sm">
+          <span class="font-semibold text-gray-900">사업자 회원으로 로그인</span>
+          <span class="block text-xs text-gray-500 mt-0.5">
+            승인된 사업자만 선택할 수 있습니다. 선택하면 기업 전용가와 사업자 주문 절차가 적용됩니다.
+          </span>
+        </span>
+      </label>
+
+      <button type="submit" id="loginSubmit"
               class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-semibold text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-        로그인
+        <%= _asBiz ? '사업자 회원으로 로그인' : '로그인' %>
       </button>
     </form>
 
     <p class="mt-4 text-center text-sm text-gray-600">
       아직 회원이 아니신가요?
       <a href="/auth/signup" class="font-semibold text-green-700 hover:text-green-800 underline underline-offset-2">이메일로 회원가입</a>
+      <span class="mx-1 text-gray-300">|</span>
+      <a href="/auth/signup?type=biz" class="font-semibold text-blue-700 hover:text-blue-800 underline underline-offset-2">사업자 회원가입</a>
     </p>
 
     <!-- 소셜 로그인 -->

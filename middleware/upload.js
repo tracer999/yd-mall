@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const parsedUploadLimitMb = Number(process.env.MAX_UPLOAD_FILE_MB);
 const MAX_UPLOAD_FILE_MB = Number.isFinite(parsedUploadLimitMb) && parsedUploadLimitMb > 0
@@ -162,6 +163,44 @@ const heroSlideUploader = multer({
     fileFilter: fileFilter,
     limits: { fileSize: MAX_VIDEO_UPLOAD_MB * 1024 * 1024 }
 });
+
+/*
+ * 사업자등록증 업로드 (설계 §3.2).
+ *
+ * ⚠️ `public/uploads/` 에 두면 안 된다 — 정적 서빙 경로라 URL 을 아는 사람은 누구나 받는다.
+ *    사업자등록증은 개인정보다. 그래서 저장 위치가 `storage/business/`(public 밖)이고,
+ *    열람은 관리자 인증을 통과한 라우트가 스트리밍한다.
+ * 파일명도 추측 불가능하게 만든다(시각 기반 이름은 대입으로 훑을 수 있다).
+ */
+const BUSINESS_LICENSE_DIR = 'storage/business';
+
+const businessLicenseStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        if (!fs.existsSync(BUSINESS_LICENSE_DIR)) {
+            fs.mkdirSync(BUSINESS_LICENSE_DIR, { recursive: true });
+        }
+        cb(null, BUSINESS_LICENSE_DIR);
+    },
+    filename: function (req, file, cb) {
+        const token = crypto.randomBytes(16).toString('hex');
+        cb(null, `bl_${token}${path.extname(file.originalname).toLowerCase()}`);
+    }
+});
+
+const businessLicenseUploader = multer({
+    storage: businessLicenseStorage,
+    fileFilter: (req, file, cb) => {
+        // 등록증은 스캔 이미지 또는 PDF 로 온다.
+        if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+            return cb(null, true);
+        }
+        cb(new Error('사업자등록증은 이미지 또는 PDF 파일만 첨부할 수 있습니다.'), false);
+    },
+    limits: { fileSize: 10 * 1024 * 1024 }
+});
+
+upload.businessLicense = businessLicenseUploader;
+upload.BUSINESS_LICENSE_DIR = BUSINESS_LICENSE_DIR;
 
 upload.MAX_UPLOAD_FILE_MB = MAX_UPLOAD_FILE_MB;
 upload.MAX_VIDEO_UPLOAD_MB = MAX_VIDEO_UPLOAD_MB;

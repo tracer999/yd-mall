@@ -1,0 +1,84 @@
+<%
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+const tabs = [['','전체'],['REQUESTED','요청'],['UNDER_REVIEW','검토 중'],['SELLER_PROPOSED','제안'],
+              ['BUYER_COUNTERED','고객 재제안'],['BUYER_ACCEPTED','고객 수락'],['SELLER_ACCEPTED','판매자 수락'],
+              ['CONVERTED_TO_ORDER','주문 전환'],['REJECTED','반려'],['EXPIRED','만료']];
+const cls = {
+  REQUESTED:'bg-amber-100 text-amber-800 border-amber-400', UNDER_REVIEW:'bg-blue-100 text-blue-800 border-blue-400',
+  SELLER_PROPOSED:'bg-blue-100 text-blue-800 border-blue-400', BUYER_COUNTERED:'bg-amber-100 text-amber-800 border-amber-400',
+  BUYER_ACCEPTED:'bg-green-100 text-green-800 border-green-400', SELLER_ACCEPTED:'bg-green-100 text-green-800 border-green-400',
+  CONVERTED_TO_ORDER:'bg-green-100 text-green-800 border-green-400', REJECTED:'bg-red-100 text-red-800 border-red-400',
+  EXPIRED:'bg-gray-100 text-gray-600 border-gray-400', CANCELLED:'bg-gray-100 text-gray-600 border-gray-400',
+  DRAFT:'bg-gray-100 text-gray-600 border-gray-400',
+};
+const qs = o => { const p=new URLSearchParams(); const s=o.status!==undefined?o.status:status;
+  if(s) p.set('status',s); if(keyword) p.set('q',keyword); if(o.page&&o.page>1) p.set('page',o.page);
+  const t=p.toString(); return '/admin/b2b/quotes'+(t?'?'+t:''); };
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+%>
+<% if (message) { %><div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800"><%= message %></div><% } %>
+<% if (error) { %><div class="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800"><%= error %></div><% } %>
+<% if (expiredNow > 0) { %>
+  <div class="mb-4 rounded-md bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700">
+    유효기간이 지난 견적 <%= expiredNow %>건을 만료 처리했습니다.
+  </div>
+<% } %>
+
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+  <div class="flex flex-wrap gap-1">
+    <% tabs.forEach(function(t) { %>
+      <a href="<%= qs({status:t[0]}) %>"
+         class="px-3 py-1.5 text-sm rounded-md no-underline <%= status === t[0] ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100' %>">
+        <%= t[1] %><% if (countMap[t[0]]) { %> <span class="ml-1 text-xs opacity-80">(<%= countMap[t[0]] %>)</span><% } %>
+      </a>
+    <% }); %>
+  </div>
+  <form action="/admin/b2b/quotes" method="GET" class="flex gap-2 w-full sm:w-auto">
+    <% if (status) { %><input type="hidden" name="status" value="<%= status %>"><% } %>
+    <input type="text" name="q" value="<%= keyword %>" placeholder="견적번호·상호" class="h-[38px] px-3 text-sm border border-gray-300 rounded-md w-full sm:w-64">
+    <button type="submit" class="h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">검색</button>
+  </form>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left text-gray-500">
+      <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-100">
+        <tr>
+          <th class="px-6 py-3">견적번호</th><th class="px-6 py-3">거래처</th>
+          <th class="px-6 py-3 text-right">정가 합계</th><th class="px-6 py-3 text-right">제안/확정</th>
+          <th class="px-6 py-3">상태</th><th class="px-6 py-3">유효기간</th><th class="px-6 py-3 text-right">관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (rows.length > 0) { %>
+          <% rows.forEach(function(q) { %>
+            <tr class="bg-white border-b border-gray-100 hover:bg-gray-50">
+              <td class="px-6 py-4 font-medium text-gray-900">
+                <%= q.quote_number %><p class="text-xs text-gray-400 font-normal">v<%= q.version %> · <%= q.item_count %>품목</p>
+              </td>
+              <td class="px-6 py-4"><%= q.company_name %></td>
+              <td class="px-6 py-4 text-right text-gray-400"><%= won(q.catalog_total) %>원</td>
+              <td class="px-6 py-4 text-right font-semibold text-gray-900"><%= won(q.final_total || q.proposed_total) %>원</td>
+              <td class="px-6 py-4"><span class="text-xs px-2.5 py-0.5 rounded border <%= cls[q.status] %>"><%= STATUS[q.status] %></span></td>
+              <td class="px-6 py-4 text-xs"><%= q.valid_until ? new Date(q.valid_until).toLocaleDateString('ko-KR') : '-' %></td>
+              <td class="px-6 py-4 text-right">
+                <a href="/admin/b2b/quotes/<%= q.id %>" class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">협상</a>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">견적이 없습니다.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<% if (totalPages > 1) { %>
+  <div class="mt-4 flex justify-center gap-1">
+    <% for (let i=1;i<=totalPages;i++) { %>
+      <a href="<%= qs({page:i}) %>" class="px-3 py-1.5 text-sm rounded-md no-underline <%= i===page?'bg-blue-600 text-white':'text-gray-600 hover:bg-gray-100' %>"><%= i %></a>
+    <% } %>
+  </div>
+<% } %>

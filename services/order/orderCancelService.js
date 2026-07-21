@@ -45,7 +45,18 @@ function isCouponRestoreEnabled() {
  */
 async function restoreOrderResources(conn, order) {
     const orderId = order.id;
-    const wasPaid = PAYMENT_CONFIRMED.has(order.status);
+
+    /*
+     * "재고를 되돌려야 하는가" 는 상태가 아니라 **사실**로 판정한다.
+     *
+     * B2B 주문은 판매자 승인 시점에 재고를 깎는다(설계 §7.3). 그때 orders.status 는 아직
+     * PENDING 이라, 상태만 보고 판정하면 승인 후 미입금 취소에서 재고가 영영 돌아오지 않는다.
+     * orders.stock_deducted_at 이 그 사실을 기록한다. 컬럼이 없던 시절의 주문(NULL)은
+     * 기존 규칙(PAID 이상)으로 폴백한다.
+     */
+    const [[deductRow]] = await conn.query('SELECT stock_deducted_at FROM orders WHERE id = ?', [orderId]);
+    const wasPaid = (deductRow && deductRow.stock_deducted_at != null)
+        || PAYMENT_CONFIRMED.has(order.status);
 
     // 0) 멱등 가드 — 조건부 UPDATE 의 affectedRows 로 "내가 첫 번째"임을 확보한다.
     //    호출측이 주문 행을 FOR UPDATE 로 잠갔더라도, 이 한 줄이 계약을 코드로 남긴다.
@@ -59,6 +70,7 @@ async function restoreOrderResources(conn, order) {
     //    멱등 가드(resources_restored_at)가 위에서 첫 실행을 보장하므로 중복 가산은 없다.
     if (wasPaid) {
         await skuService.restoreStockForOrder(conn, orderId);
+        await conn.query('UPDATE orders SET stock_deducted_at = NULL WHERE id = ?', [orderId]);
 
         // 특가 선착순 수량도 되돌린다. 소진은 결제 확정(PAID) 때만 일어나므로 wasPaid 안에 둔다.
         await dealSvc.restoreDealQuota(conn, orderId);

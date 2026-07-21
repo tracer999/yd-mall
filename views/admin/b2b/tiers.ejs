@@ -1,0 +1,130 @@
+<% if (message) { %>
+  <div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800"><%= message %></div>
+<% } %>
+<% if (error) { %>
+  <div class="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800"><%= error %></div>
+<% } %>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2">
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-500">
+          <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-6 py-3">순위</th>
+              <th class="px-6 py-3">등급명</th>
+              <th class="px-6 py-3">코드</th>
+              <th class="px-6 py-3">거래처</th>
+              <th class="px-6 py-3">상태</th>
+              <th class="px-6 py-3 text-right">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (rows.length > 0) { %>
+              <% rows.forEach(function(r) { %>
+                <tr class="bg-white border-b border-gray-100 hover:bg-gray-50">
+                  <td class="px-6 py-4"><%= r.rank_order %></td>
+                  <td class="px-6 py-4 font-medium text-gray-900">
+                    <%= r.tier_name %>
+                    <% if (r.is_default) { %>
+                      <span class="ml-1 text-xs px-2 py-0.5 rounded border bg-blue-100 text-blue-800 border-blue-400">기본</span>
+                    <% } %>
+                    <% if (r.description) { %><p class="text-xs text-gray-400 font-normal mt-0.5"><%= r.description %></p><% } %>
+                  </td>
+                  <td class="px-6 py-4 font-mono text-xs"><%= r.tier_code %></td>
+                  <td class="px-6 py-4"><%= r.member_count %>곳</td>
+                  <td class="px-6 py-4">
+                    <% if (r.is_active) { %>
+                      <span class="text-xs px-2 py-0.5 rounded border bg-green-100 text-green-800 border-green-400">사용</span>
+                    <% } else { %>
+                      <span class="text-xs px-2 py-0.5 rounded border bg-gray-100 text-gray-600 border-gray-400">미사용</span>
+                    <% } %>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <div class="flex justify-end gap-2">
+                      <button type="button" onclick='fillTierForm(<%- JSON.stringify(r) %>)'
+                              class="h-[34px] px-3 text-sm font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">수정</button>
+                      <form action="/admin/b2b/tiers/delete" method="POST" onsubmit="return confirm('삭제하시겠습니까?');">
+                        <input type="hidden" name="id" value="<%= r.id %>">
+                        <button type="submit" class="h-[34px] px-3 text-sm font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">
+                등록된 등급이 없습니다. 오른쪽에서 만들어 주세요.<br>
+                <span class="text-xs">등급이 없어도 기업회원 승인은 정상 동작합니다(등급 없이 승인).</span>
+              </td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <h3 id="tier-form-title" class="text-sm font-bold text-gray-900 mb-3">등급 추가</h3>
+      <form id="tier-form" action="/admin/b2b/tiers/save" method="POST" class="space-y-4">
+        <input type="hidden" name="id" id="tier_id" value="">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">등급명 <span class="text-red-500">*</span></label>
+          <input type="text" name="tier_name" id="tier_name" required placeholder="우수 거래처"
+                 class="mt-1 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">등급 코드 <span class="text-red-500">*</span></label>
+          <input type="text" name="tier_code" id="tier_code" required placeholder="DEALER_VIP"
+                 class="mt-1 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md font-mono">
+          <p class="mt-1 text-xs text-gray-500">영문 대문자·숫자·언더바. 나중에 바꾸지 않는 값입니다.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">순위</label>
+          <input type="number" name="rank_order" id="rank_order" value="100" min="1"
+                 class="mt-1 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+          <p class="mt-1 text-xs text-gray-500">작을수록 상위 등급</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">설명</label>
+          <input type="text" name="description" id="description"
+                 class="mt-1 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="is_default" id="is_default" value="1" class="rounded border-gray-300">
+          기본 등급 (승인 시 자동 배정)
+        </label>
+        <label class="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="is_active" id="is_active" value="1" checked class="rounded border-gray-300">
+          사용
+        </label>
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 h-[38px] px-4 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">저장</button>
+          <button type="button" onclick="resetTierForm()" class="h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">초기화</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function fillTierForm(t) {
+    document.getElementById('tier-form-title').textContent = '등급 수정';
+    document.getElementById('tier_id').value = t.id;
+    document.getElementById('tier_name').value = t.tier_name || '';
+    document.getElementById('tier_code').value = t.tier_code || '';
+    document.getElementById('rank_order').value = t.rank_order || 100;
+    document.getElementById('description').value = t.description || '';
+    document.getElementById('is_default').checked = !!t.is_default;
+    document.getElementById('is_active').checked = !!t.is_active;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function resetTierForm() {
+    document.getElementById('tier-form-title').textContent = '등급 추가';
+    document.getElementById('tier-form').reset();
+    document.getElementById('tier_id').value = '';
+    document.getElementById('is_active').checked = true;
+  }
+</script>

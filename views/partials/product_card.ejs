@@ -52,6 +52,12 @@
   const _showDist = _opts.showDistBadge && _distBadge;
   const _price = product.price;
   const _listPrice = (product.original_price && product.original_price > _price) ? product.original_price : null;
+  /*
+   * 기업 전용가 (설계 §6.2).
+   * services/b2b/b2bPricingService.decorateProducts 가 얹은 필드가 있을 때만 그린다.
+   * 일반 사용자·비로그인은 이 필드가 아예 없으므로 카드는 예전과 100% 동일하다.
+   */
+  const _b2bPrice = product.b2b_unit_price != null ? Number(product.b2b_unit_price) : null;
   const _detailPath = (product.slug && product.slug.trim())
     ? `/products/${encodeURIComponent(product.slug)}`
     : `/products/view/${product.id}`;
@@ -102,10 +108,21 @@
         </div>
       <% } %>
       <div class="mt-2 flex flex-col">
-        <% if (_listPrice) { %>
-          <span class="text-gray-400 text-xs line-through"><%= Number(_listPrice).toLocaleString() %>원</span>
+        <% if (_b2bPrice != null) { %>
+          <span class="text-gray-400 text-xs line-through"><%= Number(product.b2b_list_price || _price).toLocaleString() %>원</span>
+          <span class="flex items-center gap-1">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white shrink-0">기업가</span>
+            <span class="text-blue-900 font-bold text-lg"><%= Number(_b2bPrice).toLocaleString() %>원</span>
+          </span>
+          <% if (product.b2b_min_qty > 1) { %>
+            <span class="text-[11px] text-gray-500">최소 <%= product.b2b_min_qty %>개</span>
+          <% } %>
+        <% } else { %>
+          <% if (_listPrice) { %>
+            <span class="text-gray-400 text-xs line-through"><%= Number(_listPrice).toLocaleString() %>원</span>
+          <% } %>
+          <span class="text-gray-900 font-bold text-lg"><%= Number(_price).toLocaleString() %>원</span>
         <% } %>
-        <span class="text-gray-900 font-bold text-lg"><%= Number(_price).toLocaleString() %>원</span>
       </div>
     </div>
   </a>

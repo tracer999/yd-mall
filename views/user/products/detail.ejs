@@ -255,7 +255,81 @@
                                             <%
                                                 const displayPrice = product.price;
                                                 const displayListPrice = (product.original_price && product.original_price > displayPrice) ? product.original_price : null;
+                                                /*
+                                                 * B2B 전용가 (설계 §6.1).
+                                                 * b2bInfo 는 승인·미승인 사업자에게만 채워진다. 일반 사용자·비로그인은 null 이라
+                                                 * 아래 블록이 통째로 렌더되지 않는다 — 기존 화면과 완전히 동일하다.
+                                                 */
+                                                const _b2b = locals.b2b || { state: 'NONE', active: false };
+                                                const _bi = locals.b2bInfo || null;
+                                                const _btax = locals.b2bTax || null;
+                                                const _showB2bPrice = _bi && _bi.visible && _bi.priceSource !== 'B2C_FALLBACK';
+                                                const _pendingBiz = _b2b.state && !['NONE', 'APPROVED'].includes(_b2b.state);
                                             %>
+
+                                                <% if (_showB2bPrice) { %>
+                                                    <!-- 기업 전용가 -->
+                                                    <div class="w-full mb-6 rounded-xl border-2 border-blue-200 bg-blue-50 p-4">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-600 text-white">기업 전용가</span>
+                                                            <% if (_bi.discountRate > 0) { %>
+                                                                <span class="text-sm font-bold text-blue-700">일반가 대비 <%= _bi.discountRate %>% ↓</span>
+                                                            <% } %>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <div class="flex items-baseline justify-end gap-2">
+                                                                <span class="text-3xl font-bold text-blue-900"><%= Number(_bi.unitPrice).toLocaleString() %>원</span>
+                                                            </div>
+                                                            <% if (_btax && _b2b.taxDisplay === 'EXCLUSIVE') { %>
+                                                                <p class="mt-1 text-sm text-blue-800">
+                                                                    공급가 <strong><%= Number(_btax.supply).toLocaleString() %>원</strong>
+                                                                    <% if (_btax.vat > 0) { %> + VAT <%= Number(_btax.vat).toLocaleString() %>원<% } else { %> (면세)<% } %>
+                                                                </p>
+                                                            <% } %>
+                                                            <p class="mt-1 text-xs text-gray-500">
+                                                                일반 판매가 <span class="line-through"><%= Number(_bi.listPrice).toLocaleString() %>원</span>
+                                                            </p>
+                                                        </div>
+
+                                                        <% if (_bi.minOrderQty > 1 || _bi.orderUnit > 1) { %>
+                                                            <p class="mt-3 pt-3 border-t border-blue-200 text-sm text-blue-900">
+                                                                최소 주문수량 <strong><%= _bi.minOrderQty %>개</strong><% if (_bi.orderUnit > 1) { %> · <strong><%= _bi.orderUnit %>개</strong> 단위<% } %>
+                                                            </p>
+                                                        <% } %>
+
+                                                        <% if (_bi.tiers && _bi.tiers.length > 0) { %>
+                                                            <div class="mt-3 pt-3 border-t border-blue-200">
+                                                                <p class="text-xs font-bold text-blue-900 mb-1">수량별 가격</p>
+                                                                <table class="w-full text-sm text-blue-900">
+                                                                    <% _bi.tiers.slice().sort((a,b)=>a.minQuantity-b.minQuantity).forEach(function(t){ %>
+                                                                        <tr>
+                                                                            <td class="py-0.5"><%= t.minQuantity %>개 이상</td>
+                                                                            <td class="py-0.5 text-right font-semibold"><%= Number(t.unitPrice).toLocaleString() %>원</td>
+                                                                        </tr>
+                                                                    <% }) %>
+                                                                </table>
+                                                            </div>
+                                                        <% } %>
+
+                                                        <% if (_bi.transactionMode === 'QUOTE_REQUIRED') { %>
+                                                            <p class="mt-3 pt-3 border-t border-blue-200 text-sm font-medium text-blue-900">
+                                                                이 상품은 견적 요청 후 주문할 수 있습니다.
+                                                            </p>
+                                                        <% } else if (_bi.quoteRequired) { %>
+                                                            <p class="mt-3 pt-3 border-t border-blue-200 text-sm text-blue-900">
+                                                                대량 주문은 견적 요청이 필요합니다.
+                                                            </p>
+                                                        <% } %>
+                                                    </div>
+                                                <% } else if (_pendingBiz) { %>
+                                                    <!-- 승인 전 사업자 -->
+                                                    <div class="w-full mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                                        <p class="text-sm text-amber-900">
+                                                            기업 전용가는 <strong>사업자 승인 후</strong> 확인하실 수 있습니다.
+                                                            <a href="/b2b/status" class="underline underline-offset-2">신청 상태 보기</a>
+                                                        </p>
+                                                    </div>
+                                                <% } %>
 
                                                 <div class="flex flex-col items-end gap-1 w-full text-right mb-8">
                                                     <!-- 정가 (할인 시 취소선) -->
@@ -331,7 +405,8 @@
                                                 <% const _hasOptions = (typeof productOptions !== 'undefined' && productOptions && productOptions.length > 0); %>
                                                 <% if (isPurchasable || _hasOptions) { %>
                                                 <div id="purchasePanel" class="border border-gray-200 rounded-2xl p-5 mb-6 bg-white"
-                                                     data-is-option="<%= _hasOptions ? '1' : '0' %>">
+                                                     data-is-option="<%= _hasOptions ? '1' : '0' %>"
+                                                     <% if (_showB2bPrice) { %>data-b2b-price="1"<% } %>>
                                                     <% if (_hasOptions) { %>
                                                         <div class="space-y-3 mb-4">
                                                             <% productOptions.forEach(function(opt, oi){ %>
@@ -350,8 +425,8 @@
                                                     <% } %>
 
                                                     <div class="flex items-baseline justify-between mb-4">
-                                                        <span class="text-sm text-gray-500">판매가</span>
-                                                        <span id="panelPrice" class="text-2xl font-bold text-gray-900"><%= Number(product.price||0).toLocaleString() %>원</span>
+                                                        <span class="text-sm text-gray-500"><%= _showB2bPrice ? '기업 전용가' : '판매가' %></span>
+                                                        <span id="panelPrice" class="text-2xl font-bold <%= _showB2bPrice ? 'text-blue-900' : 'text-gray-900' %>"><%= Number((_showB2bPrice ? _bi.unitPrice : product.price) || 0).toLocaleString() %>원</span>
                                                     </div>
 
                                                     <form id="add-to-cart-form" action="/cart/add" method="post">
@@ -361,15 +436,25 @@
                                                             <span class="text-sm text-gray-500">수량</span>
                                                             <div class="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
                                                                 <button type="button" class="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-50" onclick="changeOrderQuantity(-1)"><i class="bi bi-dash"></i></button>
-                                                                <input id="orderQuantity" name="quantity" type="number" min="1" value="1"
+                                                                <input id="orderQuantity" name="quantity" type="number"
+                                                                       min="<%= _showB2bPrice ? _bi.minOrderQty : 1 %>"
+                                                                       step="<%= _showB2bPrice ? _bi.orderUnit : 1 %>"
+                                                                       value="<%= _showB2bPrice ? _bi.minOrderQty : 1 %>"
                                                                        max="<%= availableStock %>" data-max="<%= availableStock %>"
+                                                                       data-min="<%= _showB2bPrice ? _bi.minOrderQty : 1 %>"
+                                                                       data-step="<%= _showB2bPrice ? _bi.orderUnit : 1 %>"
                                                                        class="w-14 text-center text-sm border-0 focus:ring-0 focus:outline-none" />
                                                                 <button type="button" class="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-50" onclick="changeOrderQuantity(1)"><i class="bi bi-plus"></i></button>
                                                             </div>
                                                         </div>
                                                         <div class="flex flex-col gap-2">
-                                                            <button type="submit" id="addCartBtn" class="w-full py-3 rounded-xl border border-gray-900 text-gray-900 font-semibold hover:bg-gray-50 transition">장바구니 담기</button>
-                                                            <button type="button" id="buyNowBtn" onclick="goToCheckout()" class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-700 transition">바로구매</button>
+                                                            <% if (_showB2bPrice && _bi.transactionMode === 'QUOTE_REQUIRED') { %>
+                                                                <%# 견적 필수 상품은 담기·주문을 열지 않는다. 견적 도메인은 3단계. %>
+                                                                <button type="button" disabled class="w-full py-3 rounded-xl bg-gray-200 text-gray-500 font-semibold cursor-not-allowed">견적 요청 (준비중)</button>
+                                                            <% } else { %>
+                                                                <button type="submit" id="addCartBtn" class="w-full py-3 rounded-xl border border-gray-900 text-gray-900 font-semibold hover:bg-gray-50 transition">장바구니 담기</button>
+                                                                <button type="button" id="buyNowBtn" onclick="goToCheckout()" class="w-full py-3 rounded-xl <%= _showB2bPrice ? 'bg-blue-700 hover:bg-blue-800' : 'bg-gray-900 hover:bg-gray-700' %> text-white font-semibold transition"><%= _showB2bPrice ? '주문 요청' : '바로구매' %></button>
+                                                            <% } %>
                                                         </div>
                                                     </form>
                                                 </div>
@@ -402,7 +487,11 @@
                                                         });
                                                         if(!sku){ summaryEl.textContent='해당 옵션 조합은 판매하지 않습니다.'; selectedSkuInput.value=''; setEnabled(false); return; }
                                                         selectedSkuInput.value = sku.id;
-                                                        if(priceEl) priceEl.textContent = Number(sku.price).toLocaleString()+'원';
+                                                        /*
+                                                         * B2B 전용가는 상품 단위로 정한다(1단계). SKU 를 골라도 전용가는 그대로여야 하므로
+                                                         * 여기서 덮어쓰지 않는다. 일반 사용자는 data-b2b-price 가 없어 예전처럼 SKU 가로 갱신된다.
+                                                         */
+                                                        if(priceEl && !panel.dataset.b2bPrice) priceEl.textContent = Number(sku.price).toLocaleString()+'원';
                                                         var stock = Math.max(0, sku.stock||0);
                                                         if(qtyInput){ qtyInput.max = stock; qtyInput.dataset.max = stock; if((parseInt(qtyInput.value,10)||1) > stock) qtyInput.value = stock>0?1:1; }
                                                         if(sku.status==='OFF' || stock<=0){ summaryEl.textContent='선택하신 옵션은 품절입니다.'; setEnabled(false); }
@@ -954,10 +1043,17 @@
                                 const input = document.getElementById('orderQuantity');
                                 if (!input) return;
                                 const max = parseInt(input.dataset.max || input.max || PRODUCT_STOCK, 10) || PRODUCT_STOCK;
-                                let value = parseInt(input.value, 10) || 1;
-                                value += delta;
-                                if (value < 1) value = 1;
-                                if (value > max) value = max;
+                                // B2B 는 MOQ·주문단위가 있다. 일반 상품은 min=1·step=1 이라 동작이 예전과 같다.
+                                const min = parseInt(input.dataset.min || 1, 10) || 1;
+                                const step = parseInt(input.dataset.step || 1, 10) || 1;
+                                let value = parseInt(input.value, 10) || min;
+                                value += delta * step;
+                                if (value < min) value = min;
+                                if (value > max) {
+                                    // 상한을 넘으면 주문단위에 맞는 가장 큰 값으로 내린다.
+                                    value = min + Math.floor((max - min) / step) * step;
+                                    if (value < min) value = min;
+                                }
                                 input.value = value;
                             }
 

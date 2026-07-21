@@ -1,4 +1,14 @@
 <%
+/*
+ * B2B 주문서 (설계 §7.4).
+ * isB2bOrder 가 false 면 아래 조건 블록이 전부 꺼져 기존 화면과 완전히 동일하다.
+ */
+const _isB2b = locals.isB2bOrder === true;
+const _b2bTax = locals.b2bTaxTotals || null;
+const _allowCoupon = locals.b2bAllowsCoupon !== false;
+const _won = (n) => Number(n || 0).toLocaleString('ko-KR');
+%>
+<%
   /*
    * 이 파일 맨 위에 있던 layout('layouts/main_layout') 호출을 지웠다.
    * express-ejs-layouts 는 뷰 안에서 부르는 `layout()` 헬퍼를 제공하지 않는다(그건 ejs-locals 문법이다).
@@ -115,6 +125,41 @@
                     </div>
                 </div>
             </section>
+
+            <% if (_isB2b) { %>
+            <!-- 기업 주문 정보 (설계 §7.4) -->
+            <section class="bg-white border rounded-lg p-6 mt-6">
+                <h2 class="text-lg font-bold mb-1">기업 주문 정보</h2>
+                <p class="text-sm text-gray-500 mb-4"><%= b2b.companyName %> · <%= b2b.businessNumber %></p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">발주번호 (PO)</label>
+                        <input type="text" name="purchase_order_number" maxlength="50"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-sm"
+                               placeholder="사내 발주번호가 있으면 입력하세요">
+                        <p class="text-xs text-gray-400 mt-1">주문서·거래명세서에 함께 표기됩니다.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">납기 희망일</label>
+                        <input type="date" name="requested_delivery_date"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-sm">
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-2 text-sm text-gray-700">
+                            <input type="checkbox" name="tax_invoice_required" value="1" checked class="rounded border-gray-300">
+                            세금계산서 발행
+                        </label>
+                        <p class="text-xs text-gray-400 mt-1">수신 이메일은 사업자 정보에 등록된 주소를 사용합니다.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">요청사항</label>
+                        <textarea name="buyer_note" rows="3"
+                                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-sm"
+                                  placeholder="분할 납품, 도착 시간 등 요청사항을 적어주세요"></textarea>
+                    </div>
+                </div>
+            </section>
+            <% } %>
         </div>
 
         <!-- Right Column: Payment -->
@@ -164,7 +209,11 @@
 
                 <!-- Coupon & Point -->
                 <div class="space-y-4">
-                    <% if (!isGuest) { %>
+                    <% if (_isB2b && !_allowCoupon) { %>
+                        <div class="text-sm text-blue-900 bg-blue-50 border border-blue-200 p-3 rounded">
+                            기업 전용가가 적용된 주문입니다. 쿠폰·포인트는 함께 사용할 수 없습니다.
+                        </div>
+                    <% } else if (!isGuest) { %>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">쿠폰</label>
                             <div class="flex justify-between items-center">
@@ -206,13 +255,40 @@
 
                 <hr>
 
+                <% if (_isB2b && _b2bTax) { %>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between text-gray-600">
+                            <span>공급가액</span><span><%= _won(_b2bTax.supplyAmount) %>원</span>
+                        </div>
+                        <div class="flex justify-between text-gray-600">
+                            <span>부가세</span><span><%= _won(_b2bTax.vatAmount) %>원</span>
+                        </div>
+                        <% if (_b2bTax.taxFreeAmount > 0) { %>
+                        <div class="flex justify-between text-gray-600">
+                            <span>면세 금액</span><span><%= _won(_b2bTax.taxFreeAmount) %>원</span>
+                        </div>
+                        <% } %>
+                    </div>
+                    <hr>
+                <% } %>
+
                 <div class="flex justify-between items-center font-bold text-lg">
-                    <span>최종 결제금액</span>
-                    <span id="finalAmountText" class="text-green-600"><%= Number(totalAmount).toLocaleString() %>원</span>
+                    <span><%= _isB2b ? '주문 금액' : '최종 결제금액' %></span>
+                    <span id="finalAmountText" class="<%= _isB2b ? 'text-blue-700' : 'text-green-600' %>"><%= Number(totalAmount).toLocaleString() %>원</span>
                 </div>
 
-                <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition">
-                    결제하기
+                <% if (_isB2b) { %>
+                    <div class="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-900">
+                        <p class="font-medium mb-1">즉시 결제되지 않습니다.</p>
+                        <p class="text-blue-800 text-xs leading-relaxed">
+                            주문을 접수하면 담당자가 확인 후 승인하고 입금 안내를 드립니다.
+                            입금 기한은 승인일로부터 <%= b2bSettings.paymentDueDays %>일입니다.
+                        </p>
+                    </div>
+                <% } %>
+
+                <button type="submit" class="w-full <%= _isB2b ? 'bg-blue-700 hover:bg-blue-800' : 'bg-green-600 hover:bg-green-700' %> text-white py-3 rounded-lg font-bold transition">
+                    <%= _isB2b ? '주문 요청하기' : '결제하기' %>
                 </button>
             </div>
         </div>
@@ -414,7 +490,8 @@
 </script>
 
 <%# 공용 파티셜은 views/partials/ 에 있다. 여기서 '../partials' 는 views/user/partials 를 가리켜 include 가 실패했다. %>
-<% if (!isGuest) { %>
+<%# B2B(비중첩)는 쿠폰을 쓰지 않는다 — 트리거 버튼뿐 아니라 모달 마크업도 내보내지 않는다. %>
+<% if (!isGuest && _allowCoupon) { %>
   <%- include('../../partials/coupon_modal', { group: 'ORDER', coupons: orderCoupons }) %>
   <% if (shippingCoupons.length) { %>
     <%- include('../../partials/coupon_modal', { group: 'SHIPPING', coupons: shippingCoupons }) %>

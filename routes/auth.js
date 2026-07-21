@@ -6,6 +6,9 @@ const { loadSystemSettingsAndApplyEnv } = require('../config/systemSettings');
 const { PROVIDERS, LABELS, getCallbackUrl, getEnabledProviders } = require('../services/auth/authProviders');
 const policyService = require('../services/auth/policyService');
 const profileService = require('../services/auth/profileService');
+// 사업자 회원가입(/auth/signup?type=biz) — 일반 가입 성공 뒤 사업자 신청을 덧붙인다.
+const businessProfileService = require('../services/b2b/businessProfileService');
+const upload = require('../middleware/upload');
 
 const LAYOUT = 'layouts/main_layout';
 
@@ -86,26 +89,70 @@ router.get('/login', (req, res) => {
         providers: getEnabledProviders(),
         providerLabels: LABELS,
         errorMessage: req.query.error === 'oauth' ? '소셜 로그인에 실패했습니다. 다시 시도해주세요.' : null,
-        values: {}
+        values: { asBusiness: req.query.type === 'biz' }
     });
 });
 
+/**
+ * 로그인 모드 확정 (사업자 / 개인).
+ *
+ * 로그인 화면을 분리하지 않는다(설계 §3.1). 대신 체크박스 하나로 **어느 자격으로 들어왔는지**를
+ * 명시하게 하고, 서버가 그 자격이 실제로 있는지 확인한다.
+ *
+ *   체크함 + 승인 사업자   → 기업 모드 (전용가·B2B 주문절차)
+ *   체크함 + 심사중/반려   → 로그인은 되지만 상태 안내 화면으로 보낸다
+ *   체크함 + 사업자 아님   → 로그인 거부. 잘못된 자격으로 들어왔다는 것을 알려야 한다
+ *   체크 안 함            → 개인 모드. 승인 사업자라도 일반가로 산다
+ *
+ * 결과는 `req.session.b2bMode` 에 남고 middleware/b2bContext 가 이를 존중한다.
+ * 세션에 값이 없으면(소셜 로그인 등) 기존처럼 사업자 자격을 그대로 적용한다.
+ */
+async function resolveLoginMode(req, user, asBusiness) {
+    const profile = await businessProfileService.findByUser(user.id);
+
+    if (!asBusiness) {
+        req.session.b2bMode = false;               // 개인 구매로 명시 진입
+        return { ok: true, redirect: null };
+    }
+    if (!profile) {
+        return { ok: false, error: '사업자 회원이 아닙니다. 일반 회원으로 로그인하시거나 사업자 회원 신청을 해주세요.' };
+    }
+    req.session.b2bMode = true;
+    if (profile.status !== 'APPROVED') {
+        return { ok: true, redirect: '/b2b/status' };   // 심사중·반려·정지 → 상태를 먼저 보여준다
+    }
+    return { ok: true, redirect: null };
+}
+
 router.post('/login', (req, res, next) => {
+    const asBusiness = req.body.login_as_business === '1';
+
+    const renderFail = (message) => res.status(401).render('auth/login', {
+        layout: LAYOUT,
+        title: '로그인',
+        providers: getEnabledProviders(),
+        providerLabels: LABELS,
+        errorMessage: message,
+        values: { email: req.body.email || '', asBusiness }
+    });
+
     passport.authenticate('local', (err, user, info) => {
         if (err) return next(err);
-        if (!user) {
-            return res.status(401).render('auth/login', {
-                layout: LAYOUT,
-                title: '로그인',
-                providers: getEnabledProviders(),
-                providerLabels: LABELS,
-                errorMessage: (info && info.message) || '로그인에 실패했습니다.',
-                values: { email: req.body.email || '' }
-            });
-        }
-        req.login(user, (loginErr) => {
+        if (!user) return renderFail((info && info.message) || '로그인에 실패했습니다.');
+
+        req.login(user, async (loginErr) => {
             if (loginErr) return next(loginErr);
-            return checkAndRedirect(req, res);
+            try {
+                const mode = await resolveLoginMode(req, user, asBusiness);
+                if (!mode.ok) {
+                    // 자격이 없으면 세션을 남기지 않는다 — 반쯤 들어온 상태를 만들지 않는다.
+                    return req.logout(() => renderFail(mode.error));
+                }
+                if (mode.redirect) return res.redirect(mode.redirect);
+                return checkAndRedirect(req, res);
+            } catch (e) {
+                return next(e);
+            }
         });
     })(req, res, next);
 });
@@ -165,33 +212,57 @@ router.get('/kakao/reauth', refreshAuthConfig, (req, res, next) => {
 
 // ---------------------------------------------------------------- 자체 가입폼
 
-function renderSignupForm(res, { values, errors, termsContent, privacyContent, status = 200 }) {
+function renderSignupForm(res, { values, errors, termsContent, privacyContent, status = 200,
+    isBusiness = false, bizValues = {}, bizErrors = {} }) {
     return res.status(status).render('auth/signup_form', {
         layout: LAYOUT,
-        title: '회원가입',
+        title: isBusiness ? '사업자 회원가입' : '회원가입',
         providers: getEnabledProviders(),
         providerLabels: LABELS,
         values,
         errors,
         termsContent,
-        privacyContent
+        privacyContent,
+        isBusiness,
+        bizValues,
+        bizErrors
     });
+}
+
+/**
+ * `?type=biz` 또는 폼의 hidden signup_type 으로 사업자 가입인지 판단한다.
+ *
+ * ⚠️ Express 5 는 본문이 없는 GET 요청에서 `req.body` 를 **undefined** 로 둔다.
+ *    `req.body.signup_type` 을 그냥 읽으면 GET /auth/signup 이 500 으로 죽는다.
+ */
+function isBusinessSignup(req) {
+    if (req.query && req.query.type === 'biz') return true;
+    return !!(req.body && req.body.signup_type === 'biz');
 }
 
 router.get('/signup', async (req, res, next) => {
     if (req.user) return checkAndRedirect(req, res);
     try {
         const { termsContent, privacyContent } = await policyService.getPolicyContents();
-        return renderSignupForm(res, { values: {}, errors: {}, termsContent, privacyContent });
+        return renderSignupForm(res, {
+            values: {}, errors: {}, termsContent, privacyContent,
+            isBusiness: isBusinessSignup(req)
+        });
     } catch (err) {
         return next(err);
     }
 });
 
-router.post('/signup', async (req, res, next) => {
+/*
+ * 사업자 가입은 등록증 파일이 붙어 multipart 로 온다. multer 는 multipart 가 아니면
+ * 그대로 통과시키므로, 일반 가입 경로의 동작은 이 미들웨어가 있어도 바뀌지 않는다.
+ */
+router.post('/signup', upload.businessLicense.single('license_file'), async (req, res, next) => {
     if (req.user) return checkAndRedirect(req, res);
 
     const profile = profileService.normalizeProfileInput(req.body);
+    const isBusiness = isBusinessSignup(req);
+    const biz = isBusiness ? businessProfileService.normalizeBusinessInput(req.body) : null;
 
     try {
         const errors = {
@@ -204,9 +275,22 @@ router.post('/signup', async (req, res, next) => {
 
         Object.assign(errors, await profileService.checkDuplicates(profile, { checkEmail: !errors.email }));
 
-        if (Object.keys(errors).length > 0) {
+        // 사업자 항목은 별도 오류 맵으로 모은다 — 뷰가 사업자 블록 옆에 따로 뿌린다.
+        let bizErrors = {};
+        if (isBusiness) {
+            bizErrors = businessProfileService.validateBusiness(biz, { hasLicenseFile: !!req.file });
+            if (!bizErrors.business_number
+                && await businessProfileService.isDuplicateBusinessNumber(biz.business_number)) {
+                bizErrors.business_number = '이미 등록된 사업자등록번호입니다.';
+            }
+        }
+
+        if (Object.keys(errors).length > 0 || Object.keys(bizErrors).length > 0) {
             const { termsContent, privacyContent } = await policyService.getPolicyContents();
-            return renderSignupForm(res, { values: profile, errors, termsContent, privacyContent, status: 400 });
+            return renderSignupForm(res, {
+                values: profile, errors, termsContent, privacyContent, status: 400,
+                isBusiness, bizValues: biz || {}, bizErrors
+            });
         }
 
         const policyIds = await policyService.getActivePolicyIds();
@@ -226,9 +310,30 @@ router.post('/signup', async (req, res, next) => {
 
         await profileService.issueSignupCoupons(userId);
 
+        /*
+         * 사업자 신청은 회원 생성이 끝난 뒤 덧붙인다. 여기서 실패해도 회원가입 자체는 이미
+         * 커밋됐으므로, 사용자를 로그인시킨 뒤 /b2b/apply 로 보내 다시 신청하게 한다
+         * (가입을 통째로 되돌리면 이메일·전화번호가 묶여 재가입이 막힌다).
+         */
+        let bizApplied = false;
+        if (isBusiness) {
+            try {
+                await businessProfileService.createApplication({
+                    userId,
+                    biz,
+                    licenseFile: req.file ? req.file.path : null,
+                    licenseOriginalName: req.file ? req.file.originalname : null,
+                });
+                bizApplied = true;
+            } catch (bizErr) {
+                console.error('[signup] 사업자 신청 저장 실패 — 회원가입은 완료됨:', bizErr.message);
+            }
+        }
+
         const [[user]] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
         req.login(user, (loginErr) => {
             if (loginErr) return next(loginErr);
+            if (isBusiness) return res.redirect(bizApplied ? '/b2b/status' : '/b2b/apply?error=save');
             return res.redirect('/auth/signup-success');
         });
     } catch (err) {

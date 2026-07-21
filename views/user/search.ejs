@@ -114,12 +114,20 @@
                             <%
                                 const _price = p.price || 0;
                                 const _listPrice = (p.original_price && p.original_price > _price) ? p.original_price : null;
+                                /* 기업 전용가 — decorateProducts 가 얹은 필드가 있을 때만. 일반 사용자는 undefined 라 예전과 같다. */
+                                const _b2bPrice = p.b2b_unit_price != null ? Number(p.b2b_unit_price) : null;
                             %>
                             <div class="flex items-end justify-end gap-2 mt-2">
-                                <% if (_listPrice) { %>
-                                    <span class="text-xs text-gray-400 line-through"><%= Number(_listPrice).toLocaleString() %>원</span>
+                                <% if (_b2bPrice != null) { %>
+                                    <span class="text-xs text-gray-400 line-through"><%= Number(p.b2b_list_price || _price).toLocaleString() %>원</span>
+                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white">기업가</span>
+                                    <span class="font-bold text-blue-900 text-base"><%= Number(_b2bPrice).toLocaleString() %>원</span>
+                                <% } else { %>
+                                    <% if (_listPrice) { %>
+                                        <span class="text-xs text-gray-400 line-through"><%= Number(_listPrice).toLocaleString() %>원</span>
+                                    <% } %>
+                                    <span class="font-bold text-gray-900 text-base"><%= Number(_price).toLocaleString() %>원</span>
                                 <% } %>
-                                <span class="font-bold text-gray-900 text-base"><%= Number(_price).toLocaleString() %>원</span>
                             </div>
                         </div>
                     </a>

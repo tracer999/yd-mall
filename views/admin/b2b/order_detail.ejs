@@ -1,0 +1,172 @@
+<%
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+const dt = v => (v ? new Date(v).toLocaleString('ko-KR') : '-');
+const dd = v => (v ? new Date(v).toLocaleDateString('ko-KR') : '-');
+const tone = {
+  amber: 'bg-amber-100 text-amber-800 border-amber-400',
+  blue: 'bg-blue-100 text-blue-800 border-blue-400',
+  green: 'bg-green-100 text-green-800 border-green-400',
+  gray: 'bg-gray-100 text-gray-700 border-gray-400',
+}[stage.tone];
+const row = (k, v) => `<div class="flex py-2 border-b border-gray-100 last:border-0"><dt class="w-36 shrink-0 text-sm text-gray-500">${k}</dt><dd class="text-sm text-gray-900">${v == null || v === '' ? '-' : v}</dd></div>`;
+const SOURCE_LABEL = { B2B_DEFAULT: '기본 전용가', VOLUME: '수량 구간가', TIER: '등급가', CUSTOMER_CONTRACT: '계약가', NEGOTIATED_QUOTE: '견적 확정가' };
+// 지금 누를 수 있는 작업 — 서비스의 판정과 같은 규칙(화면이 규칙을 새로 만들지 않는다).
+const canReview  = stage.key === 'REQUESTED';
+const canApprove = ['REQUESTED', 'UNDER_REVIEW'].includes(stage.key);
+const canDeposit = stage.key === 'AWAIT_DEPOSIT';
+const canReject  = !['CANCELLED', 'SHIPPED', 'DELIVERED'].includes(stage.key);
+%>
+
+<% if (message) { %><div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800"><%= message %></div><% } %>
+<% if (error) { %><div class="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800"><%= error %></div><% } %>
+
+<div class="mb-6 flex justify-between items-center">
+  <a href="/admin/b2b/orders" class="text-sm text-gray-500 hover:text-gray-700 no-underline">&larr; 목록으로</a>
+  <span class="text-xs font-medium px-2.5 py-1 rounded border <%= tone %>"><%= stage.label %></span>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    <!-- 주문 정보 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">주문 정보</h3>
+      <dl>
+        <%- row('주문번호', order.order_number) %>
+        <%- row('거래처', `${order.company_name} (${order.business_number})`) %>
+        <%- row('주문자', [order.user_name, order.user_email].filter(Boolean).join(' / ')) %>
+        <%- row('주문일시', dt(order.created_at)) %>
+        <%- row('발주번호(PO)', order.purchase_order_number) %>
+        <%- row('납기 희망일', order.requested_delivery_date ? dd(order.requested_delivery_date) : '') %>
+        <%- row('요청사항', order.buyer_note) %>
+        <%- row('배송지', `${order.receiver_name || ''} ${order.receiver_phone || ''}<br>${order.shipping_address || ''}`) %>
+      </dl>
+    </div>
+
+    <!-- 주문 상품 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">주문 상품</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-xs text-gray-500 border-b border-gray-100">
+            <tr>
+              <th class="text-left py-2">상품</th>
+              <th class="text-right py-2">단가</th>
+              <th class="text-right py-2">수량</th>
+              <th class="text-right py-2">공급가</th>
+              <th class="text-right py-2">부가세</th>
+              <th class="text-right py-2">합계</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% items.forEach(function(it) { %>
+              <tr class="border-b border-gray-50">
+                <td class="py-2">
+                  <%= it.product_name %>
+                  <% if (it.option_snapshot) { %><span class="text-xs text-gray-400">/ <%= it.option_snapshot %></span><% } %>
+                  <% if (it.price_source) { %>
+                    <p class="text-xs text-blue-600"><%= SOURCE_LABEL[it.price_source] || it.price_source %>
+                      <% if (it.list_price) { %><span class="text-gray-400 line-through ml-1"><%= won(it.list_price) %>원</span><% } %>
+                    </p>
+                  <% } %>
+                </td>
+                <td class="py-2 text-right"><%= won(it.product_price) %>원</td>
+                <td class="py-2 text-right"><%= it.quantity %></td>
+                <td class="py-2 text-right"><%= won(it.supply_price) %></td>
+                <td class="py-2 text-right"><%= won(it.vat_price) %></td>
+                <td class="py-2 text-right font-semibold"><%= won(it.total_price) %>원</td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <dl class="mt-4 pt-4 border-t border-gray-100">
+        <%- row('공급가액', won(order.supply_amount) + '원') %>
+        <%- row('부가세', won(order.vat_amount) + '원') %>
+        <% if (order.tax_free_amount > 0) { %><%- row('면세 금액', won(order.tax_free_amount) + '원') %><% } %>
+        <%- row('배송비', won(order.shipping_fee) + '원') %>
+        <%- row('<strong>주문 금액</strong>', `<strong class="text-lg text-blue-700">${won(order.total_amount)}원</strong>`) %>
+      </dl>
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <!-- 진행 처리 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">진행 처리</h3>
+
+      <% if (canApprove) { %>
+        <div class="mb-3 rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+          승인하면 <strong>재고가 즉시 차감</strong>되고 입금 기한(<%= settings.paymentDueDays %>일)이 시작됩니다.
+          재고가 부족하면 승인되지 않습니다.
+        </div>
+      <% } %>
+
+      <% if (canReview) { %>
+        <form action="/admin/b2b/orders/<%= order.order_id %>/action" method="POST" class="mb-2">
+          <input type="hidden" name="action" value="review">
+          <button type="submit" class="w-full h-[38px] text-sm font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">검토 시작</button>
+        </form>
+      <% } %>
+
+      <% if (canApprove) { %>
+        <form action="/admin/b2b/orders/<%= order.order_id %>/action" method="POST" class="mb-2"
+              onsubmit="return confirm('승인하면 재고가 차감됩니다. 진행할까요?');">
+          <input type="hidden" name="action" value="approve">
+          <button type="submit" class="w-full h-[38px] text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700">승인 · 입금 안내</button>
+        </form>
+      <% } %>
+
+      <% if (canDeposit) { %>
+        <form action="/admin/b2b/orders/<%= order.order_id %>/action" method="POST" class="mb-2">
+          <input type="hidden" name="action" value="deposit">
+          <input type="text" name="deposit_name" placeholder="입금자명 (선택)"
+                 class="mb-2 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+          <button type="submit" class="w-full h-[38px] text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">입금 확인</button>
+        </form>
+      <% } %>
+
+      <% if (canReject) { %>
+        <form action="/admin/b2b/orders/<%= order.order_id %>/action" method="POST"
+              onsubmit="return confirm('주문을 반려하고 재고를 되돌립니다. 진행할까요?');">
+          <input type="hidden" name="action" value="reject">
+          <input type="text" name="reason" placeholder="반려 사유 (거래처에 안내됩니다)" required
+                 class="mb-2 block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+          <button type="submit" class="w-full h-[38px] text-sm font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">반려 · 재고 회수</button>
+        </form>
+      <% } %>
+
+      <% if (!canReview && !canApprove && !canDeposit && !canReject) { %>
+        <p class="text-sm text-gray-500">이 단계에서 처리할 작업이 없습니다. 출고·배송은 주문 관리 화면을 사용하세요.</p>
+      <% } %>
+
+      <dl class="mt-4 pt-4 border-t border-gray-100">
+        <%- row('승인일시', dt(order.approved_at)) %>
+        <%- row('입금 기한', order.payment_due_at ? dd(order.payment_due_at) : '') %>
+        <%- row('입금 확인', dt(order.deposited_at)) %>
+        <%- row('입금자명', order.deposit_name) %>
+        <% if (order.reject_reason) { %><%- row('반려 사유', order.reject_reason) %><% } %>
+      </dl>
+    </div>
+
+    <!-- 세금계산서 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <h3 class="text-sm font-bold text-gray-900 mb-1">세금계산서</h3>
+      <p class="text-xs text-gray-500 mb-3">
+        수신: <%= order.tax_invoice_email || '-' %><br>
+        <%= order.tax_invoice_required ? '거래처가 발행을 요청했습니다.' : '발행 요청이 없습니다.' %>
+      </p>
+      <form action="/admin/b2b/orders/<%= order.order_id %>/tax-invoice" method="POST" class="space-y-2">
+        <select name="tax_invoice_status" class="block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+          <% [['NOT_ISSUED','미발행'],['REQUESTED','발행 요청'],['ISSUED','발행 완료'],['CANCELLED','발행 취소']].forEach(function(o){ %>
+            <option value="<%= o[0] %>" <%= order.tax_invoice_status === o[0] ? 'selected' : '' %>><%= o[1] %></option>
+          <% }); %>
+        </select>
+        <input type="text" name="tax_invoice_no" value="<%= order.tax_invoice_no || '' %>" placeholder="승인번호"
+               class="block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+        <button type="submit" class="w-full h-[38px] text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">저장</button>
+      </form>
+      <p class="mt-2 text-xs text-gray-400">1단계는 수동 발행 후 상태만 기록합니다(팝빌·바로빌 연동은 4단계).</p>
+    </div>
+  </div>
+</div>

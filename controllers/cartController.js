@@ -2,6 +2,8 @@ const pool = require('../config/db');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
 const dealSvc = require('../services/deal/dealService');
 const skuService = require('../services/catalog/skuService');
+// B2B — 전용가·수량규칙·장바구니 유형(설계 §6.3)
+const b2bPricingService = require('../services/b2b/b2bPricingService');
 
 // 장바구니 조회
 exports.getCart = async (req, res) => {
@@ -21,8 +23,33 @@ exports.getCart = async (req, res) => {
             ORDER BY c.created_at DESC
         `, [userId]);
 
+        /*
+         * B2B 전용가를 특가보다 **먼저** 적용한다(주문서와 같은 순서).
+         * 비활성 컨텍스트면 rows 가 그대로라 B2C 장바구니는 예전과 같다.
+         */
+        const isB2bCart = !!(req.b2b && req.b2b.active);
+        if (isB2bCart) {
+            const priced = await b2bPricingService.resolveForProducts(req.b2b, rows.map(r => r.product_id));
+            for (const r of rows) {
+                const info = priced.get(Number(r.product_id));
+                if (!info || !info.visible || info.priceSource === 'B2C_FALLBACK') continue;
+                // 담은 수량 기준으로 수량구간가를 다시 본다.
+                const atQty = await b2bPricingService.resolveForProduct({ b2b: req.b2b, productId: r.product_id, quantity: r.quantity });
+                r.b2b_list_price = r.price;
+                r.price = atQty.unitPrice;
+                r.b2b_price_source = atQty.priceSource;
+                r.b2b_min_qty = atQty.minOrderQty;
+                r.b2b_order_unit = atQty.orderUnit;
+                r.b2b_qty_error = b2bPricingService.validateQuantity(
+                    { min_order_qty: atQty.minOrderQty, order_unit: atQty.orderUnit, max_order_qty: atQty.maxOrderQty },
+                    r.quantity
+                );
+            }
+        }
+
         // 특가를 반영한 뒤 합계를 낸다 — 장바구니 금액이 주문서 금액과 어긋나면 안 된다.
-        await dealSvc.applyDeals(rows, { idKey: 'product_id' });
+        // B2B 라인은 위에서 이미 전용가가 잡혀 특가 대상이 아니다.
+        if (!isB2bCart) await dealSvc.applyDeals(rows, { idKey: 'product_id' });
 
         let totalQuantity = 0;
         let totalAmount = 0;
@@ -39,12 +66,33 @@ exports.getCart = async (req, res) => {
 
         res.render('user/cart', {
             title: '장바구니',
+            isB2bCart,
             items: rows,
             totalQuantity,
             totalAmount,
             shipping,
             currentUser: req.user,
-            stockError: req.query.error === 'stock' ? req.query.max : null
+            stockError: req.query.error === 'stock' ? req.query.max : null,
+            /*
+             * B2B 관련 안내. 리다이렉트만 하고 이유를 안 보여주면 사용자는 왜 안 담겼는지 모른다.
+             * 문구는 서버가 정한다 — 뷰가 error 코드를 해석하지 않게.
+             */
+            b2bNotice: (() => {
+                switch (req.query.error) {
+                    case 'b2b_qty':
+                        return req.query.reason
+                            ? `주문 수량 조건을 확인해 주세요 — ${req.query.reason}`
+                            : '주문 수량 조건을 확인해 주세요.';
+                    case 'mixed':
+                        return req.query.type === 'B2B'
+                            ? '개인 구매로 담은 상품이 있어 기업 상품을 함께 담을 수 없습니다. 장바구니를 비운 뒤 다시 담아 주세요.'
+                            : '기업 구매로 담은 상품이 있어 함께 담을 수 없습니다. 장바구니를 비운 뒤 다시 담아 주세요.';
+                    case 'switch_mode':
+                        return '장바구니에 담긴 상품이 있어 구매 자격을 전환할 수 없습니다. 먼저 장바구니를 비워 주세요.';
+                    default:
+                        return null;
+                }
+            })()
         });
     } catch (err) {
         console.error(err);
@@ -77,6 +125,20 @@ exports.addToCart = async (req, res) => {
         const skuId = sku.id;
         const stock = (sku.stock != null && sku.stock >= 0) ? sku.stock : 0;
 
+        /*
+         * 거래 유형 혼합 금지 (설계 §6.3).
+         * 개인 구매와 기업 구매는 가격·주문절차·결제가 전부 다르다. 한 장바구니에 섞이면
+         * 주문서에서 어느 쪽 규칙을 쓸지 정할 수 없다.
+         */
+        const cartType = (req.b2b && req.b2b.active) ? 'B2B' : 'B2C';
+        const [[other]] = await pool.query(
+            'SELECT COUNT(*) AS cnt FROM carts WHERE user_id = ? AND cart_type <> ?',
+            [userId, cartType]
+        );
+        if (other.cnt > 0) {
+            return res.redirect(`/cart?error=mixed&type=${cartType}`);
+        }
+
         // 같은 SKU 라인만 합친다(옵션이 다르면 별도 라인).
         const [existingRows] = await pool.query(
             'SELECT id, quantity FROM carts WHERE user_id = ? AND product_id = ? AND sku_id <=> ?',
@@ -88,6 +150,14 @@ exports.addToCart = async (req, res) => {
             return res.redirect(`/cart?error=stock&product=${productId}&max=${stock}`);
         }
 
+        // B2B 는 최소 주문수량·주문단위를 담는 시점에도 검증한다(주문 시 또 한 번 본다).
+        if (cartType === 'B2B') {
+            const violations = await b2bPricingService.validateOrderItems(req.b2b, [{ product_id: productId, quantity: newQty }]);
+            if (violations.length > 0) {
+                return res.redirect(`/cart?error=b2b_qty&reason=${encodeURIComponent(violations[0].reason)}`);
+            }
+        }
+
         if (existingRows.length > 0) {
             await pool.query(
                 'UPDATE carts SET quantity = ? WHERE id = ?',
@@ -95,8 +165,8 @@ exports.addToCart = async (req, res) => {
             );
         } else {
             await pool.query(
-                'INSERT INTO carts (user_id, product_id, sku_id, quantity) VALUES (?, ?, ?, ?)',
-                [userId, productId, skuId, qty]
+                'INSERT INTO carts (user_id, product_id, sku_id, quantity, cart_type) VALUES (?, ?, ?, ?, ?)',
+                [userId, productId, skuId, qty, cartType]
             );
         }
 

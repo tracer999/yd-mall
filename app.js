@@ -225,6 +225,10 @@ async function startServer() {
     // Site Settings Middleware (Global)
     app.use(require('./middleware/siteSettings'));
 
+    // B2B 거래 컨텍스트 — 승인된 사업자면 req.b2b.active=true. mallContext 뒤에 와야 한다.
+    // 비활성이면 모든 하위 로직이 no-op 이라 B2C 경로는 그대로다(설계 §2).
+    app.use(require('./middleware/b2bContext'));
+
     // Theme Middleware (P4) — 활성 테마의 스타일 토큰을 res.locals.theme 에 주입
     app.use(require('./middleware/themeData'));
 

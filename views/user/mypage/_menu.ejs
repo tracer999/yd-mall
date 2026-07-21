@@ -1,4 +1,28 @@
+<%
+/*
+ * 구매 자격 표시·전환 (설계 §3.1).
+ * 승인 사업자만 이 블록이 보인다. 일반 회원에게는 아무것도 렌더되지 않는다.
+ */
+const _canSwitch = locals.b2bCanSwitch === true;
+const _isBizNow = (locals.b2b || {}).active === true;
+%>
 <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm <%= (typeof sticky !== 'undefined' && sticky) ? 'lg:sticky lg:top-4' : '' %>">
+    <% if (_canSwitch) { %>
+        <div class="mb-4 rounded-lg border <%= _isBizNow ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50' %> p-3">
+            <p class="text-xs text-gray-500 mb-1">현재 구매 자격</p>
+            <p class="text-sm font-bold <%= _isBizNow ? 'text-blue-800' : 'text-gray-800' %>">
+                <%= _isBizNow ? '기업 구매 (' + (locals.b2b.companyName || '사업자') + ')' : '개인 구매' %>
+            </p>
+            <form action="/b2b/mode" method="POST" class="mt-2">
+                <input type="hidden" name="mode" value="<%= _isBizNow ? 'personal' : 'business' %>">
+                <input type="hidden" name="redirect" value="<%= locals.path || '/mypage' %>">
+                <button type="submit" class="text-xs font-semibold <%= _isBizNow ? 'text-gray-600' : 'text-blue-700' %> underline underline-offset-2">
+                    <%= _isBizNow ? '개인 구매로 전환' : '기업 구매로 전환' %>
+                </button>
+            </form>
+            <p class="mt-1 text-[11px] text-gray-400">전환하려면 장바구니를 비워야 합니다.</p>
+        </div>
+    <% } %>
     <h2 class="mb-3 text-base font-bold text-gray-900">마이페이지 메뉴</h2>
     <nav class="space-y-3 text-sm">
         <div>
@@ -24,6 +48,27 @@
         <div>
             <p class="mb-2 px-2 text-xs font-bold tracking-wide text-gray-500">내 정보</p>
             <a href="/mypage/profile" class="block rounded-md px-3 py-2 transition <%= path && path.startsWith('/mypage/profile') ? 'brand-chip font-semibold' : 'text-gray-700 hover:bg-gray-50' %>">회원정보 수정</a>
+            <%
+            /*
+             * 사업자 회원 진입점.
+             * 신청 이력이 있으면 상태 화면으로, 없으면 신청 폼으로 보낸다.
+             * 일반회원에게는 "사업자 회원 신청" 한 줄만 보인다 — 화면 구조는 그대로다.
+             */
+            const _b2b = locals.b2b || { state: 'NONE' };
+            const _hasBiz = _b2b.state && _b2b.state !== 'NONE';
+            %>
+            <% if (_isBizNow) { %>
+            <a href="/quotes" class="block rounded-md px-3 py-2 transition <%= path && path.startsWith('/quotes') ? 'brand-chip font-semibold' : 'text-gray-700 hover:bg-gray-50' %>">견적함</a>
+            <% } %>
+            <a href="<%= _hasBiz ? '/b2b/status' : '/b2b/apply' %>"
+               class="block rounded-md px-3 py-2 transition <%= path && path.startsWith('/b2b') ? 'brand-chip font-semibold' : 'text-gray-700 hover:bg-gray-50' %>">
+                <%= _hasBiz ? '사업자 정보' : '사업자 회원 신청' %>
+                <% if (_b2b.state === 'PENDING' || _b2b.state === 'UNDER_REVIEW') { %>
+                    <span class="ml-1 text-xs text-amber-600">심사중</span>
+                <% } else if (_b2b.active) { %>
+                    <span class="ml-1 text-xs text-green-600">승인</span>
+                <% } %>
+            </a>
             <!-- <span class="block rounded-md px-3 py-2 text-gray-400">배송지 관리 (준비중)</span> -->
         </div>
     </nav>

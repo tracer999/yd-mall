@@ -14,6 +14,11 @@ const performanceService = require('../services/membership/performanceService');
 const evaluationService = require('../services/membership/evaluationService');
 const membershipConfigService = require('../services/membership/membershipConfigService');
 const skuService = require('../services/catalog/skuService');
+// B2B — 전용가 리졸버 · 세액 분해 · 주문 절차(승인/입금)
+const b2bPricingService = require('../services/b2b/b2bPricingService');
+const b2bTaxService = require('../services/b2b/b2bTaxService');
+const b2bOrderService = require('../services/b2b/b2bOrderService');
+const b2bContextMw = require('../middleware/b2bContext');
 const optionService = require('../services/catalog/optionService');
 const { getNumberSetting } = require('../config/systemSettings');
 
@@ -100,13 +105,13 @@ async function usageLimitReached(coupon) {
 /**
  * 주문 번호 생성 (토스 orderId: 6자 이상 64자 이하, 영문/숫자/-_)
  */
-function generateOrderNumber() {
+function generateOrderNumber(prefix = 'ORD') {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     const d = String(now.getDate()).padStart(2, '0');
     const rand = String(Math.floor(Math.random() * 90000) + 10000);
-    return `ORD-${y}${m}${d}-${rand}`;
+    return `${prefix}-${y}${m}${d}-${rand}`;
 }
 
 /**
@@ -146,7 +151,10 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
         }
 
         await conn.query(
-            `UPDATE orders SET status = 'PAID', payment_key = ?, payment_method = ?, paid_at = NOW() WHERE id = ?`,
+            // stock_deducted_at: 재고를 깎았다는 사실. 취소 시 복원 판정이 이 값을 본다(B2B 와 공용).
+            `UPDATE orders SET status = 'PAID', payment_key = ?, payment_method = ?, paid_at = NOW(),
+                    stock_deducted_at = COALESCE(stock_deducted_at, NOW())
+              WHERE id = ?`,
             [paymentKey, paymentMethod, orderId]
         );
 
@@ -370,6 +378,13 @@ exports.getForm = async (req, res) => {
      * 특가 적용. 주문서에 보이는 금액이 postForm 이 확정할 금액과 같아야 한다.
      * 공동구매 라인은 source_type 이 이미 있어 건너뛴다.
      */
+    /*
+     * B2B 전용가를 **특가보다 먼저** 적용한다. 여기서 찍는 source_type='B2B' 를 보고
+     * dealSvc 가 그 라인을 건너뛴다(dealService.js:172) → 계약가 레인과 프로모션 레인이 분리된다.
+     * 비활성 컨텍스트면 items 를 그대로 돌려주므로 B2C 흐름은 예전과 같다.
+     */
+    const isB2bOrder = !!(req.b2b && req.b2b.active);
+    items = await b2bPricingService.applyToScopeItems(req.b2b, items);
     items = await dealSvc.applyToScopeItems(items);
     totalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
@@ -437,8 +452,17 @@ exports.getForm = async (req, res) => {
         };
     });
 
+    // B2B 주문서: 쿠폰·포인트 슬롯을 숨기고 공급가/부가세를 분리해 보여준다(설계 §7.4).
+    const b2bSettings = b2bContextMw.getSettings();
+    const b2bAllowsCoupon = !isB2bOrder || b2bSettings.allowCouponStacking;
+    const b2bTaxTotals = isB2bOrder ? b2bTaxService.calcOrderTax(items) : null;
+
     res.render('user/checkout/form', {
-        title: '주문/결제',
+        title: isB2bOrder ? '주문 요청' : '주문/결제',
+        isB2bOrder,
+        b2bSettings,
+        b2bAllowsCoupon,
+        b2bTaxTotals,
         items,
         totalAmount,
         isGuest,
@@ -641,7 +665,21 @@ exports.postForm = async (req, res) => {
      * 부착한 source_id(deal_item.id) 가 order_items 에 저장되고, 결제 확정 트랜잭션은
      * 특가를 **재조회하지 않고** 그 id 로만 수량을 소진한다(§5.2).
      */
+    // 주문서와 같은 순서로 적용한다 — 표시가와 청구가가 어긋나면 안 된다.
+    const isB2bOrder = !!(req.b2b && req.b2b.active);
+    items = await b2bPricingService.applyToScopeItems(req.b2b, items);
     items = await dealSvc.applyToScopeItems(items);
+
+    /*
+     * B2B 수량 규칙 재검증 (설계 §7.6). 주문서를 거치지 않고 이 POST 를 직접 두드릴 수 있다.
+     * MOQ·주문단위 위반, 견적 필수 수량은 여기서 막는다.
+     */
+    if (isB2bOrder) {
+        const violations = await b2bPricingService.validateOrderItems(req.b2b, items);
+        if (violations.length > 0) {
+            return res.redirect('/cart?error=b2b_qty&reason=' + encodeURIComponent(violations[0].reason));
+        }
+    }
 
     const subtotalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
@@ -649,7 +687,14 @@ exports.postForm = async (req, res) => {
      * 멤버십 등급 혜택 (회원만). 정률 할인·무료배송 override 를 여기서 확정한다(설계 §7, §10.4).
      * 비회원은 무혜택(ZERO). 할인은 상품금액(subtotal) 기준이며 최소주문·최대할인 상한은 서비스가 건다.
      */
-    const gradeBenefits = req.user
+    /*
+     * B2B 는 전용가가 이미 계약가다. 쿠폰·포인트·등급할인을 얹으면 마진 관리가 불가능해진다
+     * (설계 §4.5). 기본은 미적용이며 system_settings.b2b_allow_coupon_stacking 으로만 연다.
+     */
+    const b2bStacking = isB2bOrder && b2bContextMw.getSettings().allowCouponStacking;
+    const skipBenefits = isB2bOrder && !b2bStacking;
+
+    const gradeBenefits = (req.user && !skipBenefits)
         ? await membershipBenefitService.getOrderBenefits({ userId: req.user.id, mallId: req.mallId || 1, subtotalAmount })
         : { ...membershipBenefitService.ZERO };
     let gradeDiscount = Number(gradeBenefits.discountAmount) || 0;
@@ -695,7 +740,8 @@ exports.postForm = async (req, res) => {
         return { coupon, discount };
     };
 
-    if (req.user) {
+    // B2B(비중첩 모드)는 쿠폰·포인트를 아예 태우지 않는다. 폼이 값을 보내도 무시한다.
+    if (req.user && !skipBenefits) {
         // 1. 주문 쿠폰 (ORDER 그룹) — 1장
         if (user_coupon_id) {
             const r = await validateCoupon(user_coupon_id, 'ORDER');
@@ -751,7 +797,13 @@ exports.postForm = async (req, res) => {
     // 계산 순서는 배송비 문서 §4 와 쿠폰 문서 §9 가 같아야 한다. 등급 할인은 쿠폰과 같은 층(주문 할인)이다.
     //   subtotal − coupon − grade − point + shipping_fee − shipping_discount = total
     const totalAmount = Math.max(0, subtotalAmount - couponDiscount - gradeDiscount - pointUsed + shippingFee - shippingDiscount);
-    const orderNumber = generateOrderNumber();
+    const orderNumber = generateOrderNumber(isB2bOrder ? 'B2B' : 'ORD');
+
+    /*
+     * 공급가액·부가세 (설계 §4.6). 라인 합과 주문 총액이 반드시 일치하도록 서비스가 잔차를 흡수한다.
+     * B2C 주문에도 계산해 두면 좋지만, 이번 범위에서는 B2B 주문에만 채운다(기존 흐름 불변).
+     */
+    const taxTotals = isB2bOrder ? b2bTaxService.calcOrderTax(items) : null;
 
     const connection = await pool.getConnection();
     try {
@@ -766,18 +818,24 @@ exports.postForm = async (req, res) => {
                 total_amount, coupon_discount, grade_discount, point_used, user_coupon_id, shipping_coupon_id,
                 receiver_name, receiver_phone, receiver_zipcode, receiver_address, receiver_detailed_address,
                 shipping_address, shipping_message,
-                buyer_name, buyer_email, buyer_phone
+                buyer_name, buyer_email, buyer_phone,
+                order_type, supply_amount, vat_amount, tax_free_amount
             ) VALUES (?, ?, ?, 'PENDING', ?, ?, ?,
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?,
-                ?, ?, ?)`,
+                ?, ?, ?,
+                ?, ?, ?, ?)`,
             [
                 userId, req.mallId || 1, orderNumber, subtotalAmount, shippingFee, shippingDiscount,
                 totalAmount, couponDiscount, gradeDiscount, pointUsed, userCouponId, shippingCouponId,
                 receiver_name, receiver_phone, receiver_zipcode || null, receiver_address || null, receiver_detailed_address || null,
                 shippingAddr || null, shipping_message || null,
-                isGuest ? buyer_name : null, isGuest ? buyer_email : null, isGuest ? buyer_phone : null
+                isGuest ? buyer_name : null, isGuest ? buyer_email : null, isGuest ? buyer_phone : null,
+                isB2bOrder ? 'B2B' : 'B2C',
+                taxTotals ? taxTotals.supplyAmount : null,
+                taxTotals ? taxTotals.vatAmount : null,
+                taxTotals ? taxTotals.taxFreeAmount : null
             ]
         );
         const orderId = (await connection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
@@ -826,16 +884,42 @@ exports.postForm = async (req, res) => {
             }
         }
 
-        for (const item of items) {
+        for (let i = 0; i < items.length; i += 1) {
+            const item = items[i];
             const lineTotal = item.price * item.quantity;
             // source_type/source_id 는 nullable — 일반 주문에는 NULL 이 들어간다(§9-1).
             // sku_id: 유효 판매 SKU. option_snapshot: 옵션 조합 텍스트(단일상품은 NULL).
+            // supply/vat: B2B 주문의 세금계산서 근거. B2C 는 NULL 이라 기존과 같다.
+            const taxLine = taxTotals ? taxTotals.lines[i] : null;
             await connection.query(
-                `INSERT INTO order_items (order_id, product_id, sku_id, product_name, option_snapshot, product_price, quantity, total_price, source_type, source_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO order_items (order_id, product_id, sku_id, product_name, option_snapshot, product_price, quantity, total_price, source_type, source_id,
+                                          supply_price, vat_price, price_source, list_price)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [orderId, item.product_id, item.sku_id || null, item.name, item.option_snapshot || null,
                     item.price, item.quantity, lineTotal,
-                    item.source_type || null, item.source_id || null]
+                    item.source_type || null, item.source_id || null,
+                    taxLine ? taxLine.supplyPrice : null,
+                    taxLine ? taxLine.vatPrice : null,
+                    item.price_source || null,
+                    item.list_price || null]
+            );
+        }
+
+        /*
+         * B2B 확장정보 + 접수 처리 (설계 §7.2).
+         * 여기서는 재고를 깎지 않는다 — 판매자 승인 시점에 차감한다(§7.3).
+         */
+        if (isB2bOrder) {
+            await connection.query(
+                `INSERT INTO b2b_order_detail
+                    (order_id, business_profile_id, purchase_order_number, requested_delivery_date,
+                     tax_invoice_required, buyer_note, approval_status, payment_terms)
+                 VALUES (?, ?, ?, ?, ?, ?, 'REQUESTED', 'PREPAY')`,
+                [orderId, req.b2b.businessProfileId,
+                    (req.body.purchase_order_number || '').trim() || null,
+                    req.body.requested_delivery_date || null,
+                    req.body.tax_invoice_required ? 1 : 0,
+                    (req.body.buyer_note || '').trim() || null]
             );
         }
 
@@ -852,6 +936,11 @@ exports.postForm = async (req, res) => {
             req.session.guestOrders = [...((req.session.guestOrders || []).slice(-9)), orderNumber];
         }
 
+        // B2B 는 즉시 결제가 아니다 — 결제창으로 보내지 않고 접수 완료로 간다(설계 §7.1).
+        if (isB2bOrder) {
+            b2bOrderService.notify(orderId, 'REQUESTED').catch((e) => console.warn('[b2b] 접수 안내 실패:', e.message));
+            return res.redirect(`/checkout/b2b-received?order=${orderNumber}`);
+        }
         return res.redirect(`/checkout/pay/${orderNumber}`);
     } catch (err) {
         await connection.rollback();
@@ -1017,5 +1106,38 @@ exports.getComplete = async (req, res) => {
     res.render('user/checkout/complete', {
         title: '주문 완료',
         order
+    });
+};
+
+/*
+ * B2B 주문 접수 완료 화면 (설계 §7.1).
+ *
+ * ⚠️ getComplete 를 재사용하면 안 된다. 그 핸들러는 테스트 모드에서 PENDING 주문을
+ *    completeOrderWithStockAndPaid 로 **자동 결제 처리**한다 — B2B 주문이 그리로 가면
+ *    판매자 승인 없이 재고가 깎이고 결제 완료가 된다.
+ */
+exports.getB2bReceived = async (req, res) => {
+    const orderNumber = req.query.order;
+    let order = null;
+
+    if (orderNumber) {
+        const [[found]] = await pool.query(
+            `SELECT o.id, o.user_id, o.order_number, o.status, o.total_amount,
+                    o.supply_amount, o.vat_amount, o.tax_free_amount, o.shipping_fee, o.subtotal_amount,
+                    o.receiver_name, o.receiver_phone, o.shipping_address, o.created_at,
+                    d.purchase_order_number, d.requested_delivery_date, d.tax_invoice_required,
+                    d.approval_status, d.payment_due_at
+               FROM orders o JOIN b2b_order_detail d ON d.order_id = o.id
+              WHERE o.order_number = ?`,
+            [orderNumber]
+        );
+        // 남의 주문번호로 배송지가 노출되지 않도록 소유자만 본다.
+        if (found && req.user && found.user_id === req.user.id) order = found;
+    }
+
+    res.render('user/checkout/b2b_received', {
+        title: '주문 접수 완료',
+        order,
+        settings: b2bContextMw.getSettings(),
     });
 };

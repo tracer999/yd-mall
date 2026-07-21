@@ -12,6 +12,19 @@
         </div>
     <% } %>
 
+    <% if (locals.b2bNotice) { %>
+        <div class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+            <i class="bi bi-info-circle mr-2"></i><%= b2bNotice %>
+        </div>
+    <% } %>
+
+    <% if (locals.isB2bCart) { %>
+        <div class="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-sm flex items-center justify-between gap-3">
+            <span><i class="bi bi-building mr-2"></i>기업 구매 장바구니입니다. 기업 전용가가 적용됩니다.</span>
+            <a href="/mypage" class="text-xs underline underline-offset-2 whitespace-nowrap">구매 자격 변경</a>
+        </div>
+    <% } %>
+
     <% if (!items || items.length === 0) { %>
         <div class="bg-white rounded-2xl border border-gray-200 p-10 text-center text-gray-500">
             <i class="bi bi-bag text-4xl mb-3 text-gray-300"></i>
@@ -108,9 +121,23 @@
                 <% } %>
                 <form action="/checkout" method="GET" class="space-y-2">
                     <input type="hidden" name="cart" value="1">
-                    <button type="submit" class="w-full py-3 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
-                        전체 상품 구매하기
+                    <%
+                    /*
+                     * 기업 장바구니면 버튼 문구가 "주문 요청"이 되고 견적 요청 경로가 하나 늘어난다.
+                     * 일반 장바구니는 isB2bCart 가 falsy 라 예전과 완전히 동일하다.
+                     */
+                    const _b2bCart = locals.isB2bCart === true;
+                    %>
+                    <button type="submit" class="w-full py-3 rounded-xl <%= _b2bCart ? 'bg-blue-700 hover:bg-blue-800' : 'bg-[var(--gh-primary)] hover:bg-[var(--gh-primary-dark)]' %> text-white text-sm font-semibold">
+                        <%= _b2bCart ? '주문 요청하기' : '전체 상품 구매하기' %>
                     </button>
+                    <% if (_b2bCart) { %>
+                        <a href="/quotes/request"
+                           class="block w-full text-center py-3 rounded-xl border-2 border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700 hover:bg-blue-100 no-underline">
+                            견적 요청하기
+                        </a>
+                        <p class="text-xs text-gray-500 text-center">대량 주문·단가 협의가 필요하면 견적을 요청하세요.</p>
+                    <% } %>
                     <%# Shopify 미사용 시 국가 선택기 + 해외 구매 버튼 숨김 (A3).
                         shopifyGlobalCartCheckout() 는 btn 없으면 즉시 return 하므로 스크립트는 안전하다. %>
                     <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
