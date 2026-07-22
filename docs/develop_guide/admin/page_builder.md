@@ -216,6 +216,16 @@ page (page_type='home', mall_id)
 
 UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로 읽는 것에 정확히 맞춘다(`controllers/admin/productGroupController.js` 상단 주석).
 
+**예외 — `menu_code` 가 걸린 메뉴 쇼케이스 그룹**은 이 이분법을 따르지 않는다. 스토어프론트는
+`menuShowcaseService.resolveShowcaseItems()` 로 **담긴 상품 우선 → 수집 조건 폴백** 순으로 뽑는다
+(`group_type` 을 보지 않는다). 따라서 관리자 폼도 두 패널을 동시에 띄우고 구성 방식 라디오를 감추며,
+저장 시 `resolveGroupType()` 이 `group_type` 을 `condition` 으로 고정한다 — `manual` 분기가
+`filter_condition_json` 을 일부러 건드리지 않아, manual 로 저장하면 방금 고친 폴백 조건이 버려지기 때문이다.
+
+폴백은 `filter_condition_json` 에 인정 키(`badge`·`isNew`·`category_id`·`min_discount`·`in_stock`)가
+**하나라도 있을 때만** 동작한다. 빈 조건은 "몰 전체 상품"을 뜻하므로, 담긴 상품이 0건이라고 해서
+아무 상품이나 `추천 특가` 로 올리지 않기 위한 가드다. 미리보기도 같은 함수를 타므로 화면과 어긋나지 않는다.
+
 - **필터 화이트리스트(4키)**: `badge`(products.product_badge 는 SET → `FIND_IN_SET`), `category_id`, `min_discount`(`discount_rate >=`), `in_stock`(`stock > 0`)
 - **정렬 화이트리스트(`ORDER_MAP`)**: `manual`(= created_at DESC), `newest`, `discount`, `price_asc`, `price_desc`, `views`
 - **배지 값**: `BEST`, `NEW`, `RECOMMEND`, `DEADLINE_SALE`, `GREENHUB_SPECIAL`
