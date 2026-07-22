@@ -718,11 +718,10 @@ const trimOrNull = (v) => {
 /** date input 은 값이 없으면 빈 문자열을 보낸다 — DATE 컬럼에 그대로 넣으면 에러다. */
 const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test((v ?? '').trim()) ? v.trim() : null);
 
-/** 업로드 파일 → 웹 경로. 새 파일이 없으면 폼이 들고 온 기존 경로(hidden)를 유지한다. */
-function topbarImageOf(files, field, existing) {
+/** 이번 저장에 새로 올라온 업로드 파일 → 웹 경로. 없으면 null. */
+function uploadedTopbarImage(files, field) {
     const f = files && files[field] && files[field][0];
-    if (f) return `/uploads/banners/${f.filename}`;
-    return trimOrNull(existing);
+    return f ? `/uploads/banners/${f.filename}` : null;
 }
 
 async function upsertTopbarItem(conn, mallId, kind, slot, row) {
@@ -802,15 +801,29 @@ exports.postTopbar = async (req, res) => {
             });
         }
 
-        // 배너 3슬롯 — 이미지가 없으면 배너가 아니다(문구만 있는 배너는 없다).
+        /*
+         * 배너 3슬롯 — **이미지가 1순위, 대체 텍스트가 폴백**.
+         * 이미지가 없어도 대체 텍스트가 있으면 텍스트 배너로 남긴다(스토어프론트가 카드로 그린다).
+         * 둘 다 비어야 '등록하지 않은 슬롯'이고, 그때만 행을 지운다.
+         */
         for (const slot of [1, 2, 3]) {
-            const image = topbarImageOf(files, `topbar_banner_${slot}`, b[`banner_${slot}_existing_image`]);
-            if (!image || b[`banner_${slot}_delete`] === '1') {
+            const alt = trimOrNull(b[`banner_${slot}_alt`]);
+            /*
+             * '이미지 삭제' 체크는 **기존 이미지**를 지우겠다는 뜻이다.
+             * 같은 저장에 새 파일까지 올라왔다면 교체가 의도이므로 새 파일이 이긴다.
+             */
+            const uploaded = uploadedTopbarImage(files, `topbar_banner_${slot}`);
+            const keepExisting = b[`banner_${slot}_delete`] === '1'
+                ? null
+                : trimOrNull(b[`banner_${slot}_existing_image`]);
+            const image = uploaded || keepExisting;
+
+            if (!image && !alt) {
                 await deleteTopbarItem(conn, mallId, 'BANNER', slot);
                 continue;
             }
             await upsertTopbarItem(conn, mallId, 'BANNER', slot, {
-                message: trimOrNull(b[`banner_${slot}_alt`]),   // 대체 텍스트(접근성)
+                message: alt,          // 대체 텍스트 — 접근성 + 이미지 없을 때의 텍스트 배너 내용
                 image_url: image,
                 link_url: trimOrNull(b[`banner_${slot}_link_url`]),
                 new_window: b[`banner_${slot}_new_window`] === '1' ? 1 : 0,

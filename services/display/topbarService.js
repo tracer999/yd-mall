@@ -6,7 +6,9 @@ const pool = require('../../config/db');
  *
  * 렌더 규칙은 여기서 정한다(뷰는 받은 대로 그린다):
  *   - 활성이고 노출 기간 안에 있는 것만 낸다.
- *   - 배너는 slot 순으로 최대 3개. 이미지가 없는 슬롯은 배너가 아니다.
+ *   - 배너는 slot 순으로 최대 3개. **이미지가 1순위**이고, 이미지가 없으면 대체 텍스트(message)로
+ *     텍스트 배너를 그린다. 이미지도 텍스트도 없는 슬롯만 배너가 아니다.
+ *     (이미지 로드 실패 시의 텍스트 폴백은 뷰가 클라이언트에서 처리한다 — 서버는 알 수 없다.)
  *   - 알림·배너가 모두 없으면 **null** 을 준다 → 뷰가 바 자체를 렌더하지 않는다.
  *
  * version 은 '닫기'의 유효 범위다. 콘텐츠가 바뀌면 값이 바뀌므로,
@@ -32,7 +34,7 @@ async function getTopbar(mallId) {
     `, [mallId]);
 
     const banners = rows
-        .filter((r) => r.kind === 'BANNER' && r.image_url)
+        .filter((r) => r.kind === 'BANNER' && (r.image_url || r.message))
         .slice(0, MAX_BANNERS);
     const notice = rows.find((r) => r.kind === 'NOTICE' && r.message) || null;
 

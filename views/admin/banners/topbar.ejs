@@ -54,6 +54,9 @@
     <li><strong>배너와 알림이 모두 없으면 톱바 자체가 노출되지 않습니다.</strong></li>
     <li>배너는 <strong>등록 개수에 따라 크기가 달라집니다</strong> — 1개: 한 폭 큰 배너 / 2개: 2단 / 3개: 3단.
         현재 노출 중인 배너 <strong><%= _bannerCount %></strong>개.</li>
+    <li><strong>이미지가 1순위입니다.</strong> 이미지를 올리지 않았거나 이미지가 열리지 않으면,
+        <strong>대체 텍스트</strong>가 이미지 배너와 같은 자리·같은 크기의 <strong>텍스트 배너</strong>로 노출됩니다.
+        이미지와 대체 텍스트가 <strong>모두 비면</strong> 그 슬롯은 삭제됩니다.</li>
     <li>고객은 닫기(×) 버튼으로 톱바를 숨길 수 있습니다. 내용을 바꾸면 닫았던 고객에게도 다시 보입니다.</li>
   </ul>
 </div>
@@ -105,13 +108,13 @@
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
     <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
       <h2 class="text-base font-bold text-gray-800"><i class="bi bi-image mr-1"></i> 배너 (최대 3개)</h2>
-      <p class="mt-0.5 text-xs text-gray-500">이미지가 없는 슬롯은 저장 시 비워집니다. 슬롯 순서대로 왼쪽부터 놓입니다.</p>
+      <p class="mt-0.5 text-xs text-gray-500">이미지와 대체 텍스트가 모두 없는 슬롯은 저장 시 비워집니다. 슬롯 순서대로 왼쪽부터 놓입니다.</p>
     </div>
 
     <div class="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
       <% topbar.slots.forEach(function (slot) { %>
         <% const _b = topbar.banners[slot] || {}; %>
-        <div class="rounded-lg border border-gray-200 p-4 space-y-3">
+        <div class="rounded-lg border border-gray-200 p-4 space-y-3" data-tb-slot>
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-bold text-gray-700">배너 <%= slot %></h3>
             <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
@@ -120,21 +123,35 @@
             </label>
           </div>
 
+          <%#
+            미리보기 — 실제 노출 우선순위(이미지 → 대체 텍스트)를 그대로 보여 준다.
+            이미지 미리보기와 텍스트 배너 미리보기를 둘 다 심어 두고 상태에 따라 하나만 띄운다.
+          %>
           <% if (_b.image_url) { %>
-            <img src="<%= _b.image_url %>" alt="" class="w-full h-20 object-cover rounded border border-gray-100">
+            <img data-tb-image src="<%= _b.image_url %>" alt="" class="w-full h-20 object-cover rounded border border-gray-100">
             <input type="hidden" name="banner_<%= slot %>_existing_image" value="<%= _b.image_url %>">
-            <label class="inline-flex items-center gap-1.5 text-xs text-red-600">
-              <input type="checkbox" name="banner_<%= slot %>_delete" value="1" class="w-4 h-4 rounded border-gray-300"> 이 배너 삭제
-            </label>
           <% } else { %>
-            <div class="w-full h-20 rounded border border-dashed border-gray-200 flex items-center justify-center text-xs text-gray-300">
-              등록된 이미지 없음
+            <img data-tb-image alt="" style="display:none" class="w-full h-20 object-cover rounded border border-gray-100">
+          <% } %>
+
+          <div data-tb-text-preview <%- _b.image_url ? 'style="display:none"' : '' %>
+               class="w-full h-20 rounded border border-gray-200 bg-slate-800 p-2">
+            <div class="w-full h-full flex items-center justify-center px-2 text-center rounded-md
+                        bg-gradient-to-br from-white/20 via-white/10 to-white/[0.04] ring-1 ring-inset ring-white/25">
+              <span data-tb-text-value class="font-semibold text-[13px] line-clamp-2 <%= _b.message ? 'text-white' : 'text-white/40 font-normal text-[11px]' %>"><%= _b.message || '대체 텍스트를 입력하면 이렇게 노출됩니다' %></span>
             </div>
+          </div>
+
+          <% if (_b.image_url) { %>
+            <label class="inline-flex items-center gap-1.5 text-xs text-red-600">
+              <input type="checkbox" data-tb-delete name="banner_<%= slot %>_delete" value="1" class="w-4 h-4 rounded border-gray-300"> 이미지 삭제
+            </label>
+            <p class="text-[11px] text-gray-400 -mt-1">이미지를 지워도 대체 텍스트가 있으면 <strong>텍스트 배너</strong>로 남습니다.</p>
           <% } %>
 
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">이미지 <%= _b.image_url ? '교체' : '업로드' %></label>
-            <input type="file" name="topbar_banner_<%= slot %>" accept="image/*"
+            <input type="file" data-tb-file name="topbar_banner_<%= slot %>" accept="image/*"
                    class="w-full text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-100 file:text-gray-700">
           </div>
 
@@ -145,9 +162,9 @@
           </div>
 
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">대체 텍스트 (선택)</label>
-            <input type="text" name="banner_<%= slot %>_alt" maxlength="200" value="<%= _b.message || '' %>"
-                   placeholder="이미지 로드 실패·스크린리더용"
+            <label class="block text-xs font-medium text-gray-600 mb-1">대체 텍스트 <span class="text-gray-400">(이미지 없으면 텍스트 배너)</span></label>
+            <input type="text" data-tb-alt name="banner_<%= slot %>_alt" maxlength="200" value="<%= _b.message || '' %>"
+                   placeholder="예) 여름 특가 최대 50% 할인"
                    class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
           </div>
 
@@ -179,3 +196,54 @@
     </button>
   </div>
 </form>
+
+<script>
+  /*
+   * 슬롯 미리보기 동기화 — 저장하면 어떻게 나올지 그 자리에서 보여 준다.
+   * 판정 기준은 서버(bannerController.postTopbar)와 같다: 이미지가 1순위, 없으면 대체 텍스트.
+   */
+  (function () {
+    var PLACEHOLDER = '대체 텍스트를 입력하면 이렇게 노출됩니다';
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tb-slot]'), function (cell) {
+      var img = cell.querySelector('[data-tb-image]');
+      var textBox = cell.querySelector('[data-tb-text-preview]');
+      var textVal = cell.querySelector('[data-tb-text-value]');
+      var alt = cell.querySelector('[data-tb-alt]');
+      var file = cell.querySelector('[data-tb-file]');
+      var del = cell.querySelector('[data-tb-delete]');
+
+      var savedImage = (img && img.getAttribute('src')) || '';
+      var pickedUrl = '';   // 이번에 고른 파일의 미리보기 URL
+
+      function sync() {
+        // 새로 고른 파일이 최우선, 그다음이 저장된 이미지(삭제 체크하면 없는 것으로 본다).
+        var src = pickedUrl || ((del && del.checked) ? '' : savedImage);
+
+        if (img) {
+          if (src) { img.src = src; img.style.display = ''; }
+          else { img.style.display = 'none'; }
+        }
+        if (textBox) textBox.style.display = src ? 'none' : '';
+
+        var value = alt ? alt.value.trim() : '';
+        if (textVal) {
+          textVal.textContent = value || PLACEHOLDER;
+          textVal.className = 'line-clamp-2 ' +
+            (value ? 'font-semibold text-[13px] text-white' : 'text-[11px] text-white/40');
+        }
+      }
+
+      if (alt) alt.addEventListener('input', sync);
+      if (del) del.addEventListener('change', sync);
+      if (file) file.addEventListener('change', function () {
+        if (pickedUrl) { URL.revokeObjectURL(pickedUrl); pickedUrl = ''; }
+        var picked = file.files && file.files[0];
+        if (picked) pickedUrl = URL.createObjectURL(picked);
+        sync();
+      });
+
+      sync();
+    });
+  })();
+</script>
