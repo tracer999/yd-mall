@@ -6,15 +6,26 @@
    * 참조가 있으면 삭제·비활성화가 막힌다(섹션이 조용히 비는 것을 방지).
    */
   const _groups = groups || [];
-  const condSummary = (g) => {
-    if (g.group_type === 'manual') return `수동 ${g.item_count}개`;
+  // 메뉴 쇼케이스 그룹은 '담긴 상품 우선 → 조건 폴백'이라 수동/조건 어느 쪽으로도 못 적는다.
+  const isMenu = (g) => !!g.menu_code;
+  const condText = (g) => {
     const c = g.cond || {};
     const parts = [];
     if (c.badge) parts.push(`배지=${c.badge}`);
     if (c.category_id) parts.push(`카테고리#${c.category_id}`);
     if (c.min_discount) parts.push(`할인≥${c.min_discount}%`);
     if (c.in_stock) parts.push('재고있음');
-    return parts.length ? parts.join(' · ') : '조건 없음 (전체)';
+    return parts.length ? parts.join(' · ') : null;
+  };
+  const condSummary = (g) => {
+    if (isMenu(g)) {
+      const cond = condText(g);
+      return g.item_count > 0
+        ? `담긴 ${g.item_count}개 우선` + (cond ? ` (폴백: ${cond})` : '')
+        : (cond ? `폴백 조건: ${cond}` : '담긴 상품·조건 모두 없음');
+    }
+    if (g.group_type === 'manual') return `수동 ${g.item_count}개`;
+    return condText(g) || '조건 없음 (전체)';
   };
 %>
 
@@ -70,14 +81,16 @@
                 <a href="/admin/product-groups/<%= g.id %>" class="font-medium text-gray-900 hover:text-indigo-600"><%= g.name %></a>
               </td>
               <td class="px-4 py-3">
-                <% if (g.group_type === 'manual') { %>
+                <% if (isMenu(g)) { %>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700" title="담긴 상품 우선, 없으면 조건">메뉴</span>
+                <% } else if (g.group_type === 'manual') { %>
                   <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">수동</span>
                 <% } else { %>
                   <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">조건</span>
                 <% } %>
               </td>
               <td class="px-4 py-3 text-gray-600"><%= condSummary(g) %></td>
-              <td class="px-4 py-3 text-gray-500 text-xs"><%= g.group_type === 'manual' ? '등록순' : g.sort_type %></td>
+              <td class="px-4 py-3 text-gray-500 text-xs"><%= (!isMenu(g) && g.group_type === 'manual') ? '등록순' : g.sort_type %></td>
               <td class="px-4 py-3 text-center">
                 <% if (g.is_active) { %>
                   <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-700">ON</span>
