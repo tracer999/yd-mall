@@ -3,6 +3,7 @@ const router = express.Router();
 const productController = require('../../controllers/admin/productController');
 const productOptionController = require('../../controllers/admin/productOptionController');
 const categoryOptionController = require('../../controllers/admin/categoryOptionController');
+const facetController = require('../../controllers/admin/facetController');
 const upload = require('../../middleware/upload');
 
 router.get('/', productController.getList);
@@ -43,6 +44,17 @@ router.post('/recommendations/reorder', express.json(), productController.postRe
 router.get('/category-options', categoryOptionController.getEditor);
 router.get('/category-options/:categoryId', categoryOptionController.getEditor);
 router.post('/category-options/:categoryId', express.json(), categoryOptionController.postSave);
+
+// 카테고리 상품 필터(facet) — 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §6
+router.get('/attribute-form', facetController.getAttributeForm);
+router.get('/facets', facetController.getEditor);
+router.get('/facets/:categoryId', facetController.getEditor);
+router.post('/facets/:categoryId', express.json(), facetController.postSave);
+
+// 속성 자동 추출 + 검수 (Phase 8)
+router.get('/facet-extract', facetController.getExtract);
+router.post('/facet-extract/run', express.json(), facetController.postExtractRun);
+router.post('/facet-extract/review', express.json(), facetController.postExtractReview);
 
 // 옵션·SKU 관리 (옵션상품)
 router.get('/options/:id', productOptionController.getEditor);

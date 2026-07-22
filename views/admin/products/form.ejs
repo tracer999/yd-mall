@@ -129,6 +129,24 @@
                                     <input type="hidden" name="provider"
                                         value="<%= product ? (product.provider || '') : '' %>">
                                 </div>
+                                <%# 상품 속성 — 고객 목록의 필터(facet) 값이 된다.
+                                    카테고리마다 항목이 달라서 카테고리를 고치면 다시 그린다.
+                                    설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §9 %>
+                                <div class="md:col-span-2">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="block text-sm font-medium text-gray-700">
+                                            상품 속성
+                                            <span class="text-xs font-normal text-gray-400">— 고객 목록의 필터로 쓰입니다</span>
+                                        </label>
+                                        <a href="/admin/products/facets" target="_blank" rel="noopener"
+                                           class="text-xs text-gray-400 hover:text-gray-600">카테고리별 필터 설정 →</a>
+                                    </div>
+                                    <div id="facet-attrs"
+                                         class="border border-gray-300 rounded-md p-3 text-sm text-gray-500"
+                                         data-product-id="<%= product ? product.id : '' %>">
+                                        카테고리를 선택하면 입력할 속성이 나타납니다.
+                                    </div>
+                                </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">판매 상태</label>
                                     <select name="status">
@@ -1315,4 +1333,90 @@
             else { fillOptions(sels[0], null, PH[0]); sels[0].disabled = false; clearFrom(1); }
         });
     })();
+</script>
+<script>
+/*
+ * 상품 속성(facet) 입력 — 카테고리에 맞는 항목을 서버에서 받아 그린다.
+ * 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §9
+ *
+ * 제출은 평범한 폼 필드로 한다(name="attr_COLOR"). JSON textarea 를 만들지 않는다.
+ */
+(function () {
+    var box = document.getElementById('facet-attrs');
+    if (!box) return;
+    var productId = box.dataset.productId || '';
+    var hiddenSel = document.getElementById('category_id_select');
+    if (!hiddenSel) return;
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function render(defs, values) {
+        if (!defs.length) {
+            box.className = 'border border-gray-300 rounded-md p-3 text-sm text-gray-500';
+            box.innerHTML = '이 카테고리에는 입력할 속성이 없습니다. '
+                + '<a href="/admin/products/facets" target="_blank" rel="noopener" class="underline">필터 설정</a>에서 추가할 수 있습니다.';
+            return;
+        }
+        box.className = 'border border-gray-300 rounded-md p-3 space-y-3';
+        box.innerHTML = defs.map(function (d) {
+            var cur = values[d.source_key] || [];
+            var name = 'attr_' + d.source_key;
+            var body;
+            if (d.is_multi) {
+                body = d.values.map(function (v) {
+                    var on = cur.indexOf(v.value_code) !== -1;
+                    return '<label class="inline-flex items-center gap-1.5 mr-3 mb-1 text-sm text-gray-700 cursor-pointer">'
+                        + '<input type="checkbox" name="' + esc(name) + '" value="' + esc(v.value_code) + '"'
+                        + (on ? ' checked' : '') + ' class="h-4 w-4 border-gray-300">'
+                        + '<span>' + esc(v.display_name) + '</span></label>';
+                }).join('');
+            } else {
+                body = '<select name="' + esc(name) + '" class="text-sm border border-gray-300 rounded px-2 py-1">'
+                    + '<option value="">선택 안 함</option>'
+                    + d.values.map(function (v) {
+                        var on = cur.indexOf(v.value_code) !== -1;
+                        return '<option value="' + esc(v.value_code) + '"' + (on ? ' selected' : '') + '>'
+                            + esc(v.display_name) + '</option>';
+                    }).join('')
+                    + '</select>';
+            }
+            return '<div class="flex items-start gap-3">'
+                + '<div class="w-28 shrink-0 pt-1 text-xs font-semibold text-gray-600">' + esc(d.facet_name)
+                + (d.unit ? ' <span class="font-normal text-gray-400">' + esc(d.unit) + '</span>' : '') + '</div>'
+                + '<div class="flex-1 min-w-0">' + body + '</div></div>';
+        }).join('');
+    }
+
+    var lastCat = null;
+    async function load() {
+        var cat = hiddenSel.value;
+        if (cat === lastCat) return;
+        lastCat = cat;
+        if (!cat) {
+            box.className = 'border border-gray-300 rounded-md p-3 text-sm text-gray-500';
+            box.textContent = '카테고리를 선택하면 입력할 속성이 나타납니다.';
+            return;
+        }
+        box.className = 'border border-gray-300 rounded-md p-3 text-sm text-gray-400';
+        box.textContent = '불러오는 중...';
+        try {
+            var url = '/admin/products/attribute-form?categoryId=' + encodeURIComponent(cat)
+                + (productId ? '&productId=' + encodeURIComponent(productId) : '');
+            var resp = await fetch(url);
+            var data = await resp.json();
+            if (!data.ok) throw new Error(data.message || '실패');
+            render(data.defs || [], data.values || {});
+        } catch (e) {
+            box.className = 'border border-red-300 rounded-md p-3 text-sm text-red-600';
+            box.textContent = '속성을 불러오지 못했습니다: ' + e.message;
+        }
+    }
+
+    hiddenSel.addEventListener('change', load);
+    load();
+})();
 </script>

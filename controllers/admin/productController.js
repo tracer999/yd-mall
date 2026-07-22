@@ -7,6 +7,7 @@ const productImporter = require('../../services/catalog/productImporter');
 const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
 const productMedia = require('../../services/catalog/productMedia');
 const skuService = require('../../services/catalog/skuService');
+const facetAdminService = require('../../services/catalog/facetAdminService');
 const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
 
 const { getAiStatus, getOpenAIClient } = require('../../services/ai/aiStatus');
@@ -517,6 +518,33 @@ exports.postReorderRecommendations = async (req, res) => {
 };
 
 /*
+ * 상품 폼의 [상품 속성] 섹션 저장 → product_attribute.
+ *
+ * 폼 필드명은 `attr_<facet_code>` 다(예: attr_COLOR). 다중 선택 체크박스는 배열로 올라온다.
+ * 카테고리에 부여된 facet 만 저장한다 — 정의에 없는 값이 들어오면 필터가 무너진다(§11 R-3).
+ * 여기서 넣은 값은 관리자가 직접 고른 것이라 is_searchable=1(바로 필터에 걸림)이다.
+ *
+ * 속성 저장이 실패해도 상품 저장 자체는 되돌리지 않는다 — 상품이 더 중요하다.
+ * 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §9
+ */
+async function saveFacetAttributes(productId, categoryId, body) {
+    try {
+        if (!productId || !categoryId) return;
+        const defs = await facetAdminService.getProductAttributeForm(categoryId);
+        if (!defs.length) return;
+
+        const values = {};
+        defs.forEach((d) => {
+            const raw = body['attr_' + d.source_key];
+            if (raw !== undefined) values[d.source_key] = raw;
+        });
+        await facetAdminService.saveProductAttributes(productId, values, defs);
+    } catch (e) {
+        console.error('[admin/products] 상품 속성 저장 실패 (상품은 저장됨):', e);
+    }
+}
+
+/**
  * 상품 폼의 B2B 판매 섹션 저장.
  *
  * 체크가 꺼져 있으면 설정 행을 지운다 — "행이 없으면 B2B 판매를 안 한다" 는 규칙 하나로
@@ -752,6 +780,7 @@ exports.postAdd = async (req, res) => {
         }
 
         await saveB2bSetting(productId, req.body);
+        await saveFacetAttributes(productId, category_id, req.body);
 
         res.redirect('/admin/products');
     } catch (err) {
@@ -889,6 +918,7 @@ exports.postEdit = async (req, res) => {
         }
 
         await saveB2bSetting(id, req.body);
+        await saveFacetAttributes(id, category_id, req.body);
 
         res.redirect('/admin/products');
     } catch (err) {

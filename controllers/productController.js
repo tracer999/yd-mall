@@ -313,7 +313,15 @@ exports.getList = async (req, res) => {
 
             // 화면에는 값이 실제로 있는 것만 그린다(0건 필터로 화면을 채우지 않는다).
             const availability = await facetService.getAttributeAvailability(mallId);
-            facets = facetService.pruneUnavailable(allFacets, availability);
+            let attrCounts = null;
+            if (availability.size) {
+                // 속성 값별 건수. 속성 조건은 전부 빼고 센다(같은 그룹이 0 으로 접히는 것 방지).
+                const fpNoAttr = facetService.buildPredicates(allFacets, q, { excludeSources: ['ATTRIBUTE'] });
+                const idQuery = (_preFacetQuery + (fpNoAttr.sql ? ` AND ${fpNoAttr.sql}` : ''))
+                    .replace('SELECT *', 'SELECT id');
+                attrCounts = await facetService.getAttributeCounts(idQuery, [..._preFacetParams, ...fpNoAttr.params]);
+            }
+            facets = facetService.pruneUnavailable(allFacets, availability, attrCounts);
         } catch (facetErr) {
             console.error('[facet] 필터 해석 실패 — 필터 없이 목록만 렌더합니다.', facetErr);
         }

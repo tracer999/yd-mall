@@ -20,6 +20,60 @@
   const priceRange = (b.min_price != null && b.max_price != null)
     ? Number(b.min_price).toLocaleString() + '원 ~ ' + Number(b.max_price).toLocaleString() + '원'
     : null;
+
+  /* --- 필터(facet) — 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §5.1 ---
+     브랜드관에서는 카테고리가 1급 필터라, 카테고리를 고른 뒤에야 속성 필터가 붙는다.
+     아래 url() 은 tab/cat/sort 만 남기므로, 필터용으로는 전체 쿼리를 이어붙이는 빌더를 따로 둔다. */
+  const _bFacets = (typeof facets !== 'undefined' && Array.isArray(facets)) ? facets : [];
+  const _bq = (typeof currentQuery !== 'undefined' && currentQuery) ? currentQuery : {};
+  function _bUrl(overrides) {
+    const p = new URLSearchParams();
+    Object.keys(_bq).forEach((k) => {
+      if (k === 'page') return;                 // 조건이 바뀌면 1페이지로
+      const v = _bq[k];
+      if (v === undefined || v === null || v === '') return;
+      p.set(k, String(v));
+    });
+    Object.keys(overrides || {}).forEach((k) => {
+      const v = overrides[k];
+      if (v === undefined || v === null || v === '') p.delete(k);
+      else p.set(k, String(v));
+    });
+    const s = p.toString();
+    return `/brands/${b.id}${s ? '?' + s : ''}`;
+  }
+  const _bVals = (key) => String(_bq[key] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const _bOn = (key, value) => _bVals(key).indexOf(value) !== -1;
+  function _bToggle(facet, value) {
+    const cur = _bVals(facet.key);
+    const has = cur.indexOf(value) !== -1;
+    const next = !facet.is_multi
+      ? (has ? [] : [value])
+      : (has ? cur.filter((v) => v !== value) : cur.concat([value]));
+    return _bUrl({ [facet.key]: next.join(','), page: null });
+  }
+  function _bLabel(facet, code) {
+    const hit = (facet.values || []).find((v) => v.value_code === code);
+    if (hit) return hit.display_name;
+    const preset = (facet.meta && Array.isArray(facet.meta.preset))
+      ? facet.meta.preset.find((p) => p.code === code) : null;
+    if (preset) return preset.name;
+    const m = /^(\d*)-(\d*)$/.exec(code);
+    if (m) {
+      const won = (n) => Number(n).toLocaleString();
+      if (m[1] && m[2]) return `${won(m[1])}~${won(m[2])}원`;
+      if (m[1]) return `${won(m[1])}원 이상`;
+      if (m[2]) return `${won(m[2])}원 이하`;
+    }
+    return code;
+  }
+  const _bHelpers = { url: _bUrl, vals: _bVals, on: _bOn, toggleUrl: _bToggle,
+                      clearUrl: (k) => _bUrl({ [k]: null, page: null }), label: _bLabel };
+  const _bClearAll = (() => {
+    const o = { page: null };
+    _bFacets.forEach((f) => { o[f.key] = null; });
+    return _bUrl(o);
+  })();
 %>
 
 <!-- 관리자 브랜드 배너 (배너 관리 > 브랜드 배너) — 상세관 최상단 -->
@@ -264,8 +318,28 @@
         </div>
       </div>
 
+      <%# 필터 패널. 카테고리를 고르기 전에는 공통 필터(가격·할인 등)만 뜨고,
+          카테고리를 고르면 그 카테고리의 속성 필터가 붙는다(§5.1).
+          브랜드 필터는 파셜이 currentBrand 로 알아서 제외한다. %>
+      <div class="mb-5">
+        <%- include('../products/_facet_filters', {
+              facets: _bFacets,
+              h: _bHelpers,
+              basePath: '/brands/' + b.id,
+              query: _bq,
+              clearAllUrl: _bClearAll,
+              brandOptions: [],
+              currentBrand: b.id
+            }) %>
+      </div>
+
       <% if (!listing.products.length) { %>
-        <p class="py-16 text-center text-gray-500">상품이 없습니다.</p>
+        <p class="py-16 text-center text-gray-500">
+          조건에 맞는 상품이 없습니다.
+          <% if (Object.keys(_bq).some((k) => _bFacets.some((f) => f.key === k))) { %>
+            <a href="<%= _bClearAll %>" class="underline text-gray-600 ml-1">필터 해제</a>
+          <% } %>
+        </p>
       <% } else { %>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <% listing.products.forEach(function (product) { %>

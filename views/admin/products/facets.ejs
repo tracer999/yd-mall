@@ -1,0 +1,139 @@
+<%# 관리자 — 카테고리별 상품 필터(facet) 부여
+    설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §6 %>
+<div class="max-w-5xl mx-auto py-6 px-4">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-xl font-bold text-gray-900">카테고리 상품 필터</h1>
+        <div class="flex items-center gap-3 text-sm">
+            <a href="/admin/products/category-options" class="text-gray-500 hover:text-gray-800">카테고리 추천 옵션</a>
+            <a href="/admin/products" class="text-gray-500 hover:text-gray-800">← 상품 목록</a>
+        </div>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-6 leading-relaxed">
+        고객이 <b>상품 목록에서 쓸 필터</b>를 카테고리별로 정합니다. 상위 카테고리 설정은 하위로 상속됩니다.<br>
+        <b>속성 필터(색상·사이즈 등)는 상품에 값이 하나도 없으면 고객 화면에 자동으로 숨겨집니다.</b>
+        값은 상품 등록·수정 화면의 [상품 속성]에서 넣습니다.
+    </div>
+
+    <!-- 카테고리 선택 -->
+    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+        <select id="catSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <% categories.forEach(function (c) { %>
+                <option value="<%= c.id %>" <%= (c.id === categoryId) ? 'selected' : '' %>>
+                    <%= c.depth > 1 ? '— '.repeat(c.depth - 1) : '' %><%= c.name %>
+                </option>
+            <% }) %>
+        </select>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-gray-500 border-b bg-gray-50">
+                    <th class="py-2.5 pl-4 pr-3">필터</th>
+                    <th class="py-2.5 px-2 w-28 text-center">구분</th>
+                    <th class="py-2.5 px-2 w-36 text-center">사용 여부</th>
+                    <th class="py-2.5 px-2 w-24 text-center">즉시 노출</th>
+                    <th class="py-2.5 px-2 w-24 text-center">하위 상속</th>
+                    <th class="py-2.5 px-2 w-28 text-center">값 보유</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% let _lastTier = null; %>
+                <% matrix.forEach(function (d) {
+                     const eff = d.own || d.inherited;
+                     const state = d.own ? (d.own.is_visible ? 'use' : 'hide') : 'inherit';
+                     const isAttr = d.value_source === 'ATTRIBUTE';
+                     const cnt = isAttr ? (filled.get(d.source_key || d.facet_code) || 0) : null;
+                     const tierName = d.tier === 0 ? '공통' : (d.tier === 1 ? '그룹' : '전용'); %>
+                    <% if (_lastTier !== d.tier) { _lastTier = d.tier; %>
+                    <tr class="bg-gray-100/70">
+                        <td colspan="6" class="py-1.5 pl-4 text-[11px] font-semibold text-gray-500 tracking-wide">
+                            <%= d.tier === 0 ? 'Tier 0 · 공통 필터 (별도 지정이 없어도 전 카테고리에 적용)'
+                                : (d.tier === 1 ? 'Tier 1 · 그룹 필터 (여러 카테고리가 공유)'
+                                                : 'Tier 2 · 카테고리 전용 필터') %>
+                        </td>
+                    </tr>
+                    <% } %>
+                    <tr class="facet-row border-b last:border-0 <%= d.is_active ? '' : 'opacity-50' %>" data-id="<%= d.id %>">
+                        <td class="py-2 pl-4 pr-3">
+                            <span class="text-gray-800"><%= d.facet_name %></span>
+                            <span class="text-gray-400 text-xs">(<%= d.facet_code %>)</span>
+                            <% if (!d.is_active) { %><span class="ml-1 text-[10px] text-gray-400">비활성</span><% } %>
+                            <% if (d.inherited && !d.own) { %>
+                                <span class="ml-1 text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">상속됨</span>
+                            <% } %>
+                        </td>
+                        <td class="py-2 px-2 text-center text-xs text-gray-500"><%= tierName %></td>
+                        <td class="py-2 px-2 text-center">
+                            <select class="f-state border border-gray-300 rounded px-1.5 py-1 text-xs">
+                                <option value="inherit" <%= state === 'inherit' ? 'selected' : '' %>>기본/상속</option>
+                                <option value="use"     <%= state === 'use' ? 'selected' : '' %>>사용</option>
+                                <option value="hide"    <%= state === 'hide' ? 'selected' : '' %>>숨김</option>
+                            </select>
+                        </td>
+                        <td class="py-2 px-2 text-center">
+                            <input type="checkbox" class="f-primary" <%= (eff ? eff.is_primary : d.is_primary_default) ? 'checked' : '' %>>
+                        </td>
+                        <td class="py-2 px-2 text-center">
+                            <input type="checkbox" class="f-inherit" <%= (d.own ? d.own.inherit_to_children : 1) ? 'checked' : '' %>>
+                        </td>
+                        <td class="py-2 px-2 text-center text-xs">
+                            <% if (!isAttr) { %>
+                                <span class="text-gray-400">자동</span>
+                            <% } else if (cnt > 0) { %>
+                                <span class="text-green-600 font-medium"><%= cnt %>개 상품</span>
+                            <% } else { %>
+                                <span class="text-amber-600">값 없음</span>
+                            <% } %>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <button type="button" id="saveBtn" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-700">저장</button>
+        <span id="saveMsg" class="text-sm"></span>
+    </div>
+</div>
+
+<script>
+(function () {
+    var CATEGORY_ID = <%= categoryId || 'null' %>;
+    document.getElementById('catSelect').addEventListener('change', function () {
+        location.href = '/admin/products/facets/' + this.value;
+    });
+    document.getElementById('saveBtn').addEventListener('click', async function () {
+        if (!CATEGORY_ID) return;
+        // '기본/상속' 은 행을 만들지 않는다. 사용/숨김만 저장한다.
+        var facets = [].slice.call(document.querySelectorAll('.facet-row'))
+            .map(function (r) {
+                return {
+                    facet_id: Number(r.dataset.id),
+                    state: r.querySelector('.f-state').value,
+                    is_primary: r.querySelector('.f-primary').checked,
+                    inherit_to_children: r.querySelector('.f-inherit').checked,
+                };
+            })
+            .filter(function (x) { return x.state !== 'inherit'; });
+
+        var msg = document.getElementById('saveMsg');
+        msg.textContent = '저장 중...'; msg.className = 'text-sm text-gray-500';
+        try {
+            var resp = await fetch('/admin/products/facets/' + CATEGORY_ID, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ facets: facets }),
+            });
+            var data = await resp.json();
+            msg.textContent = data.ok ? ('저장됨 (' + data.count + '개 지정)') : (data.message || '실패');
+            msg.className = data.ok ? 'text-sm text-green-600' : 'text-sm text-red-600';
+        } catch (e) {
+            msg.textContent = '오류: ' + e.message;
+            msg.className = 'text-sm text-red-600';
+        }
+    });
+})();
+</script>

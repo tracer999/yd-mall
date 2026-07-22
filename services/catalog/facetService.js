@@ -145,7 +145,7 @@ function findPreset(meta, code) {
  *   price=30000-50000      직접 구간(열린 구간은 30000- / -50000)
  *   price_min=&price_max=  직접 입력 폼(JS 없이 GET 으로 그대로 넘어온다)
  */
-function pricePredicate(facet, raw, q) {
+function pricePredicate(facet, raw, q, alias) {
     const parts = splitValues(raw);
 
     const ranges = [];
@@ -178,49 +178,49 @@ function pricePredicate(facet, raw, q) {
     const params = [];
     ranges.forEach((r) => {
         const conds = [];
-        if (r.min != null) { conds.push('price >= ?'); params.push(r.min); }
-        if (r.max != null) { conds.push('price < ?'); params.push(r.max); }
+        if (r.min != null) { conds.push(`${alias}.price >= ?`); params.push(r.min); }
+        if (r.max != null) { conds.push(`${alias}.price < ?`); params.push(r.max); }
         if (conds.length) sqls.push(`(${conds.join(' AND ')})`);
     });
     return sqls.length ? { sql: `(${sqls.join(' OR ')})`, params } : null;
 }
 
 /** 'DISCOUNT' 술어 — 선택된 것 중 가장 낮은 하한만 쓴다(10%↑ 와 30%↑ 를 함께 고르면 10%↑). */
-function discountPredicate(facet, raw) {
+function discountPredicate(facet, raw, alias) {
     const mins = splitValues(raw)
         .map((c) => findPreset(facet.meta, c))
         .filter(Boolean)
         .map((p) => Number(p.min))
         .filter((n) => Number.isFinite(n));
     if (!mins.length) return null;
-    return { sql: 'discount_rate >= ?', params: [Math.min(...mins)] };
+    return { sql: `${alias}.discount_rate >= ?`, params: [Math.min(...mins)] };
 }
 
 /** 혜택(쿠폰·딜·아웃렛) — 전부 EXISTS 서브쿼리 */
-function benefitPredicate(raw) {
+function benefitPredicate(raw, alias) {
     const picked = splitValues(raw);
     if (!picked.length) return null;
     const sqls = [];
     if (picked.includes('DEAL')) {
         sqls.push(`EXISTS (SELECT 1 FROM deal_item di JOIN deal d ON d.id = di.deal_id
-                            WHERE di.product_id = products.id AND d.is_active = 1
+                            WHERE di.product_id = ${alias}.id AND d.is_active = 1
                               AND NOW() BETWEEN d.starts_at AND d.ends_at)`);
     }
     if (picked.includes('OUTLET')) {
         sqls.push(`EXISTS (SELECT 1 FROM outlet_product op
-                            WHERE op.product_id = products.id AND op.is_visible = 1)`);
+                            WHERE op.product_id = ${alias}.id AND op.is_visible = 1)`);
     }
     // 쿠폰은 상품 단위 매핑 테이블이 없어 보류한다(전체 적용 쿠폰만 존재).
     return sqls.length ? { sql: `(${sqls.join(' OR ')})`, params: [] } : null;
 }
 
 /** 속성(EAV) 술어 — facet 간 AND, facet 내 값은 OR */
-function attributePredicate(facet, raw) {
+function attributePredicate(facet, raw, alias) {
     const vals = splitValues(raw);
     if (!vals.length) return null;
     return {
         sql: `EXISTS (SELECT 1 FROM product_attribute pa
-                       WHERE pa.product_id = products.id
+                       WHERE pa.product_id = ${alias}.id
                          AND pa.attr_name = ?
                          AND pa.attr_value IN (${vals.map(() => '?').join(',')})
                          AND pa.is_searchable = 1)`,
@@ -235,7 +235,8 @@ function attributePredicate(facet, raw) {
  *
  * @param {Array} facets getFacetsForCategory() 결과
  * @param {object} q 병합된 쿼리스트링
- * @param {{exclude?: string[]}} [opts] 특정 facet 을 빼고 만든다.
+ * @param {{exclude?: string[], excludeSources?: string[]}} [opts]
+ *        특정 facet(exclude) 또는 특정 value_source 전체(excludeSources)를 빼고 만든다.
  *        파셋 카운트를 낼 때 쓴다 — 자기 자신을 조건에 넣으면 다른 값이 전부 0 으로 보인다.
  * @returns {{sql:string, params:Array, selected:object}}
  */
@@ -244,11 +245,15 @@ function buildPredicates(facets, q, opts) {
     const params = [];
     const selected = {};
     const exclude = new Set((opts && opts.exclude) || []);
+    const excludeSources = new Set((opts && opts.excludeSources) || []);
+    // 목록 쿼리의 products 테이블 별칭. 브랜드관은 `p` 로 조인한다.
+    const alias = (opts && opts.alias) || 'products';
 
     facets.forEach((facet) => {
         if (HANDLED_ELSEWHERE.has(facet.facet_code)) return;
         if (RESERVED_KEYS.has(facet.key)) return;
         if (exclude.has(facet.facet_code)) return;
+        if (excludeSources.has(facet.value_source)) return;
 
         const raw = q[facet.key];
         // 가격은 price_min/price_max 로도 들어오므로 raw 가 비어도 통과시킨다.
@@ -256,18 +261,19 @@ function buildPredicates(facets, q, opts) {
         if (!isPrice && (raw == null || raw === '')) return;
 
         let piece = null;
-        if (isPrice) piece = pricePredicate(facet, raw, q);
-        else if (facet.facet_code === 'DISCOUNT') piece = discountPredicate(facet, raw);
-        else if (facet.facet_code === 'BENEFIT') piece = benefitPredicate(raw);
-        else if (facet.facet_code === 'STOCK') piece = { sql: "(stock > 0 AND status <> 'SOLD_OUT')", params: [] };
-        else if (facet.facet_code === 'BRAND') {
+        if (isPrice) piece = pricePredicate(facet, raw, q, alias);
+        else if (facet.facet_code === 'DISCOUNT') piece = discountPredicate(facet, raw, alias);
+        else if (facet.facet_code === 'BENEFIT') piece = benefitPredicate(raw, alias);
+        else if (facet.facet_code === 'STOCK') {
+            piece = { sql: `(${alias}.stock > 0 AND ${alias}.status <> 'SOLD_OUT')`, params: [] };
+        } else if (facet.facet_code === 'BRAND') {
             const ids = splitValues(raw).map(Number).filter(Boolean);
-            if (ids.length) piece = { sql: `brand_category_id IN (${ids.map(() => '?').join(',')})`, params: ids };
+            if (ids.length) piece = { sql: `${alias}.brand_category_id IN (${ids.map(() => '?').join(',')})`, params: ids };
         } else if (facet.facet_code === 'DELIVERY') {
             // 무료배송·오늘출발은 상품 단위 데이터가 아직 없다. 값이 생기면 여기에 채운다.
             piece = null;
         } else if (facet.value_source === 'ATTRIBUTE') {
-            piece = attributePredicate(facet, raw);
+            piece = attributePredicate(facet, raw, alias);
         }
 
         if (piece) {
@@ -311,8 +317,15 @@ async function getAttributeAvailability(mallId) {
 /**
  * 값이 없는 속성 필터를 걷어낸다. 값 목록도 실제 있는 것만 남긴다.
  * ATTRIBUTE 가 아닌 필터(가격·브랜드·할인 등)는 그대로 둔다.
+ *
+ * @param {Map<string, Map<string, number>>} [counts] 값별 건수(있으면 값에 붙이고 0 건은 뺀다)
  */
-function pruneUnavailable(facets, availability) {
+function pruneUnavailable(facets, availability, counts) {
+    const cntOf = (name, code) => {
+        if (!counts) return undefined;
+        const m = counts.get(name);
+        return m ? m.get(code) : undefined;
+    };
     return facets
         .filter((f) => {
             if (f.value_source !== 'ATTRIBUTE') return true;
@@ -320,22 +333,55 @@ function pruneUnavailable(facets, availability) {
         })
         .map((f) => {
             if (f.value_source !== 'ATTRIBUTE') return f;
-            const have = availability.get(f.source_key || f.facet_code);
+            const name = f.source_key || f.facet_code;
+            const have = availability.get(name);
             // 값 정의가 없는 열린 집합(저자·출판사 등)은 실제 값을 그대로 쓴다.
-            if (!f.values.length) {
-                return {
-                    ...f,
-                    values: [...have].sort().map((v) => ({ value_code: v, display_name: v, meta_json: null })),
-                };
-            }
-            return { ...f, values: f.values.filter((v) => have.has(v.value_code)) };
+            const base = f.values.length
+                ? f.values.filter((v) => have.has(v.value_code))
+                : [...have].sort().map((v) => ({ value_code: v, display_name: v, meta_json: null }));
+            const withCount = base
+                .map((v) => {
+                    const c = cntOf(name, v.value_code);
+                    return c === undefined ? v : { ...v, count: c };
+                })
+                // 카운트를 아는데 0 이면 고를 이유가 없다(설계 §8).
+                .filter((v) => v.count === undefined || v.count > 0);
+            return { ...f, values: withCount };
         })
         .filter((f) => f.value_source !== 'ATTRIBUTE' || f.values.length > 0);
+}
+
+/**
+ * 현재 결과 범위에서 속성 값별 상품 수.
+ *
+ * ⚠ 속성 필터 조건은 **전부 뺀 상태**로 센다. 자기 자신을 넣으면 같은 그룹의 다른 값이
+ *   모두 0 으로 접히기 때문이다. 그룹 간에는 약간 과대 집계되지만, facet 마다 쿼리를
+ *   따로 도는 비용(속성 10종이면 10회)을 치르는 것보다 낫다.
+ *
+ * @param {string} idQuery `SELECT id FROM products WHERE ...` 형태의 범위 쿼리
+ * @returns {Promise<Map<string, Map<string, number>>>} attr_name → (value_code → cnt)
+ */
+async function getAttributeCounts(idQuery, params) {
+    const [rows] = await pool.query(
+        `SELECT pa.attr_name, pa.attr_value, COUNT(DISTINCT pa.product_id) AS cnt
+           FROM product_attribute pa
+          WHERE pa.is_searchable = 1
+            AND pa.product_id IN (${idQuery})
+          GROUP BY pa.attr_name, pa.attr_value`,
+        params
+    );
+    const map = new Map();
+    rows.forEach((r) => {
+        if (!map.has(r.attr_name)) map.set(r.attr_name, new Map());
+        map.get(r.attr_name).set(r.attr_value, r.cnt);
+    });
+    return map;
 }
 
 module.exports = {
     getFacetsForCategory,
     getAttributeAvailability,
+    getAttributeCounts,
     pruneUnavailable,
     buildPredicates,
     facetKey,

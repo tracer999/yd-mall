@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const brandSvc = require('../services/brand/brandService');
 const benefitSvc = require('../services/brand/benefitService');
 const { INITIAL_BUCKETS } = require('../shared/hangul');
+const facetService = require('../services/catalog/facetService');
 
 /**
  * 브랜드 허브.
@@ -101,13 +102,33 @@ exports.getDetail = async (req, res, next) => {
         const needNew = tab === 'home' || tab === 'new';
         const needList = tab === 'all' || (tab === 'home' && brand.product_count <= 3);
 
+        /*
+         * 필터(facet). 브랜드관에서는 **카테고리가 1급 필터**다 — 브랜드 하나가 최대 11개
+         * 1뎁스에 걸쳐 있어(오너클랜), 카테고리를 좁히기 전에는 속성 필터를 부여할 수 없다.
+         * 그래서 cat 이 선택됐을 때만 그 카테고리의 필터를 해석한다.
+         * 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §5.1
+         *
+         * ⚠ 브랜드 목록 쿼리는 products 를 `p` 로 별칭하므로 alias 를 넘겨야 한다.
+         */
+        let facetDefs = [];
+        let facetPredicate = null;
+        try {
+            const all = await facetService.getFacetsForCategory(cat);
+            const fp = facetService.buildPredicates(all, req.query, { alias: 'p' });
+            if (fp.sql) facetPredicate = fp;
+            const availability = await facetService.getAttributeAvailability(mallId);
+            facetDefs = facetService.pruneUnavailable(all, availability);
+        } catch (e) {
+            console.error('[brand] 필터 해석 실패 — 필터 없이 진행합니다.', e);
+        }
+
         const [benefits, bestRes, newRes, listing, categories, related, likedBrandIds] = await Promise.all([
             benefitSvc.getBrandBenefits(mallId, brandId),
             needBest ? brandSvc.getBrandBest(mallId, brandId, { hasUser, limit: tab === 'best' ? 30 : 6 })
                      : Promise.resolve({ products: [] }),
             needNew ? brandSvc.getBrandProducts(mallId, brandId, { hasUser, sort: 'new', size: tab === 'new' ? 40 : 6 })
                     : Promise.resolve({ products: [] }),
-            needList ? brandSvc.getBrandProducts(mallId, brandId, { hasUser, catId: cat, sort, page })
+            needList ? brandSvc.getBrandProducts(mallId, brandId, { hasUser, catId: cat, sort, page, facet: facetPredicate })
                      : Promise.resolve({ products: [], total: 0, page: 1, pages: 1 }),
             brandSvc.getBrandCategories(mallId, brandId),
             brandSvc.getRelatedBrands(mallId, brandId, 6),
@@ -144,6 +165,8 @@ exports.getDetail = async (req, res, next) => {
             likedBrandIds,
             isLiked: likedBrandIds.map(Number).includes(brandId),
             filters: { cat, sort },
+            facets: facetDefs,
+            currentQuery: Object.assign({}, req.query),
             currentUser: req.user || null,
             seo: {
                 ...res.locals.seo,

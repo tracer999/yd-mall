@@ -372,7 +372,7 @@ async function getBrandCategories(mallId, brandId) {
 }
 
 /** 브랜드 상품 — 전체/신상품 탭 + 카테고리 필터 + 페이지네이션 */
-async function getBrandProducts(mallId, brandId, { hasUser, catId, sort = 'new', page = 1, size = 40 } = {}) {
+async function getBrandProducts(mallId, brandId, { hasUser, catId, sort = 'new', page = 1, size = 40, facet = null } = {}) {
     const order = {
         new: 'p.created_at DESC',
         popular: 'p.view_count DESC, p.created_at DESC',
@@ -383,6 +383,9 @@ async function getBrandProducts(mallId, brandId, { hasUser, catId, sort = 'new',
     const where = ['p.mall_id = ?', 'p.brand_category_id = ?', P_LIVE, vis(hasUser)];
     const params = [mallId, brandId];
     if (catId) { where.push('p.category_id = ?'); params.push(catId); }
+    // 필터(facet) — services/catalog/facetService.buildPredicates 가 alias 'p' 로 만들어 준다.
+    // 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §5.1
+    if (facet && facet.sql) { where.push(facet.sql); params.push(...facet.params); }
     const whereSql = `WHERE ${where.join(' AND ')}`;
 
     const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM products p ${whereSql}`, params);
