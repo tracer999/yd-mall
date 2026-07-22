@@ -3,6 +3,11 @@
  *
  * 화면은 하나다(레퍼런스 §5). 유형(취소·반품)으로 구분하고, 승인 시 귀책·반품배송비를 확정한다.
  * 승인 로직은 claimService 가 소유한다 — 복원·환불·상태 전이를 한 트랜잭션에서 한다.
+ *
+ * ⚠️ **일반(B2C) 주문 전용이다.** 기업 주문의 취소·반품은 `/admin/b2b/claims` 가 다룬다.
+ *    환불 수단이 다르기 때문이다 — B2C 는 PG 취소로 자동 환불되지만, B2B 는 무통장이라
+ *    사람이 계좌로 이체한 뒤 마감해야 한다. 이 화면에는 그 마감 절차가 없어서, 여기서 B2B
+ *    클레임을 승인하면 "이체 대기" 건이 아무 화면에도 뜨지 않고 묻힌다.
  */
 
 const pool = require('../../config/db');
@@ -14,7 +19,7 @@ const CLAIM_STATUS = ['REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'WITHDRA
 exports.getList = async (req, res, next) => {
     try {
         const { status, claim_type } = req.query;
-        const where = ['1=1'];
+        const where = ["o.order_type = 'B2C'"];
         const params = [];
         if (CLAIM_STATUS.includes(status)) { where.push('c.status = ?'); params.push(status); }
         if (['CANCEL', 'RETURN', 'EXCHANGE'].includes(claim_type)) { where.push('c.claim_type = ?'); params.push(claim_type); }
@@ -46,7 +51,7 @@ exports.getDetail = async (req, res, next) => {
     try {
         const [[claim]] = await pool.query(
             `SELECT c.*, o.order_number, o.total_amount, o.subtotal_amount, o.shipping_fee, o.shipping_discount,
-                    o.status AS order_status, o.payment_key, o.point_used,
+                    o.status AS order_status, o.payment_key, o.point_used, o.order_type,
                     u.name AS customer_name, u.email AS customer_email
                FROM order_claims c
                JOIN orders o ON o.id = c.order_id
@@ -55,6 +60,8 @@ exports.getDetail = async (req, res, next) => {
             [req.params.id]
         );
         if (!claim) return res.redirect('/admin/claims');
+        // 기업 주문 클레임은 계좌 환불 절차가 있는 전용 화면으로 보낸다.
+        if (claim.order_type === 'B2B') return res.redirect(`/admin/b2b/claims/${claim.id}`);
 
         const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [claim.order_id]);
         const [refunds] = await pool.query('SELECT * FROM order_refunds WHERE order_id = ? ORDER BY created_at DESC', [claim.order_id]);
@@ -82,8 +89,22 @@ exports.getDetail = async (req, res, next) => {
     }
 };
 
+/** B2B 클레임이면 전용 화면으로 보낸다. 처리했으면 true. */
+async function divertIfB2b(claimId, res) {
+    const [[row]] = await pool.query(
+        `SELECT o.order_type FROM order_claims c JOIN orders o ON o.id = c.order_id WHERE c.id = ?`,
+        [claimId]
+    );
+    if (row && row.order_type === 'B2B') {
+        res.redirect(`/admin/b2b/claims/${claimId}`);
+        return true;
+    }
+    return false;
+}
+
 exports.postApprove = async (req, res, next) => {
     try {
+        if (await divertIfB2b(Number(req.params.id), res)) return;
         const adminId = req.session.admin ? req.session.admin.id : null;
         const { responsible, return_shipping_fee, memo } = req.body;
         const result = await claimService.approveClaim({
@@ -108,6 +129,7 @@ exports.postApprove = async (req, res, next) => {
 
 exports.postReject = async (req, res, next) => {
     try {
+        if (await divertIfB2b(Number(req.params.id), res)) return;
         const adminId = req.session.admin ? req.session.admin.id : null;
         const result = await claimService.rejectClaim({ claimId: Number(req.params.id), adminId, memo: req.body.memo });
         if (!result.ok) return res.redirect(`/admin/claims/${req.params.id}?error=` + encodeURIComponent(result.reason));
@@ -120,6 +142,7 @@ exports.postReject = async (req, res, next) => {
 /** PG 환불 실패분을 계좌 수동 환불로 마감한다. */
 exports.postManualRefund = async (req, res, next) => {
     try {
+        if (await divertIfB2b(Number(req.params.id), res)) return;
         await markRefundManual(Number(req.body.refund_id), req.body.memo);
         await pool.query("UPDATE orders SET refund_status = 'COMPLETED', payment_status = 'REFUNDED' WHERE id = ?", [req.body.order_id]);
         res.redirect(`/admin/claims/${req.params.id}`);

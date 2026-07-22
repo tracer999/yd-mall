@@ -9,9 +9,11 @@
 - **뷰:** `views/admin/sales/list.ejs`, `views/admin/sales/detail.ejs`  
 - **메뉴 권한(`admin_menus`):** `super_admin`, `admin`, `customer_admin`
 
-운영자가 주문을 조회하고 상태를 바꾸는 **유일한 화면**입니다.
+운영자가 **일반(B2C) 주문**을 조회하고 상태를 바꾸는 유일한 화면입니다.
 
-> ⚠️ **`/admin/orders` 는 살아 있지 않습니다.** `routes/admin/orders.js` 와 `controllers/admin/orderController.js` 는 저장소에 남아 있지만 `routes/admin.js` 가 마운트하지 않아 `/admin/orders` 는 404 입니다. 같은 폴더의 `routes/admin/list.ejs`·`routes/admin/detail.ejs` 도 그 화면이 쓰던 잔재입니다. 따라서 그 컨트롤러에만 있는 엑셀 다운로드(`/download`)·일괄 상태 변경(`/bulk-status`) 은 현재 접근할 수 없습니다. 주문 상태 변경 경로는 아래 `POST /admin/sales/status` 하나뿐입니다.
+> ⚠️ **B2B 주문은 이 화면에 나오지 않습니다.** 목록·상세·상태변경 모두 `o.order_type = 'B2C'` 로 잠겨 있고, `/admin/sales/:id` 나 `POST /admin/sales/status` 로 B2B 주문 ID 가 들어오면 `/admin/b2b/orders/:id` 로 리다이렉트합니다. 이 화면은 `b2b_order_detail.approval_status`(승인 단계)와 `orders.stock_deducted_at`(재고 차감 시점)을 모르기 때문에, 여기서 B2B 주문의 상태를 바꾸면 **재고를 차감하지 않은 채 `PAID`** 가 되는 어긋난 상태가 만들어집니다. B2B 는 [B2B 주문 관리](../../manual/admin/b2b.md)에서 접수→승인→입금확인→출고까지 처리합니다.
+
+> ⚠️ **`/admin/orders` 는 제거됐습니다.** 마운트되지 않은 채 남아 있던 `routes/admin/orders.js` 와 `controllers/admin/orderController.js` 는 삭제했습니다(같은 폴더의 `routes/admin/list.ejs`·`routes/admin/detail.ejs` 는 그 화면이 쓰던 잔재로 남아 있습니다). 그 컨트롤러에만 있던 엑셀 다운로드(`/download`)·일괄 상태 변경(`/bulk-status`) 은 원래도 접근할 수 없었습니다. 주문 상태 변경 경로는 아래 `POST /admin/sales/status` 하나뿐입니다.
 
 관련 문서: [클레임 관리](./claims.md) · [배송 관리](./shipping.md)
 

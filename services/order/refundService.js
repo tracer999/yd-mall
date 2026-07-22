@@ -12,6 +12,13 @@
  *      있음  →  Toss `/v1/payments/{key}/cancel`
  *      없음  →  결제가 없던 주문(TEST·전액 적립금·무료). method='NONE', 즉시 완료
  *
+ * ── B2B(무통장)는 자동 환불이 없다. **사람이 계좌로 보내야 한다.**
+ *    B2B 주문은 `payment_key` 가 없으므로 위 규칙대로면 "결제 없음 → 즉시 완료"로 처리돼,
+ *    **돈을 한 푼도 보내지 않았는데 환불 완료로 찍힌다.** 그래서 B2B 는 따로 판정한다.
+ *      입금 전(payment_status ≠ PAID)  →  받은 돈이 없다. method='NONE', 즉시 완료
+ *      입금 후(payment_status = PAID)  →  method='MANUAL', status='REQUESTED' 로 **대기**.
+ *                                        운영자가 이체한 뒤 markRefundManual 로 마감한다.
+ *
  * ── 실패해도 클레임을 되돌리지 않는다 (§4).
  *    "재고는 돌아왔는데 취소가 안 된" 상태보다 "취소는 됐는데 환불이 안 된" 상태가 낫다.
  *    전자는 재고가 새고, 후자는 운영자가 처리할 수 있다.
@@ -83,12 +90,27 @@ async function cancelTossPayment(paymentKey, cancelReason, cancelAmount) {
  *    COMPLETED/FAILED** 다. 이렇게 하면 markRefundManual 이 노리는 재시도 표면도 자연스러워진다.
  *    이 리팩터링은 approveInTransaction 의 구조를 바꾸므로 별도 과제로 분리했다(문서 §6-3).
  *
- * @returns {Promise<{ok:boolean, refundId:number, method:string, reason?:string}>}
+ * `pending: true` 는 "환불이 아직 끝나지 않았다(사람이 이체해야 한다)"는 뜻이다. 실패(`FAILED`)와
+ * 구분해야 한다 — 실패는 재시도 대상이고, 대기는 정상 흐름의 한 단계다.
+ *
+ * @returns {Promise<{ok:boolean, pending?:boolean, refundId:number, method:string, reason?:string}>}
  */
 async function refundOrder(conn, { order, claimId = null, returnShippingFee = 0, reason = '주문 취소' }) {
     const { refundAmount, shippingFeeRefund, deducted } = calcRefundAmount(order, returnShippingFee);
 
-    // 결제가 없던 주문 — TEST 결제, 전액 적립금·쿠폰으로 0원 결제 등
+    // B2B 무통장 — 받은 돈이 있으면 사람이 계좌로 돌려줘야 한다(자동 환불 수단이 없다).
+    const isB2bBankTransfer = order.order_type === 'B2B' && order.payment_status === 'PAID' && refundAmount > 0;
+    if (isB2bBankTransfer) {
+        const [ins] = await conn.query(
+            `INSERT INTO order_refunds (order_id, claim_id, refund_amount, shipping_fee_refund,
+                                        return_shipping_fee_deducted, method, status)
+             VALUES (?, ?, ?, ?, ?, 'MANUAL', 'REQUESTED')`,
+            [order.id, claimId, refundAmount, shippingFeeRefund, deducted]
+        );
+        return { ok: false, pending: true, refundId: ins.insertId, method: 'MANUAL' };
+    }
+
+    // 결제가 없던 주문 — TEST 결제, 전액 적립금·쿠폰으로 0원 결제, 입금 전 B2B 주문 등
     const noPayment = !order.payment_key || refundAmount === 0;
     const method = noPayment ? 'NONE' : 'PG';
 
@@ -127,7 +149,10 @@ async function refundOrder(conn, { order, claimId = null, returnShippingFee = 0,
     return { ok: false, refundId, method, reason: String(result.body).slice(0, 500) };
 }
 
-/** 실패한 환불을 운영자가 수동 처리했다고 표시한다. */
+/**
+ * 실패했거나(PG 오류) 대기 중인(B2B 계좌 이체) 환불을 운영자가 수동 처리했다고 표시한다.
+ * 메모를 담을 별도 컬럼이 없어 `failed_reason` 에 적는다 — 실패 사유가 아니라 처리 메모다.
+ */
 async function markRefundManual(refundId, adminMemo) {
     await pool.query(
         "UPDATE order_refunds SET status = 'COMPLETED', method = 'MANUAL', completed_at = NOW(), failed_reason = ? WHERE id = ?",

@@ -88,6 +88,7 @@ const totalPages = Math.max(1, Math.ceil(total / pageSize));
           <th class="px-6 py-3 text-right">주문금액</th>
           <th class="px-6 py-3">단계</th>
           <th class="px-6 py-3">입금기한</th>
+          <th class="px-6 py-3">송장</th>
           <th class="px-6 py-3">계산서</th>
           <th class="px-6 py-3 text-right">관리</th>
         </tr>
@@ -116,6 +117,11 @@ const totalPages = Math.max(1, Math.ceil(total / pageSize));
                 <% } else { %>-<% } %>
               </td>
               <td class="px-6 py-4 text-xs">
+                <% if (r.tracking_number) { %>
+                  <%= r.courier_company || '' %><p class="text-gray-400"><%= r.tracking_number %></p>
+                <% } else { %>-<% } %>
+              </td>
+              <td class="px-6 py-4 text-xs">
                 <%= { NOT_ISSUED:'미발행', REQUESTED:'요청', ISSUED:'발행', CANCELLED:'취소' }[r.tax_invoice_status] %>
               </td>
               <td class="px-6 py-4 text-right">
@@ -125,7 +131,7 @@ const totalPages = Math.max(1, Math.ceil(total / pageSize));
             </tr>
           <% }); %>
         <% } else { %>
-          <tr><td colspan="8" class="px-6 py-12 text-center text-gray-400">
+          <tr><td colspan="9" class="px-6 py-12 text-center text-gray-400">
             <%= keyword || stage ? '조건에 맞는 주문이 없습니다.' : 'B2B 주문이 아직 없습니다.' %>
           </td></tr>
         <% } %>

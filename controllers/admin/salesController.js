@@ -1,3 +1,12 @@
+/*
+ * 판매 관리 — **일반(B2C) 주문 전용 화면**이다.
+ *
+ * 기업(B2B) 주문은 접수 → 승인(재고 차감) → 입금 확인이라는 별도 단계를 거치고, 그 단계는
+ * b2b_order_detail.approval_status 가 들고 있다. 이 화면은 그 축을 모르기 때문에 여기서
+ * B2B 주문의 상태를 바꾸면 "재고를 깎지 않은 채 결제완료" 같은 어긋난 상태가 만들어진다.
+ * 그래서 목록·상세·상태변경 모두 order_type='B2C' 로 잠그고, B2B 는 /admin/b2b/orders 로 보낸다.
+ */
+
 const pool = require('../../config/db');
 const { restoreOrderResources } = require('../../services/order/orderCancelService');
 const { refundOrder } = require('../../services/order/refundService');
@@ -9,7 +18,7 @@ exports.getList = async (req, res) => {
         const statusFilter = req.query.status || '';
         // 주문은 몰별로 "관리"하지 않고 통합 조회한다. 몰 필터(?mallId=<id>)는 조회 편의일 뿐이고
         // 기본은 전 몰 통합이다. 소속 몰은 손님 결제 시 orders.mall_id 에 기록된다(checkoutController).
-        const conditions = [];
+        const conditions = ["o.order_type = 'B2C'"];
         const params = [];
         if (statusFilter && ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'].includes(statusFilter)) {
             conditions.push('o.status = ?');
@@ -79,6 +88,10 @@ exports.getDetail = async (req, res) => {
         }
 
         const order = orders[0];
+        // B2B 주문은 이 화면에서 다루지 않는다 — 링크·즐겨찾기로 직접 들어와도 전용 화면으로 넘긴다.
+        if (order.order_type === 'B2B') {
+            return res.redirect(`/admin/b2b/orders/${order.id}`);
+        }
         const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [id]);
         const [shipment] = await pool.query('SELECT * FROM shipments WHERE order_id = ?', [id]);
 
@@ -142,13 +155,18 @@ exports.postStatus = async (req, res) => {
         await connection.beginTransaction();
 
         const [[order]] = await connection.query(
-            `SELECT id, user_id, status, point_used, total_amount, shipping_fee, shipping_discount, payment_key
+            `SELECT id, user_id, status, point_used, total_amount, shipping_fee, shipping_discount, payment_key, order_type
                FROM orders WHERE id = ? FOR UPDATE`,
             [id]
         );
         if (!order) {
             await connection.rollback();
             return res.redirect('/admin/sales');
+        }
+        // 승인·입금 단계를 모르는 화면이 B2B 주문을 뒤집지 못하게 막는다.
+        if (order.order_type === 'B2B') {
+            await connection.rollback();
+            return res.redirect(`/admin/b2b/orders/${order.id}`);
         }
 
         const becomingCancelled = CANCEL_STATUSES.includes(status) && !CANCEL_STATUSES.includes(order.status);

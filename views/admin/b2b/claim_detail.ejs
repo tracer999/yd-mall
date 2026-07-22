@@ -1,0 +1,172 @@
+<%
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+const dt = v => (v ? new Date(v).toLocaleString('ko-KR') : '-');
+const TYPE = { CANCEL: '취소', RETURN: '반품', EXCHANGE: '교환' };
+const REASON = { CHANGE_OF_MIND: '단순 변심', DEFECT: '불량', WRONG_DELIVERY: '오배송', OTHER: '기타' };
+const METHOD = { PG: 'PG 취소', MANUAL: '계좌 이체', NONE: '환불 대상 없음' };
+const REFUND_STATUS = { REQUESTED: '이체 대기', COMPLETED: '완료', FAILED: '실패' };
+const row = (k, v) => `<div class="flex py-2 border-b border-gray-100 last:border-0"><dt class="w-32 shrink-0 text-sm text-gray-500">${k}</dt><dd class="text-sm text-gray-900">${v == null || v === '' ? '-' : v}</dd></div>`;
+const isOpen = claim.status === 'REQUESTED';
+// 입금이 확인된 주문만 실제로 돌려줄 돈이 있다.
+const hasMoneyToReturn = claim.payment_status === 'PAID';
+const refundPreview = Math.max(0, Number(claim.total_amount)
+  - (claim.responsible === 'CUSTOMER' && claim.claim_type === 'RETURN' ? suggestedReturnFee : 0));
+%>
+
+<% if (message) { %><div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800"><%= message %></div><% } %>
+<% if (error) { %><div class="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800"><%= error %></div><% } %>
+
+<div class="mb-6 flex justify-between items-center">
+  <a href="/admin/b2b/claims" class="text-sm text-gray-500 hover:text-gray-700 no-underline">&larr; 목록으로</a>
+  <a href="/admin/b2b/orders/<%= claim.order_id %>" class="text-sm text-blue-600 hover:text-blue-800 no-underline">주문 상세 보기 &rarr;</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    <!-- 클레임 정보 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <h3 class="text-sm font-bold text-gray-900 mb-3"><%= TYPE[claim.claim_type] %> 신청</h3>
+      <dl>
+        <%- row('주문번호', claim.order_number) %>
+        <%- row('거래처', `${claim.company_name} (${claim.business_number})`) %>
+        <%- row('신청자', claim.requested_by === 'ADMIN' ? '관리자' : (claim.customer_name || '거래처 담당자')) %>
+        <%- row('신청일', dt(claim.created_at)) %>
+        <%- row('사유', REASON[claim.reason_type] || claim.reason_type) %>
+        <%- row('주문 상태', claim.order_status) %>
+        <%- row('입금 확인', claim.deposited_at ? `${dt(claim.deposited_at)}${claim.deposit_name ? ' · ' + claim.deposit_name : ''}` : '입금 전') %>
+      </dl>
+      <% if (claim.reason_detail) { %>
+        <div class="mt-3 p-3 bg-gray-50 rounded text-sm text-gray-700"><%= claim.reason_detail %></div>
+      <% } %>
+      <% if (claim.admin_memo) { %>
+        <div class="mt-3 p-3 bg-blue-50 rounded text-sm text-blue-800">관리자 메모: <%= claim.admin_memo %></div>
+      <% } %>
+    </div>
+
+    <!-- 주문 상품 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">주문 상품</h3>
+      <ul class="divide-y divide-gray-100">
+        <% items.forEach(function(i) { %>
+          <li class="py-2 flex justify-between text-sm">
+            <span class="text-gray-700"><%= i.product_name %> &times; <%= i.quantity %></span>
+            <span class="text-gray-900"><%= won(i.total_price) %>원</span>
+          </li>
+        <% }); %>
+      </ul>
+      <dl class="mt-3 pt-3 border-t border-gray-100">
+        <%- row('공급가액', won(claim.supply_amount) + '원') %>
+        <%- row('부가세', won(claim.vat_amount) + '원') %>
+        <%- row('배송비', won(claim.shipping_fee) + '원') %>
+        <%- row('<strong>주문 금액</strong>', `<strong class="text-lg text-blue-700">${won(claim.total_amount)}원</strong>`) %>
+      </dl>
+    </div>
+
+    <!-- 환불 내역 -->
+    <% if (refunds.length) { %>
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">환불 내역</h3>
+        <% refunds.forEach(function(r) { %>
+          <div class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm border-b border-gray-50 last:border-0">
+            <div>
+              <span class="font-medium"><%= won(r.refund_amount) %>원</span>
+              <span class="text-gray-400 ml-2"><%= METHOD[r.method] || r.method %></span>
+              <% if (r.return_shipping_fee_deducted > 0) { %>
+                <span class="text-gray-400 ml-1">(반품비 -<%= won(r.return_shipping_fee_deducted) %>)</span>
+              <% } %>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="px-2 py-0.5 rounded text-xs <%= r.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : r.status === 'FAILED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800' %>">
+                <%= REFUND_STATUS[r.status] || r.status %>
+              </span>
+              <% if (r.status !== 'COMPLETED') { %>
+                <form method="POST" action="/admin/b2b/claims/refund-complete" class="flex items-center gap-1"
+                      onsubmit="return confirm('이체를 마쳤습니까? 환불 완료로 기록합니다.');">
+                  <input type="hidden" name="refund_id" value="<%= r.id %>">
+                  <input type="hidden" name="order_id" value="<%= claim.order_id %>">
+                  <input type="hidden" name="claim_id" value="<%= claim.id %>">
+                  <input type="text" name="memo" placeholder="이체 메모" class="h-[32px] px-2 text-xs border border-gray-300 rounded-md w-28">
+                  <button class="h-[32px] px-3 text-xs font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700">계좌 환불 완료</button>
+                </form>
+              <% } %>
+            </div>
+          </div>
+          <% if (r.failed_reason) { %><p class="text-xs text-gray-500 mt-1"><%= r.failed_reason %></p><% } %>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="space-y-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+      <% if (isOpen) { %>
+        <h3 class="text-sm font-bold text-gray-900 mb-3">클레임 처리</h3>
+
+        <form method="POST" action="/admin/b2b/claims/<%= claim.id %>/approve" class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">귀책</label>
+            <select name="responsible" id="responsible" class="block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+              <option value="CUSTOMER" <%= claim.responsible === 'CUSTOMER' ? 'selected' : '' %>>거래처 (단순 변심 — 반품비 청구)</option>
+              <option value="SELLER" <%= claim.responsible === 'SELLER' ? 'selected' : '' %>>판매자 (불량·오배송 — 전액 환불)</option>
+            </select>
+          </div>
+          <% if (claim.claim_type === 'RETURN') { %>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">반품 배송비 (원)</label>
+              <input type="number" name="return_shipping_fee" min="0" value="<%= claim.responsible === 'CUSTOMER' ? suggestedReturnFee : 0 %>"
+                     class="block w-full h-[38px] px-3 text-sm border border-gray-300 rounded-md">
+              <p class="text-xs text-gray-400 mt-1">환불액에서 차감됩니다. 판매자 귀책이면 0.</p>
+            </div>
+          <% } %>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">메모</label>
+            <textarea name="memo" rows="2" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md"></textarea>
+          </div>
+
+          <div class="p-3 rounded-md <%= hasMoneyToReturn ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50' %> text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-600">예상 환불액</span>
+              <span class="font-bold <%= hasMoneyToReturn ? 'text-amber-800' : 'text-gray-500' %>"><%= won(hasMoneyToReturn ? refundPreview : 0) %>원</span>
+            </div>
+            <% if (hasMoneyToReturn) { %>
+              <p class="text-xs text-amber-900 mt-1">
+                <strong>자동으로 송금되지 않습니다.</strong> 승인 후 거래처 계좌로 직접 이체하고 [계좌 환불 완료] 를 눌러 주세요.
+              </p>
+            <% } else { %>
+              <p class="text-xs text-gray-500 mt-1">아직 입금되지 않은 주문이라 돌려줄 금액이 없습니다. 재고·적립금만 복원됩니다.</p>
+            <% } %>
+          </div>
+
+          <button type="submit" class="w-full h-[38px] text-sm font-semibold rounded-md bg-green-600 text-white hover:bg-green-700">승인 (복원 + 환불 기록)</button>
+        </form>
+
+        <form method="POST" action="/admin/b2b/claims/<%= claim.id %>/reject" class="mt-3 pt-3 border-t border-gray-100 space-y-2"
+              onsubmit="return confirm('이 클레임을 거절할까요?');">
+          <textarea name="memo" rows="2" placeholder="거절 사유" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md"></textarea>
+          <button type="submit" class="w-full h-[38px] text-sm font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">거절</button>
+        </form>
+      <% } else { %>
+        <h3 class="text-sm font-bold text-gray-900 mb-2">처리 완료</h3>
+        <dl>
+          <%- row('상태', { APPROVED:'승인', COMPLETED:'완료', REJECTED:'거절', WITHDRAWN:'철회' }[claim.status] || claim.status) %>
+          <%- row('처리일', dt(claim.processed_at)) %>
+          <%- row('환불 상태', REFUND_STATUS[claim.refund_status] || '-') %>
+        </dl>
+        <% if (claim.refund_status === 'REQUESTED') { %>
+          <p class="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+            아직 계좌로 이체하지 않았습니다. 왼쪽 환불 내역에서 마감해 주세요.
+          </p>
+        <% } %>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 귀책을 판매자로 바꾸면 반품 배송비를 0으로 제안한다.
+  var resp = document.getElementById('responsible');
+  if (resp) resp.addEventListener('change', function () {
+    var fee = document.querySelector('input[name="return_shipping_fee"]');
+    if (fee) fee.value = this.value === 'SELLER' ? 0 : '<%= suggestedReturnFee %>';
+  });
+</script>

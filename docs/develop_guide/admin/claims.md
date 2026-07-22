@@ -13,7 +13,9 @@
 
 **반품과 환불은 다른 업무입니다.** 반품은 상품을 회수하는 물류 업무, 환불은 돈을 되돌리는 금융 업무입니다. 출고 전 취소처럼 반품 없이 환불만 발생할 수도 있습니다.
 
-관련 문서: [주문 및 매출 관리](./sales.md) · [배송 관리](./shipping.md)
+> ⚠️ **일반(B2C) 주문 전용입니다.** 목록은 `o.order_type = 'B2C'` 로 잠겨 있고, 상세·승인·거절·수동환불에 B2B 클레임 ID 가 들어오면 `/admin/b2b/claims/:id` 로 리다이렉트합니다(`divertIfB2b`). 갈라진 이유는 **환불 수단**입니다 — B2C 는 `payment_key` 로 PG 취소가 자동 실행되지만, B2B 는 무통장이라 `payment_key` 가 없습니다. 분리 전에는 그 때문에 `refundOrder` 가 "결제 없음 → 즉시 COMPLETED" 로 처리해 **돈을 보내지 않았는데 환불 완료로 찍혔습니다.** 지금은 B2B 를 `method='MANUAL'` · `status='REQUESTED'`(이체 대기)로 남기고, 운영자가 `/admin/b2b/claims` 에서 마감합니다. 컨트롤러는 `controllers/admin/b2bClaimController.js`.
+
+관련 문서: [주문 및 매출 관리](./sales.md) · [배송 관리](./shipping.md) · [B2B 관리 매뉴얼](../../manual/admin/b2b.md)
 
 ---
 

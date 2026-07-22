@@ -1,6 +1,12 @@
 const pool = require('../../config/db');
 const { transition, log } = require('../../services/order/orderStatusService');
 
+/*
+ * 배송 관리 — **일반(B2C) 주문 전용**이다.
+ * 기업(B2B) 주문의 출고·송장·배송완료는 /admin/b2b/orders 상세에서 처리한다(b2bOrderService.ship).
+ * 그쪽은 "입금 확인 전 출고 금지" 같은 B2B 규칙을 함께 검사한다.
+ */
+
 exports.getList = async (req, res) => {
     try {
         // Fetch orders that need shipping or are shipped
@@ -22,7 +28,8 @@ exports.getList = async (req, res) => {
             LEFT JOIN shipments s ON o.id = s.order_id
             LEFT JOIN users u ON o.user_id = u.id
             LEFT JOIN mall m ON o.mall_id = m.id
-            WHERE o.status IN ('PAID', 'PREPARING', 'SHIPPED', 'DELIVERED')
+            WHERE o.order_type = 'B2C'
+              AND o.status IN ('PAID', 'PREPARING', 'SHIPPED', 'DELIVERED')
             ORDER BY o.created_at DESC
         `);
         res.render('admin/shipping/list', {
@@ -42,6 +49,12 @@ exports.postTracking = async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
+
+        const [[target]] = await conn.query('SELECT order_type FROM orders WHERE id = ?', [order_id]);
+        if (!target || target.order_type === 'B2B') {
+            await conn.rollback();
+            return res.redirect(target ? `/admin/b2b/orders/${order_id}` : '/admin/shipping');
+        }
 
         const [start] = await conn.query('SELECT id FROM shipments WHERE order_id = ?', [order_id]);
         if (start.length > 0) {
@@ -78,6 +91,13 @@ exports.postDelivered = async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
+
+        const [[target]] = await conn.query('SELECT order_type FROM orders WHERE id = ?', [order_id]);
+        if (!target || target.order_type === 'B2B') {
+            await conn.rollback();
+            return res.redirect(target ? `/admin/b2b/orders/${order_id}` : '/admin/shipping');
+        }
+
         await conn.query(
             "UPDATE shipments SET status = 'DELIVERED', delivered_at = NOW() WHERE order_id = ?",
             [order_id]

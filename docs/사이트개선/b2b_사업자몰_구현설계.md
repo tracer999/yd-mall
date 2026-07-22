@@ -1007,7 +1007,32 @@ B2B 관리                              /admin/b2b
 ```
 
 - `visible_roles` 는 기존 CSV RBAC 규칙(`middleware/adminRoleGuard.js` + `requireMenuAccess`)을 따른다.
-- 기존 `주문 관리` 는 그대로 두고 **주문 유형 필터(전체/B2C/B2B)** 만 추가한다. 목록 화면을 복제하지 않는다.
+- **화면은 유형별로 완전히 가른다(2026-07 변경).** 설계 초안은 "기존 주문 관리에 유형 필터만 추가"였으나,
+  같은 주문이 판매 관리와 B2B 주문 두 곳에 뜨면서 운영자가 어느 쪽에서 처리해야 하는지 혼동했고,
+  더 나아가 승인 단계를 모르는 판매 관리에서 상태를 바꾸면 **재고를 차감하지 않은 채 `PAID`** 가 되는
+  정합성 사고가 가능했다. 그래서:
+  - 판매 관리(`/admin/sales`)·배송 관리(`/admin/shipping`) 는 `order_type='B2C'` 로 잠근다.
+    B2B ID 로 직접 진입·POST 하면 `/admin/b2b/orders/:id` 로 리다이렉트한다.
+  - B2B 주문은 접수→승인→입금확인→**출고·배송완료**까지 `/admin/b2b/orders` 에서 끝낸다
+    (`b2bOrderService.ship()` · `markDelivered()` — 주문 엔진 `shipments`·`orderStatusService` 는 그대로 공용).
+  - 클레임(취소·반품)도 `/admin/b2b/claims` 로 갈랐다(`b2bClaimController`). `/admin/claims` 는
+    `order_type='B2C'` 전용이며 B2B ID 가 들어오면 리다이렉트한다.
+
+**환불 수단이 갈라지는 지점 (중요).** B2B 는 무통장 입금이라 `orders.payment_key` 가 없다.
+분리 전 `refundService.refundOrder` 는 `payment_key` 유무로만 판정했기 때문에, B2B 환불이
+"결제 없던 주문 → `method='NONE'`, 즉시 `COMPLETED`" 로 처리됐다. **한 푼도 보내지 않았는데
+환불 완료로 기록된다.** 지금은 B2B 를 따로 판정한다.
+
+| 조건 | method | status | 뜻 |
+|---|---|---|---|
+| B2B · `payment_status='PAID'` | `MANUAL` | `REQUESTED` | 이체 대기 — 사람이 계좌로 보내야 한다 |
+| B2B · 입금 전 | `NONE` | `COMPLETED` | 받은 돈이 없다 |
+| B2C · `payment_key` 있음 | `PG` | Toss 응답 | 자동 환불 |
+
+`refundOrder` 는 대기 시 `{ ok:false, pending:true }` 를 돌려주고, `claimService.approveInTransaction`
+이 이를 `orders.refund_status='REQUESTED'` 로 옮긴다. **`FAILED` 와 구분해야 한다** — 실패는 재시도
+대상이고 대기는 정상 흐름이다. 운영자가 이체 후 `/admin/b2b/claims` 의 [계좌 환불 완료] 를 누르면
+`markRefundManual` + `refund_status='COMPLETED'` · `payment_status='REFUNDED'` 로 마감된다.
 
 ### 11.2 상품 관리자 — 탭 하나 추가
 

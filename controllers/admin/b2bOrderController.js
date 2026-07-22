@@ -1,12 +1,17 @@
 /*
  * B2B 주문 관리 (설계 §7, §11.1).
  *
- * 목록·상세는 분리하되 주문 엔진은 공통이다 — 출고·배송·클레임은 기존 화면을 그대로 쓴다.
- * 여기서 다루는 건 B2B 고유 단계뿐이다: 승인 → 입금 확인 → 세금계산서 → 기한초과 회수.
+ * **B2B 주문의 처리는 전부 이 화면에서 끝난다.** 주문 엔진(orders/order_items/shipments)은
+ * B2C 와 공통이지만 관리 화면은 완전히 갈라져 있다 — 판매 관리·배송 관리는 order_type='B2C'
+ * 만 다루므로, 같은 주문이 두 곳에 뜨거나 승인 단계를 모르는 화면이 상태를 뒤집는 일이 없다.
+ *
+ * 단계: 접수 → 검토 → 승인(재고 차감) → 입금 확인 → 출고(송장) → 배송완료.
+ *       그 밖에 세금계산서 상태 기록, 입금기한 초과분 회수.
  */
 
 const pool = require('../../config/db');
 const b2bOrderService = require('../../services/b2b/b2bOrderService');
+const { history } = require('../../services/order/orderStatusService');
 const b2bContext = require('../../middleware/b2bContext');
 
 const LAYOUT = 'layouts/admin_layout';
@@ -54,10 +59,12 @@ exports.getList = async (req, res, next) => {
                     o.supply_amount, o.vat_amount, o.created_at,
                     d.approval_status, d.payment_due_at, d.purchase_order_number,
                     d.tax_invoice_status, d.requested_delivery_date,
-                    bp.company_name
+                    bp.company_name,
+                    s.courier_company, s.tracking_number
                FROM orders o
                JOIN b2b_order_detail d ON d.order_id = o.id
                JOIN business_profile bp ON bp.id = d.business_profile_id
+               LEFT JOIN shipments s ON s.order_id = o.id
               WHERE ${where.join(' AND ')}
               ORDER BY o.created_at DESC
               LIMIT ? OFFSET ?`,
@@ -77,7 +84,8 @@ exports.getList = async (req, res, next) => {
                 SUM(d.approval_status = 'REQUESTED' AND o.status <> 'CANCELLED') AS REQUESTED,
                 SUM(d.approval_status = 'UNDER_REVIEW' AND o.status <> 'CANCELLED') AS UNDER_REVIEW,
                 SUM(d.approval_status = 'APPROVED' AND o.payment_status = 'PENDING' AND o.status <> 'CANCELLED') AS AWAIT_DEPOSIT,
-                SUM(o.payment_status = 'PAID' AND o.status IN ('PAID','PREPARING')) AS PAID
+                SUM(o.payment_status = 'PAID' AND o.status IN ('PAID','PREPARING')) AS PAID,
+                SUM(o.status IN ('SHIPPED','DELIVERED')) AS SHIPPED
                FROM orders o JOIN b2b_order_detail d ON d.order_id = o.id
               WHERE o.order_type = 'B2B'`
         );
@@ -87,7 +95,7 @@ exports.getList = async (req, res, next) => {
         res.render('admin/b2b/orders', {
             layout: LAYOUT,
             title: 'B2B 주문',
-            subtitle: '기업 주문은 접수 → 승인 → 입금 확인 순으로 진행됩니다. 승인 시점에 재고가 차감됩니다.',
+            subtitle: '기업 주문은 접수 → 승인 → 입금 확인 → 출고까지 이 화면에서 모두 처리합니다. 승인 시점에 재고가 차감됩니다.',
             rows: rows.map((r) => ({ ...r, stage: stageOf(r) })),
             total: cnt ? cnt.total : 0,
             page,
@@ -116,12 +124,20 @@ exports.getDetail = async (req, res, next) => {
             [req.params.id]
         );
 
+        const logs = await history(pool, req.params.id);
+        const [claims] = await pool.query(
+            'SELECT id, claim_type, status, reason_type, created_at FROM order_claims WHERE order_id = ? ORDER BY created_at DESC',
+            [req.params.id]
+        );
+
         res.render('admin/b2b/order_detail', {
             layout: LAYOUT,
             title: 'B2B 주문 상세',
             subtitle: `${order.order_number} · ${order.company_name}`,
             order,
             items,
+            logs,
+            claims,
             stage: stageOf(order),
             settings: b2bContext.getSettings(),
             message: req.query.message || null,
@@ -132,10 +148,13 @@ exports.getDetail = async (req, res, next) => {
     }
 };
 
-/** 승인·검토·입금확인·반려를 한 엔드포인트로 받는다. 실제 판정은 서비스가 한다. */
+/**
+ * 검토·승인·입금확인·출고·배송완료·반려를 한 엔드포인트로 받는다.
+ * 단계 판정(무엇을 지금 누를 수 있는가)은 전부 서비스가 한다 — 화면은 버튼만 감춘다.
+ */
 exports.postAction = async (req, res, next) => {
     const { id } = req.params;
-    const { action, reason, deposit_name } = req.body;
+    const { action, reason, deposit_name, courier_company, tracking_number } = req.body;
     const adminId = req.session.admin ? req.session.admin.id : null;
 
     try {
@@ -144,13 +163,18 @@ exports.postAction = async (req, res, next) => {
             case 'review': result = await b2bOrderService.markUnderReview(id); break;
             case 'approve': result = await b2bOrderService.approve(id, { adminId }); break;
             case 'deposit': result = await b2bOrderService.confirmDeposit(id, { adminId, depositName: (deposit_name || '').trim() || null }); break;
+            case 'ship': result = await b2bOrderService.ship(id, { adminId, courierCompany: courier_company, trackingNumber: tracking_number }); break;
+            case 'delivered': result = await b2bOrderService.markDelivered(id, { adminId }); break;
             case 'reject': result = await b2bOrderService.cancel(id, { reason: (reason || '').trim() || '판매자 반려', adminId }); break;
             default: result = { ok: false, error: '알 수 없는 작업입니다.' };
         }
         if (!result.ok) {
             return res.redirect(`/admin/b2b/orders/${id}?error=${encodeURIComponent(result.error)}`);
         }
-        const label = { review: '검토 중으로 변경', approve: '승인(재고 차감)', deposit: '입금 확인', reject: '반려' }[action];
+        const label = {
+            review: '검토 중으로 변경', approve: '승인(재고 차감)', deposit: '입금 확인',
+            ship: '출고 · 송장 등록', delivered: '배송완료', reject: '반려',
+        }[action];
         return res.redirect(`/admin/b2b/orders/${id}?message=${encodeURIComponent(label + ' 처리했습니다.')}`);
     } catch (err) {
         next(err);

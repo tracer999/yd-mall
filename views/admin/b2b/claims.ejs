@@ -1,0 +1,107 @@
+<%
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+const dt = v => (v ? new Date(v).toLocaleString('ko-KR') : '-');
+const TYPE = { CANCEL: '취소', RETURN: '반품', EXCHANGE: '교환' };
+const REASON = { CHANGE_OF_MIND: '단순 변심', DEFECT: '불량', WRONG_DELIVERY: '오배송', OTHER: '기타' };
+const STATUS = {
+  REQUESTED: { label: '접수', cls: 'bg-amber-100 text-amber-800 border-amber-400' },
+  APPROVED:  { label: '승인', cls: 'bg-blue-100 text-blue-800 border-blue-400' },
+  COMPLETED: { label: '완료', cls: 'bg-green-100 text-green-800 border-green-400' },
+  REJECTED:  { label: '거절', cls: 'bg-gray-100 text-gray-700 border-gray-400' },
+  WITHDRAWN: { label: '철회', cls: 'bg-gray-100 text-gray-700 border-gray-400' },
+};
+const tabs = [['', '전체'], ['REQUESTED', '접수'], ['COMPLETED', '완료'], ['REJECTED', '거절']];
+const qs = s => '/admin/b2b/claims' + (s ? '?status=' + s : '');
+%>
+
+<% if (message) { %><div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800"><%= message %></div><% } %>
+<% if (error) { %><div class="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800"><%= error %></div><% } %>
+
+<% if (pendingRefunds.length > 0) { %>
+  <div class="mb-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+    <p class="text-sm font-bold text-amber-900">계좌로 이체해야 할 환불 <%= pendingRefunds.length %>건이 남아 있습니다.</p>
+    <p class="text-xs text-amber-800 mt-1">
+      기업 주문은 무통장 입금이라 <strong>환불이 자동으로 나가지 않습니다.</strong> 거래처 계좌로 보낸 뒤 [완료] 를 눌러 주세요.
+    </p>
+    <div class="mt-3 bg-white rounded-lg border border-amber-200 divide-y divide-amber-100">
+      <% pendingRefunds.forEach(function(r) { %>
+        <form action="/admin/b2b/claims/refund-complete" method="POST"
+              class="flex flex-wrap items-center gap-3 px-3 py-2 text-sm"
+              onsubmit="return confirm('이체를 마쳤습니까? 환불 완료로 기록합니다.');">
+          <input type="hidden" name="refund_id" value="<%= r.id %>">
+          <input type="hidden" name="order_id" value="<%= r.order_id %>">
+          <% if (r.claim_id) { %><input type="hidden" name="claim_id" value="<%= r.claim_id %>"><% } %>
+          <span class="font-medium text-gray-900"><%= r.order_number %></span>
+          <span class="text-gray-600"><%= r.company_name %></span>
+          <span class="font-semibold text-amber-800"><%= won(r.refund_amount) %>원</span>
+          <span class="text-xs text-gray-400"><%= dt(r.created_at) %> 승인</span>
+          <input type="text" name="memo" placeholder="이체 메모 (선택)"
+                 class="ml-auto h-[32px] px-2 text-xs border border-gray-300 rounded-md w-44">
+          <button type="submit" class="h-[32px] px-3 text-xs font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700">완료</button>
+        </form>
+      <% }); %>
+    </div>
+  </div>
+<% } %>
+
+<div class="mb-6 flex flex-wrap gap-1">
+  <% tabs.forEach(function(t) { %>
+    <a href="<%= qs(t[0]) %>"
+       class="px-3 py-1.5 text-sm rounded-md no-underline transition-colors <%= filters.status === t[0] ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100' %>"><%= t[1] %></a>
+  <% }); %>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left text-gray-500">
+      <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-100">
+        <tr>
+          <th class="px-6 py-3">주문번호</th>
+          <th class="px-6 py-3">거래처</th>
+          <th class="px-6 py-3">유형 · 사유</th>
+          <th class="px-6 py-3 text-right">주문금액</th>
+          <th class="px-6 py-3">상태</th>
+          <th class="px-6 py-3">환불</th>
+          <th class="px-6 py-3">신청일</th>
+          <th class="px-6 py-3 text-right">관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (claims.length > 0) { %>
+          <% claims.forEach(function(c) { %>
+            <tr class="bg-white border-b border-gray-100 hover:bg-gray-50">
+              <td class="px-6 py-4 font-medium text-gray-900"><%= c.order_number %></td>
+              <td class="px-6 py-4"><%= c.company_name %></td>
+              <td class="px-6 py-4">
+                <%= TYPE[c.claim_type] %>
+                <p class="text-xs text-gray-400"><%= REASON[c.reason_type] || c.reason_type %></p>
+              </td>
+              <td class="px-6 py-4 text-right font-semibold text-gray-900"><%= won(c.total_amount) %>원</td>
+              <td class="px-6 py-4">
+                <span class="text-xs font-medium px-2.5 py-0.5 rounded border <%= (STATUS[c.status] || STATUS.REQUESTED).cls %>"><%= (STATUS[c.status] || {}).label || c.status %></span>
+              </td>
+              <td class="px-6 py-4 text-xs">
+                <% if (c.refund_status === 'REQUESTED') { %>
+                  <span class="text-amber-700 font-semibold">이체 대기</span>
+                <% } else if (c.refund_status === 'COMPLETED') { %>
+                  완료
+                <% } else if (c.refund_status === 'FAILED') { %>
+                  <span class="text-red-600 font-semibold">실패</span>
+                <% } else { %>-<% } %>
+              </td>
+              <td class="px-6 py-4 text-xs"><%= dt(c.created_at) %></td>
+              <td class="px-6 py-4 text-right">
+                <a href="/admin/b2b/claims/<%= c.id %>"
+                   class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">상세</a>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr><td colspan="8" class="px-6 py-12 text-center text-gray-400">
+            <%= filters.status ? '조건에 맞는 클레임이 없습니다.' : '기업 주문의 취소·반품 신청이 아직 없습니다.' %>
+          </td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>

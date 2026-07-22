@@ -73,7 +73,7 @@ async function requestClaim({ orderId, userId = null, claimType, reasonType, rea
 
         const [[order]] = await conn.query(
             `SELECT id, user_id, status, payment_status, claim_status, point_used, total_amount,
-                    shipping_fee, shipping_discount, payment_key
+                    shipping_fee, shipping_discount, payment_key, order_type
                FROM orders WHERE id = ? FOR UPDATE`,
             [orderId]
         );
@@ -153,12 +153,15 @@ async function approveInTransaction(conn, { claimId, order, claimType, responsib
         [responsible, fee, actorType === 'ADMIN' ? actorId : null, memo || null, claimId]
     );
 
-    // 3) 상태 전이 — 주문·결제·클레임·환불이 각각 움직인다
+    // 3) 상태 전이 — 주문·결제·클레임·환불이 각각 움직인다.
+    //    환불은 완료·대기·실패 셋이다. 대기(B2B 계좌 이체)를 실패로 적으면 운영자가 재시도 대상으로
+    //    오인하고, 완료로 적으면 돈을 안 보냈는데 끝난 것으로 보인다.
+    const refundStatus = refund.ok ? 'COMPLETED' : (refund.pending ? 'REQUESTED' : 'FAILED');
     await transition(conn, order.id, {
         status: 'CANCELLED',
         payment_status: refund.ok ? 'REFUNDED' : 'CANCELLED',
         claim_status: 'COMPLETED',
-        refund_status: refund.ok ? 'COMPLETED' : 'FAILED',
+        refund_status: refundStatus,
     }, { actorType, actorId, memo: memo || (claimType === 'RETURN' ? '반품 승인' : '취소 승인') });
 
     return { refund };
@@ -175,7 +178,8 @@ async function approveClaim({ claimId, adminId, responsible, returnShippingFee, 
         if (claim.status !== 'REQUESTED') { await conn.rollback(); return { ok: false, reason: '이미 처리된 클레임입니다.' }; }
 
         const [[order]] = await conn.query(
-            `SELECT id, user_id, status, point_used, total_amount, shipping_fee, shipping_discount, payment_key
+            `SELECT id, user_id, status, payment_status, point_used, total_amount,
+                    shipping_fee, shipping_discount, payment_key, order_type
                FROM orders WHERE id = ? FOR UPDATE`,
             [claim.order_id]
         );

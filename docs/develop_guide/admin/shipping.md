@@ -17,6 +17,8 @@
 
 배송이 필요한 주문에 대해 송장을 입력하고 배송 상태를 반영합니다. 배송비를 **얼마 받을지**는 §7 의 별도 화면이 정합니다.
 
+> ⚠️ **일반(B2C) 주문 전용입니다.** 목록은 `o.order_type = 'B2C'` 로 잠겨 있고, `POST /admin/shipping/tracking`·`/delivered` 에 B2B 주문 ID 가 들어오면 `/admin/b2b/orders/:id` 로 리다이렉트합니다. B2B 의 출고·송장·배송완료는 `services/b2b/b2bOrderService.js` 의 `ship()`·`markDelivered()` 가 담당하며, "입금 확인(`payment_status='PAID'`) 전 출고 금지" 같은 B2B 규칙을 함께 검사합니다.
+
 ---
 
 ## 2. 라우트 및 동작

@@ -4,6 +4,7 @@ const memberController = require('../../controllers/admin/b2bMemberController');
 const settingController = require('../../controllers/admin/b2bSettingController');
 const orderController = require('../../controllers/admin/b2bOrderController');
 const quoteController = require('../../controllers/admin/quoteAdminController');
+const claimController = require('../../controllers/admin/b2bClaimController');
 
 // 기업회원 승인
 router.get('/members', memberController.getList);
@@ -19,6 +20,13 @@ router.post('/orders/cancel-overdue', orderController.postCancelOverdue);
 router.get('/orders/:id', orderController.getDetail);
 router.post('/orders/:id/action', orderController.postAction);
 router.post('/orders/:id/tax-invoice', orderController.postTaxInvoice);
+
+// B2B 클레임 — 취소·반품 승인 + 계좌 환불 마감 (B2C 는 /admin/claims)
+router.get('/claims', claimController.getList);
+router.post('/claims/refund-complete', claimController.postRefundComplete);
+router.get('/claims/:id', claimController.getDetail);
+router.post('/claims/:id/approve', claimController.postApprove);
+router.post('/claims/:id/reject', claimController.postReject);
 
 // 견적 관리 · 협상 (설계 §8, §11.4)
 router.get('/quotes', quoteController.getList);

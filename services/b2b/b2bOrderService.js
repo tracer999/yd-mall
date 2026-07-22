@@ -11,7 +11,14 @@
  *   접수      status=PENDING  payment=PENDING  approval=REQUESTED     재고 손대지 않음
  *   승인      status=PENDING  payment=PENDING  approval=APPROVED      ← 여기서 재고 차감
  *   입금확인  status=PAID     payment=PAID     approval=APPROVED      예약 확정
+ *   출고      status=SHIPPED  payment=PAID                            송장 등록
+ *   배송완료  status=DELIVERED payment=PAID
  *   반려/취소 status=CANCELLED payment=CANCELLED                      재고 복원
+ *
+ * ⚠️ B2B 주문은 **B2B 관리 화면에서만** 처리한다. 판매 관리(/admin/sales)·배송 관리(/admin/shipping)
+ *    는 order_type='B2C' 로 잠겨 있다. 그 화면들은 승인·입금 단계를 모르기 때문에, B2B 주문을
+ *    거기서 건드리면 approval_status 와 재고 차감 여부가 어긋난다(예: 재고를 깎지 않은 채 PAID).
+ *    그래서 출고·배송완료도 여기(ship·markDelivered)에 둔다.
  *
  * ⚠️ 승인 시점에 재고를 깎는 이유: 입금 기한(기본 7일) 동안 아무 확보가 없으면 마지막 재고를
  *    두 거래처가 동시에 승인받고 한쪽이 출고 불가가 된다. 차감 사실은 orders.stock_deducted_at
@@ -21,6 +28,7 @@
 const pool = require('../../config/db');
 const skuService = require('../catalog/skuService');
 const { restoreOrderResources } = require('../order/orderCancelService');
+const { transition } = require('../order/orderStatusService');
 const b2bContext = require('../../middleware/b2bContext');
 const { sendEmail } = require('../emailService');
 
@@ -43,15 +51,24 @@ function paymentDueDate(from = new Date()) {
     return due;
 }
 
-/** 주문 + B2B 확장정보 + 거래처를 함께 읽는다. */
+/**
+ * 주문 + B2B 확장정보 + 거래처 + 배송을 함께 읽는다.
+ *
+ * `o.*, d.*` 는 같은 이름의 컬럼을 뒤(d)가 덮는다 — created_at 이 대표적이라 주문 생성시각은
+ * `ordered_at` 으로 따로 뽑는다. 배송 컬럼도 o.status 와 부딪히므로 전부 별칭을 준다.
+ */
 async function findOrder(orderId) {
     const [[row]] = await pool.query(
-        `SELECT o.*, d.*, bp.company_name, bp.business_number, bp.tax_invoice_email,
-                u.email AS user_email, u.name AS user_name
+        `SELECT o.*, d.*, o.created_at AS ordered_at,
+                bp.company_name, bp.business_number, bp.tax_invoice_email,
+                u.email AS user_email, u.name AS user_name,
+                s.courier_company, s.tracking_number, s.status AS shipping_status,
+                s.shipped_at, s.delivered_at
            FROM orders o
            JOIN b2b_order_detail d ON d.order_id = o.id
            JOIN business_profile bp ON bp.id = d.business_profile_id
            LEFT JOIN users u ON u.id = o.user_id
+           LEFT JOIN shipments s ON s.order_id = o.id
           WHERE o.id = ?`,
         [orderId]
     );
@@ -166,6 +183,97 @@ async function confirmDeposit(orderId, { adminId = null, depositName = null } = 
         await conn.commit();
 
         await notify(orderId, 'PAID').catch((e) => console.warn('[b2b] 입금확인 안내 실패:', e.message));
+        return { ok: true };
+    } catch (err) {
+        await conn.rollback();
+        throw err;
+    } finally {
+        conn.release();
+    }
+}
+
+/**
+ * 출고 — 송장을 등록하고 SHIPPED 로 넘긴다.
+ *
+ * 입금 확인(payment_status=PAID) 전에는 출고할 수 없다. B2B 는 선입금이 원칙이라
+ * 미입금 출고는 곧 미수금이 된다. shipments 는 주문당 1행이므로 있으면 갱신한다.
+ */
+async function ship(orderId, { courierCompany, trackingNumber, adminId = null } = {}) {
+    const courier = (courierCompany || '').trim();
+    const tracking = (trackingNumber || '').trim();
+    if (!courier || !tracking) return { ok: false, error: '택배사와 송장번호를 모두 입력하세요.' };
+
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        const [[order]] = await conn.query(
+            `SELECT o.id, o.status, o.payment_status
+               FROM orders o JOIN b2b_order_detail d ON d.order_id = o.id
+              WHERE o.id = ? FOR UPDATE`,
+            [orderId]
+        );
+        if (!order) { await conn.rollback(); return { ok: false, error: '주문을 찾을 수 없습니다.' }; }
+        if (order.status === 'CANCELLED') { await conn.rollback(); return { ok: false, error: '취소된 주문입니다.' }; }
+        if (order.payment_status !== 'PAID') {
+            await conn.rollback();
+            return { ok: false, error: '입금 확인 후에 출고할 수 있습니다.' };
+        }
+
+        const [[shipment]] = await conn.query('SELECT id FROM shipments WHERE order_id = ?', [orderId]);
+        if (shipment) {
+            await conn.query(
+                `UPDATE shipments
+                    SET courier_company = ?, tracking_number = ?, status = 'IN_TRANSIT',
+                        shipped_at = IFNULL(shipped_at, NOW())
+                  WHERE order_id = ?`,
+                [courier, tracking, orderId]
+            );
+        } else {
+            await conn.query(
+                `INSERT INTO shipments (order_id, courier_company, tracking_number, status, shipped_at)
+                 VALUES (?, ?, ?, 'IN_TRANSIT', NOW())`,
+                [orderId, courier, tracking]
+            );
+        }
+
+        await transition(conn, Number(orderId), { status: 'SHIPPED' },
+            { actorType: 'ADMIN', actorId: adminId, memo: `송장 등록 (${courier} ${tracking})` });
+
+        await conn.commit();
+
+        await notify(orderId, 'SHIPPED').catch((e) => console.warn('[b2b] 출고 안내 실패:', e.message));
+        return { ok: true };
+    } catch (err) {
+        await conn.rollback();
+        throw err;
+    } finally {
+        conn.release();
+    }
+}
+
+/** 배송완료 — delivered_at 이 반품 가능 기간의 기준이 된다. */
+async function markDelivered(orderId, { adminId = null } = {}) {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        const [[order]] = await conn.query('SELECT id, status FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+        if (!order) { await conn.rollback(); return { ok: false, error: '주문을 찾을 수 없습니다.' }; }
+        if (order.status === 'CANCELLED') { await conn.rollback(); return { ok: false, error: '취소된 주문입니다.' }; }
+        if (order.status !== 'SHIPPED') {
+            await conn.rollback();
+            return { ok: false, error: '출고된 주문만 배송완료로 바꿀 수 있습니다.' };
+        }
+
+        await conn.query(
+            "UPDATE shipments SET status = 'DELIVERED', delivered_at = NOW() WHERE order_id = ?",
+            [orderId]
+        );
+        await transition(conn, Number(orderId), { status: 'DELIVERED' },
+            { actorType: 'ADMIN', actorId: adminId, memo: '배송완료 처리' });
+
+        await conn.commit();
         return { ok: true };
     } catch (err) {
         await conn.rollback();
@@ -301,6 +409,11 @@ async function notify(orderId, kind) {
             subject: `[입금 확인] ${o.order_number}`,
             text: `${o.company_name} 님, 입금이 확인되었습니다.\n주문번호: ${o.order_number}\n상품 준비 후 출고해 드립니다.`,
         },
+        SHIPPED: {
+            subject: `[출고 안내] ${o.order_number}`,
+            text: `${o.company_name} 님, 주문 상품이 출고되었습니다.\n주문번호: ${o.order_number}`
+                + `\n택배사: ${o.courier_company || '-'}\n송장번호: ${o.tracking_number || '-'}`,
+        },
         REJECTED: {
             subject: `[주문 반려] ${o.order_number}`,
             text: `${o.company_name} 님, 주문이 반려되었습니다.\n주문번호: ${o.order_number}\n사유: ${o.reject_reason || '-'}`,
@@ -318,6 +431,8 @@ module.exports = {
     approve,
     markUnderReview,
     confirmDeposit,
+    ship,
+    markDelivered,
     cancel,
     listOverdue,
     cancelOverdue,
