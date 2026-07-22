@@ -27,12 +27,15 @@
   <%- include('./_carousel_base') %>
 
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" data-yd-carousel>
-    <div class="flex items-end justify-between mb-6 gap-4">
-      <div class="text-left">
+    <%# 제목은 다른 섹션들과 같이 항상 중앙. 화살표가 오른쪽에 있어도 제목이 밀리지 않도록
+        좌우에 같은 폭(1fr)의 트랙을 두고 가운데 트랙에만 제목을 넣는다. %>
+    <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end mb-6 gap-4">
+      <span aria-hidden="true"></span>
+      <div class="text-center">
         <% if (_badgeText) { %><span class="<%= _badgeClass %>"><%= _badgeText %></span><% } %>
         <h2 class="text-2xl font-extrabold text-gray-900"><%= title %></h2>
       </div>
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex items-center gap-2 justify-self-end shrink-0">
         <button type="button" class="yd-carousel__nav" data-yd-prev aria-label="이전 상품">
           <i class="bi bi-chevron-left"></i>
         </button>
