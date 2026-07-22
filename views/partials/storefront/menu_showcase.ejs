@@ -78,18 +78,16 @@
   }
   .yd-showcase__count { font-variant-numeric: tabular-nums; }
 
-  /* 배너 카드 — 이미지 위에 제목을 얹는다(샘플 레이아웃) */
+  /* 배너 카드 — 이미지 위에 제목 + 배너 문구를 얹는다(샘플 레이아웃) */
   .yd-showcase__banner { position: relative; display: block; border-radius: .75rem; overflow: hidden; }
   .yd-showcase__banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .yd-showcase__banner figcaption {
+    /* 글자 크기·색은 banner_copy 파셜(.yd-bcopy)이 정한다 — 여기선 자리와 그라데이션만. */
     position: absolute; left: 0; right: 0; bottom: 0; padding: .75rem .875rem;
-    background: linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0));
-    color: #fff; font-weight: 700; font-size: .9375rem; line-height: 1.35;
-    /* 제목이 길어도 카드를 덮지 않도록 2줄에서 자른다 */
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    background: linear-gradient(to top, rgba(0,0,0,.62), rgba(0,0,0,0));
   }
   @media (min-width: 640px) {
-    .yd-showcase__banner figcaption { padding: 1rem 1.25rem; font-size: 1.05rem; }
+    .yd-showcase__banner figcaption { padding: 1rem 1.25rem; }
   }
   /* 연달아 놓이면 경계선이 겹친다 — 마지막 것만 남긴다 */
   .yd-showcase + .yd-showcase { border-top: 0; padding-top: 0; }
@@ -129,7 +127,12 @@
                   <% } %>
                   <img src="<%= banner.image_url %>" alt="<%= banner.title || '' %>" loading="lazy">
                 </picture>
-                <% if (banner.title) { %><figcaption><%= banner.title %></figcaption><% } %>
+                <%# 제목(작게) + 배너 문구(크게, 최대 3줄) %>
+                <% if (banner.title || banner.overlay_subtitle) { %>
+                  <figcaption>
+                    <%- include('../banner_copy', { copy: banner.overlay_subtitle, heading: banner.title, variant: 'overlay' }) %>
+                  </figcaption>
+                <% } %>
               </a>
             </div>
           <% }); %>

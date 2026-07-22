@@ -35,7 +35,7 @@ async function getByGroup(groupKey, { limit = 12, mallId } = {}) {
     const lim = Math.min(Math.max(Number(limit) || 12, 1), 50);
 
     const [rows] = await pool.query(`
-        SELECT id, title, image_url, mobile_image_url, link_url, display_order
+        SELECT id, title, overlay_subtitle, image_url, mobile_image_url, link_url, display_order
         FROM banners
         WHERE group_key = ? AND is_active = 1
         ${scope.sql}
@@ -56,7 +56,7 @@ async function getByType(bannerType, { limit = 12, mallId } = {}) {
     if (!scope) return [];
     const lim = Math.min(Math.max(Number(limit) || 12, 1), 50);
     const [rows] = await pool.query(`
-        SELECT id, title, image_url, mobile_image_url, link_url, display_order
+        SELECT id, title, overlay_subtitle, image_url, mobile_image_url, link_url, display_order
         FROM banners
         WHERE banner_type = ? AND is_active = 1
         ${scope.sql}

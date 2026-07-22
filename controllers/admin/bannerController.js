@@ -385,31 +385,51 @@ exports.getAdd = async (req, res) => {
 };
 
 /*
- * 배너 내 문구(오버레이) — 메인 슬라이더의 '이미지 배너 슬라이더' 방식에서만 뜻이 있다.
- * 이미지 위에 큰 제목 + 추가 문구(최대 2줄) + 이동 버튼을 얹는다(views/partials/sections/hero_banner.ejs).
+ * 배너 문구(오버레이) — banners.overlay_* 컬럼.
  *
- * MAIN 이 아닌 타입에서는 저장하지 않는다 — 카테고리/팝업 배너에는 렌더할 자리가 없어서
- * 값만 남으면 나중에 "왜 안 나오지" 가 된다. 타입을 MAIN 에서 바꾸면 문구도 비워진다.
+ * 두 갈래로 쓰인다.
+ *   MAIN                        : 큰 제목 + 추가 문구(최대 2줄) + 이동 버튼 + 정렬/버튼색
+ *                                 → views/partials/sections/hero_banner.ejs
+ *   CATEGORY·BRAND·MENU·PROMO   : overlay_subtitle 만. 배너 제목(banners.title)은 지금까지의 크기로,
+ *                                 이 문구는 크게(줄 수에 따라 크기 조절, 최대 3줄) 얹는다.
+ *                                 → views/partials/banner_copy.ejs
+ *
+ * 위 타입이 아니면(POPUP) 저장하지 않는다 — 렌더할 자리가 없어 값만 남으면 "왜 안 나오지" 가 된다.
+ * 타입을 바꾸면 그 타입이 안 쓰는 항목은 비워진다.
  */
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const ALIGNS = ['LEFT', 'CENTER', 'RIGHT'];
+/** 배너 문구(최대 3줄)만 쓰는 타입 — 폼의 banner_type 값 기준(MENU·PROMO 는 가상 타입). */
+const COPY_TYPES = ['CATEGORY', 'BRAND', 'MENU', 'PROMO'];
+const SUBTITLE_MAX = 300;   // banners.overlay_subtitle VARCHAR(300)
 
-function readOverlay(body, storedType) {
-    if (storedType !== 'MAIN') {
-        return { title: null, subtitle: null, buttonText: null, buttonColor: null, align: 'LEFT' };
+/** 줄 단위로 다듬고 maxLines 줄까지만 남긴다. 뷰에서만 자르면 저장된 데이터가 거짓말을 한다. */
+function readSubtitle(raw, maxLines) {
+    const lines = String(raw || '')
+        .replace(/\r\n/g, '\n')
+        .split('\n').map(l => l.trim()).filter(Boolean)
+        .slice(0, maxLines);
+    const joined = lines.join('\n');
+    return joined ? joined.slice(0, SUBTITLE_MAX) : null;
+}
+
+function readOverlay(body, formType) {
+    const empty = { title: null, subtitle: null, buttonText: null, buttonColor: null, align: 'LEFT' };
+
+    if (COPY_TYPES.includes(formType)) {
+        // 이 타입들은 제목·버튼·정렬을 렌더하지 않는다. 문구(최대 3줄)만 남긴다.
+        return { ...empty, subtitle: readSubtitle(body.overlay_subtitle, 3) };
     }
+    if (formType !== 'MAIN') return empty;
+
     const trim = (v, max) => {
         const s = String(v == null ? '' : v).trim();
         return s ? s.slice(0, max) : null;
     };
-    // 추가 문구는 최대 2줄. 3줄째부터는 버려서 저장 시점에 규칙을 지킨다(뷰에서만 자르면 데이터가 거짓말한다).
-    const subtitleRaw = String(body.overlay_subtitle || '').replace(/\r\n/g, '\n');
-    const subtitle = subtitleRaw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 2).join('\n') || null;
-
     const color = String(body.overlay_button_color || '').trim();
     return {
         title: trim(body.overlay_title, 120),
-        subtitle: subtitle ? subtitle.slice(0, 200) : null,
+        subtitle: readSubtitle(body.overlay_subtitle, 2),
         buttonText: trim(body.overlay_button_text, 40),
         buttonColor: HEX_COLOR.test(color) ? color.toLowerCase() : null,
         align: ALIGNS.includes(body.overlay_align) ? body.overlay_align : 'LEFT',

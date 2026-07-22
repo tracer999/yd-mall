@@ -8,6 +8,8 @@
     const _s = _fmt(banner.start_date);
     const _e = _fmt(banner.end_date);
     const _period = (_s || _e) ? `${_s || '상시'} ~ ${_e || '상시'}` : '상시 노출';
+    // 배너 문구가 걸려 있으면 첫 줄만 칩으로 보여 준다(전문은 title 툴팁).
+    const _copy = String(banner.overlay_subtitle || '').split('\n').map(s => s.trim()).filter(Boolean);
 %>
 <div class="flex items-stretch rounded-md border <%= banner.is_active ? 'border-gray-200' : 'border-gray-200 opacity-60' %> bg-white overflow-hidden">
     <img src="<%= banner.image_url %>" alt="<%= banner.title || '' %>"
@@ -17,6 +19,11 @@
             <span class="px-1.5 py-0.5 rounded text-[10px] leading-none font-semibold <%= banner.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500' %>"><%= banner.is_active ? '사용중' : '중지' %></span>
             <span class="text-[11px] text-gray-500 whitespace-nowrap"><%= _period %></span>
         </div>
+        <% if (_copy.length) { %>
+            <span class="text-[11px] text-gray-600 truncate max-w-[180px]" title="<%= _copy.join(' / ') %>">
+                문구: <%= _copy[0] %><%= _copy.length > 1 ? ' …' : '' %>
+            </span>
+        <% } %>
         <div class="flex items-center gap-1">
             <a href="/admin/banners/edit/<%= banner.id %>" class="text-[11px] text-blue-600 hover:underline no-underline">수정</a>
             <span class="text-gray-300 text-[11px]">·</span>

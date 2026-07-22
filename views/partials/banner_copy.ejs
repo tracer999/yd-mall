@@ -1,0 +1,29 @@
+<%
+  /*
+   * 배너 문구 블록 — 카테고리·브랜드·메뉴별·프로모션 배너 공용.
+   *
+   * "제목(작게) + 배너 문구(크게, 최대 3줄)" 한 덩어리. 제목은 banners.title,
+   * 문구는 banners.overlay_subtitle(줄바꿈 구분)이다.
+   *
+   * locals:
+   *   copy    : 배너 문구 원문(줄바꿈 구분). 3줄째까지만 그린다.
+   *   heading : 배너 제목. 비면 생략.
+   *   variant : 'overlay'(이미지 위 · 흰 글자) | 'caption'(이미지 아래 · 검은 글자). 기본 overlay.
+   *
+   * 글자 크기는 **줄 수**에 따라 단계적으로 줄인다(1줄이 가장 크다 — .yd-bcopy--1/2/3).
+   * 절대 크기가 아니라 컨테이너 폭(cqw) 기준이라, 좁은 카드에 들어가도 넘치지 않는다.
+   * 스타일은 public/css/input.css 하단의 '배너 문구' 블록에 있다(4곳에서 include 되므로
+   * 여기에 <style> 을 두면 한 페이지에 중복으로 실린다).
+   */
+  const _lines = String(copy || '').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 3);
+  const _heading = (typeof heading !== 'undefined' && heading) ? String(heading).trim() : '';
+  const _variant = (typeof variant !== 'undefined' && variant === 'caption') ? 'caption' : 'overlay';
+%>
+<% if (_lines.length || _heading) { %>
+  <div class="yd-bcopy yd-bcopy--<%= _variant %> yd-bcopy--<%= _lines.length || 1 %>">
+    <% if (_heading) { %><p class="yd-bcopy__title"><%= _heading %></p><% } %>
+    <% if (_lines.length) { %>
+      <p class="yd-bcopy__text"><% _lines.forEach(function (line, i) { %><% if (i) { %><br><% } %><%= line %><% }); %></p>
+    <% } %>
+  </div>
+<% } %>

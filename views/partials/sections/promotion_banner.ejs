@@ -36,7 +36,7 @@
     .yd-promo__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .yd-promo__item--rect img { aspect-ratio: 16 / 6; }
     .yd-promo__item--vertical img { aspect-ratio: 3 / 4; }
-    .yd-promo__caption { padding: .75rem 1rem; font-size: .875rem; font-weight: 600; color: #374151; }
+    .yd-promo__caption { padding: .75rem 1rem; }
   </style>
 
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -64,7 +64,12 @@
             <img src="<%= b.image_url %>" alt="<%= b.title || '프로모션 배너' %>" loading="lazy">
           <% } %>
 
-          <% if (b.title) { %><div class="yd-promo__caption"><%= b.title %></div><% } %>
+          <%# 제목(작게) + 배너 문구(크게, 최대 3줄). 둘 다 비면 캡션 자체를 그리지 않는다. %>
+          <% if (b.title || b.overlay_subtitle) { %>
+            <div class="yd-promo__caption">
+              <%- include('../banner_copy', { copy: b.overlay_subtitle, heading: b.title, variant: 'caption' }) %>
+            </div>
+          <% } %>
 
         <% if (hasLink) { %></a><% } else { %></div><% } %>
       <% }); %>

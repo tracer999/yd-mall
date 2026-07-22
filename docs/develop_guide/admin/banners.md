@@ -130,7 +130,9 @@
 | banner_type | radio | - | MAIN / CATEGORY / POPUP / BRAND / MENU, 기본은 `currentType` |
 | menu_target | select | MENU일 때 | 노출 메뉴 (BEST / NEW / DEAL) — MENU 선택 시에만 노출 |
 | category_id | select | CATEGORY·BRAND일 때 | 카테고리/브랜드 선택. JS 가 `data-type` 으로 옵션을 필터(BRAND 타입은 `type='BRAND'` 카테고리만) |
-| title | text | - | 배너 제목 |
+| title | text | - | 배너 제목. CATEGORY·BRAND·MENU·PROMO 에서는 `overlay_subtitle` 위에 **작은 글씨**로 함께 노출 |
+| overlay_subtitle | textarea | - | **배너 문구**. MAIN 최대 2줄 / CATEGORY·BRAND·MENU·PROMO 최대 **3줄** — 초과분은 저장 시 버린다. POPUP 은 폼에서 숨기고 저장도 안 한다. 입력칸은 **하나만** 둔다: 타입별로 두 벌 두면 숨긴 칸도 함께 전송돼 값이 배열로 들어온다 |
+| overlay_title / overlay_button_text / overlay_button_color / overlay_align | - | - | **MAIN 전용**. 다른 타입에서는 폼에서 숨기고 `readOverlay()` 가 null 로 저장 |
 | banner_image | file | 신규 등록 시 O | 배너 이미지 (PC). 수정 시엔 선택 |
 | mobile_banner_image | file | - | 모바일용 배너 이미지 (없으면 PC 이미지 사용). 폼 스크립트가 PC 필드 뒤에 주입 |
 | existing_image / existing_mobile_image | hidden | - | 수정 시 기존 이미지 경로 유지용 |
@@ -227,6 +229,8 @@
 | group_key | VARCHAR(50) NULL | 배너 그룹 키. `menu:{key}` = 메뉴별 배너, 그 외는 SDUI `promotion_banner` 섹션 데이터소스 |
 | category_id | INT FK NULL | CATEGORY/BRAND 타입일 때 대상 (`ON DELETE SET NULL`) |
 | title | VARCHAR(100) NULL | 제목 |
+| overlay_subtitle | VARCHAR(300) NULL | 배너 문구(줄바꿈 구분). MAIN 2줄 / 그 외 3줄. 렌더는 `views/partials/banner_copy.ejs` |
+| overlay_title / overlay_button_text / overlay_button_color / overlay_align | — | MAIN 히어로 오버레이 전용(큰 제목·이동 버튼·버튼색·정렬) |
 | image_url | VARCHAR(255) NOT NULL | 이미지 경로 |
 | mobile_image_url | VARCHAR(255) NULL | 모바일용 이미지 경로 |
 | link_url | VARCHAR(255) NULL | 링크 URL |

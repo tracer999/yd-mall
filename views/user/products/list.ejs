@@ -192,9 +192,15 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                 <%# 메뉴 상단 쇼케이스(캐러셀)는 main_layout 이 body 위에 렌더한다 — 여기서는 다루지 않는다. %>
                 <% if (categoryBanner) { %>
                     <div class="mb-6">
-                        <a href="<%= categoryBanner.link_url || '#' %>">
+                        <a href="<%= categoryBanner.link_url || '#' %>" class="yd-banner-fig rounded-xl overflow-hidden shadow-sm">
                             <img src="<%= categoryBanner.image_url %>" alt="<%= categoryBanner.title || '' %>"
-                                class="w-full h-auto rounded-xl shadow-sm object-cover">
+                                class="w-full h-auto object-cover">
+                            <%# 배너 문구가 있을 때만 이미지 위에 얹는다 — 이미지 전용 배너의 기존 모습은 그대로 둔다. %>
+                            <% if (categoryBanner.overlay_subtitle) { %>
+                                <div class="yd-banner-fig__copy">
+                                    <%- include('../../partials/banner_copy', { copy: categoryBanner.overlay_subtitle, heading: categoryBanner.title, variant: 'overlay' }) %>
+                                </div>
+                            <% } %>
                         </a>
                     </div>
                     <% } %>

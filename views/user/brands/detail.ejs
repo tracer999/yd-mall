@@ -24,9 +24,15 @@
 
 <!-- 관리자 브랜드 배너 (배너 관리 > 브랜드 배너) — 상세관 최상단 -->
 <% if (typeof brandBanner !== 'undefined' && brandBanner) { %>
-  <a href="<%= brandBanner.link_url || '#' %>" class="block w-full">
+  <a href="<%= brandBanner.link_url || '#' %>" class="yd-banner-fig w-full">
     <img src="<%= brandBanner.image_url %>" alt="<%= brandBanner.title || b.name %>"
          class="w-full h-auto object-cover">
+    <%# 배너 문구가 있을 때만 이미지 위에 얹는다 — 이미지 전용 배너의 기존 모습은 그대로 둔다. %>
+    <% if (brandBanner.overlay_subtitle) { %>
+      <div class="yd-banner-fig__copy">
+        <%- include('../../partials/banner_copy', { copy: brandBanner.overlay_subtitle, heading: brandBanner.title, variant: 'overlay' }) %>
+      </div>
+    <% } %>
   </a>
 <% } %>
 

@@ -152,29 +152,33 @@
           </div>
 
           <%#
-            ── 배너 내 문구(오버레이) ─ 메인 슬라이더('이미지 배너 슬라이더' 방식) 전용 ──
-            이미지 위에 얹히는 큰 제목 + 추가 문구(최대 2줄) + 이동 버튼. 비워 두면 이미지만 노출된다.
-            MAIN 이 아닌 타입에는 렌더할 자리가 없으므로 폼에서도 숨기고, 서버도 저장하지 않는다.
+            ── 배너 문구(오버레이) ──
+            · 메인 슬라이더(MAIN): 큰 제목 + 추가 문구(최대 2줄) + 이동 버튼/색/정렬 — hero_banner.ejs
+            · 카테고리·브랜드·메뉴별·프로모션: '배너 문구'(최대 3줄)만. 배너 제목은 지금 크기 그대로,
+              이 문구는 크게(줄 수에 따라 크기 조절) 배너 위에 얹힌다 — partials/banner_copy.ejs
+            · 팝업: 렌더할 자리가 없어 블록 전체를 감춘다(서버도 저장하지 않는다).
+            문구 입력칸은 **하나**다. 타입별로 두 벌 두면 숨긴 칸도 함께 전송돼 값이 배열로 들어온다.
           %>
           <div id="overlayField" class="hidden rounded-lg border border-gray-200 bg-gray-50/60 p-4 space-y-4">
             <div class="flex items-center justify-between">
-              <h3 class="text-sm font-bold text-gray-800">배너 내 문구 <span class="font-normal text-gray-400">(이미지 배너 슬라이더 전용 · 비우면 이미지만 노출)</span></h3>
+              <h3 class="text-sm font-bold text-gray-800">배너 문구 <span id="overlayFieldNote" class="font-normal text-gray-400">(비우면 이미지만 노출)</span></h3>
             </div>
 
-            <div>
+            <div id="overlayTitleField">
               <label class="block text-sm font-medium text-gray-700 mb-2">배너 제목 (큰 글자)</label>
               <input type="text" name="overlay_title" maxlength="120" placeholder="예: 건강식품 B2B 유통 플랫폼"
                 value="<%= banner && banner.overlay_title ? banner.overlay_title : '' %>" />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">추가 문구 (최대 2줄)</label>
-              <textarea name="overlay_subtitle" rows="2" maxlength="200"
+              <label id="overlaySubtitleLabel" class="block text-sm font-medium text-gray-700 mb-2">배너 문구 (최대 3줄)</label>
+              <textarea name="overlay_subtitle" id="overlaySubtitleInput" rows="3" maxlength="300"
                 class="block w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                placeholder="한 줄에 하나씩. 3줄째부터는 저장되지 않습니다."><%= banner && banner.overlay_subtitle ? banner.overlay_subtitle : '' %></textarea>
+                placeholder="한 줄에 하나씩 입력하세요."><%= banner && banner.overlay_subtitle ? banner.overlay_subtitle : '' %></textarea>
+              <p id="overlaySubtitleHint" class="mt-1 text-xs text-gray-400"></p>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div id="overlayMainOnly" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">이동 버튼 문구</label>
                 <input type="text" name="overlay_button_text" maxlength="40" placeholder="예: 이용가이드 보러가기"
@@ -288,6 +292,50 @@
       menuPoolNotice.classList.toggle('hidden', !hasPool);
     }
 
+    /*
+     * 배너 문구 블록 — 타입에 따라 보이는 항목이 다르다(서버 readOverlay 와 같은 갈래).
+     *   MAIN                      : 제목(큰 글자) + 문구 2줄 + 버튼/색/정렬
+     *   CATEGORY·BRAND·MENU·PROMO : 문구 3줄만
+     *   POPUP                     : 블록 전체 숨김
+     */
+    const COPY_TYPES = ['CATEGORY', 'BRAND', 'MENU', 'PROMO'];
+
+    function updateOverlayFields(type) {
+      const overlayField = document.getElementById('overlayField');
+      if (!overlayField) return;
+      const isMain = type === 'MAIN';
+      const isCopy = COPY_TYPES.indexOf(type) !== -1;
+
+      overlayField.classList.toggle('hidden', !(isMain || isCopy));
+
+      const titleField = document.getElementById('overlayTitleField');
+      const mainOnly = document.getElementById('overlayMainOnly');
+      if (titleField) titleField.classList.toggle('hidden', !isMain);
+      if (mainOnly) mainOnly.classList.toggle('hidden', !isMain);
+
+      const note = document.getElementById('overlayFieldNote');
+      const label = document.getElementById('overlaySubtitleLabel');
+      const input = document.getElementById('overlaySubtitleInput');
+      const hint = document.getElementById('overlaySubtitleHint');
+      if (note) {
+        note.textContent = isMain
+          ? '(이미지 배너 슬라이더 전용 · 비우면 이미지만 노출)'
+          : '(비우면 이미지만 노출)';
+      }
+      if (label) label.textContent = isMain ? '추가 문구 (최대 2줄)' : '배너 문구 (최대 3줄)';
+      if (input) {
+        input.rows = isMain ? 2 : 3;
+        input.placeholder = isMain
+          ? '한 줄에 하나씩. 3줄째부터는 저장되지 않습니다.'
+          : '한 줄에 하나씩. 4줄째부터는 저장되지 않습니다.';
+      }
+      if (hint) {
+        hint.textContent = isMain
+          ? '배너 제목(큰 글자) 아래에 작게 표시됩니다.'
+          : '배너 제목보다 크게 표시됩니다. 줄 수가 많을수록 글자 크기는 자동으로 작아집니다.';
+      }
+    }
+
     function updateCategoryVisibility() {
       const selected = document.querySelector('input[name="banner_type"]:checked');
       // 메뉴별 배너 선택 필드 토글
@@ -300,11 +348,7 @@
         promoGroupField.classList.toggle('hidden', !isPromo);
         if (promoGroupInput) promoGroupInput.required = isPromo;
       }
-      // 배너 내 문구는 메인 슬라이더(MAIN) 에서만 렌더된다 → 다른 타입에선 아예 감춘다.
-      const overlayField = document.getElementById('overlayField');
-      if (overlayField) {
-        overlayField.classList.toggle('hidden', !(selected && selected.value === 'MAIN'));
-      }
+      updateOverlayFields(selected && selected.value);
       if (selected && (selected.value === 'CATEGORY' || selected.value === 'BRAND')) {
         categoryField.classList.remove('hidden');
         updateCommonToggle();

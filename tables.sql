@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS `banners` (
   `category_id` int DEFAULT NULL COMMENT '카테고리 ID (CATEGORY 타입일 경우)',
   `title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 제목(관리용)',
   `overlay_title` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 내 큰 제목(메인 슬라이더 이미지 배너 전용)',
-  `overlay_subtitle` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 내 추가 문구(최대 2줄, 줄바꿈 구분)',
+  `overlay_subtitle` varchar(300) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 문구(줄바꿈 구분. 메인 슬라이더 최대 2줄 / 그 외 배너 최대 3줄)',
   `overlay_button_text` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '배너 내 이동 버튼 문구(비면 버튼 미노출)',
   `overlay_button_color` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '버튼 배경색 #RRGGBB (글자색은 밝기로 자동)',
   `overlay_align` enum('LEFT','CENTER','RIGHT') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'LEFT' COMMENT '배너 내 문구 정렬',
