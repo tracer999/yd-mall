@@ -11,6 +11,7 @@ const membershipService = require('../../services/membership/membershipService')
 const evaluationService = require('../../services/membership/evaluationService');
 const gradeCouponService = require('../../services/membership/gradeCouponService');
 const membershipConfigService = require('../../services/membership/membershipConfigService');
+const membershipSeeder = require('../../services/membership/membershipSeeder');
 const { generateUniqueCode } = require('../../shared/codeGen');
 
 const LAYOUT = 'layouts/admin_layout';
@@ -86,6 +87,31 @@ exports.getGrades = async (req, res, next) => {
             grades, success: req.query.success, error: req.query.error,
         });
     } catch (e) { next(e); }
+};
+
+/**
+ * 기본 등급 세트 불러오기 — 등급이 0건인 몰의 복구 수단.
+ *
+ * 신규 몰은 mallProvisioner 가 자동으로 심는다(services/membership/membershipSeeder).
+ * 이 버튼은 그 장치가 생기기 전에 만들어진 몰, 또는 등급을 전부 지운 몰을 위한 것이다.
+ * 등급이 하나라도 있으면 시더가 아무것도 하지 않으므로 운영자가 손댄 값은 안전하다.
+ */
+exports.postSeedDefaultGrades = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    try {
+        const r = await membershipSeeder.seedMallMembership(mallId);
+        if (!r.grades) {
+            return res.redirect('/admin/membership/grades?error=' +
+                encodeURIComponent('이미 등급이 등록되어 있어 불러오지 않았습니다.'));
+        }
+        const extra = r.policyCreated ? ' 기본 평가 정책과 승급 기준도 함께 만들었습니다.' : '';
+        return res.redirect('/admin/membership/grades?success=' +
+            encodeURIComponent(`기본 등급 ${r.grades}종을 불러왔습니다.${extra} 혜택·기준은 등급 수정에서 바꿀 수 있습니다.`));
+    } catch (e) {
+        console.error('[membership] 기본 등급 불러오기 실패:', e.message);
+        return res.redirect('/admin/membership/grades?error=' +
+            encodeURIComponent('기본 등급을 불러오지 못했습니다: ' + e.message));
+    }
 };
 
 exports.getGradeForm = async (req, res, next) => {

@@ -7,6 +7,7 @@ router.get('/', c.getDashboard);
 
 // 등급 관리
 router.get('/grades', c.getGrades);
+router.post('/grades/seed-defaults', c.postSeedDefaultGrades); // /grades/:id 보다 먼저
 router.get('/grades/new', c.getGradeForm);
 router.post('/grades', c.postGradeSave);
 router.get('/grades/:id/edit', c.getGradeForm);

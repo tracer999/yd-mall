@@ -49,6 +49,22 @@ const MALL_SCOPED_TABLES = [
     'mall_feature_menu', 'navigation_config', 'custom_menu',
     'shipping_policy', 'site_settings', 'theme',
     /*
+     * 멤버십 — mallProvisioner 가 몰마다 기본 등급을 심으므로(membershipSeeder) 몰을 지울 때
+     * 반드시 함께 지운다. 안 지우면 만들고-지우기를 반복할수록 죽은 몰의 등급이 쌓인다
+     * (실제로 몰 1·12 의 등급 8건이 이렇게 남아 있었다).
+     *
+     * 순서: 회원 상태 → 정책 → 등급.
+     *   membership_grade 를 지우면 benefit·criterion·grade_coupon 이 CASCADE 로 따라간다.
+     *   membership_evaluation_policy 를 지우면 criterion 이 CASCADE 로 따라간다.
+     *
+     * ⚠ order_membership_benefit_snapshot 은 **일부러 뺐다**. mall_id 를 갖지만 주문에 딸린
+     *   기록(order_id CASCADE)이고, 이 목록은 orders 를 지우지 않는다 — 살아 있는 주문의
+     *   등급혜택 내역까지 지워 주문 상세가 깨지는 것을 막는다.
+     */
+    'membership_birthday_issue_log', 'membership_periodic_issue_log', 'membership_demotion_notice_log',
+    'membership_grade_history', 'membership_evaluation_run', 'customer_performance_ledger',
+    'customer_membership', 'membership_evaluation_policy', 'membership_grade', 'membership_config',
+    /*
      * 외부몰 연동(도매꾹·온채널 → 우리 몰) — 몰 스코프 데이터.
      *   supplier_product  : 가져온 공급처 상품 스냅샷.
      *                       supplier_variant 는 fk_sv_product ON DELETE CASCADE 라 따라 지워진다

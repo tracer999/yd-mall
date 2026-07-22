@@ -21,7 +21,14 @@
     </tr></thead>
     <tbody class="bg-white divide-y divide-gray-200">
       <% if (!grades || grades.length===0) { %>
-      <tr><td colspan="9" class="px-6 py-8 text-center text-gray-500">등급이 없습니다.</td></tr>
+      <tr><td colspan="9" class="px-6 py-10 text-center">
+        <p class="text-sm text-gray-500">등록된 등급이 없습니다.</p>
+        <p class="mt-1 text-xs text-gray-400">등급이 없으면 고객 화면의 멤버십 안내가 기본 예시 등급표로 표시됩니다.</p>
+        <form action="/admin/membership/grades/seed-defaults" method="POST" class="mt-4"
+              onsubmit="return confirm('기본 등급 4종(베이직·실버·골드·VIP)과 승급 기준을 불러올까요?');">
+          <button type="submit" class="inline-flex items-center justify-center h-[38px] px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">기본 등급 불러오기</button>
+        </form>
+      </td></tr>
       <% } else { grades.forEach(function(g){ %>
       <tr>
         <td class="px-4 py-4 text-sm text-gray-500"><%= g.rank_order %></td>

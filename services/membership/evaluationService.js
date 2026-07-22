@@ -279,21 +279,11 @@ async function getPublicTiers(mallId) {
         const cs = await getCriteria(policy.id);
         critByGrade = new Map(cs.map((c) => [Number(c.grade_id), c]));
     }
-    const won = (n) => `${Math.round(Number(n) / 10000).toLocaleString()}만원`;
+    // 등급 → 뷰 tier 매핑은 membershipInfo.toTier 한 곳에 둔다(폴백 표와 같은 문구를 쓰기 위함).
     const ordered = [...grades].sort((a, b) => Number(b.rank_order) - Number(a.rank_order)); // 하위→상위 표시
     const tiers = ordered.map((g) => {
         const c = critByGrade.get(Number(g.id));
-        const entry = c ? Number(c.entry_amount_min) : 0;
-        const threshold = (Number(g.is_default) === 1 || entry <= 0) ? '가입 시' : `${won(entry)} 이상`;
-        const pr = g.point_rate != null ? Number(g.point_rate) : null;
-        const rate = pr != null ? (g.point_rate_mode === 'REPLACE' ? `${pr}%` : `+${pr}%`) : '기본';
-        const perks = [];
-        if (Number(g.discount_rate) > 0) perks.push(`상품 ${Number(g.discount_rate)}% 할인`);
-        if (Number(g.free_shipping) === 1) perks.push('상시 무료배송');
-        else if (g.free_ship_threshold != null) perks.push(`${won(g.free_ship_threshold)} 이상 무료배송`);
-        if (pr != null) perks.push(`구매 적립 ${g.point_rate_mode === 'REPLACE' ? pr : '+' + pr}%`);
-        if (!perks.length) perks.push('기본 적립');
-        return { code: g.grade_code, name: g.grade_name, threshold, rate, perks, accent: g.grade_code === 'GOLD' };
+        return membershipInfo.toTier(g, c ? c.entry_amount_min : 0);
     });
     return { tiers, benefits: membershipInfo.BENEFITS };
 }

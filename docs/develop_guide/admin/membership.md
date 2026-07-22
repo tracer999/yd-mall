@@ -4,6 +4,29 @@
 
 > 착수 배경: `users` 에 등급 컬럼이 없고 등급을 정적 상수(`membershipInfo.js`)로만 안내하던 것을, 1차 MVP 로 실제 등급 시스템으로 구현(2026-07).
 
+## 신규 몰 기본 리소스 (2026-07 추가)
+
+등급은 **몰을 만들 때 함께 심는다** — `mallProvisioner.provisionMall()` 이 트랜잭션 안에서 `membershipSeeder.seedMallMembership(mallId, conn)` 을 호출한다.
+
+없을 때 무슨 일이 벌어졌는가: `getPublicTiers()` 는 활성 등급이 0건이면 정적 폴백(`membershipInfo.TIERS`)을 돌려준다. 그래서 갓 찍어낸 몰은 **관리자 [등급관리]는 텅 비었는데 고객 화면 `/membership`·`/event` 에는 등급표가 버젓이 뜨는** 상태였다. 운영자가 등록한 적 없고 결제에 적용되지도 않는 혜택을 광고한 셈이다.
+
+| 파일 | 역할 |
+|---|---|
+| `services/membership/membershipDefaults.js` | **단일 정의** — 등급 4종(코드·이름·순위·색·혜택·진입/유지 기준) + ACTIVE 평가정책. 값은 설계 §18 = `scripts/seed_membership.sql` 과 동일 |
+| `services/membership/membershipSeeder.js` | 위 정의를 DB 행으로. 멱등 |
+| `membershipInfo.TIERS` | 폴백 표. **하드코딩이 아니라 `membershipDefaults` 에서 생성**한다 → 시드 값과 갈라질 수 없다 |
+| `membershipInfo.toTier(grade, entryAmount)` | 등급 → 뷰 tier 매핑. `getPublicTiers`(DB 경로)와 폴백이 같은 문구를 쓰도록 한 곳에 둔다 |
+
+멱등 규칙(운영자가 손댄 것을 되살리지 않는다):
+
+- **등급**: 이 몰에 등급이 하나라도 있으면 통째로 건너뛴다. 하나씩 `INSERT IGNORE` 하면 운영자가 지운 등급이 재적용 때마다 부활한다.
+- **정책**: ACTIVE 정책이 없을 때만 생성.
+- **기준**: 그 정책에 없는 (정책, 등급) 조합만 `INSERT IGNORE`.
+
+이미 만들어진 몰(등급 0건)의 복구 수단은 등급관리 화면의 **[기본 등급 불러오기]** 버튼이다(`postSeedDefaultGrades`). 프리셋 재적용도 같은 시더를 타지만 그쪽은 내비·테마까지 되돌리므로 등급만 필요하면 버튼을 쓴다.
+
+> 몰을 지울 때는 `mallEraser` 가 멤버십 테이블을 함께 지운다. 안 지우면 만들고-지우기를 반복할수록 죽은 몰의 등급이 쌓인다(실제로 몰 1·12 의 등급 8건이 그렇게 남아 있었다).
+
 ---
 
 ## 마운트 · 접근 제어
@@ -18,6 +41,7 @@
 |---|---|---|
 | GET `/admin/membership` | getDashboard | 등급 분포·평가 현황 요약 |
 | GET `/admin/membership/grades` | getGrades | 등급 목록(+혜택 요약) |
+| POST `/admin/membership/grades/seed-defaults` | postSeedDefaultGrades | **기본 등급 4종 불러오기** — 등급 0건일 때만 목록에 버튼이 뜬다. `/:id` 보다 먼저 등록해야 라우트가 안 먹힌다 |
 | GET `/admin/membership/grades/new` · `/:id/edit` | getGradeForm | 등급 등록/수정 폼 |
 | POST `/admin/membership/grades` · `/:id` | postGradeSave | 등급 + 혜택 저장(트랜잭션) |
 | POST `/admin/membership/grades/:id/delete` | postGradeDelete | 삭제(소속 회원·이력 있으면 차단) |
@@ -40,7 +64,9 @@
 | `evaluationService.js` | 평가 엔진 — 히스테리시스(진입/유지) 판정, `evaluateCustomer`(즉시 승급), `evaluateMall`(정기 배치·시뮬레이션), `getCustomerSummary`(마이페이지), `getPublicTiers`(공개 등급표) |
 | `membershipBenefitService.js` | 주문 등급 혜택 계산 — `getOrderBenefits`(할인액·적립률·무료배송) · `effectivePointRate` |
 | `gradeCouponService.js` | **등급 진입 쿠폰(쿠폰팩, 2차)** — 등급↔쿠폰 연결(`membership_grade_coupon`) + `issueEntryCoupons`(승급 시 자동 발급, `couponIssueService` 재사용) |
-| `membershipInfo.js` | 정적 폴백 상수(활성 등급 없을 때만) |
+| `membershipDefaults.js` | 신규 몰 기본 등급 4종 + 평가정책 **단일 정의**(위 §신규 몰 기본 리소스) |
+| `membershipSeeder.js` | 위 정의를 몰에 심는다(멱등). `mallProvisioner` · 등급관리 [기본 등급 불러오기]가 호출 |
+| `membershipInfo.js` | 등급 → 뷰 tier 매핑(`toTier`) + 활성 등급 0건일 때의 폴백 표(`membershipDefaults` 에서 생성) |
 
 ### 평가 로직 (히스테리시스)
 
