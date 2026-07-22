@@ -1,0 +1,127 @@
+<%
+  /*
+   * 브랜드 검색형 선택 (상품 조회 팝업의 브랜드 필터).
+   *
+   * 브랜드는 전 몰 공통 1,379개라 select 로 못 쓴다. 몰 하나가 실제로 1,300개 넘게
+   * 쓰기도 해서 "이 몰 것만" 으로 좁혀도 드롭다운은 여전히 못 읽는다.
+   * 그래서 기획전이 쓰던 검색형 위젯을 공용으로 뽑았다.
+   *
+   * 넘겨받는 값: id(필수 — 값을 담는 hidden input 의 id) · placeholder(선택)
+   *
+   * 바깥 코드는 예전 select 와 똑같이 쓴다:
+   *   읽기 — document.getElementById(id).value   ('' 이면 전체)
+   *   비우기 — window.ydBrandPicker.reset(id)     (hidden 에 값만 넣으면 글자가 남는다)
+   *
+   * 서버(/admin/brands/search.json)가 이 몰에 상품이 있는 브랜드만 돌려주므로,
+   * 검색어 없이 클릭만 해도 목록이 뜬다 — 브랜드명을 알아야만 고를 수 있게 두지 않는다.
+   */
+  var _id = id;
+  var _ph = typeof placeholder !== 'undefined' ? placeholder : '전체 — 클릭해서 고르거나 검색';
+%>
+<div class="relative" data-brand-picker>
+  <input type="hidden" id="<%= _id %>" value="">
+  <input type="text" data-role="text" autocomplete="off" placeholder="<%= _ph %>"
+         class="w-full px-2.5 py-1.5 pr-7 rounded-md border border-gray-200 text-sm">
+  <button type="button" data-role="clear"
+          class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600">
+    <i class="bi bi-x-circle-fill text-xs"></i>
+  </button>
+  <div data-role="suggest"
+       class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto"></div>
+</div>
+
+<script>
+/* 파셜이 여러 번 들어와도 정의는 한 번만. 이미 붙은 컨테이너는 data-wired 로 건너뛴다. */
+window.ydBrandPicker = window.ydBrandPicker || (function () {
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  };
+
+  function wire(root) {
+    if (root.dataset.wired === '1') return;
+    root.dataset.wired = '1';
+
+    var hidden = root.querySelector('input[type=hidden]');
+    var text = root.querySelector('[data-role=text]');
+    var clear = root.querySelector('[data-role=clear]');
+    var box = root.querySelector('[data-role=suggest]');
+    if (!hidden || !text || !box) return;
+
+    var timer = null;
+    var close = function () { box.classList.add('hidden'); };
+
+    function load(q) {
+      fetch('/admin/brands/search.json?q=' + encodeURIComponent(q || ''))
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var rows = (j && j.brands) || [];
+          if (!rows.length) {
+            box.innerHTML = '<div class="px-3 py-3 text-sm text-gray-400">'
+              + (q ? '검색 결과가 없습니다.' : '이 몰에 상품이 등록된 브랜드가 없습니다.') + '</div>';
+          } else {
+            box.innerHTML = rows.map(function (b) {
+              return '<button type="button" data-id="' + b.id + '" data-name="' + esc(b.name) + '" '
+                   + 'class="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2">'
+                   + '<span class="text-sm text-gray-900">' + esc(b.name) + '</span>'
+                   + (b.name_en ? '<span class="text-xs text-gray-400">' + esc(b.name_en) + '</span>' : '')
+                   + '<span class="ml-auto text-xs text-gray-400">상품 '
+                   + Number(b.product_count || 0).toLocaleString() + '</span>'
+                   + '</button>';
+            }).join('');
+          }
+          box.classList.remove('hidden');
+        })
+        .catch(close);
+    }
+
+    text.addEventListener('focus', function () { if (!text.value.trim()) load(''); });
+    text.addEventListener('input', function () {
+      hidden.value = '';                 // 글자를 고치면 선택이 풀린다
+      clear.classList.add('hidden');
+      clearTimeout(timer);
+      timer = setTimeout(function () { load(text.value.trim()); }, 200);
+    });
+
+    box.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      hidden.value = btn.dataset.id;
+      text.value = btn.dataset.name;
+      clear.classList.remove('hidden');
+      close();
+    });
+
+    clear.addEventListener('click', function () { api.reset(hidden.id); });
+
+    document.addEventListener('click', function (e) {
+      if (!root.contains(e.target)) close();
+    });
+  }
+
+  var api = {
+    init: function () {
+      document.querySelectorAll('[data-brand-picker]').forEach(wire);
+    },
+    /** 필터 초기화용 — hidden 값과 보이는 글자를 함께 지운다. */
+    reset: function (hiddenId) {
+      var hidden = document.getElementById(hiddenId);
+      var root = hidden && hidden.closest('[data-brand-picker]');
+      if (!root) return;
+      hidden.value = '';
+      root.querySelector('[data-role=text]').value = '';
+      root.querySelector('[data-role=clear]').classList.add('hidden');
+      root.querySelector('[data-role=suggest]').classList.add('hidden');
+    },
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', api.init);
+  } else {
+    api.init();
+  }
+  return api;
+})();
+window.ydBrandPicker.init();
+</script>

@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
 
 /*
  * 상품 추천관리 — 추천 그룹 CRUD + 상품 큐레이션
@@ -46,13 +47,9 @@ exports.getList = async (req, res) => {
 
 /** 편집 화면(신규/수정 공용) */
 async function renderForm(res, group, mallId, extra = {}) {
-    const [categories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
-    );
-    // 상품의 brand_category_id 는 type='BRAND' 카테고리를 가리킨다(상품 조회 팝업의 브랜드 필터).
-    const [brands] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
-    );
+    // 상품 조회 팝업의 카테고리 필터 — 이 몰이 실제로 쓰는 카테고리만 고를 수 있게 한다.
+    // 브랜드는 검색형 위젯(partials/admin/brand_picker)이 /admin/brands/search.json 으로 직접 받는다.
+    const categories = await usedCategoryOptions(mallId);
 
     let items = [];
     if (group.id) {
@@ -78,7 +75,6 @@ async function renderForm(res, group, mallId, extra = {}) {
         group,
         items,
         categories,
-        brands,
         saved: false,
         error: null,
     }, extra));

@@ -23,6 +23,42 @@ function toNum(v) {
     return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * 도매꾹 가격 필드 파싱.
+ *
+ * 도매꾹은 price.dome / price.supply 를 **두 가지 형태**로 준다.
+ *   - 단일가   : "9900"
+ *   - 수량별가 : "1+17000|2+16800"   ("수량+단가" 를 | 로 이음, 수량 오름차순)
+ *
+ * ⚠ toNum() 을 그대로 쓰면 안 된다. "1+17000|2+16800" 에서 숫자 아닌 문자를 지워
+ *   117000216800 이라는 엉뚱한 값이 나오고, sql_mode 가 비엄격이라 DB 가 이를
+ *   조용히 잘라(decimal(12,2) → 9999999999.99 → INT → 2147483647) 가격을 오염시킨다.
+ *   설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §1.5 D-2
+ *
+ * @returns {{base:number|null, tiers:Array<{qty:number, price:number}>}}
+ *          base = 최소 수량 구간의 단가(= 1개 기준 공급가)
+ */
+function parsePriceField(v) {
+    if (v == null || v === '') return { base: null, tiers: [] };
+    const s = String(v).trim();
+
+    // 수량 구분자가 없으면 단일가.
+    if (!s.includes('+') && !s.includes('|')) return { base: toNum(s), tiers: [] };
+
+    const tiers = s
+        .split('|')
+        .map((part) => {
+            const [q, p] = part.split('+');
+            const qty = toInt(q);
+            const price = toNum(p);
+            return qty != null && price != null ? { qty, price } : null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.qty - b.qty);
+
+    return { base: tiers.length ? tiers[0].price : null, tiers };
+}
+
 // 도매꾹은 불리언을 "true"/"false" 문자열로 준다.
 function toBool(v) {
     if (v === true) return true;
@@ -181,9 +217,12 @@ function normalizeDetail(root, supplier) {
     const category = (root.category && root.category.current) || {};
 
     // 마켓별 공급가. 도매매 상품이 dome 가격만 갖고 있는 경우가 있어 폴백을 둔다.
+    // 수량별 단가표("1+17000|2+16800")도 오는 필드라 parsePriceField 로 파싱한다.
+    const domePrice = parsePriceField(price.dome);
+    const supPrice = parsePriceField(price.supply);
     const supplyPrice = market === 'supply'
-        ? (toNum(price.supply) != null ? toNum(price.supply) : toNum(price.dome))
-        : toNum(price.dome);
+        ? (supPrice.base != null ? supPrice.base : domePrice.base)
+        : domePrice.base;
 
     const detailHtml = str(contents.item) || null;
     const { type: optionType, variants } = parseSelectOpt(root.selectOpt, market);

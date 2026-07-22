@@ -34,6 +34,10 @@ const MAX_NAME_LEN = 100;
 const MAX_DETAIL_IMAGES = 10;
 // 도매꾹 CDN 이 referer 를 확인하는 경우가 있어 붙여 준다.
 const REFERER = 'https://domeggook.com/';
+// 금액 컬럼(products.price 등)은 INT 라 21.4억이 한계이고, sql_mode 가 비엄격이라
+// 초과값이 에러 없이 잘려 들어간다. 실사용 최고가는 2,500만원대이므로 1억을 상한으로 둔다.
+// 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §1.5 D-2
+const MAX_PRICE = 100000000;
 
 /** 원 단위 노이즈를 없애기 위해 10원 단위로 반올림한다. */
 function roundPrice(v) {
@@ -170,6 +174,14 @@ async function publishToMall(mallId, supplierProductId, opts = {}) {
     const name = String(sp.title || '').slice(0, MAX_NAME_LEN);
     const purchasePrice = Math.round(Number(sp.supply_price) || 0);
     const price = sellPrice(purchasePrice, marginRate);
+    // 공급처가 준 가격이 비정상이면 여기서 멈춘다. 통과시키면 DB 가 조용히 잘라
+    // 21억짜리 상품이 몰에 노출된다(과거 사고 사례).
+    if (purchasePrice > MAX_PRICE || price > MAX_PRICE) {
+        throw new Error(
+            `공급가가 비정상입니다(공급가 ${purchasePrice.toLocaleString()}원 / 판매가 ${price.toLocaleString()}원). ` +
+            '공급처 원본 가격을 확인한 뒤 [상세 다시 가져오기] 로 갱신하세요.'
+        );
+    }
     const description = sanitize(sp.detail_html || '');
     const slug = await generateUniqueSlugFromName(name, null, null);
     const status = ['ON', 'OFF', 'SOLD_OUT', 'COMING_SOON', 'RESTOCK'].includes(opts.status) ? opts.status : 'OFF';

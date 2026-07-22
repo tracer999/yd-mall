@@ -117,7 +117,10 @@ CREATE TABLE IF NOT EXISTS `categories` (
   `onboarded_at` date DEFAULT NULL COMMENT '브랜드 입점일 (type=BRAND 에서만 의미. 신규 입점 브랜드 판정 기준)',
   `description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '카테고리/브랜드 설명',
   `shopify_collection_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Shopify 컬렉션 ID (연동용)',
-  `naver_category_id` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '대응 네이버 카테고리 ID (origin=naver 일 때. products.naver_category_id 와 축 다름)',
+  -- ⚠ collation 은 naver_category 계열(utf8mb4_unicode_ci)과 반드시 같아야 한다.
+  --   다르면 JOIN 시 ERROR 1267 Illegal mix of collations 가 난다.
+  --   설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §1.5 D-1
+  `naver_category_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '대응 네이버 카테고리 ID (origin=naver 일 때. products.naver_category_id 와 축 다름)',
   PRIMARY KEY (`id`),
   KEY `parent_id` (`parent_id`),
   KEY `idx_shopify_col_id` (`shopify_collection_id`),
@@ -288,6 +291,9 @@ CREATE TABLE IF NOT EXISTS `products` (
   `distribution_badge` enum('ONLINE_ONLY','OFFLINE_ONLY') COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '유통채널 구분 뱃지',
   `product_badge` set('BEST','NEW','RECOMMEND','DEADLINE_SALE','GREENHUB_SPECIAL') COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '상품구분 뱃지(다중). NEW = 기간 무관 신상품 강제 노출',
   `badge_expire_date` date DEFAULT NULL COMMENT '뱃지 만료일 (DEADLINE_SALE 용)',
+  -- ⚠ collation 은 naver_category / naver_brand 와 반드시 같아야 한다(§1.5 D-1).
+  `naver_category_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '등록 근거 네이버 카테고리 ID(참조)',
+  `naver_brand_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '등록 근거 네이버 브랜드 ID(참조)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_products_slug` (`slug`),
   KEY `category_id` (`category_id`),

@@ -7,7 +7,7 @@ const productImporter = require('../../services/catalog/productImporter');
 const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
 const productMedia = require('../../services/catalog/productMedia');
 const skuService = require('../../services/catalog/skuService');
-const { validCategoryIdSet } = require('../../services/catalog/categoryScope');
+const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
 
 const { getAiStatus, getOpenAIClient } = require('../../services/ai/aiStatus');
 
@@ -1017,22 +1017,12 @@ exports.getList = async (req, res) => {
         }
 
         // 필터 셀렉트 옵션 — 카테고리는 3뎁스 캐스케이드, 브랜드는 단일 셀렉트.
-        // 카테고리·브랜드는 글로벌화(mall_id=0)됐으므로 mall_id IN (0, MALL_ID) 로 조회하고,
         // 이 몰에 상품이 있는 것(+조상)만 노출한다 — 상품 없는 카테고리로 필터하면 항상 0건이라 무의미.
-        const [allNormalCats] = await pool.query(
-            `SELECT id, name, parent_id, depth FROM categories
-             WHERE mall_id IN (0, ?) AND type = 'NORMAL' ORDER BY depth ASC, display_order ASC, id ASC`, [MALL_ID]
-        );
-        const [allBrandCats] = await pool.query(
-            `SELECT id, name FROM categories
-             WHERE mall_id IN (0, ?) AND type = 'BRAND' ORDER BY display_order ASC, id ASC`, [MALL_ID]
-        );
-        const [validCat, validBrand] = await Promise.all([
-            validCategoryIdSet(MALL_ID),
-            validCategoryIdSet(MALL_ID, { brand: true }),
+        // 상품 선택 팝업(특가·상품그룹·추천그룹)도 같은 헬퍼를 쓴다.
+        const [filterCategories, filterBrands] = await Promise.all([
+            usedCategoryOptions(MALL_ID),
+            usedCategoryOptions(MALL_ID, { brand: true }),
         ]);
-        const filterCategories = allNormalCats.filter(c => validCat.has(c.id));
-        const filterBrands = allBrandCats.filter(b => validBrand.has(b.id));
 
         const totalPages = Math.ceil(total / perPage);
 

@@ -5,10 +5,16 @@
    * group_type 으로 폼이 완전히 갈린다. resolve() 가 읽지 않는 필드는 보여주지 않는다.
    *   manual    → 상품 피커만 (sort_type / 필터는 무시됨)
    *   condition → 필터 + 정렬만 (담긴 상품은 무시됨)
+   *
+   * 예외: **메뉴 상단 노출(쇼케이스) 그룹**은 둘 다 쓴다 — 담긴 상품이 우선이고, 하나도
+   * 없을 때만 수집 조건으로 채운다(services/menu/menuShowcaseService.resolveShowcaseItems).
+   * 그래서 이 경우에만 두 패널을 동시에 띄우고 구성 방식 선택을 감춘다.
    */
   const isNew = !group.id;
   const action = isNew ? '/admin/product-groups' : `/admin/product-groups/${group.id}`;
   const _cond = cond || {};
+  const _isMenuGroup = typeof isMenuGroup !== 'undefined' ? !!isMenuGroup : !!group.menu_code;
+  const _previewSource = typeof previewSource !== 'undefined' ? previewSource : null;
   const won = (n) => Number(n || 0).toLocaleString('ko-KR');
 %>
 
@@ -101,6 +107,19 @@
           <% } %>
         </div>
 
+        <% if (_isMenuGroup) { %>
+          <%#
+            메뉴 쇼케이스 그룹은 구성 방식을 고르지 않는다 — 담긴 상품이 우선이고, 없으면 조건이다.
+            group_type 은 서버가 'condition' 으로 고정한다(resolveGroupType).
+          %>
+          <div class="rounded-md border border-gray-200 bg-gray-50 p-4">
+            <p class="text-sm font-medium text-gray-700 mb-1">구성 방식 — 담긴 상품 우선</p>
+            <p class="text-xs text-gray-500 leading-relaxed">
+              아래 <strong>담긴 상품</strong>에 하나라도 담겨 있으면 그 상품이 그대로 노출됩니다.
+              하나도 담지 않았을 때만 <strong>수집 조건</strong>으로 자동 수집합니다.
+            </p>
+          </div>
+        <% } else { %>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">구성 방식</label>
           <div class="flex gap-4">
@@ -116,6 +135,7 @@
             </label>
           </div>
         </div>
+        <% } %>
 
         <div>
           <label class="inline-flex items-center gap-2 text-sm text-gray-700">
@@ -131,8 +151,13 @@
     <%# ── 조건 검색 전용 ─────────────────────────────── %>
     <div data-panel="condition" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
-        <h2 class="text-base font-bold text-gray-800">수집 조건</h2>
-        <p class="mt-0.5 text-xs text-gray-500">모든 조건은 AND 로 결합됩니다. 판매중·노출중 상품만 대상입니다.</p>
+        <h2 class="text-base font-bold text-gray-800">
+          수집 조건<% if (_isMenuGroup) { %> <span class="text-xs font-normal text-gray-500">— 담긴 상품이 없을 때만 사용</span><% } %>
+        </h2>
+        <p class="mt-0.5 text-xs text-gray-500">
+          모든 조건은 AND 로 결합됩니다. 판매중·노출중 상품만 대상입니다.
+          <% if (_isMenuGroup) { %>조건을 하나도 지정하지 않으면 자동 수집을 하지 않습니다(캐러셀이 뜨지 않음).<% } %>
+        </p>
       </div>
       <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
 
@@ -196,6 +221,28 @@
       <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
         <h2 class="text-base font-bold text-gray-800">담긴 상품 <span class="text-gray-400 font-normal">(<%= items.length %>개)</span></h2>
         <p class="mt-0.5 text-xs text-gray-500">위에서 아래 순서로 노출됩니다. 추가·삭제·순서 변경은 즉시 저장됩니다.</p>
+
+        <%#
+          메뉴 쇼케이스 그룹은 '담긴 상품 우선 → 조건 폴백'이라 우선순위를 여기서 설명한다.
+          이 안내가 없으면 운영자는 상품을 담아도 조건 결과가 나오는 줄 알거나,
+          비워 뒀을 때 왜 특가와 무관한 상품이 뜨는지 알 수 없다.
+        %>
+        <% if (_isMenuGroup) { %>
+          <div class="mt-3 rounded-md border border-indigo-200 bg-indigo-50 px-3.5 py-3 text-xs text-indigo-900">
+            <p class="font-semibold mb-1.5">
+              <i class="bi bi-info-circle-fill"></i>
+              ‘<%= group.showcase_title || group.name %>’ 영역에 노출될 상품입니다.
+            </p>
+            <ul class="list-disc pl-4 space-y-1 leading-relaxed">
+              <li>여기 담은 상품이 <strong>가장 먼저</strong> 노출됩니다 (위 순서 그대로).</li>
+              <% if (typeof poolHint !== 'undefined' && poolHint) { %>
+                <li><%= poolHint %></li>
+              <% } %>
+              <li>하나도 담지 않으면 아래 <strong>수집 조건</strong>으로 자동 채워집니다.
+                  조건도 비어 있으면 이 영역은 노출되지 않습니다.</li>
+            </ul>
+          </div>
+        <% } %>
       </div>
 
       <div class="p-5 border-b border-gray-100">
@@ -237,12 +284,25 @@
   <% if (!isNew) { %>
     <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
-        <h2 class="text-base font-bold text-gray-800">미리보기 <span class="text-gray-400 font-normal">(최대 12개)</span></h2>
+        <h2 class="text-base font-bold text-gray-800">
+          미리보기 <span class="text-gray-400 font-normal">(최대 12개)</span>
+          <% if (_isMenuGroup && _previewSource === 'manual') { %>
+            <span class="ml-1 align-middle text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">담긴 상품</span>
+          <% } else if (_isMenuGroup && _previewSource === 'condition') { %>
+            <span class="ml-1 align-middle text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">수집 조건 (담긴 상품 없음)</span>
+          <% } %>
+        </h2>
         <p class="mt-0.5 text-xs text-gray-500">스토어프론트와 같은 경로로 뽑은 실제 결과입니다(비로그인 기준).</p>
       </div>
       <div class="p-5">
         <% if (!preview.length) { %>
-          <p class="py-8 text-center text-sm text-gray-500">조건에 맞는 상품이 없습니다. 이 그룹을 쓰는 섹션은 빈 상태로 노출됩니다.</p>
+          <p class="py-8 text-center text-sm text-gray-500">
+            <% if (_isMenuGroup) { %>
+              담긴 상품도, 수집 조건도 없습니다. 이 영역은 노출되지 않습니다.
+            <% } else { %>
+              조건에 맞는 상품이 없습니다. 이 그룹을 쓰는 섹션은 빈 상태로 노출됩니다.
+            <% } %>
+          </p>
         <% } else { %>
           <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
             <% preview.forEach(function (p) { %>
@@ -283,10 +343,7 @@
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">브랜드</label>
-          <select id="pgfBrand" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
-            <option value="">전체</option>
-            <% (brands || []).forEach(function (b) { %><option value="<%= b.id %>"><%= b.name %></option><% }); %>
-          </select>
+          <%- include('../../partials/admin/brand_picker', { id: 'pgfBrand' }) %>
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">재고</label>
@@ -336,15 +393,21 @@
 (function () {
   const groupId = <%- JSON.stringify(group.id) %>;
 
+  // 메뉴 쇼케이스 그룹은 두 패널을 다 쓴다(담긴 상품 우선 → 조건 폴백). 라디오 자체가 없다.
+  const isMenuGroup = <%- JSON.stringify(_isMenuGroup) %>;
+
   // group_type 에 따라 무의미한 패널을 숨긴다 — resolve() 가 읽지 않는 설정은 내주지 않는다.
   function syncPanels() {
-    const type = document.querySelector('[data-group-type]:checked').value;
+    const checked = document.querySelector('[data-group-type]:checked');
+    if (!checked) return;                      // 메뉴 그룹 — 둘 다 그대로 둔다
     document.querySelectorAll('[data-panel]').forEach(el => {
-      el.style.display = (el.dataset.panel === type) ? '' : 'none';
+      el.style.display = (el.dataset.panel === checked.value) ? '' : 'none';
     });
   }
-  document.querySelectorAll('[data-group-type]').forEach(r => r.addEventListener('change', syncPanels));
-  syncPanels();
+  if (!isMenuGroup) {
+    document.querySelectorAll('[data-group-type]').forEach(r => r.addEventListener('change', syncPanels));
+    syncPanels();
+  }
 
   if (!groupId) return;
 
@@ -466,7 +529,8 @@
   document.getElementById('pgfSearch').addEventListener('click', doSearch);
   document.getElementById('pgfQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
   document.getElementById('pgfReset').addEventListener('click', () => {
-    ['pgfQ', 'pgfCategory', 'pgfBrand', 'pgfStock', 'pgfVisibility'].forEach(id => { document.getElementById(id).value = ''; });
+    ['pgfQ', 'pgfCategory', 'pgfStock', 'pgfVisibility'].forEach(id => { document.getElementById(id).value = ''; });
+    window.ydBrandPicker.reset('pgfBrand');   // 검색형이라 hidden 만 지우면 글자가 남는다
     resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>';
     selected.clear(); updateCount();
     if (allChk) allChk.checked = false;

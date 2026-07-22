@@ -311,10 +311,7 @@
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">브랜드</label>
-            <select id="dlfBrand" class="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-sm">
-              <option value="">전체</option>
-              <% (brands || []).forEach(function (b) { %><option value="<%= b.id %>"><%= b.name %></option><% }); %>
-            </select>
+            <%- include('../../partials/admin/brand_picker', { id: 'dlfBrand' }) %>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">재고</label>
@@ -525,7 +522,8 @@
   document.getElementById('dlfSearch').addEventListener('click', doSearch);
   document.getElementById('dlfQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
   document.getElementById('dlfReset').addEventListener('click', () => {
-    ['dlfQ', 'dlfCategory', 'dlfBrand', 'dlfStock', 'dlfVisibility'].forEach(id => { document.getElementById(id).value = ''; });
+    ['dlfQ', 'dlfCategory', 'dlfStock', 'dlfVisibility'].forEach(id => { document.getElementById(id).value = ''; });
+    window.ydBrandPicker.reset('dlfBrand');   // 검색형이라 hidden 만 지우면 글자가 남는다
     resultsEl.innerHTML = '<p class="py-10 text-center text-sm text-gray-400">필터를 지정하고 검색하세요.</p>';
     selected.clear(); updateCount();
     if (allChk) allChk.checked = false;

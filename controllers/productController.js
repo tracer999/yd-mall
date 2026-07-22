@@ -6,6 +6,7 @@ const outletService = require('../services/outlet/outletService');
 const optionService = require('../services/catalog/optionService');
 const compositeService = require('../services/catalog/compositeService');
 const categoryScope = require('../services/catalog/categoryScope');
+const facetService = require('../services/catalog/facetService');
 // B2B 전용가·수량규칙 (설계 §4). 컨텍스트가 비활성이면 전부 null 이라 화면이 바뀌지 않는다.
 const b2bPricingService = require('../services/b2b/b2bPricingService');
 const b2bTaxService = require('../services/b2b/b2bTaxService');
@@ -263,6 +264,28 @@ exports.getList = async (req, res) => {
             params.push(groupId);
         }
 
+        /*
+         * 필터(facet) — 가격대·속성 등. 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §6
+         *
+         * ⚠ facetService 는 EXISTS / IN 서브쿼리만 만든다.
+         *   바로 아래 카운트 쿼리가 'SELECT *' 문자열 치환이라 FROM 에 JOIN 이 붙으면 깨진다.
+         *
+         * 필터 정의를 못 읽어도 목록 자체는 떠야 하므로 실패는 삼키고 로그만 남긴다.
+         */
+        let facets = [];
+        let selectedFacets = {};
+        try {
+            facets = await facetService.getFacetsForCategory(selectedCategoryId);
+            const fp = facetService.buildPredicates(facets, q);
+            if (fp.sql) {
+                query += ` AND ${fp.sql}`;
+                params.push(...fp.params);
+            }
+            selectedFacets = fp.selected;
+        } catch (facetErr) {
+            console.error('[facet] 필터 해석 실패 — 필터 없이 목록만 렌더합니다.', facetErr);
+        }
+
         // 페이지네이션
         const allowedSizes = [10, 20, 30, 50];
         const perPage = allowedSizes.includes(Number(req.query.perPage)) ? Number(req.query.perPage) : 30;
@@ -363,6 +386,8 @@ exports.getList = async (req, res) => {
             categoryNav,
             categoryBest,
             sortTabs: SORT_TABS,
+            facets,
+            selectedFacets,
             seo,
             pagination: { page, perPage, total, totalPages }
         });

@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
 
 /*
  * 쇼핑특가 관리 (쇼핑특가 §7)
@@ -240,13 +241,9 @@ async function renderForm(res, deal, mallId, extra = {}) {
         items = rows;
     }
 
-    // 상품 조회 팝업 필터 (product-groups 와 동일)
-    const [productCategories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
-    );
-    const [brands] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
-    );
+    // 상품 조회 팝업의 카테고리 필터 — 이 몰이 실제로 쓰는 카테고리만.
+    // 브랜드는 검색형 위젯(partials/admin/brand_picker)이 /admin/brands/search.json 으로 직접 받는다.
+    const productCategories = await usedCategoryOptions(mallId);
 
     res.render('admin/deals/form', Object.assign({
         layout: 'layouts/admin_layout',
@@ -262,7 +259,6 @@ async function renderForm(res, deal, mallId, extra = {}) {
         categories,
         items,
         productCategories,
-        brands,
         weekdayList: WEEKDAYS,
         saved: false,
         error: null,

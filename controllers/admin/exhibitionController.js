@@ -1,7 +1,7 @@
 const pool = require('../../config/db');
 const svc = require('../../services/exhibition/exhibitionService');
 const { sanitize } = require('../../services/display/htmlSanitizer');
-const { categorySubtreeIds } = require('../../services/catalog/categoryScope');
+const { categorySubtreeIds, usedCategoryOptions } = require('../../services/catalog/categoryScope');
 
 /*
  * 기획전 관리 (1차)
@@ -190,15 +190,13 @@ async function renderForm(req, res, exhibition, extra = {}) {
     const sections = isNew ? [] : await svc.getSections(exhibition.id, { activeOnly: false });
 
     /*
-     * 유형별 설정 UI 재료.
-     *   카테고리 트리 — 3뎁스 종속 셀렉트(products/form.ejs 와 같은 방식)
-     * 브랜드는 1,300개가 넘어 select 로 못 쓴다. /admin/brands/search.json 검색형으로 고른다.
+     * 유형별 설정 + 상품 선택 팝업이 함께 쓰는 카테고리 트리 — 3뎁스 종속 셀렉트.
+     * 이 몰이 실제로 쓰는 카테고리만 준다. 상품 없는 카테고리로 기획전을 만들면 늘 빈 기획전이다.
+     * (브랜드는 1,300개가 넘어 select 로 못 쓴다. /admin/brands/search.json 검색형으로 고르고,
+     *  그쪽도 이 몰에 상품이 있는 브랜드만 돌려준다.)
      */
-    const [productCategories] = await pool.query(`
-        SELECT id, name, parent_id, depth FROM categories
-         WHERE type = 'NORMAL' AND mall_id IN (0, ?)
-         ORDER BY depth ASC, display_order ASC, id ASC
-    `, [mallId]);
+    const scope = scopeOf(isNew ? null : exhibition);
+    const productCategories = await usedCategoryOptions(mallId, { includeIds: [scope.categoryId] });
 
     let products = [];
     if (!isNew) {
@@ -228,7 +226,7 @@ async function renderForm(req, res, exhibition, extra = {}) {
         layout: 'layouts/admin_layout',
         ownedBrandName,
         productCategories,
-        scope: scopeOf(isNew ? null : exhibition),
+        scope,
         title: isNew ? '기획전 등록' : '기획전 수정',
         subtitle: isNew ? null : exhibition.title,
         exhibition: Object.assign({}, exhibition, {

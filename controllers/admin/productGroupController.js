@@ -3,6 +3,7 @@ const sectionRegistry = require('../../services/display/sectionRegistry');
 const productGroupService = require('../../services/display/productGroupService');
 const menuShowcaseService = require('../../services/menu/menuShowcaseService');
 const newArrival = require('../../services/catalog/newArrival');
+const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
 
 /*
  * 상품 그룹 관리 (B6)
@@ -89,6 +90,13 @@ const POOL_LABELS = {
     new: '신상품',
 };
 
+/** 상품 추가 안내 문구 — POOL_PREDICATES 가 실제로 거르는 범위를 그대로 설명한다. */
+const POOL_HINTS = {
+    deal: '담을 수 있는 상품은 [쇼핑특가 관리]의 특가 상세에 등록된 상품 중, 아직 종료되지 않은 특가의 상품뿐입니다.',
+    best: `담을 수 있는 상품은 베스트 랭킹(전체·일간) 상위 ${BEST_POOL_RANK}위 안에 든 상품뿐입니다.`,
+    new: '담을 수 있는 상품은 신상품(판매 시작일 기준 또는 NEW 배지)뿐입니다.',
+};
+
 /** 그룹의 menu_code → 상품 풀 키 (없으면 null = 전체 상품) */
 function poolForGroup(group) {
     return group && group.menu_code
@@ -144,6 +152,18 @@ function buildFilterJson(existingJson, body) {
 
 function normalizeGroupType(v) {
     return GROUP_TYPES.includes(String(v)) ? String(v) : 'manual';
+}
+
+/**
+ * 저장할 group_type.
+ *
+ * 메뉴 쇼케이스 그룹은 담긴 상품(우선)과 수집 조건(폴백)을 **둘 다** 쓴다. 폼에서 구성 방식을
+ * 고르게 하지 않고 'condition' 으로 고정하는 이유는, manual 분기가 filter_condition_json 을
+ * 일부러 건드리지 않기 때문이다 — manual 로 저장하면 운영자가 방금 고친 폴백 조건이
+ * 조용히 버려진다. 담긴 상품은 group_type 과 무관하게 전용 엔드포인트로 저장된다.
+ */
+function resolveGroupType(body, menuCode) {
+    return menuCode ? 'condition' : normalizeGroupType(body.group_type);
 }
 
 function normalizeSortType(v) {
@@ -206,18 +226,27 @@ exports.getList = async (req, res) => {
 
 /** 편집 화면(신규/수정 공용) */
 async function renderForm(res, group, mallId, extra = {}) {
-    const [categories] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
-    );
-    // 수동 선택 팝업의 브랜드 필터용 — 상품의 brand_category_id 는 type='BRAND' 카테고리를 가리킨다.
-    const [brands] = await pool.query(
-        "SELECT id, name FROM categories WHERE type = 'BRAND' AND mall_id IN (0, ?) ORDER BY display_order, id", [mallId]
-    );
+    const cond = parseCond(group.filter_condition_json);
+
+    /*
+     * 조건형 그룹의 카테고리 조건 + 수동 선택 팝업의 카테고리 필터.
+     * 둘 다 "이 몰의 상품을 골라내는 조건"이라 이 몰이 실제로 쓰는 것만 보여준다.
+     * 이미 저장된 조건은 지금 상품이 없어도 남겨야 재저장 때 조용히 지워지지 않는다.
+     * 브랜드는 검색형 위젯(partials/admin/brand_picker)이 /admin/brands/search.json 으로 직접 받는다.
+     */
+    const categories = await usedCategoryOptions(mallId, { includeIds: [cond.category_id] });
+
+    /*
+     * 메뉴 쇼케이스 그룹은 '수동이냐 조건이냐'가 아니라 **담긴 상품 우선 + 조건 폴백**이다.
+     * 그래서 group_type 과 무관하게 상품 피커와 수집 조건을 둘 다 내준다.
+     */
+    const isMenuGroup = !!group.menu_code;
 
     let items = [];
     let preview = [];
+    let previewSource = 'none';
     if (group.id) {
-        if (group.group_type === 'manual') {
+        if (group.group_type === 'manual' || isMenuGroup) {
             const [rows] = await pool.query(`
                 SELECT i.id AS item_id, i.sort_order, p.id, p.name, p.main_image, p.price, p.status, p.product_badge
                 FROM product_group_item i
@@ -229,7 +258,16 @@ async function renderForm(res, group, mallId, extra = {}) {
         }
         // 미리보기는 스토어프론트와 같은 경로로 뽑는다 — condition 그룹이 실제 무엇을 고르는지 보여준다.
         // resolve 는 is_active=1 인 그룹만 getById 로 찾으므로, 여기서는 그룹 객체를 직접 넘긴다.
-        preview = await productGroupService.resolve(group, { hasUser: false, limit: 12 });
+        if (isMenuGroup) {
+            // 메뉴 캐러셀은 우선순위가 있는 별도 해석기를 탄다. 여기서 resolve 를 그대로 쓰면
+            // 미리보기와 실제 화면이 어긋난다.
+            const resolved = await menuShowcaseService.resolveShowcaseItems(group, { hasUser: false, limit: 12 });
+            preview = resolved.items;
+            previewSource = resolved.source;
+        } else {
+            preview = await productGroupService.resolve(group, { hasUser: false, limit: 12 });
+            previewSource = group.group_type;
+        }
     }
 
     const poolKey = poolForGroup(group);
@@ -238,16 +276,18 @@ async function renderForm(res, group, mallId, extra = {}) {
         layout: 'layouts/admin_layout',
         title: group.id ? '상품 그룹 수정' : '상품 그룹 등록',
         group,
-        cond: parseCond(group.filter_condition_json),
+        cond,
         items,
         preview,
+        previewSource,
+        isMenuGroup,
         categories,
-        brands,
         sortTypes: SORT_TYPES,
         badges: BADGES,
         // 메뉴 쇼케이스 — 이 그룹을 어느 GNB 메뉴 상단 캐러셀로 쓸지
         menuTargets: await menuShowcaseService.getMenuTargets(mallId),
         poolLabel: poolKey ? POOL_LABELS[poolKey] : null,
+        poolHint: poolKey ? POOL_HINTS[poolKey] : null,
         refs: group.id ? await findReferencingSections(null, group.id) : [],
         saved: false,
         error: null,
@@ -292,8 +332,8 @@ exports.postCreate = async (req, res) => {
         const name = String(req.body.name || '').trim();
         if (!name) return res.redirect('/admin/product-groups/new');
 
-        const groupType = normalizeGroupType(req.body.group_type);
         const { menuCode, showcaseTitle } = await normalizeMenuShowcase(req.body, MALL_ID);
+        const groupType = resolveGroupType(req.body, menuCode);
 
         const [r] = await pool.query(`
             INSERT INTO product_group (mall_id, name, menu_code, showcase_title, group_type, sort_type, filter_condition_json, is_active)
@@ -337,8 +377,8 @@ exports.postUpdate = async (req, res) => {
             }
         }
 
-        const groupType = normalizeGroupType(req.body.group_type);
         const { menuCode, showcaseTitle } = await normalizeMenuShowcase(req.body, MALL_ID);
+        const groupType = resolveGroupType(req.body, menuCode);
 
         if (groupType === 'condition') {
             // seed_key 등 UI 밖 키를 보존하며 필터를 갱신한다.

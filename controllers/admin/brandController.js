@@ -122,6 +122,9 @@ exports.searchJson = async (req, res) => {
             `, [mallId, mallId]);
             return res.json({ brands });
         }
+        // 검색 결과도 무검색 목록과 같은 기준으로 — 이 몰에 상품이 있는 브랜드만.
+        // 브랜드는 전 몰 공통 1,379개라 이 조건이 없으면 이 몰과 무관한 브랜드가 섞여 나오고,
+        // 그걸 고르면 상품 조회 결과가 늘 0건이 된다.
         const like = `%${q}%`;
         const [brands] = await pool.query(`
             SELECT c.id, c.name, c.logo_image_path, bp.name_en, s.product_count
@@ -129,10 +132,11 @@ exports.searchJson = async (req, res) => {
               LEFT JOIN brand_profile bp ON bp.category_id = c.id
               LEFT JOIN brand_stat s ON s.category_id = c.id AND s.mall_id = ?
              WHERE c.type = 'BRAND' AND c.mall_id IN (0, ?)
+               AND EXISTS (SELECT 1 FROM products p WHERE p.brand_category_id = c.id AND p.mall_id = ?)
                AND (c.name LIKE ? OR bp.name_en LIKE ? OR bp.alias LIKE ? OR bp.initial_chosung LIKE ?)
              ORDER BY COALESCE(s.product_count, 0) DESC
              LIMIT 15
-        `, [mallId, mallId, like, like, like, `%${toChosung(q)}%`]);
+        `, [mallId, mallId, mallId, like, like, like, `%${toChosung(q)}%`]);
         res.json({ brands });
     } catch (err) {
         console.error('[admin/brands] 검색 실패', err);

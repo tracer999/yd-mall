@@ -10,6 +10,11 @@ const bannerService = require('../display/bannerService');
  *   2) 상품형 — product_group.menu_code = '{feature_code}' 인 그룹의 상품. 배너 **아래**.
  *      (쇼핑특가='추천 특가', 베스트='추천 베스트', 신상품='주목할 신상품')
  *
+ * 상품형은 **담긴 상품 우선, 없으면 수집 조건**이다(resolveShowcaseItems). 일반 상품 그룹처럼
+ * group_type 으로 둘 중 하나만 고르게 하면, 운영자가 특가 상품을 고르지 않은 몰은 캐러셀이
+ * 통째로 비고(수동) 특가와 무관한 상품이 '추천 특가'로 뜬다(조건). 납품 직후 빈 몰에서도
+ * 뭔가 보이면서, 운영자가 고른 순간 그게 이기는 게 이 자리에 맞다.
+ *
  * 예전에는 상품형이 있으면 배너를 조회조차 하지 않았다(early return). 그래서 베스트·신상품·
  * 쇼핑특가에는 배너를 등록해도 노출될 곳이 없었고, 관리자 화면에서 그 메뉴를 아예 숨겨야 했다.
  * 이제 둘은 공존한다 — 배너는 어느 메뉴에나 걸 수 있다.
@@ -123,6 +128,49 @@ async function getProductGroupForMenu(mallId, menuCode) {
     return rows[0] || null;
 }
 
+/*
+ * 폴백 조건으로 인정할 filter_condition_json 키 — productGroupService.resolve 가 읽는 것과 같다.
+ * 여기에 아무것도 없으면 조건 검색은 "몰 전체 상품"을 뜻하게 되므로 폴백하지 않는다.
+ * (담긴 상품이 0건이라고 해서 아무 상품이나 '추천 특가'로 올리면 안 된다.)
+ */
+const CONDITION_KEYS = ['badge', 'isNew', 'category_id', 'min_discount', 'in_stock'];
+
+function parseCond(v) {
+    if (!v) return {};
+    if (typeof v === 'object') return v;   // mysql2 JSON 컬럼
+    try { return JSON.parse(v); } catch (e) { return {}; }
+}
+
+function hasFallbackCondition(group) {
+    const cond = parseCond(group && group.filter_condition_json);
+    return CONDITION_KEYS.some(k => cond[k] !== undefined && cond[k] !== null && cond[k] !== '');
+}
+
+/**
+ * 쇼케이스 상품 해석 — **운영자가 담은 상품이 우선**, 하나도 없으면 수집 조건.
+ *
+ * group.group_type 을 보지 않는다. 메뉴에 걸린 그룹은 둘 다 갖고 있고, 그 우선순위가
+ * 이 함수의 존재 이유다. 관리자 미리보기도 이 함수를 써야 화면과 어긋나지 않는다.
+ *
+ * @returns {Promise<{items: Array, source: 'manual'|'condition'|'none'}>}
+ */
+async function resolveShowcaseItems(group, { hasUser = false, limit = 12 } = {}) {
+    if (!group) return { items: [], source: 'none' };
+
+    // 그룹 객체를 복사해 타입만 바꿔 넘긴다 — 호출자의 행을 건드리지 않는다.
+    const picked = await productGroupService.resolve(
+        Object.assign({}, group, { group_type: 'manual' }), { hasUser, limit }
+    );
+    if (picked.length > 0) return { items: picked, source: 'manual' };
+
+    if (!hasFallbackCondition(group)) return { items: [], source: 'none' };
+
+    const auto = await productGroupService.resolve(
+        Object.assign({}, group, { group_type: 'condition' }), { hasUser, limit }
+    );
+    return { items: auto, source: 'condition' };
+}
+
 /**
  * 경로에 해당하는 쇼케이스들을 렌더 순서대로 조립한다.
  * 배열 순서가 곧 화면 순서다 — 배너가 먼저, 상품 캐러셀이 뒤.
@@ -152,7 +200,7 @@ async function getForPath(reqPath, { mallId = 1, hasUser = false } = {}) {
     // 2) 상품형 — 메뉴에 걸린 상품그룹
     const group = await getProductGroupForMenu(mallId, menuCode);
     if (group) {
-        const items = await productGroupService.resolve(group, { hasUser, limit: 12 });
+        const { items } = await resolveShowcaseItems(group, { hasUser, limit: 12 });
         if (items.length > 0) {
             showcases.push({
                 kind: 'product',
@@ -171,6 +219,7 @@ module.exports = {
     getForPath,
     getMenuTargets,
     getProductGroupForMenu,
+    resolveShowcaseItems,
     resolveMenuCode,
     clearCache,
     EXCLUDED,
