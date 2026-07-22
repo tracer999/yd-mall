@@ -5,7 +5,6 @@
  * **같은 검증·같은 화면 블록**을 쓴다(services/b2b/businessProfileService, views/auth/_business_fields).
  */
 
-const pool = require('../config/db');
 const businessProfileService = require('../services/b2b/businessProfileService');
 const b2bContext = require('../middleware/b2bContext');
 
@@ -102,35 +101,13 @@ exports.postApply = async (req, res, next) => {
     }
 };
 
-/**
- * 구매 자격 전환 (개인 ↔ 기업).
+/*
+ * 구매 자격 전환(postMode)은 제거했다.
  *
- * 로그인 시 고른 자격을 나중에 바꾼다. 자격 자체를 만들지는 못한다 —
- * 승인 사업자가 아니면 기업 모드로 갈 수 없다(미들웨어가 다시 판정한다).
- *
- * ⚠️ 장바구니에 다른 유형의 상품이 있으면 막는다. 개인 장바구니를 그대로 둔 채 기업으로 바꾸면
- *    일반가로 담은 상품이 기업 주문서로 넘어간다(설계 §6.3 혼합 금지).
+ * 기업회원과 일반회원은 로그인 자체가 상호 배타가 되어(routes/auth.js resolveLoginMode)
+ * 승인 사업자가 개인 자격으로 들어올 방법이 없다. 따라서 도중에 바꿀 자격도 없다.
+ * 자격 판정은 middleware/b2bContext 한 곳이 전부다.
  */
-exports.postMode = async (req, res, next) => {
-    if (!req.user) return res.redirect('/auth/login');
-    try {
-        const toBusiness = req.body.mode === 'business';
-        const wantType = toBusiness ? 'B2B' : 'B2C';
-        const back = req.body.redirect && req.body.redirect.startsWith('/') ? req.body.redirect : '/mypage';
-
-        const [[other]] = await pool.query(
-            'SELECT COUNT(*) AS cnt FROM carts WHERE user_id = ? AND cart_type <> ?', [req.user.id, wantType]
-        );
-        if (other.cnt > 0) {
-            return res.redirect('/cart?error=switch_mode&type=' + wantType);
-        }
-
-        req.session.b2bMode = toBusiness;
-        return req.session.save(() => res.redirect(back));
-    } catch (err) {
-        return next(err);
-    }
-};
 
 /** 신청 상태 화면. 마이페이지의 "사업자 정보" 진입점이기도 하다. */
 exports.getStatus = async (req, res, next) => {

@@ -1,26 +1,19 @@
 <%
 /*
- * 구매 자격 표시·전환 (설계 §3.1).
- * 승인 사업자만 이 블록이 보인다. 일반 회원에게는 아무것도 렌더되지 않는다.
+ * 구매 자격 표시 (설계 §3.1).
+ *
+ * 기업회원과 일반회원은 로그인 자체가 상호 배타이므로(routes/auth.js resolveLoginMode)
+ * 자격을 도중에 바꾸는 개념이 없다. 지금 어떤 자격인지만 보여준다.
  */
-const _canSwitch = locals.b2bCanSwitch === true;
 const _isBizNow = (locals.b2b || {}).active === true;
 %>
 <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm <%= (typeof sticky !== 'undefined' && sticky) ? 'lg:sticky lg:top-4' : '' %>">
-    <% if (_canSwitch) { %>
-        <div class="mb-4 rounded-lg border <%= _isBizNow ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50' %> p-3">
+    <% if (_isBizNow) { %>
+        <div class="mb-4 rounded-lg border border-blue-300 bg-blue-50 p-3">
             <p class="text-xs text-gray-500 mb-1">현재 구매 자격</p>
-            <p class="text-sm font-bold <%= _isBizNow ? 'text-blue-800' : 'text-gray-800' %>">
-                <%= _isBizNow ? '기업 구매 (' + (locals.b2b.companyName || '사업자') + ')' : '개인 구매' %>
+            <p class="text-sm font-bold text-blue-800">
+                기업 구매 (<%= locals.b2b.companyName || '사업자' %>)
             </p>
-            <form action="/b2b/mode" method="POST" class="mt-2">
-                <input type="hidden" name="mode" value="<%= _isBizNow ? 'personal' : 'business' %>">
-                <input type="hidden" name="redirect" value="<%= locals.path || '/mypage' %>">
-                <button type="submit" class="text-xs font-semibold <%= _isBizNow ? 'text-gray-600' : 'text-blue-700' %> underline underline-offset-2">
-                    <%= _isBizNow ? '개인 구매로 전환' : '기업 구매로 전환' %>
-                </button>
-            </form>
-            <p class="mt-1 text-[11px] text-gray-400">전환하려면 장바구니를 비워야 합니다.</p>
         </div>
     <% } %>
     <h2 class="mb-3 text-base font-bold text-gray-900">마이페이지 메뉴</h2>

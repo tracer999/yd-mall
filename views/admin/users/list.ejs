@@ -1,5 +1,27 @@
+<% if (locals.error) { %>
+<div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <i class="bi bi-exclamation-triangle-fill mr-1"></i><%= error %>
+</div>
+<% } %>
+<% if (locals.message) { %>
+<div class="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+    <i class="bi bi-check-circle-fill mr-1"></i><%= message %>
+</div>
+<% } %>
+
+<%# 기업회원은 이 목록에 없다 — 승인·계약 상태와 함께 봐야 하므로 B2B 관리에서 다룬다. %>
+<% if (locals.businessCount) { %>
+<div class="mb-4 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+    <span>
+        <i class="bi bi-building mr-1"></i>
+        이 목록은 <strong>일반회원</strong>만 표시합니다. 기업회원 <strong><%= businessCount %></strong>명은 B2B 관리에서 관리합니다.
+    </span>
+    <a href="/admin/b2b/members" class="font-medium underline hover:no-underline">기업회원 승인 →</a>
+</div>
+<% } %>
+
 <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-    <p class="text-sm text-gray-500">회원 정보를 조회하고 검색·관리를 진행합니다.</p>
+    <p class="text-sm text-gray-500">일반회원 정보를 조회하고 검색·관리를 진행합니다.</p>
     <form action="/admin/users" method="GET"
         class="flex w-full sm:w-auto items-center gap-2 justify-start sm:justify-end">
         <select name="status" class="min-w-[100px] rounded-md border-gray-300 py-2 pl-3 pr-10 text-sm">
@@ -123,11 +145,18 @@
                                             <%= user.is_active ? '비활성' : '활성' %>
                                         </button>
                                     </form>
+                                    <%# 삭제는 탈퇴·미사용 회원만. 막힌 이유는 버튼에 얹어 바로 보이게 한다. %>
+                                    <% if (user.deletable) { %>
                                     <form action="/admin/users/delete/<%= user.id %>" method="POST" class="inline"
-                                        onsubmit="return confirm('정말 삭제하시겠습니까?');">
+                                        onsubmit="return confirm('이 회원을 완전히 삭제합니다. 장바구니·포인트·쿠폰·리뷰가 함께 삭제되며 되돌릴 수 없습니다. 계속하시겠습니까?');">
                                         <button type="submit"
                                             class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
                                     </form>
+                                    <% } else { %>
+                                        <button type="button" disabled
+                                            title="<%= user.deleteBlockReason %>"
+                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed">삭제</button>
+                                    <% } %>
                             </div>
                         </td>
                     </tr>

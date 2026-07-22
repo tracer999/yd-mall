@@ -81,8 +81,7 @@ exports.getCart = async (req, res) => {
                         return req.query.type === 'B2B'
                             ? '개인 구매로 담은 상품이 있어 기업 상품을 함께 담을 수 없습니다. 장바구니를 비운 뒤 다시 담아 주세요.'
                             : '기업 구매로 담은 상품이 있어 함께 담을 수 없습니다. 장바구니를 비운 뒤 다시 담아 주세요.';
-                    case 'switch_mode':
-                        return '장바구니에 담긴 상품이 있어 구매 자격을 전환할 수 없습니다. 먼저 장바구니를 비워 주세요.';
+                    // 'switch_mode' 는 제거했다 — 구매 자격 전환 기능이 없어졌다(routes/b2b.js).
                     default:
                         return null;
                 }

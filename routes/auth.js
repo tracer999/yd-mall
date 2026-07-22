@@ -94,30 +94,38 @@ router.get('/login', (req, res) => {
 });
 
 /**
- * 로그인 모드 확정 (사업자 / 개인).
+ * 로그인 자격 확인 (기업회원 / 일반회원).
  *
- * 로그인 화면을 분리하지 않는다(설계 §3.1). 대신 체크박스 하나로 **어느 자격으로 들어왔는지**를
- * 명시하게 하고, 서버가 그 자격이 실제로 있는지 확인한다.
+ * 로그인 화면은 하나지만 **자격은 상호 배타**다. 체크박스로 어느 자격으로 들어왔는지 밝히게 하고,
+ * 서버가 실제 자격과 대조해 **어긋나면 거부**한다.
  *
- *   체크함 + 승인 사업자   → 기업 모드 (전용가·B2B 주문절차)
- *   체크함 + 심사중/반려   → 로그인은 되지만 상태 안내 화면으로 보낸다
- *   체크함 + 사업자 아님   → 로그인 거부. 잘못된 자격으로 들어왔다는 것을 알려야 한다
- *   체크 안 함            → 개인 모드. 승인 사업자라도 일반가로 산다
+ *   체크함  + 사업자 프로필 있음 → 통과 (미승인이면 상태 안내 화면으로)
+ *   체크함  + 사업자 아님        → 거부. 일반회원이 기업 자격으로 들어올 수 없다
+ *   체크 안 함 + 사업자 프로필 있음 → 거부. 기업회원은 일반 자격으로 들어올 수 없다
+ *   체크 안 함 + 사업자 아님     → 통과 (일반회원)
  *
- * 결과는 `req.session.b2bMode` 에 남고 middleware/b2bContext 가 이를 존중한다.
- * 세션에 값이 없으면(소셜 로그인 등) 기존처럼 사업자 자격을 그대로 적용한다.
+ * 기준은 `business_profile` 행의 존재 하나뿐이다 — 관리자 화면의 분리 기준
+ * (controllers/admin/userController.js)과 **같은 기준**을 쓴다. 두 곳이 갈라지면
+ * "회원 관리에는 없는데 일반 로그인은 되는" 회원이 생긴다.
+ *
+ * 승인 전(PENDING·UNDER_REVIEW·REJECTED)에도 로그인 자체는 된다. 다만 b2bContext 가
+ * active=false 로 판정하므로 전용가 없이 일반가로 쇼핑한다 — 자격과 가격은 별개다.
  */
 async function resolveLoginMode(req, user, asBusiness) {
     const profile = await businessProfileService.findByUser(user.id);
 
     if (!asBusiness) {
-        req.session.b2bMode = false;               // 개인 구매로 명시 진입
+        if (profile) {
+            return {
+                ok: false,
+                error: '기업회원 계정입니다. "사업자 회원으로 로그인"을 선택해 주세요.'
+            };
+        }
         return { ok: true, redirect: null };
     }
     if (!profile) {
         return { ok: false, error: '사업자 회원이 아닙니다. 일반 회원으로 로그인하시거나 사업자 회원 신청을 해주세요.' };
     }
-    req.session.b2bMode = true;
     if (profile.status !== 'APPROVED') {
         return { ok: true, redirect: '/b2b/status' };   // 심사중·반려·정지 → 상태를 먼저 보여준다
     }

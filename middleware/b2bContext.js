@@ -160,25 +160,18 @@ module.exports = async (req, res, next) => {
     try {
         if (!req.user) return next();
         const profile = await loadProfile(req.user.id);
-        const ctx = buildContext(profile, req.user, req.mallId || 1);
 
         /*
-         * 로그인 시 고른 구매 자격을 존중한다(routes/auth.js resolveLoginMode).
-         *   false  → 개인 구매로 명시 진입. 승인 사업자라도 일반가로 산다.
-         *   그 외  → 사업자 자격을 그대로 적용(소셜 로그인·기존 세션 호환).
-         * 자격 자체(승인 상태·계약기간)는 buildContext 가 이미 판정했다. 여기서는 **끄기만** 한다 —
-         * 세션 값으로 없는 자격을 만들어 낼 수는 없다.
+         * 자격은 계정에 붙어 있다 — 세션이 이를 뒤집지 않는다.
+         *
+         * 예전에는 로그인 시 고른 구매 자격(req.session.b2bMode)으로 승인 사업자를 개인 모드로
+         * 낮출 수 있었다. 지금은 기업회원과 일반회원의 로그인 자체가 상호 배타이므로
+         * (routes/auth.js resolveLoginMode) 기업회원이 개인 자격으로 들어올 방법이 없고,
+         * 따라서 전환 개념도 없다. 판정은 buildContext 한 곳이 전부다.
          */
-        const personalMode = req.session && req.session.b2bMode === false;
-        const applied = (personalMode && ctx.active)
-            ? Object.freeze({ ...ctx, active: false, state: 'PERSONAL_MODE', permissions: Object.freeze([]) })
-            : ctx;
-
-        req.b2b = applied;
-        res.locals.b2b = applied;
-        // 화면이 "지금 어느 자격인지 / 전환할 수 있는지" 를 판단하는 값
-        res.locals.b2bCanSwitch = ctx.active;
-        res.locals.b2bPersonalMode = personalMode && ctx.active;
+        const ctx = buildContext(profile, req.user, req.mallId || 1);
+        req.b2b = ctx;
+        res.locals.b2b = ctx;
     } catch (err) {
         // fail-close — 판정에 실패하면 B2B 를 켜지 않는다. 화면은 B2C 로 정상 동작한다.
         console.warn('[b2bContext] 컨텍스트 해석 실패, B2B 비활성:', err.message);
