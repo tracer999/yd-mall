@@ -155,10 +155,27 @@
           ? adminMenuTree
           : ((typeof adminMenus !== 'undefined' && adminMenus) ? adminMenus.map(m => Object.assign({}, m, { isGroup: false, children: [] })) : []);
 
-        const _isActive = (menuPath) => {
+        /* 활성 판정: (1) 경로 경계 단위로만 매칭한다. 단순 startsWith 는
+           /admin/shipping 이 /admin/shipping-policy 까지 잡아먹는다.
+           (2) 매칭되는 메뉴가 여러 개면 가장 구체적인(긴) 것 하나만 활성화한다.
+           /admin/membership(대시보드)은 /admin/membership/customers 의 부모 경로라
+           둘 다 매칭되는데, 실제 페이지인 후자만 켜져야 한다. */
+        const _matchesPath = (menuPath) => {
           if (!menuPath) return false;
-          return menuPath === '/admin' ? path === '/admin' : path.startsWith(menuPath);
+          if (menuPath === '/admin') return path === '/admin';
+          return path === menuPath || path.startsWith(menuPath + '/');
         };
+
+        const _allPaths = [];
+        _tree.forEach(function (n) {
+          if (n.path) _allPaths.push(n.path);
+          (n.children || []).forEach(function (c) { if (c.path) _allPaths.push(c.path); });
+        });
+        const _activePath = _allPaths
+          .filter(_matchesPath)
+          .reduce((best, p) => (p.length > best.length ? p : best), '');
+
+        const _isActive = (menuPath) => !!menuPath && menuPath === _activePath;
       %>
 
       <% _tree.forEach(function (node, gi) { %>
