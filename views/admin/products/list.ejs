@@ -149,6 +149,38 @@
             <span class="text-xs text-gray-500">비워두고 누르면 미지정으로 되돌립니다(신상품에서 제외).</span>
         </div>
 
+        <%# 카테고리·브랜드 일괄 자동 매핑 — 임포트 상품은 둘 다 비어 있는 채로 들어온다.
+            위 필터에서 "미설정" 으로 거른 뒤 전체 선택 → 이 버튼으로 화면 안에서 끝낸다.
+            이미 값이 있는 상품은 서버가 건너뛴다(덮어쓰지 않음). %>
+        <div class="mb-4 flex flex-wrap gap-2 items-center border-t border-gray-200 pt-3">
+            <span class="text-sm text-gray-600 mr-2">선택한 상품의 미설정 항목을:</span>
+            <button type="button" id="bulk-map-category-btn"
+                class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 bg-teal-600 text-white hover:bg-teal-700">
+                카테고리 매핑처리
+            </button>
+            <button type="button" id="bulk-map-brand-btn"
+                class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 bg-purple-600 text-white hover:bg-purple-700">
+                브랜드 매핑처리
+            </button>
+            <span class="text-xs text-gray-500">브랜드는 판매사 기준이며 없으면 새로 만듭니다. 카테고리는 기존 카테고리에만 매핑합니다.</span>
+        </div>
+
+        <%# B2B(사업자) 판매 일괄 등록 — 할인율·최소 주문수량은 레이어에서 받는다.
+            전용가는 저장하지 않는다(할인율만 저장 → 읽는 시점에 계산). %>
+        <div class="mb-4 flex flex-wrap gap-2 items-center border-t border-gray-200 pt-3">
+            <span class="text-sm text-gray-600 mr-2">선택한 상품을:</span>
+            <button type="button" id="bulk-b2b-btn"
+                class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 bg-slate-700 text-white hover:bg-slate-800 gap-1.5">
+                <i class="bi bi-briefcase-fill"></i> B2B(사업자) 판매등록
+            </button>
+            <span class="text-xs text-gray-500">할인율과 최소 주문수량을 입력해 사업자 전용가로 판매합니다.</span>
+        </div>
+
+        <div id="bulk-b2b-status" class="hidden mb-3 px-4 py-3 rounded-md text-sm border"></div>
+
+        <div id="bulk-map-status" class="hidden mb-3 px-4 py-3 rounded-md text-sm"></div>
+        <div id="bulk-map-detail" class="hidden mb-4 max-h-64 overflow-y-auto rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-700"></div>
+
         <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
             <div id="shopify-sync-status" class="hidden mb-3 px-4 py-2 rounded-md text-sm"></div>
         <% } %>
@@ -205,6 +237,13 @@
                                     <% if(p.brand_category_name) { %>
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-indigo-100 text-indigo-800">
                                             <%= p.brand_category_name %>
+                                        </span>
+                                    <% } %>
+                                    <%# B2B 설정 행이 있으면(=사업자 판매) 할인율·최소수량을 그대로 보여 준다. %>
+                                    <% if (p.b2b_discount_rate !== null && typeof p.b2b_discount_rate !== 'undefined') { %>
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-200 text-slate-700"
+                                              title="사업자 전용가 — 할인율 <%= Number(p.b2b_discount_rate) %>%, 최소 <%= p.b2b_min_order_qty %>개">
+                                            B2B <%= Number(p.b2b_discount_rate) %>% / <%= p.b2b_min_order_qty %>개↑
                                         </span>
                                     <% } %>
                                 </div>
@@ -401,6 +440,103 @@
             }
         });
 
+        /* 카테고리·브랜드 일괄 자동 매핑.
+           결과는 "몇 건 됐다" 만으로 부족하다 — 실패한 상품과 그 사유(카테고리 관리에서
+           매핑하라는 안내)를 같이 보여줘야 다음 행동으로 이어진다. */
+        (function () {
+            const statusEl = document.getElementById('bulk-map-status');
+            const detailEl = document.getElementById('bulk-map-detail');
+            const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+            const VIA_LABEL = { naver: '네이버 카테고리 매핑', 'naver-path': '네이버 분류명 일치', name: '상품명 일치', match: '기존 브랜드', created: '신규 생성' };
+
+            function showStatus(tone, text) {
+                statusEl.className = 'mb-3 px-4 py-3 rounded-md text-sm border ' + (
+                    tone === 'ok' ? 'bg-green-50 text-green-700 border-green-200' :
+                    tone === 'warn' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                    tone === 'err' ? 'bg-red-50 text-red-700 border-red-200' :
+                                     'bg-blue-50 text-blue-700 border-blue-200');
+                statusEl.textContent = text;
+            }
+
+            function renderDetail(data) {
+                const blocks = [];
+                if (data.mapped && data.mapped.length) {
+                    blocks.push('<div class="mb-2 font-semibold text-gray-800">매핑 완료 ' + data.mapped.length + '건</div><ul class="space-y-0.5">' +
+                        data.mapped.map((m) => '<li>· ' + escapeHtml(m.name) + ' → <span class="font-medium text-teal-700">' + escapeHtml(m.target) + '</span>' +
+                            (VIA_LABEL[m.via] ? ' <span class="text-gray-400">(' + VIA_LABEL[m.via] + ')</span>' : '') + '</li>').join('') + '</ul>');
+                }
+                if (data.created && data.created.length) {
+                    blocks.push('<div class="mt-3 mb-2 font-semibold text-gray-800">새로 만든 브랜드 ' + data.created.length + '개</div><div>' +
+                        data.created.map((n) => escapeHtml(n)).join(', ') + '</div>');
+                }
+                if (data.failed && data.failed.length) {
+                    blocks.push('<div class="mt-3 mb-2 font-semibold text-red-700">매핑 실패 ' + data.failed.length + '건</div><ul class="space-y-1">' +
+                        data.failed.map((f) => '<li>· ' + escapeHtml(f.name) + '<div class="text-gray-500 pl-3">' + escapeHtml(f.reason) + '</div></li>').join('') + '</ul>');
+                }
+                if (!blocks.length) {
+                    detailEl.classList.add('hidden');
+                    return;
+                }
+                detailEl.innerHTML = blocks.join('');
+                detailEl.classList.remove('hidden');
+            }
+
+            async function run(btn, url, label) {
+                const checked = document.querySelectorAll('.product-checkbox:checked');
+                if (checked.length === 0) {
+                    alert('매핑할 상품을 먼저 선택하세요.');
+                    return;
+                }
+                if (!confirm('선택한 ' + checked.length + '개 상품의 미설정 ' + label + '를 자동 매핑하시겠습니까?')) return;
+
+                const productIds = Array.from(checked).map((cb) => Number(cb.value));
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = '매핑 중...';
+                detailEl.classList.add('hidden');
+                statusEl.classList.remove('hidden');
+                showStatus('info', productIds.length + '개 상품 ' + label + ' 매핑 중...');
+
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ productIds })
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        showStatus('err', data.message || '매핑에 실패했습니다.');
+                        return;
+                    }
+                    showStatus(data.failed && data.failed.length ? 'warn' : 'ok', data.message);
+                    // 목록의 카테고리/브랜드 뱃지는 서버 렌더라 매핑 후 낡는다. 다시 읽을 수단을 붙인다.
+                    if (data.mapped && data.mapped.length) {
+                        const reload = document.createElement('button');
+                        reload.type = 'button';
+                        reload.className = 'ml-3 underline font-medium';
+                        reload.textContent = '목록 새로고침';
+                        reload.addEventListener('click', () => location.reload());
+                        statusEl.appendChild(reload);
+                    }
+                    renderDetail(data);
+                } catch (err) {
+                    showStatus('err', '네트워크 오류: ' + err.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            }
+
+            document.getElementById('bulk-map-category-btn').addEventListener('click', function () {
+                run(this, '/admin/products/bulk-map/category', '카테고리');
+            });
+            document.getElementById('bulk-map-brand-btn').addEventListener('click', function () {
+                run(this, '/admin/products/bulk-map/brand', '브랜드');
+            });
+        })();
+
         // 노출관리 AJAX 변경
         document.querySelectorAll('.visibility-select').forEach(sel => {
             sel.addEventListener('change', async function() {
@@ -428,6 +564,147 @@
         });
     </script>
 </div>
+
+<%# ── B2B(사업자) 판매등록 레이어 ──────────────────────────────
+    #bulk-action-form 밖에 둔다. 안에 두면 이 입력들이 상태변경·판매시작일 버튼에도 함께 전송된다. %>
+<div id="b2bModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+        <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <i class="bi bi-briefcase-fill text-slate-700"></i> B2B(사업자) 판매등록
+        </h3>
+        <p class="mt-3 text-sm text-gray-700">
+            선택한 <strong id="b2bCount" class="text-gray-900">0</strong>개 상품을 사업자 고객에게 전용가로 판매하도록 등록합니다.
+        </p>
+
+        <div class="mt-4 space-y-4">
+            <div>
+                <label for="b2bRate" class="block text-xs font-bold text-gray-900 mb-1">B2B 할인율 (%)</label>
+                <input type="number" id="b2bRate" min="0" max="99" step="0.01" value="0"
+                       class="w-full px-3 py-2 text-right text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                <p class="text-xs text-gray-500 mt-1">판매가 대비 할인율입니다. 0 이면 일반 판매가와 같습니다.</p>
+            </div>
+            <div>
+                <label for="b2bMoq" class="block text-xs font-bold text-gray-900 mb-1">최소 주문수량</label>
+                <input type="number" id="b2bMoq" min="1" step="1" value="1"
+                       class="w-full px-3 py-2 text-right text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                <p class="text-xs text-gray-500 mt-1">1 이면 1개부터 주문 가능합니다.</p>
+            </div>
+        </div>
+
+        <p class="mt-4 text-xs text-gray-500 leading-relaxed">
+            · 거래처마다 <strong>추가 할인</strong>을 더 줄 수 있고(B2B 관리 &gt; 거래처 할인), 두 할인율은 <strong>단순 합산</strong>됩니다.<br>
+            · <strong>과세 구분</strong>은 상품이 아니라 <strong>거래처</strong>에 정합니다 — B2B 관리 &gt; 기업회원 승인.<br>
+            · 일반 고객 화면과 판매가는 <strong>바뀌지 않습니다</strong>.
+        </p>
+
+        <div class="mt-6 flex items-center justify-between gap-2">
+            <button type="button" id="b2bOffBtn"
+                    class="text-xs text-red-600 hover:text-red-700 underline">선택 상품 B2B 판매 해제</button>
+            <div class="flex gap-2">
+                <button type="button" id="b2bCancelBtn"
+                        class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">취소</button>
+                <button type="button" id="b2bSaveBtn"
+                        class="inline-flex items-center justify-center h-[38px] px-5 text-sm font-medium rounded-md bg-slate-700 text-white hover:bg-slate-800">저장</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* B2B(사업자) 판매 일괄 등록·해제.
+       레이어에서 할인율·최소 주문수량을 받아 선택 상품에 한 번에 적용한다.
+       전용가는 저장하지 않는다 — 할인율만 저장하고 가격은 읽는 시점에 계산된다. */
+    (function () {
+        const modal = document.getElementById('b2bModal');
+        const openBtn = document.getElementById('bulk-b2b-btn');
+        const statusEl = document.getElementById('bulk-b2b-status');
+        const rateEl = document.getElementById('b2bRate');
+        const moqEl = document.getElementById('b2bMoq');
+        const countEl = document.getElementById('b2bCount');
+        const saveBtn = document.getElementById('b2bSaveBtn');
+        const offBtn = document.getElementById('b2bOffBtn');
+        if (!modal || !openBtn) return;
+
+        const selectedIds = () => Array.from(document.querySelectorAll('.product-checkbox:checked')).map((cb) => Number(cb.value));
+
+        function open() {
+            const ids = selectedIds();
+            if (ids.length === 0) {
+                alert('B2B 판매로 등록할 상품을 먼저 선택하세요.');
+                return;
+            }
+            countEl.textContent = ids.length;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            rateEl.focus();
+        }
+        function close() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function showStatus(ok, text) {
+            statusEl.className = 'mb-3 px-4 py-3 rounded-md text-sm border ' +
+                (ok ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200');
+            statusEl.textContent = text;
+            statusEl.classList.remove('hidden');
+            if (ok) {
+                const reload = document.createElement('button');
+                reload.type = 'button';
+                reload.className = 'ml-3 underline font-medium';
+                reload.textContent = '목록 새로고침';
+                reload.addEventListener('click', () => location.reload());
+                statusEl.appendChild(reload);
+            }
+        }
+
+        async function submit(action) {
+            const productIds = selectedIds();
+            if (productIds.length === 0) { alert('선택된 상품이 없습니다.'); return; }
+
+            const payload = { productIds: productIds, action: action };
+            if (action !== 'off') {
+                const rate = parseFloat(rateEl.value);
+                const moq = parseInt(moqEl.value, 10);
+                if (!isFinite(rate) || rate < 0 || rate > 99) { alert('할인율은 0~99 사이로 입력하세요.'); rateEl.focus(); return; }
+                if (!isFinite(moq) || moq < 1) { alert('최소 주문수량은 1 이상으로 입력하세요.'); moqEl.focus(); return; }
+                payload.discountRate = rate;
+                payload.minOrderQty = moq;
+                if (!confirm(productIds.length + '개 상품을 B2B 판매로 등록하시겠습니까?\n할인율 ' + rate + '% · 최소 주문수량 ' + moq + '개')) return;
+            } else if (!confirm(productIds.length + '개 상품의 B2B 판매를 해제하시겠습니까?\n사업자 고객에게도 일반 판매가로 팔리게 됩니다.')) {
+                return;
+            }
+
+            const btn = action === 'off' ? offBtn : saveBtn;
+            const originalText = btn.textContent;
+            saveBtn.disabled = true; offBtn.disabled = true;
+            btn.textContent = '처리 중...';
+            try {
+                const res = await fetch('/admin/products/bulk-b2b', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                close();
+                showStatus(!!data.success, data.message || (data.success ? '처리했습니다.' : '처리에 실패했습니다.'));
+            } catch (err) {
+                close();
+                showStatus(false, '네트워크 오류: ' + err.message);
+            } finally {
+                saveBtn.disabled = false; offBtn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        openBtn.addEventListener('click', open);
+        document.getElementById('b2bCancelBtn').addEventListener('click', close);
+        saveBtn.addEventListener('click', () => submit('on'));
+        offBtn.addEventListener('click', () => submit('off'));
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
+    })();
+</script>
 
 <script>
     /* perPage 는 URL 에 이미 있을 수 있다. 새로 append 하면 중복 키가 되어 서버가 기본값으로 되돌린다. */
@@ -462,7 +739,7 @@
         function fill(sel, parentId, placeholder, withNone) {
             sel.innerHTML = '';
             sel.appendChild(opt('', placeholder));
-            if (withNone) sel.appendChild(opt('none', '미설정'));
+            if (withNone) sel.appendChild(opt('none', '미설정 (카테고리 없음)'));
             childrenOf(parentId).forEach(c => sel.appendChild(opt(String(c.id), c.name)));
             sel.disabled = sel.options.length <= 1;  // 자식 없으면(플레이스홀더만) 비활성
         }

@@ -5,6 +5,8 @@ const { syncProductById, syncProductsByIds, deleteProductById, isShopifySyncEnab
 const newArrival = require('../../services/catalog/newArrival');
 const productImporter = require('../../services/catalog/productImporter');
 const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
+const taxonomyMapper = require('../../services/catalog/taxonomyMapper');
+const b2bPricingService = require('../../services/b2b/b2bPricingService');
 const productMedia = require('../../services/catalog/productMedia');
 const skuService = require('../../services/catalog/skuService');
 const facetAdminService = require('../../services/catalog/facetAdminService');
@@ -414,6 +416,39 @@ exports.postBulkSaleStartDate = async (req, res) => {
     }
 };
 
+/*
+ * 카테고리·브랜드 일괄 매핑 (목록 화면의 [카테고리 매핑처리] / [브랜드 매핑처리]).
+ *
+ * 임포트 상품은 카테고리·브랜드가 비어 있는 채로 들어온다. 그 상태면 고객 GNB·브랜드관에서
+ * 빠지므로 운영이 채워야 하는데, 수천 건을 한 건씩 여는 것은 화면에서 끝나는 작업이 아니다.
+ * 그래서 "미설정 필터 → 전체 선택 → 매핑처리" 로 화면 안에서 끝낸다.
+ *
+ * 결과는 JSON 으로 돌려준다 — 매핑된 건수만이 아니라 **실패 사유(무엇을 해야 하는지)** 를
+ * 보여줘야 다음 행동(카테고리 관리에서 매핑)으로 이어진다. 판정 규칙은
+ * services/catalog/taxonomyMapper 한 곳에만 있다.
+ */
+async function runBulkMapping(req, res, mapper, label) {
+    const ids = req.body && (req.body.productIds || req.body.product_ids);
+    if (!ids || (Array.isArray(ids) && ids.length === 0)) {
+        return res.status(400).json({ success: false, message: '선택된 상품이 없습니다.' });
+    }
+    try {
+        const r = await mapper({ mallId: req.adminMallId || 1, productIds: ids });
+        const parts = [`${r.mapped.length}건 ${label} 매핑 완료`];
+        if (r.created && r.created.length) parts.push(`브랜드 ${r.created.length}개 신규 생성`);
+        if (r.skipped) parts.push(`${r.skipped}건은 이미 설정돼 있어 건너뜀`);
+        if (r.failed.length) parts.push(`${r.failed.length}건 실패`);
+        if (r.truncated) parts.push(`한 번에 ${taxonomyMapper.MAX_BULK}건까지만 처리합니다(나머지는 다시 실행하세요)`);
+        res.json({ success: true, message: parts.join(' · '), ...r });
+    } catch (err) {
+        console.error(`[bulk-map:${label}]`, err);
+        res.status(500).json({ success: false, message: '매핑 처리 중 오류가 발생했습니다.' });
+    }
+}
+
+exports.postBulkMapCategory = (req, res) => runBulkMapping(req, res, taxonomyMapper.mapCategories, '카테고리');
+exports.postBulkMapBrand = (req, res) => runBulkMapping(req, res, taxonomyMapper.mapBrands, '브랜드');
+
 exports.postVisibility = async (req, res) => {
     const { productId, visibility } = req.body;
     if (!productId || !visibility) return res.status(400).json({ success: false, message: '잘못된 요청' });
@@ -568,6 +603,78 @@ async function saveB2bSetting(productId, body) {
         );
     }
 }
+
+/*
+ * B2B(사업자) 판매 일괄 등록/해제 — 상품 목록에서 여러 건을 한 번에.
+ *
+ * 저장 규칙은 단건(saveB2bSetting)과 똑같다: **행이 있으면 B2B 판매, 없으면 안 함.**
+ * 해제가 is_b2b_sale=0 행을 남기지 않고 DELETE 인 이유도 같다 — 표현이 두 가지가 되면
+ * b2bPricingService 의 판정이 갈린다.
+ *
+ * 가격은 여기서도 **쓰지 않는다**. product_b2b_setting 에 담기는 건 할인율·최소수량뿐이고
+ * 전용가는 읽는 시점에 계산된다(b2bPricingService). products.price 는 건드리지 않는다.
+ */
+exports.postBulkB2bSetting = async (req, res) => {
+    const MALL_ID = req.adminMallId || 1;
+    const raw = Array.isArray(req.body.productIds) ? req.body.productIds : [];
+    const ids = [...new Set(raw.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    const off = req.body.action === 'off';
+
+    if (!ids.length) return res.status(400).json({ success: false, message: '선택된 상품이 없습니다.' });
+
+    // 할인율 0 은 "일반 판매가와 같음" 이라 유효한 값이다(막지 않는다).
+    const rate = Number(req.body.discountRate);
+    const moq = parseInt(req.body.minOrderQty, 10);
+    if (!off) {
+        if (!Number.isFinite(rate) || rate < 0 || rate > b2bPricingService.MAX_DISCOUNT_RATE) {
+            return res.status(400).json({ success: false, message: `할인율은 0~${b2bPricingService.MAX_DISCOUNT_RATE} 사이로 입력하세요.` });
+        }
+        if (!Number.isInteger(moq) || moq < 1) {
+            return res.status(400).json({ success: false, message: '최소 주문수량은 1 이상의 정수로 입력하세요.' });
+        }
+    }
+
+    try {
+        // 다른 몰 상품이 섞여 들어와도 이 몰 것만 처리한다(크로스몰 차단).
+        // 파생상품(세트·묶음)은 목록에 없지만 id 를 직접 보내는 경우까지 막는다.
+        const [own] = await pool.query(
+            `SELECT id FROM products WHERE id IN (?) AND mall_id = ? AND product_type IN ('SINGLE','OPTION')`,
+            [ids, MALL_ID]
+        );
+        const targetIds = own.map((r) => r.id);
+        const ignored = ids.length - targetIds.length;
+        if (!targetIds.length) {
+            return res.status(400).json({ success: false, message: '이 몰에서 처리할 수 있는 상품이 없습니다.' });
+        }
+
+        if (off) {
+            await pool.query('DELETE FROM product_b2b_setting WHERE product_id IN (?)', [targetIds]);
+            return res.json({
+                success: true,
+                affected: targetIds.length,
+                message: `${targetIds.length}건 B2B 판매를 해제했습니다.` + (ignored ? ` (${ignored}건은 대상이 아니라 제외)` : ''),
+            });
+        }
+
+        const values = targetIds.map((id) => [id, 1, rate.toFixed(2), moq]);
+        await pool.query(
+            `INSERT INTO product_b2b_setting (product_id, is_b2b_sale, discount_rate, min_order_qty)
+             VALUES ?
+             ON DUPLICATE KEY UPDATE is_b2b_sale = 1, discount_rate = VALUES(discount_rate),
+                                     min_order_qty = VALUES(min_order_qty)`,
+            [values]
+        );
+        res.json({
+            success: true,
+            affected: targetIds.length,
+            message: `${targetIds.length}건을 B2B 판매 상품으로 등록했습니다. (할인율 ${rate}% · 최소 ${moq}개)`
+                + (ignored ? ` (${ignored}건은 대상이 아니라 제외)` : ''),
+        });
+    } catch (err) {
+        console.error('[bulk-b2b]', err);
+        res.status(500).json({ success: false, message: 'B2B 판매 등록 중 오류가 발생했습니다.' });
+    }
+};
 
 exports.getAdd = async (req, res) => {
     try {
@@ -1009,11 +1116,15 @@ exports.getList = async (req, res) => {
             queryParams
         );
 
+        // B2B 설정은 1:1 이라 JOIN 해도 행이 늘지 않는다. 목록에 뱃지로 그려
+        // 일괄 등록 결과가 화면에서 바로 보이게 한다.
         const [products] = await pool.query(`
-            SELECT p.*, c.name as category_name, bc.name as brand_category_name
+            SELECT p.*, c.name as category_name, bc.name as brand_category_name,
+                   bs.discount_rate AS b2b_discount_rate, bs.min_order_qty AS b2b_min_order_qty
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN categories bc ON p.brand_category_id = bc.id
+            LEFT JOIN product_b2b_setting bs ON bs.product_id = p.id AND bs.is_b2b_sale = 1
             ${whereClause}
             GROUP BY p.id
             ORDER BY p.created_at DESC

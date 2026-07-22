@@ -30,6 +30,11 @@ router.post('/product-image-upload', upload.single('file'), productController.po
 router.post('/generate-ai-recommendation', productController.generateAIRecommendation);
 router.post('/status/update', productController.postUpdateStatus);
 router.post('/sale-start-date/bulk', productController.postBulkSaleStartDate);
+// 카테고리·브랜드 일괄 자동 매핑 (미설정 상품 대상)
+router.post('/bulk-map/category', express.json(), productController.postBulkMapCategory);
+router.post('/bulk-map/brand', express.json(), productController.postBulkMapBrand);
+// B2B(사업자) 판매 일괄 등록·해제
+router.post('/bulk-b2b', express.json(), productController.postBulkB2bSetting);
 router.post('/visibility', express.json(), productController.postVisibility);
 router.post('/shopify-sync', express.json(), productController.postShopifySync);
 
