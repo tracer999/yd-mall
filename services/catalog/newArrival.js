@@ -6,12 +6,18 @@
  * 판정 규칙을 바꾸려면 반드시 이 파일만 고치고, 소비처는 여기서 만든 술어를 재사용한다.
  *
  * 규칙
- *   상품: 판매 시작일이 오늘 이전 & N일 이내   (자동)
- *         OR  product_badge 에 'NEW'           (관리자 강제 노출 — 기간 무관)
+ *   상품: 신상품 기준일이 오늘 이전 & N일 이내  (자동)
+ *         OR  product_badge 에 'NEW'            (관리자 강제 노출 — 기간 무관)
  *   브랜드: 입점일이 오늘 이전 & M일 이내
  *
- * created_at(적재 시각)이 아니라 sale_start_date(판매 시작일)를 앵커로 쓴다.
- * created_at 으로 자르면 대량 임포트 몰 전체가 신상품이 되기 때문이다.
+ * 기준일 = sale_start_date, **없으면** DATE(created_at).
+ *
+ * 원래는 sale_start_date 만 봤다. created_at(적재 시각)으로 자르면 대량 임포트 몰 전체가
+ * 신상품이 되기 때문인데, 그 대가로 **판매 시작일을 입력하지 않은 몰은 신상품이 0건**이 됐다.
+ * 몰 빌더로 갓 찍어낸 몰(외부 소싱으로 상품을 막 적재한 상태)이 정확히 그 경우라, 신상품
+ * 랜딩이 통째로 비어 버렸다. 그래서 sale_start_date 가 있으면 그것을, 없으면 적재일을 쓴다.
+ * 대량 임포트 우려는 N일 창(기본 100일)이 그대로 막아준다 — 100일 지난 적재분은 빠진다.
+ *
  * 미래 날짜(예약 발매)는 아직 판매 전이므로 신상품에서 제외한다.
  *
  * 뱃지를 다시 써넣는(materialize) 방식을 쓰지 않는 이유: 동적 술어로 계산해야
@@ -49,13 +55,26 @@ function newBrandDays() {
  */
 function newProductPredicate(alias = 'p') {
     const c = alias ? `${alias}.` : '';
+    const anchor = newProductAnchor(alias);
     return {
-        sql: `((${c}sale_start_date IS NOT NULL
-                AND ${c}sale_start_date <= CURDATE()
-                AND ${c}sale_start_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY))
+        sql: `((${anchor} IS NOT NULL
+                AND ${anchor} <= CURDATE()
+                AND ${anchor} >= DATE_SUB(CURDATE(), INTERVAL ? DAY))
                OR FIND_IN_SET('NEW', ${c}product_badge))`,
         params: [newProductDays()],
     };
+}
+
+/**
+ * 신상품 기준일 SQL 식 — 판매 시작일, 없으면 적재일.
+ *
+ * ⚠️ 이 식은 인덱스를 타지 못한다(함수 적용). 상품 수가 만 단위인 몰에서 전체 목록을
+ *    이 조건만으로 훑으면 풀스캔이다. 실제 소비처는 전부 카테고리·브랜드로 먼저 좁힌 뒤
+ *    쓰고 있어 문제되지 않는다. 새 소비처를 만들 때 이 전제를 깨지 말 것.
+ */
+function newProductAnchor(alias = 'p') {
+    const c = alias ? `${alias}.` : '';
+    return `COALESCE(${c}sale_start_date, DATE(${c}created_at))`;
 }
 
 /** 신규 입점 브랜드 SQL 술어 (categories, type=BRAND 를 이미 걸고 있다고 가정) */
@@ -69,13 +88,13 @@ function newBrandPredicate(alias = 'c') {
     };
 }
 
-/** 신상품 정렬 — 판매 시작일 최신순. 미지정(NULL)은 뒤로. */
-const NEW_PRODUCT_ORDER = 'sale_start_date IS NULL ASC, sale_start_date DESC, id DESC';
+/** 신상품 정렬 — 기준일(판매 시작일 → 없으면 적재일) 최신순. */
+const NEW_PRODUCT_ORDER = 'COALESCE(sale_start_date, DATE(created_at)) DESC, id DESC';
 
-/** 별칭이 붙은 테이블용 신상품 정렬. (예: newProductOrder('p') → 'p.sale_start_date IS NULL ASC, …') */
+/** 별칭이 붙은 테이블용 신상품 정렬. (예: newProductOrder('p') → 'COALESCE(p.sale_start_date, …) DESC, …') */
 function newProductOrder(alias = 'p') {
     const c = alias ? `${alias}.` : '';
-    return `${c}sale_start_date IS NULL ASC, ${c}sale_start_date DESC, ${c}id DESC`;
+    return `${newProductAnchor(alias)} DESC, ${c}id DESC`;
 }
 
 function daysAgo(days) {
@@ -100,7 +119,9 @@ function isNewProduct(product) {
     const badges = String(product.product_badge || '').split(',');
     if (badges.includes('NEW')) return true;
 
-    const start = toDate(product.sale_start_date);
+    // SQL 술어와 같은 기준일: 판매 시작일 → 없으면 적재일.
+    // created_at 을 select 하지 않은 쿼리에서는 판정이 false 로 떨어진다(뱃지만 안 보일 뿐 안전).
+    const start = toDate(product.sale_start_date) || toDate(product.created_at);
     if (!start) return false;
 
     const today = new Date();
@@ -121,6 +142,7 @@ function isNewBrand(brand) {
 
 module.exports = {
     newProductPredicate,
+    newProductAnchor,
     newBrandPredicate,
     isNewProduct,
     isNewBrand,

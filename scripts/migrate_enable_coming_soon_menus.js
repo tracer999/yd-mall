@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 미구현 모듈 4종(RANKING · OUTLET · COUPON · MEMBERSHIP)을 GNB 에 노출 (멱등)
+ * 미구현 모듈 3종(OUTLET · COUPON · MEMBERSHIP)을 GNB 에 노출 (멱등)
  *
  * 실행:   node scripts/migrate_enable_coming_soon_menus.js
  * 되돌림: node scripts/migrate_enable_coming_soon_menus.js --revert
@@ -16,7 +16,7 @@
  *      GNB 는 상한을 넘으면 **뒤에서 잘린다**. 4종을 켜고 상한을 그대로 두면
  *      기존 메뉴가 조용히 사라진다.
  *
- * 이 4종은 실제 기능이 아니라 '준비 중' 랜딩(200, noindex)이다.
+ * 이 3종은 실제 기능이 아니라 '준비 중' 랜딩(200, noindex)이다.
  * `#` 죽은 링크가 아니라 실제 페이지이므로 `module_ready = 1` 이 정당하다
  * (기획전·공동구매·쇼핑라이브와 같은 처리).
  */
@@ -24,7 +24,9 @@ require('../config/env');
 const pool = require('../config/db');
 
 const MALL_ID = 1;
-const CODES = ['RANKING', 'OUTLET', 'COUPON', 'MEMBERSHIP'];
+// RANKING 은 폐기됐다(베스트가 흡수). 카탈로그에서 지웠으므로 여기에 되살리지 말 것.
+const CODES = ['OUTLET', 'COUPON', 'MEMBERSHIP'];
+const PH = CODES.map(() => '?').join(', ');
 const isRevert = process.argv.includes('--revert');
 
 (async () => {
@@ -34,16 +36,16 @@ const isRevert = process.argv.includes('--revert');
 
         if (isRevert) {
             await conn.query(
-                `UPDATE feature_menu SET module_ready = 0 WHERE feature_code IN (?, ?, ?, ?)`, CODES
+                `UPDATE feature_menu SET module_ready = 0 WHERE feature_code IN (${PH})`, CODES
             );
             await conn.query(
-                `UPDATE mall_feature_menu SET is_enabled = 0 WHERE mall_id = ? AND feature_code IN (?, ?, ?, ?)`,
+                `UPDATE mall_feature_menu SET is_enabled = 0 WHERE mall_id = ? AND feature_code IN (${PH})`,
                 [MALL_ID, ...CODES]
             );
             console.log(`  ~ ${CODES.join(', ')} → module_ready=0, is_enabled=0`);
         } else {
             await conn.query(
-                `UPDATE feature_menu SET module_ready = 1 WHERE feature_code IN (?, ?, ?, ?)`, CODES
+                `UPDATE feature_menu SET module_ready = 1 WHERE feature_code IN (${PH})`, CODES
             );
             // mall_feature_menu 행이 없을 수도 있으므로 upsert
             for (const code of CODES) {

@@ -13,8 +13,8 @@
 | **홈·검색** | `/`, `/search` | 메인 홈(SDUI 페이지 빌더로 조립), 통합 검색 | [home.md](./home.md) · [search.md](./search.md) |
 | **상품** | `/products` | 목록, 카테고리별, 브랜드별, 상세(slug SEO) | [products.md](./products.md) |
 | | `/brands`, `/brands/search.json`, `/brands/:id` | 브랜드 허브(검색·색인) + **브랜드 상세관**(`?tab=home\|best\|new\|all\|benefit`) | [products.md](./products.md) |
-| **기능 메뉴** | `/best`, `/best/tab` | 베스트·랭킹(그룹×기간 탭, 탭 전환 AJAX) | [best.md](./best.md) |
-| | `/new` | 신상품 — SDUI 랜딩(`page.slug='new'`), 섹션 0건이면 상품목록 폴백 | [products.md](./products.md) |
+| **기능 메뉴** | `/best`, `/best/all`, `/best/tab` | 베스트·랭킹 — BEST 10(기간 탭, AJAX) + 카테고리별 BEST + 브랜드별 BEST | [best.md](./best.md) |
+| | `/new` | 신상품 — 카테고리별·브랜드별 섹션(전용 컨트롤러). SDUI 랜딩(`page.slug='new'`)이 있으면 그쪽 우선 | [products.md](./products.md) |
 | | `/membership` | 멤버십 제도 소개(정적, 등급 산정 없음) | [../admin/storefront_menus.md](../admin/storefront_menus.md) |
 | | `/ranking` → **301 `/best`**, `/deal/today` → **301 `/deals`** | 구 URL 영구 이전(북마크·외부 링크 보존) | [best.md](./best.md) · [promotions.md](./promotions.md) |
 | **프로모션** | `/exhibition` | 기획전(상품 전시 랜딩) | [promotions.md](./promotions.md) |

@@ -1,0 +1,52 @@
+<%
+  /*
+   * 신상품 (고객)
+   *
+   *   [쇼케이스]          이 뷰가 아니라 main_layout 이 body 위에 렌더한다(middleware/menuShowcase)
+   *   [카테고리별 신상품] 카테고리마다 한 줄 (최대 10개 + 더보기)
+   *   [브랜드별 신상품]   브랜드마다 한 줄 (최대 10개 + 더보기)
+   *
+   * 좌측 필터(facet)·정렬 탭은 없다 — 조건을 좁혀 찾는 화면이 아니다(컨트롤러 주석 참고).
+   *
+   * locals: categoryRows[], brandRows[], newDays
+   */
+  const _cat = categoryRows || [];
+  const _brand = brandRows || [];
+%>
+
+<section class="bg-white pt-6 pb-2">
+  <div class="max-w-7xl mx-auto px-4">
+    <h1 class="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+      <i class="bi bi-stars text-[color:var(--gh-primary)]"></i>신상품
+    </h1>
+    <p class="mt-1 text-sm text-gray-500">최근 <%= newDays %>일 이내에 들어온 상품을 최신 등록순으로 모았습니다.</p>
+  </div>
+</section>
+
+<%- include('../../partials/storefront/landing_rows', {
+      sectionTitle: '카테고리별 신상품',
+      sectionDesc: null,
+      rows: _cat,
+      variant: 'category',
+      surface: 'white',
+    }) %>
+
+<%- include('../../partials/storefront/landing_rows', {
+      sectionTitle: '브랜드별 신상품',
+      sectionDesc: null,
+      rows: _brand,
+      variant: 'brand',
+      surface: 'gray',
+    }) %>
+
+<% if (!_cat.length && !_brand.length) { %>
+  <%# 신상품이 0건인 몰에서 빈 화면을 남기지 않는다 %>
+  <div class="max-w-7xl mx-auto px-4 py-20 text-center">
+    <i class="bi bi-box-seam text-5xl text-gray-200"></i>
+    <p class="mt-4 text-gray-500">최근 <%= newDays %>일 이내에 등록된 상품이 없습니다.</p>
+    <p class="mt-1 text-sm text-gray-400">신상품 노출 기간은 관리자 &gt; 사이트 설정에서 조정할 수 있습니다.</p>
+    <a href="/products" class="mt-6 inline-block px-6 py-2.5 rounded-full bg-gray-900 text-white text-sm font-semibold no-underline">
+      전체 상품 보기
+    </a>
+  </div>
+<% } %>

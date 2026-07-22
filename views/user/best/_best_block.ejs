@@ -1,0 +1,109 @@
+<%
+  /*
+   * 랭킹 블록 — 제목 + 기간 탭 + 순위 그리드.
+   * /best 의 [BEST 10] 과 /best/all 의 [전체 랭킹] 이 같은 조각을 쓴다. 다른 건 scope 뿐이다.
+   *
+   * locals:
+   *   heading  : 제목 (예: 'BEST 10')
+   *   lead     : 제목 아래 보조 설명 (선택)
+   *   period   : 현재 기간 키
+   *   periods  : { KEY: { label } }
+   *   top      : { products[], calculatedAt, isEmpty, hasMore }
+   *   scope    : 'top' | 'all'  — /best/tab 에 넘길 범위
+   *   moreUrl  : 더보기 링크 (선택, top.hasMore 일 때만 노출)
+   *
+   * 기간 탭은 GET /best/tab 으로 **이 블록의 본문만** 갈아끼운다. 아래 카테고리·브랜드
+   * 줄은 기간과 무관하므로 다시 그리지 않는다.
+   */
+  const _periodKeys = Object.keys(periods);
+  const _scope = (typeof scope !== 'undefined' && scope) ? scope : 'top';
+  const _more = (typeof moreUrl !== 'undefined') ? moreUrl : null;
+  const _lead = (typeof lead !== 'undefined') ? lead : null;
+%>
+
+<section class="bg-white pt-6 pb-10 md:pb-12">
+  <div class="max-w-7xl mx-auto px-4">
+
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-5">
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <i class="bi bi-trophy-fill text-[color:var(--gh-primary)]"></i><%= heading %>
+        </h1>
+        <% if (_lead) { %>
+          <p class="mt-1 text-sm text-gray-500"><%= _lead %></p>
+        <% } %>
+      </div>
+
+      <div class="flex items-center gap-1" id="periodTabs">
+        <% _periodKeys.forEach(function (k) { const on = k === period; %>
+          <button type="button"
+                  class="best-period px-3 py-1.5 text-sm rounded transition
+                         <%= on ? 'font-semibold text-gray-900' : 'text-gray-400 hover:text-gray-600' %>"
+                  data-period="<%= k %>" data-label="<%= periods[k].label %>">
+            <% if (on) { %><i class="bi bi-check text-xs"></i><% } %><%= periods[k].label %>
+          </button>
+        <% }); %>
+      </div>
+    </div>
+
+    <div id="rankBody">
+      <%- include('./_ranking_list', { products: top.products, calculatedAt: top.calculatedAt, isEmpty: top.isEmpty }) %>
+    </div>
+
+    <% if (_more && top.hasMore) { %>
+      <div class="mt-8 text-center">
+        <a href="<%= _more %>"
+           class="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full border border-gray-300 text-sm font-semibold text-gray-700 hover:border-gray-900 hover:text-gray-900 no-underline transition">
+          전체 랭킹 더보기 <i class="bi bi-chevron-right text-xs"></i>
+        </a>
+      </div>
+    <% } %>
+  </div>
+</section>
+
+<script>
+(function () {
+  var body = document.getElementById('rankBody');
+  var tabs = document.getElementById('periodTabs');
+  if (!body || !tabs) return;
+
+  var SCOPE = '<%= _scope %>';
+  var BASE  = '<%= _scope === "all" ? "/best/all" : "/best" %>';
+  var state = { period: '<%= period %>' };
+
+  function paint(active) {
+    tabs.querySelectorAll('.best-period').forEach(function (b) {
+      var on = b === active;
+      b.className = 'best-period px-3 py-1.5 text-sm rounded transition '
+        + (on ? 'font-semibold text-gray-900' : 'text-gray-400 hover:text-gray-600');
+      b.innerHTML = (on ? '<i class="bi bi-check text-xs"></i>' : '') + b.dataset.label;
+    });
+  }
+
+  async function reload() {
+    body.style.opacity = '0.4';
+    try {
+      var res = await fetch('/best/tab?period=' + encodeURIComponent(state.period) + '&scope=' + SCOPE,
+                            { headers: { 'X-Requested-With': 'fetch' } });
+      if (!res.ok) throw new Error(res.status);
+      body.innerHTML = await res.text();
+      // 새로고침·공유·뒤로가기에서 같은 화면이 나오도록 URL 을 맞춘다
+      history.replaceState(null, '', BASE + '?period=' + encodeURIComponent(state.period));
+    } catch (e) {
+      // 부분 렌더가 실패하면 전체 페이지 이동으로 폴백한다(빈 본문을 남기지 않는다)
+      location.href = BASE + '?period=' + encodeURIComponent(state.period);
+    } finally {
+      body.style.opacity = '';
+    }
+  }
+
+  tabs.querySelectorAll('.best-period').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (state.period === btn.dataset.period) return;
+      state.period = btn.dataset.period;
+      paint(btn);
+      reload();
+    });
+  });
+})();
+</script>

@@ -17,17 +17,24 @@
 `services/catalog/newArrival.js` **한 곳**에만 정의됩니다. 판정 규칙을 바꾸려면 이 파일만 고치고, 소비처는 여기서 만든 술어를 재사용하세요.
 
 ```
-신상품 =  (sale_start_date 가 오늘 이전 AND 오늘로부터 N일 이내)   ← 자동
-       OR FIND_IN_SET('NEW', product_badge)                      ← 관리자 강제 노출(기간 무관)
+기준일 = COALESCE(sale_start_date, DATE(created_at))          ← newProductAnchor()
+
+신상품 =  (기준일이 오늘 이전 AND 오늘로부터 N일 이내)          ← 자동
+       OR FIND_IN_SET('NEW', product_badge)                   ← 관리자 강제 노출(기간 무관)
 ```
 
 | 항목 | 값 |
 |---|---|
 | N (상품) | `system_settings.new_product_days` — 기본 **100** |
 | M (신규 입점 브랜드) | `system_settings.new_brand_days` — 기본 **180** (`categories.onboarded_at` 기준) |
-| 정렬 | `NEW_PRODUCT_ORDER` = 판매시작일 최신순, **NULL 은 뒤로** |
+| 정렬 | `NEW_PRODUCT_ORDER` = 기준일 최신순 |
 
-- **앵커는 `created_at` 이 아니라 `sale_start_date`(판매 시작일)** 입니다. 적재 시각으로 자르면 대량 임포트한 몰의 카탈로그 전체가 신상품이 됩니다.
+- **앵커는 `sale_start_date`(판매 시작일), 없으면 `DATE(created_at)`(적재일)** 입니다.
+  - 원래는 `sale_start_date` 만 봤습니다. 적재 시각으로 자르면 대량 임포트한 몰의 카탈로그 전체가 신상품이 되기 때문인데, 그 대가로 **판매 시작일을 입력하지 않은 몰은 신상품이 0건**이 됐습니다. 몰 빌더로 갓 찍어내 외부 소싱으로 상품을 막 적재한 몰이 정확히 그 경우라, 신상품 랜딩이 통째로 비었습니다(2026-07-22 개선).
+  - 대량 임포트 우려는 **N일 창(기본 100일)이 그대로 막아줍니다** — 100일 지난 적재분은 빠집니다.
+  - 실측(2026-07-22): `sale_start_date` 가 채워진 몰 2 는 **50건 → 50건(변동 없음)**, 전부 NULL 인 몰 28 은 **2건 → 49건**.
+- ⚠️ `COALESCE(...)` 는 **인덱스를 타지 못합니다.** 소비처는 전부 카테고리·브랜드로 먼저 좁힌 뒤 이 술어를 씁니다. 전체 카탈로그를 이 조건만으로 훑는 새 소비처를 만들지 마세요.
+- ⚠️ `isNewProduct(product)`(JS 판정)도 같은 폴백을 씁니다 — 카드용 쿼리에 **`created_at` 을 select 하지 않으면 NEW 뱃지가 조용히 사라집니다**(판정이 false 로 떨어짐).
 - 미래 날짜(예약 발매)는 아직 판매 전이므로 **신상품에서 제외**됩니다.
 - 뱃지를 DB 에 다시 써넣는(materialize) 방식이 아니라 **동적 술어**입니다. 기간이 지난 상품은 배치 없이 자동으로 빠지고, 관리자가 기간 설정을 바꾸면 즉시 반영됩니다.
 - ⚠️ `newProductPredicate()` 의 `sql` 조각과 `params` 는 **반드시 같은 지점에서 함께** 삽입해야 합니다. 소비처가 문자열 이어붙이기 + `params.push()` 방식이라 순서가 어긋나면 **에러 없이 조용히 틀린 결과**가 나옵니다.
@@ -54,10 +61,22 @@
 - `GET /products/category/:categoryId` — 카테고리별 상품
 - `GET /products/brand/:brandId` — 브랜드별 상품
 
-**`/new`(신상품)는 SDUI 랜딩이 우선입니다** (`routes/feature.js:53-77`). `displayService.getPageBySlug(mallId, 'new')` 로 페이지를 찾고 섹션이 1개 이상이면 `user/landing`(섹션 조립)을 렌더합니다. 랜딩이 미시드(또는 섹션 0건)일 때만 `req.featurePreset = { filter:'new', menuKey:'NEW' }` 로 아래 `getList` 목록으로 폴백합니다.
+**`/new`(신상품)는 더 이상 `getList` 를 쓰지 않습니다** (2026-07-22). 전용 컨트롤러 `controllers/newController.js` 가 두 섹션을 렌더합니다.
 
-기능 메뉴(`routes/feature.js`)의 신상품 폴백 화면도 같은 `getList` 를 씁니다. 이때 `req.featurePreset` 이 `filter`·`sort`·`badge`·`menuKey`·`groupId`·`capLimit` 를 주입하며, **사용자 쿼리스트링보다 우선**합니다.
-(베스트는 더 이상 `getList` 를 쓰지 않습니다 — 전용 컨트롤러입니다 → [best.md](./best.md).)
+```
+[쇼케이스]          middleware/menuShowcase 주입 → main_layout 렌더
+[카테고리별 신상품] 카테고리마다 한 줄, 줄당 최대 10개(최신 등록순) → [더보기] /products/category/:id?filter=new
+[브랜드별 신상품]   브랜드마다 한 줄,   줄당 최대 10개(최신 등록순) → [더보기] /products/brand/:id?filter=new
+```
+
+- 뷰: `views/user/new/index.ejs` + 공용 파티셜 `views/partials/storefront/landing_rows.ejs`(베스트와 같은 조각).
+- 데이터: `services/catalog/landingSections.js` (`mode:'new'`) → [best.md](./best.md) §4.
+- **좌측 facet 필터·정렬 탭은 없습니다.** 신상품은 "무엇이 새로 들어왔는지" 훑는 화면이지 조건을 좁혀 찾는 화면이 아닙니다. 필터가 필요하면 각 줄의 [더보기]가 목록 화면으로 데려갑니다.
+- **빈 상태:** 신상품이 0건이면 안내 + [전체 상품 보기]. 갓 찍어낸 몰에서 빈 화면을 남기지 않습니다.
+
+⚠️ **관리자가 페이지 빌더로 만든 SDUI 랜딩(`page.slug='new'`)이 있으면 그쪽이 이깁니다** (`routes/feature.js`). `displayService.getPageBySlug(mallId, 'new')` 로 페이지를 찾고 섹션이 1개 이상이면 `user/landing`(섹션 조립)을 렌더합니다. 운영자가 직접 구성한 화면을 코드가 덮어쓰지 않기 위해서입니다 — 표준 화면으로 되돌리려면 관리자에서 그 페이지를 내리세요. (현재 몰 2 `와이디몰 종합관` 이 이 경우입니다.)
+
+(베스트도 `getList` 를 쓰지 않습니다 — 전용 컨트롤러입니다 → [best.md](./best.md).)
 
 ### 2.2 쿼리 파라미터
 
@@ -70,6 +89,8 @@
 | distributionBadge | ONLINE_ONLY | - |
 | page | 페이지 번호 | 1 |
 | perPage | 10, 20, 30, 50 중 하나 | 30 |
+| **facet 키** | `price` · `brand` · `discount` · `stock` · `benefit` · 속성 facet 코드 소문자. 값은 콤마 구분(최대 30개) | - |
+| **price_min / price_max** | 가격 직접 입력. JS 없이 GET 으로 넘어온다 | - |
 
 - `sale_start` 는 `new` 와 **다릅니다.** `new` = `created_at DESC`(적재 순), `sale_start` = 판매 시작일 최신순(NULL 후순위).
 - `sort` 탭(`SORT_TABS`)에 노출되는 건 6종(인기상품·낮은가격·높은가격·판매량·최근등록·상품평)이고, `sale_start` 는 신상품 필터의 **기본 정렬**로만 쓰입니다.
@@ -95,7 +116,36 @@
 - **가격:** 조회 직후 `dealSvc.applyDeals(products)` 로 활성 특가를 반영합니다.
 - **페이지네이션:** `LIMIT perPage OFFSET (page-1)*perPage`. 프리셋 `capLimit` 가 있으면 총건수와 마지막 페이지 LIMIT 을 상한으로 조입니다.
 - **메뉴 배너:** 프리셋 `menuKey` 가 있으면 `bannerService.getByGroup('menu:{key}')` 1건을 `menuBanner` 로 전달.
-- **전달 변수:** title(카테고리·브랜드명 또는 '전체상품'), products, categories(NORMAL·depth 1), brands, currentCategory, currentBrand, currentSort, currentDistributionBadge, currentProductBadge, currentUser, likedProductIds, categoryBanner, menuBanner, categoryNav, sortTabs, seo, pagination(page, perPage, total, totalPages).
+- **전달 변수:** title(카테고리·브랜드명 또는 '전체상품'), products, categories(NORMAL·depth 1), brands, currentCategory, currentBrand, currentSort, currentDistributionBadge, currentProductBadge, currentUser, likedProductIds, categoryBanner, menuBanner, categoryNav, sortTabs, seo, pagination(page, perPage, total, totalPages), **facets · selectedFacets · brandFacetOptions**.
+
+### 2.4 필터(facet)
+
+설계: `docs/사이트개선/카테고리_브랜드_상품필터_설계.md`. 구현은 `services/catalog/facetService.js` + 뷰 `views/user/products/_facet_filters.ejs`.
+
+**정의는 DB 카탈로그다.** `facet_definition`(필터 정의) · `facet_value_definition`(값) · `category_facet`(카테고리별 부여)의 3테이블이며, 마이그레이션 SQL(`scripts/migrations/20260722_facet_phase*.sql`)로 배포에 싣는다(제품의 일부). 값(`product_attribute`)은 운영 데이터라 스크립트로 넣지 않는다.
+
+| 단계 | 함수 | 하는 일 |
+|---|---|---|
+| ① 노출 결정 | `getFacetsForCategory(categoryId)` | 조상 체인(최대 3뎁스)을 타고 `category_facet` 을 머지. **가까운 조상이 이기고**, 조상 행은 `inherit_to_children=1` 일 때만 내려온다. 매핑이 없으면 **Tier 0 만** 자동 노출 |
+| ② 값 정리 | `getAttributeAvailability(mallId)` → `pruneUnavailable()` | 몰에 실제 값이 있는 속성만 남긴다. `product_attribute` 가 비면 속성 필터가 통째로 숨는다 |
+| ③ 술어 조립 | `buildPredicates(facets, q, {exclude})` | 쿼리스트링 → WHERE 조각. facet 간 AND, facet 내 값 OR |
+
+**Tier 0(항상 붙는 공통 필터)** — `CATEGORY`(칩) · `PRICE`(구간) · `BRAND`(파생) · `DISCOUNT` · `BADGE` · `STOCK`(토글) · `BENEFIT` · `DELIVERY` · `CHANNEL`.
+이 중 `CATEGORY`·`BADGE`·`CHANNEL`·`RATING` 은 기존 컨트롤러가 이미 처리하므로 `HANDLED_ELSEWHERE` 로 술어를 만들지 않는다(이중 적용 방지). `DELIVERY` 는 상품 단위 데이터가 없어 술어가 `null` 이다.
+
+값 해석 규칙:
+
+- **PRICE** — `price=P1,P3`(프리셋) · `price=30000-50000`(직접 구간, 열린 구간 가능) · `price_min`/`price_max`(폼). **폼 입력이 프리셋보다 우선**하고, 여러 구간은 OR. 구간은 `min <= price < max`.
+- **DISCOUNT** — 다중 선택 시 **가장 낮은 하한**만 쓴다(`D10`+`D30` → `discount_rate >= 10`).
+- **BENEFIT** — `DEAL`(활성 `deal_item` EXISTS) · `OUTLET`(`outlet_product.is_visible=1` EXISTS). 쿠폰은 상품 단위 매핑 테이블이 없어 보류.
+- **BRAND** — `brand_category_id IN (...)`.
+- **ATTRIBUTE 계열** — `product_attribute` 에 `attr_name = source_key` 이고 `is_searchable=1` 인 행 EXISTS.
+
+> ⚠️ **술어는 EXISTS/IN 서브쿼리만 쓴다. FROM 에 JOIN 을 추가하면 안 된다.** `getList` 가 카운트 쿼리를 `query.replace('SELECT *','SELECT COUNT(*) as total')` 문자열 치환으로 만들기 때문에, JOIN 을 붙이면 카운트가 조용히 틀어진다.
+
+**브랜드 파셋 카운트** — 브랜드 후보는 고정 목록이 아니라 "지금 조건에서 상품이 있는 브랜드 상위 30개 + 건수"다. 몰 전체 브랜드(1,300여 개)를 뿌리면 대부분 0건이고 DOM 만 커진다. 집계 쿼리는 **`exclude: ['BRAND']` 로 자기 자신을 뺀 술어**로 만든다 — 빼지 않으면 브랜드 하나를 고르는 순간 나머지가 전부 0으로 접힌다.
+
+**뷰** — `_facet_filters.ejs` 가 `ui_type` 에 따라 위젯 4종(알약·사이즈 격자·색상 스와치·토글)을 그린다. 선택 조건은 상단에 해제 가능한 칩으로, 값이 많은 필터는 `+N개` 로 접는다. URL 조립은 `list.ejs` 의 `_url(overrides)`(URLSearchParams) 하나로 통일돼 있다.
 
 ---
 

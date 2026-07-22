@@ -16,7 +16,7 @@
 
 | # | 과제 | 현재 상태 |
 |---|---|---|
-| 1 | **성별·나이 세그먼트 산출** | 구조는 완비(`best_ranking.gender`·`age_band`, `users.gender`). 배치가 `('ALL','ALL')` 한 조합만 채워 **데이터 0건** → 고객 화면 셀렉트가 자동 `disabled`. `gender <> 'ALL'` 행이 하나라도 생기면 `bestController.segmentsAvailable` 이 **저절로 켠다** — 배치만 확장하면 화면·스키마는 그대로다 |
+| 1 | **성별·나이 세그먼트 산출** | 구조는 완비(`best_ranking.gender`·`age_band`, `users.gender`). 배치가 `('ALL','ALL')` 한 조합만 채워 **데이터 0건**. ⚠️ **고객 화면의 셀렉트 UI 는 2026-07-22 개편에서 걷어냈다** — 늘 `disabled` 인 채 자리만 차지했다. 스키마·배치·`getRanking()` 파라미터는 그대로이므로 배치를 확장한 뒤 **UI 만 다시 붙이면 된다**(구 `segmentsAvailable` 은 git 이력 참고) |
 | 2 | **CUSTOM 그룹 산출** | `best_group.type='CUSTOM'` 은 정의돼 있으나 `groupFilter()` 가 **산출에서 제외**한다. `condition_json` 스키마(뱃지·가격대 등) 확정이 선행 |
 | 3 | **급상승 랭킹 화면** | `prev_rank_no` 는 배치가 이미 저장 중. **화면만 만들면 된다** |
 
@@ -30,7 +30,8 @@
 
 | 폐기 항목 | 이유 |
 |---|---|
-| **`/ranking` 별도 메뉴** | `/best` 로 **301 통합**됐다. `mall_feature_menu` 에서 OFF. 같은 엔진을 두 화면으로 태우지 않는다 |
+| **`/ranking` 별도 메뉴** | `/best` 로 **301 통합**됐다. 2026-07-22 에 카탈로그(`feature_menu`)·몰 오버라이드(`mall_feature_menu`) 행까지 **삭제**했다(`scripts/migrations/20260722_drop_ranking_feature_menu.sql`). OFF 로만 두니 관리자 [메뉴 관리]·[메뉴 미리보기]에 계속 뜨고, 새로 찍어내는 몰마다 켤 수 있는 죽은 메뉴가 하나씩 생겼다. **라우트 301 은 유지**(북마크 보존) |
+| **고객 화면의 그룹 탭** | 탭 목록이 곧 `best_group` 이라 운영자가 그룹을 만들지 않은 몰(= 갓 찍어낸 몰)에는 '전체' 하나뿐이었다. 카테고리별·브랜드별 섹션이 대체한다(`services/catalog/landingSections.js` — 설정 없이 조회 시점에 파생). `best_group` 자체는 배치·홈 섹션 탭으로 계속 쓴다 |
 | **`product_view_daily` 기간별 조회수 집계** | `best_ranking` 스냅샷 배치가 대신한다. 조회 가중치(`weight_view`)를 0 보다 올리면 일간·실시간 랭킹에도 **누적 조회수**(`products.view_count`)가 섞인다는 점만 유의 |
 
 ### 알려진 결함
@@ -52,6 +53,15 @@
 
 - **THEME 카테고리 id=5 · 6 이 DB 에서 여전히 `is_active=1`** — 계획의 비활성화 처리가 미이행이다. 코드가 `/best` · `/new` 로 리다이렉트하므로 고객 노출 경로는 막혀 있으나 데이터는 남아 있다.
 - **브랜드 찜이 `mall_id` 를 검증하지 않는다** (`controllers/likeController.js`) — 상세는 이 문서 [브랜드](#브랜드) 절 참고.
+
+### 화면 개편 (2026-07-22)
+
+- `/new` 는 상품목록(`getList`) 재사용을 **끊었다**. 전용 컨트롤러 `controllers/newController.js` + `views/user/new/index.ejs`.
+  - 구성: [카테고리별 신상품] → [브랜드별 신상품]. 줄당 최대 10개(최신 등록순), 더 있으면 [더보기].
+  - **좌측 facet 필터·정렬 탭 제거.** 신상품은 훑는 화면이지 좁혀 찾는 화면이 아니다.
+  - ⚠️ SDUI 랜딩(`page.slug='new'`)이 있으면 여전히 **그쪽이 이긴다**(운영자가 만든 화면을 코드가 덮지 않는다). 몰 2 가 이 경우다.
+- **신상품 기준일에 `created_at` 폴백을 넣었다** (`newArrival.newProductAnchor`).
+  `COALESCE(sale_start_date, DATE(created_at))`. 판매 시작일을 입력하지 않은 몰(= 몰 빌더로 갓 찍어내 외부 소싱으로 적재한 몰)에서 신상품이 0건이 되던 문제. 실측: 몰 2 = 50건(변동 없음) / 몰 28 = 2건 → 49건.
 
 ### 현재 데이터 상태 (원문 premise 정정)
 

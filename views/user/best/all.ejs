@@ -1,0 +1,24 @@
+<%
+  /*
+   * 전체 랭킹 — /best 의 [BEST 10 더보기] 착지점.
+   * 같은 스냅샷을 100위까지 펼친다. 카테고리별·브랜드별 줄은 /best 에만 있다.
+   *
+   * locals: period, periods{}, top{products,calculatedAt,isEmpty,hasMore}
+   */
+%>
+
+<div class="max-w-7xl mx-auto px-4 pt-6">
+  <nav class="text-sm text-gray-400">
+    <a href="/best" class="hover:text-gray-700 no-underline">베스트/랭킹</a>
+    <i class="bi bi-chevron-right text-[10px] mx-1"></i>
+    <span class="text-gray-600">전체 랭킹</span>
+  </nav>
+</div>
+
+<%- include('./_best_block', {
+      heading: '전체 랭킹',
+      lead: '판매와 좋아요를 합산해 매긴 인기 상품 순위입니다.',
+      period, periods, top,
+      scope: 'all',
+      moreUrl: null,
+    }) %>

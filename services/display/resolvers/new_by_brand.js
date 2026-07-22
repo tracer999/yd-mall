@@ -28,12 +28,13 @@ async function resolve({ shared, config, locals }) {
         SELECT c.id, c.name, c.logo_image_path, c.onboarded_at, COUNT(p.id) AS new_count
         FROM categories c
         JOIN products p
-          ON p.brand_category_id = c.id AND ${P_STATUS} AND ${vis} AND ${npB.sql}
-        WHERE c.type = 'BRAND' AND c.is_active = 1 AND c.mall_id = ?
+          ON p.brand_category_id = c.id AND p.mall_id = ?
+         AND ${P_STATUS} AND ${vis} AND ${npB.sql}
+        WHERE c.type = 'BRAND' AND c.is_active = 1 AND c.mall_id IN (0, ?)
         GROUP BY c.id, c.name, c.logo_image_path, c.onboarded_at
         ORDER BY new_count DESC, c.display_order ASC, c.id ASC
         LIMIT ?
-    `, [...npB.params, mallId, brandLimit]);
+    `, [mallId, ...npB.params, mallId, brandLimit]);
 
     if (!brands || !brands.length) return null;
 

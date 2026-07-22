@@ -38,7 +38,8 @@ const FEATURE_CATALOG = [
     ['EVENT',               '이벤트&혜택',   '/event',           'gnb',         'event',       0, 0, 0,  5, '이벤트·쿠폰·혜택'],
     ['EXHIBITION',          '기획전',        '/exhibition',      'gnb',         'exhibition',  0, 0, 0,  6, '시즌·브랜드·테마전'],
     ['BRAND',               '브랜드',        '/brands',          'gnb',         'brand',       1, 0, 0,  7, '브랜드별 상품 탐색'],
-    ['RANKING',             '랭킹',          '/ranking',         'gnb',         'ranking',     0, 0, 0,  8, '카테고리별 순위'],
+    // RANKING(랭킹)은 폐기됐다 — 베스트(BEST)가 랭킹 엔진을 흡수했고 /ranking 은 /best 로 301 한다.
+    // 카탈로그에 되살리지 말 것. (제거: scripts/migrations/20260722_drop_ranking_feature_menu.sql)
     ['OUTLET',              '아울렛',        '/outlet',          'gnb',         'outlet',      0, 0, 0,  9, '할인/재고 소진'],
     ['COUPON',              '쿠폰',          '/coupon',          'gnb',         'coupon',      0, 0, 0, 10, '다운로드 쿠폰'],
     ['MEMBERSHIP',          '멤버십',        '/membership',      'gnb',         'membership',  0, 0, 0, 11, '등급·적립·혜택'],

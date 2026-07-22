@@ -1,34 +1,52 @@
-const pool = require('../config/db');
 const bestRankingService = require('../services/best/bestRankingService');
+const landingSections = require('../services/catalog/landingSections');
 
 /*
  * 베스트/랭킹 (고객)
  *
- * productController.getList 를 재사용하지 않는다. 목록형 화면과 계약이 다르다:
- *   - 순위 번호(1..N)와 "N시 기준" 산출 시각이 화면의 본질이다
- *   - 그룹 탭 × 기간 탭 × 세그먼트 필터가 상태를 이룬다
- *   - 페이지네이션이 없다(rank_limit 까지 한 화면)
- * getList 에 이걸 다 밀어넣으면 두 화면이 서로를 망가뜨린다.
+ * 화면 구조 (2026-07-22 개편)
+ *   [쇼케이스]        상단 배너·상품 캐러셀 — 이 컨트롤러가 아니라 middleware/menuShowcase 가 주입한다
+ *   [BEST 10]         전체 랭킹 상위 10 + 순위 번호. 기간 탭(실시간·일간·주간·월간)만 붙는다
+ *   [카테고리별 BEST] 카테고리마다 한 줄, 줄당 최대 10개
+ *   [브랜드별 BEST]   브랜드마다 한 줄, 줄당 최대 10개
  *
- * 데이터는 배치가 만든 스냅샷(best_ranking)에서 읽는다. 여기서 점수를 계산하지 않는다.
+ * 예전에는 그룹 탭(전체·카테고리·브랜드)으로 한 화면에서 갈아끼웠다. 탭을 눌러야만 다른
+ * 카테고리가 보이니 스크롤만으로는 아무것도 알 수 없었고, 탭 목록이 곧 `best_group` 이라
+ * **운영자가 그룹을 만들어 두지 않은 몰(= 갓 찍어낸 몰)에는 '전체' 하나뿐**이었다.
+ * 지금은 카테고리·브랜드를 조회 시점에 파생하므로 설정 없이도 화면이 채워진다.
+ *
+ * 성별·나이 세그먼트 셀렉트도 걷어냈다. 배치가 ('ALL','ALL') 조합만 채워서 늘 비활성이었다.
+ * 스키마(best_ranking.gender·age_band)와 배치는 그대로 살아 있으니, 세그먼트를 켤 때
+ * 다시 붙이면 된다.
+ *
+ * BEST 10 데이터는 배치가 만든 스냅샷(best_ranking)에서 읽는다. 여기서 점수를 계산하지 않는다.
+ * 반면 카테고리별·브랜드별은 스냅샷에 없으므로 조회 시점에 계산한다(landingSections 주석 참고).
  */
 
-const SEGMENT_AGE_BANDS = ['10', '20', '30', '40', '50', '60'];
+/** BEST 10 — 이름 그대로 10개. 더 있으면 전체 랭킹(/best/all)으로 넘긴다 */
+const TOP_LIMIT = 10;
 
-/**
- * 세그먼트(성별·나이대) 필터를 쓸 수 있는가?
- *
- * users 에 성별이 없어서 현재 배치는 ('ALL','ALL') 만 채운다. 그래서 필터를 켜면
- * 무조건 빈 랭킹이 나온다 — UI 는 만들되 **비활성**으로 렌더하고, 배치가 세그먼트
- * 행을 채우기 시작하면 저절로 켜진다. 플래그를 코드에 박지 않는 이유다.
- */
-async function segmentsAvailable(mallId) {
-    const [[row]] = await pool.query(
-        `SELECT COUNT(*) AS c FROM best_ranking
-          WHERE mall_id = ? AND (gender <> 'ALL' OR age_band <> 'ALL') LIMIT 1`,
-        [mallId]
-    );
-    return Number(row.c) > 0;
+/** 전체 랭킹 화면에서 한 번에 보여줄 최대 순위 */
+const ALL_LIMIT = 100;
+
+/** 랭킹 그룹 중 '전체'. 없으면 첫 그룹으로 폴백한다(그룹이 0개면 null) */
+function pickAllGroup(groups) {
+    return groups.find(g => g.group_type === 'ALL') || groups[0] || null;
+}
+
+/** BEST 10 슬롯을 채운다. 그룹이 하나도 없으면 빈 결과(화면은 카테고리·브랜드 줄만 렌더) */
+async function loadTop({ mallId, hasUser, period, limit }) {
+    const groups = await bestRankingService.getGroups(mallId);
+    const group = pickAllGroup(groups);
+    if (!group) return { products: [], calculatedAt: null, isEmpty: true, hasMore: false };
+
+    // limit + 1 건을 읽어 "더 있는지"를 판정한다 (COUNT 쿼리를 따로 쏘지 않는다)
+    const { products, calculatedAt } = await bestRankingService.getRanking({
+        mallId, groupId: group.id, period, hasUser, limit: limit + 1,
+    });
+    const hasMore = products.length > limit;
+    const sliced = hasMore ? products.slice(0, limit) : products;
+    return { products: sliced, calculatedAt, isEmpty: sliced.length === 0, hasMore };
 }
 
 /** GET /best — 베스트/랭킹 */
@@ -36,39 +54,22 @@ async function getIndex(req, res, next) {
     try {
         const mallId = req.mallId || 1;
         const hasUser = !!req.user;
-
-        const groups = await bestRankingService.getGroups(mallId);
-        if (!groups.length) {
-            // 그룹이 하나도 없으면 보여줄 탭이 없다. 준비중 랜딩으로 되돌린다.
-            return res.redirect('/products?sort=best');
-        }
-
         const period = bestRankingService.normalizePeriod(req.query.period);
-        const requested = Number(req.query.group) || 0;
-        const group = groups.find(g => g.id === requested) || groups[0];
 
-        const segOk = await segmentsAvailable(mallId);
-        const gender = segOk && ['M', 'F'].includes(req.query.gender) ? req.query.gender : 'ALL';
-        const ageBand = segOk && SEGMENT_AGE_BANDS.includes(req.query.age) ? req.query.age : 'ALL';
+        const [top, categoryRows, brandRows] = await Promise.all([
+            loadTop({ mallId, hasUser, period, limit: TOP_LIMIT }),
+            landingSections.getCategoryRows(mallId, { hasUser, mode: 'best' }),
+            landingSections.getBrandRows(mallId, { hasUser, mode: 'best' }),
+        ]);
 
-        const { products, calculatedAt, isEmpty } = await bestRankingService.getRanking({
-            mallId, groupId: group.id, period, hasUser, gender, ageBand, limit: 100,
-        });
-
-        // 상단 '추천 베스트' 캐러셀은 middleware/menuShowcase 가 주입하고 main_layout 이 렌더한다.
         res.render('user/best/index', {
             title: '베스트/랭킹',
-            groups,
-            group,
             period,
             periods: bestRankingService.PERIODS,
-            products,
-            calculatedAt,
-            isEmpty,
-            segmentsEnabled: segOk,
-            gender,
-            ageBand,
-            ageBands: SEGMENT_AGE_BANDS,
+            top,
+            topLimit: TOP_LIMIT,
+            categoryRows,
+            brandRows,
             seo: Object.assign({}, res.locals.seo, {
                 title: '베스트/랭킹',
                 description: '판매·좋아요를 합산한 인기 상품 순위입니다.',
@@ -80,37 +81,51 @@ async function getIndex(req, res, next) {
 }
 
 /**
- * GET /best/tab — 탭 전환용 부분 렌더(AJAX)
- * 그룹·기간을 바꿀 때 전체 페이지를 다시 그리지 않는다.
+ * GET /best/tab — BEST 10 부분 렌더(AJAX)
+ * 기간 탭을 바꿀 때 아래 카테고리·브랜드 줄까지 다시 그리지 않는다(그 줄들은 기간과 무관하다).
  */
 async function getTab(req, res, next) {
     try {
         const mallId = req.mallId || 1;
-        const hasUser = !!req.user;
-
-        const groups = await bestRankingService.getGroups(mallId);
-        const requested = Number(req.query.group) || 0;
-        const group = groups.find(g => g.id === requested) || groups[0];
-        if (!group) return res.status(404).json({ error: 'no group' });
-
         const period = bestRankingService.normalizePeriod(req.query.period);
-        const segOk = await segmentsAvailable(mallId);
-        const gender = segOk && ['M', 'F'].includes(req.query.gender) ? req.query.gender : 'ALL';
-        const ageBand = segOk && SEGMENT_AGE_BANDS.includes(req.query.age) ? req.query.age : 'ALL';
+        const limit = String(req.query.scope) === 'all' ? ALL_LIMIT : TOP_LIMIT;
 
-        const { products, calculatedAt, isEmpty } = await bestRankingService.getRanking({
-            mallId, groupId: group.id, period, hasUser, gender, ageBand, limit: 100,
-        });
+        const top = await loadTop({ mallId, hasUser: !!req.user, period, limit });
 
         res.render('user/best/_ranking_list', {
             layout: false,
-            products,
-            calculatedAt,
-            isEmpty,
+            products: top.products,
+            calculatedAt: top.calculatedAt,
+            isEmpty: top.isEmpty,
         });
     } catch (e) {
         next(e);
     }
 }
 
-module.exports = { getIndex, getTab };
+/**
+ * GET /best/all — 전체 랭킹 (BEST 10 의 [더보기])
+ * 같은 스냅샷을 100위까지 펼쳐 보여준다. 기간 탭은 같고, 카테고리·브랜드 줄은 없다.
+ */
+async function getAll(req, res, next) {
+    try {
+        const mallId = req.mallId || 1;
+        const period = bestRankingService.normalizePeriod(req.query.period);
+        const top = await loadTop({ mallId, hasUser: !!req.user, period, limit: ALL_LIMIT });
+
+        res.render('user/best/all', {
+            title: '전체 랭킹',
+            period,
+            periods: bestRankingService.PERIODS,
+            top,
+            seo: Object.assign({}, res.locals.seo, {
+                title: '전체 랭킹',
+                description: '판매·좋아요를 합산한 인기 상품 전체 순위입니다.',
+            }),
+        });
+    } catch (e) {
+        next(e);
+    }
+}
+
+module.exports = { getIndex, getTab, getAll };

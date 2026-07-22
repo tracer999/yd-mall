@@ -1,0 +1,73 @@
+<%
+  /*
+   * 카탈로그 랜딩의 "○○별 섹션" — 줄 하나 = 카테고리(또는 브랜드) 하나.
+   *
+   * /best 의 [카테고리별 BEST]·[브랜드별 BEST] 와 /new 의 [카테고리별 신상품]·[브랜드별 신상품]
+   * 네 곳이 같은 마크업을 쓴다. 데이터는 services/catalog/landingSections 가 만든다.
+   *
+   * locals:
+   *   sectionTitle : 섹션 제목 (예: '카테고리별 BEST')
+   *   sectionDesc  : 제목 아래 보조 설명 (선택)
+   *   rows         : [{ id, name, logo?, products[], hasMore, moreUrl }]
+   *   variant      : 'category' | 'brand'  — 브랜드는 줄 머리에 로고를 붙인다
+   *   surface      : 'white' | 'gray'      — 섹션 배경 (교차 배치용)
+   *
+   * 상품은 모바일에서 가로 스크롤, PC 에서 5열 그리드다. 줄당 최대 10개라 PC 에서는
+   * 2행으로 떨어진다 — 카드 폭을 유지한 채 한 줄에 10개를 밀어 넣으면 너무 작아진다.
+   */
+  const _rows = (typeof rows !== 'undefined' && rows) ? rows : [];
+  const _variant = (typeof variant !== 'undefined' && variant) ? variant : 'category';
+  const _surface = (typeof surface !== 'undefined' && surface) ? surface : 'white';
+  const _desc = (typeof sectionDesc !== 'undefined') ? sectionDesc : null;
+%>
+<% if (_rows.length) { %>
+<section class="<%= _surface === 'gray' ? 'bg-gray-50' : 'bg-white' %> py-10 md:py-12">
+  <div class="max-w-7xl mx-auto px-4">
+    <div class="mb-7">
+      <h2 class="text-xl md:text-2xl font-bold text-gray-900"><%= sectionTitle %></h2>
+      <% if (_desc) { %>
+        <p class="mt-1 text-sm text-gray-500"><%= _desc %></p>
+      <% } %>
+    </div>
+
+    <div class="space-y-10">
+      <% _rows.forEach(function (row) { %>
+        <div>
+          <div class="flex items-end justify-between gap-3 mb-4 pb-2 border-b border-gray-100">
+            <a href="<%= row.moreUrl %>" class="flex items-center gap-3 no-underline group min-w-0">
+              <% if (_variant === 'brand') { %>
+                <span class="h-10 w-10 rounded-full bg-white border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                  <% if (row.logo) { %>
+                    <img src="<%= row.logo %>" alt="<%= row.name %>" class="max-h-full max-w-full object-contain">
+                  <% } else { %>
+                    <span class="text-[11px] font-bold text-gray-400"><%= String(row.name).slice(0, 2) %></span>
+                  <% } %>
+                </span>
+              <% } %>
+              <span class="text-base md:text-lg font-bold text-gray-900 truncate group-hover:text-[color:var(--gh-primary)] transition-colors">
+                <%= row.name %>
+              </span>
+            </a>
+
+            <%# 더보기는 실제로 더 있을 때만. 10개가 전부인데 눌러 봤자 같은 화면이면 신뢰를 깎는다 %>
+            <% if (row.hasMore) { %>
+              <a href="<%= row.moreUrl %>"
+                 class="shrink-0 text-sm text-gray-500 hover:text-gray-900 no-underline whitespace-nowrap">
+                더보기 <i class="bi bi-chevron-right text-xs"></i>
+              </a>
+            <% } %>
+          </div>
+
+          <div class="flex gap-3 sm:gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-5 lg:gap-y-8 lg:overflow-visible">
+            <% row.products.forEach(function (product) { %>
+              <div class="w-40 shrink-0 lg:w-auto">
+                <%- include('../product_card', { product: product, opts: { imageHeightClass: 'h-44', showPriceBadge: false, showDistBadge: false } }) %>
+              </div>
+            <% }); %>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+</section>
+<% } %>

@@ -1,11 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/db');
-const productController = require('../controllers/productController');
 const bestController = require('../controllers/bestController');
+const newController = require('../controllers/newController');
 const dealController = require('../controllers/dealController');
 const displayService = require('../services/display/displayService');
-const membershipInfo = require('../services/membership/membershipInfo');
 const evaluationService = require('../services/membership/evaluationService');
 
 /*
@@ -15,17 +13,10 @@ const evaluationService = require('../services/membership/evaluationService');
  * 관리자에서는 사용 여부(is_enabled)·표시명·순서만 관리한다.
  * (docs/사이트개선/frontend_dev_plan.md §5)
  *
- * 기존 상품목록 컨트롤러(productController.getList)를 얇게 재사용한다.
- * Express 5의 req.query 는 getter 이므로 변형하지 않고 req.featurePreset 으로 주입한다.
+ * 각 메뉴는 전용 컨트롤러가 렌더한다. 예전에는 상품목록(productController.getList)에
+ * req.featurePreset 을 심어 재사용했는데, 목록형 화면의 계약(정렬 탭·facet 필터·페이지네이션)이
+ * 랜딩형 화면과 맞지 않아 떼어냈다.
  */
-
-/** 상품목록 컨트롤러에 넘길 프리셋을 심는 미들웨어 */
-function preset(featurePreset) {
-    return (req, res, next) => {
-        req.featurePreset = featurePreset;
-        next();
-    };
-}
 
 /*
  * 베스트/랭킹 — 판매·좋아요를 합산한 자동 순위 + 관리자 수동 고정(MD 픽).
@@ -39,17 +30,19 @@ function preset(featurePreset) {
  * 순위 번호·기준 시각·그룹×기간 탭은 getList 의 계약에 없다.
  */
 router.get('/best', bestController.getIndex);
+router.get('/best/all', bestController.getAll);
 router.get('/best/tab', bestController.getTab);
 
 /*
- * 신상품 — 판매 시작일(sale_start_date) 기준 100일 이내 + NEW 뱃지 강제 노출.
- *   (설계: docs/사이트개선/new_arrivals_dev_plan.md)
+ * 신상품 — 기준일(판매 시작일, 없으면 적재일) 100일 이내 + NEW 뱃지 강제 노출.
+ *   판정은 services/catalog/newArrival 한 곳에서만 한다.
  *
- * 예전에는 NEW 뱃지만 봤다. created_at(적재 시각)으로 자르면 "신상품 = 전체 카탈로그"가
- * 되기 때문인데, 판매 시작일이라는 앵커가 생겨 자동 판정이 가능해졌다. 뱃지는 기간과
- * 무관하게 밀고 싶은 상품을 위한 수동 수단으로 남는다(services/catalog/newArrival).
+ * 화면은 [카테고리별 신상품] + [브랜드별 신상품] 두 섹션이다(newController).
+ * 예전에는 상품목록(productController.getList)을 재사용해 좌측 facet 필터가 딸려 왔다.
  *
- * 화면은 SDUI 랜딩(page slug='new')이 있으면 그것을, 없으면 기존 목록으로 폴백한다.
+ * ⚠️ 관리자가 페이지 빌더로 만든 SDUI 랜딩(page slug='new')이 있으면 **그쪽이 이긴다**.
+ *    운영자가 직접 구성한 화면을 코드가 덮어쓰면 안 된다. 표준 화면으로 되돌리려면
+ *    관리자에서 그 페이지를 내리면 된다.
  */
 router.get('/new', async (req, res, next) => {
     try {
@@ -72,9 +65,8 @@ router.get('/new', async (req, res, next) => {
         return next(e);
     }
 
-    // 랜딩 미시드(또는 섹션 0건) → 기존 목록 화면으로 폴백
-    req.featurePreset = { filter: 'new', menuKey: 'NEW' };
-    return productController.getList(req, res);
+    // 랜딩 미시드(또는 섹션 0건) → 표준 신상품 화면
+    return newController.getIndex(req, res, next);
 });
 
 /*
