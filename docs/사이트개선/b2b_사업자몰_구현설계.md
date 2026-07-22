@@ -177,6 +177,19 @@ app.js:211 부근 res.locals              → res.locals.b2b
   `normalizeBusinessInput / validateBusiness / saveBusinessProfile` 을 profileService와 동일한 시그니처로 만든다.
 - 로그인은 기존 `/auth/login` 하나. 로그인 후 §2 미들웨어가 컨텍스트를 붙인다.
 
+**로그인 자격은 상호 배타다** (확정 2026-07-22, `routes/auth.js` `resolveLoginMode`). 화면은 하나지만 `사업자 회원으로 로그인` 체크박스로 자격을 밝히게 하고, 서버가 실제 자격과 대조해 어긋나면 거부한다.
+
+| 체크박스 | `business_profile` | 결과 |
+|---|---|---|
+| 체크 | 있음 | 통과 (미승인이면 `/b2b/status` 로) |
+| 체크 | 없음 | **거부** — "사업자 회원이 아닙니다" |
+| 미체크 | 있음 | **거부** — "기업회원 계정입니다" |
+| 미체크 | 없음 | 통과 (일반회원) |
+
+판정 기준은 **`business_profile` 행의 존재 하나**이며, 관리자 회원 관리 화면의 분리 기준(`controllers/admin/userController.js` `ONLY_GENERAL`)과 **같은 기준을 쓴다.** 두 곳이 갈라지면 "회원 관리 목록에는 없는데 일반 로그인은 되는" 회원이 생긴다.
+
+승인 전(PENDING·UNDER_REVIEW·REJECTED)에도 로그인 자체는 되지만 §2.3 판정이 `active=false` 라 일반가로 산다 — **자격과 가격은 별개다.**
+
 ### 3.2 입력 항목
 
 | 필드 | 필수 | 검증 |
@@ -1117,7 +1130,7 @@ B2B 판매 여부      ● 사용   ○ 미사용
 | 3 | 기한초과 주문 자동취소 | 스케줄러(`node-cron`) 도입 vs 관리자 수동 일괄취소. **재고를 실차감하므로 2단계에서 반드시 결정** |
 | 4 | 사업자등록증 파일 저장 위치 | `public/` 밖 + 권한 라우트 스트리밍(권장) vs 랜덤 파일명. `middleware/upload.js` 경로 분기 필요 |
 | 5 | B2B 배송비 | `shipping_policy` 재사용 vs B2B 전용 정책 테이블 — 재사용 우선 검토 |
-| 6 | 거래 컨텍스트 전환 | 잠정: **승인 사업자는 항상 B2B 컨텍스트**(개인 구매 전환 없음). 원문 §4.2의 토글이 필요하면 헤더 스위치 + `carts.cart_type` 분리 보관으로 확장 가능 |
+| 6 | 거래 컨텍스트 전환 | ✅ **확정(2026-07-22) — 전환 없음.** 기업회원과 일반회원은 **로그인 자체가 상호 배타**다(`routes/auth.js` `resolveLoginMode`): 사업자 프로필이 있는 계정은 `사업자 회원으로 로그인` 을 체크해야만 들어오고, 없는 계정이 체크하면 거부된다. 따라서 승인 사업자는 항상 B2B 컨텍스트이며 `req.session.b2bMode` · `PERSONAL_MODE` · `POST /b2b/mode` 는 제거했다. 판정은 `middleware/b2bContext.buildContext()` 한 곳뿐이다 |
 | 7 | 견적서 직인 이미지 | B2B 설정 화면에 업로드 항목 추가 여부 (선택) |
 
 ---
