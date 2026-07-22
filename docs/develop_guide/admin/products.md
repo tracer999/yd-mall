@@ -70,6 +70,24 @@
 - **표시:** 썸네일(main_image), 상품명/공급사/카테고리·뱃지, 재고(stock), **판매시작일(sale_start_date)**, 정가(original_price), 판매가(price + 할인율), 판매 상태(status), 노출관리(visibility 셀렉트), 관리(수정/삭제)
 - **뷰 전달:** `products`, `keyword`, `filters`, `filterCategories`, `filterBrands`, `selectedCategory`, `selectedBrand`, `pagination`, `title: '상품 관리'`
 
+#### 카테고리·브랜드 셀렉트 옵션 — `categoryScope.usedCategoryOptions()`
+
+`filterCategories` / `filterBrands` 는 **그 몰의 상품이 실제로 쓰는 것(+조상)** 만 담습니다. 카테고리·브랜드는 글로벌화(`mall_id = 0`) 이후 전 몰 공용 한 벌(NORMAL 2,348 · BRAND 1,379)이라, 그대로 그리면 셀렉트가 수천 줄이 되고 그중 대부분은 이 몰에 상품이 없어 **골라도 결과가 항상 0건**입니다.
+
+```js
+const [filterCategories, filterBrands] = await Promise.all([
+    usedCategoryOptions(MALL_ID),
+    usedCategoryOptions(MALL_ID, { brand: true }),
+]);
+```
+
+- 기준은 `validCategoryIdSet`(= `products` 가 참조하는 id + 조상)입니다. **스토어프론트 숨김(`mall_category_visibility`)은 빼지 않습니다** — 숨긴 카테고리의 상품도 관리자는 그룹·특가에 담을 수 있어야 합니다.
+- `includeIds` 로 **이미 저장된 선택값**을 항상 살려 둡니다. 지금 상품이 없다고 목록에서 빼면, 폼을 다시 저장할 때 그 값이 조용히 사라집니다(기획전 `scope.categoryId` 가 이 경우).
+- 같은 헬퍼를 **쇼핑특가·상품그룹·추천그룹·기획전의 상품 조회 팝업**이 함께 씁니다. 화면마다 따로 쿼리하면 기준이 어긋납니다.
+
+> **브랜드는 셀렉트로 쓰지 마세요.** 1,300개가 넘어 몰 하나로 좁혀도 드롭다운으로는 읽을 수 없습니다. 검색형 공용 위젯 `views/partials/admin/brand_picker.ejs` 를 include 하고(필수 인자 `id` = 값을 담는 hidden input 의 id), 값은 예전 select 와 동일하게 `document.getElementById(id).value` 로 읽습니다. 비울 때만 `window.ydBrandPicker.reset(id)` 를 써야 합니다 — hidden 에 값만 지우면 보이는 글자가 남습니다.
+> 데이터 출처는 `/admin/brands/search.json` 이고, 이쪽도 **이 몰에 상품이 있는 브랜드만**(`EXISTS products`) 돌려줍니다. 그래서 검색어 없이 클릭만 해도 목록이 뜹니다.
+
 ### 3.1 검색·필터 (쿼리스트링)
 
 | 파라미터 | 허용값 | 동작 |

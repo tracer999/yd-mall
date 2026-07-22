@@ -114,6 +114,8 @@
 - **빼기(POST /:id/products/:mappingId/delete):** `exhibition_product` 행 삭제
 - **상품 검색(GET /product-search?q=):** `products` LIKE 검색 20건, `{ products: [...] }` JSON (519-538행)
 
+> **폼의 카테고리 선택지(`productCategories`)** 는 `categoryScope.usedCategoryOptions(mallId, { includeIds: [scope.categoryId] })` 다 — 이 몰 상품이 실제로 쓰는 분류(+조상)만 준다. 상품 없는 분류로 기획전을 만들면 늘 빈 기획전이기 때문. `includeIds` 로 **이미 저장된 대상 분류는 항상 살려 둔다**(빠지면 재저장 시 조용히 풀린다). 브랜드는 원래부터 검색형(`/admin/brands/search.json`) 이고, 그 위젯이 `partials/admin/brand_picker` 로 공용화돼 쇼핑특가·상품그룹·추천그룹도 같은 것을 쓴다 — [상품 관리 §3](products.md) 참고.
+
 ---
 
 ## 5. DB 테이블

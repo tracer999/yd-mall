@@ -74,6 +74,7 @@ Express 5 는 `:id(\d+)` 를 지원하지 않아 `/new` 를 `/:id` 보다 먼저
 
 - **담기(`postAddItems`, AJAX):** `product_ids[]` 를 받아 이 몰 소유 상품만 남기고, 이미 담긴 것은 **조용히 건너뜁니다**(`{ added, skipped }` 반환). 유니크 `uq_rgi_group_product` 가 최종 방어선입니다.
 - **상품 조회 팝업(`getProductSearch`):** **검색어는 선택입니다** — 카테고리·브랜드 필터만으로도 조회할 수 있어야 합니다. 필터: `q`(name·product_code), `category_id`, `brand_id`, `in_stock`(y/n), `visibility`(PUBLIC/HIDDEN/MEMBER_ONLY). 이미 담긴 상품은 후보에서 제외. 최대 100건(`limited` 플래그).
+- **팝업의 카테고리·브랜드 선택지:** 카테고리는 `categoryScope.usedCategoryOptions(mallId)`, 브랜드는 검색형 위젯 `partials/admin/brand_picker`(`/admin/brands/search.json`). 둘 다 **이 몰에 상품이 있는 것만** 줍니다 — 근거와 주의사항은 [상품 관리 §3](products.md) 참고. 쇼핑특가·상품그룹·기획전도 동일합니다.
 - **순서(`postReorderItems`):** 드래그 순서를 1..N 으로 재기록(트랜잭션).
 - **관리자 목록은 숨김 상품도 보여줍니다.** 고객 화면(`recommendService`)은 `PUBLIC` + 판매중만 그리므로, 숨김 상품을 담아 둔 운영자가 "왜 안 뜨지?"로 헤매지 않도록 **숨김 배지를 달아 그대로 노출**합니다(`recommendGroupController.js:59-63`).
 - 모든 하위 조작은 `ownsGroup(groupId, mallId)` 로 몰 소유를 먼저 확인합니다(요청 위조 차단).

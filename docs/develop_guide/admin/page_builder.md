@@ -230,6 +230,8 @@ UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로
 - **정렬 화이트리스트(`ORDER_MAP`)**: `manual`(= created_at DESC), `newest`, `discount`, `price_asc`, `price_desc`, `views`
 - **배지 값**: `BEST`, `NEW`, `RECOMMEND`, `DEADLINE_SALE`, `GREENHUB_SPECIAL`
 - 조건/정렬 모두 화이트리스트만 허용해 SQL 인젝션을 차단한다.
+
+> **수동 선택 팝업의 카테고리·브랜드 선택지.** 카테고리는 `categoryScope.usedCategoryOptions(mallId)`(이 몰 상품이 실제로 쓰는 것 + 조상), 브랜드는 셀렉트 대신 검색형 공용 위젯 `partials/admin/brand_picker`(데이터는 `/admin/brands/search.json`, 이쪽도 같은 기준)를 쓴다. 쇼핑특가·추천그룹·기획전도 동일 — 근거와 주의사항은 [상품 관리 §3](products.md) 참고.
 - `resolve()` 는 항상 `group.mall_id` 로 상품을 스코프하고, 전시 상태(`P_STATUS`)·노출등급(비로그인 `PUBLIC` 만)을 강제하며 `limit` 상한은 60.
 
 ### 6.2 수동 선택 팝업 (`GET /admin/product-groups/:id/product-search`)

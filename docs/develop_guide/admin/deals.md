@@ -175,6 +175,8 @@ UPDATE deal_item SET sold_qty = sold_qty + ?
 
 > **뱃지는 기간만 봅니다.** 시간창·요일까지 반영하면 타임특가가 하루 23시간 "종료"로 보입니다. 뱃지는 캠페인의 생애주기만 말하고, 시간창·요일은 별도 컬럼으로 표시합니다(`dealController.js:21-23`).
 
+> **상품 조회 팝업의 카테고리·브랜드 선택지.** 카테고리는 `categoryScope.usedCategoryOptions(mallId)`(이 몰 상품이 실제로 쓰는 것 + 조상), 브랜드는 셀렉트 대신 검색형 공용 위젯 `partials/admin/brand_picker`(데이터는 `/admin/brands/search.json`, 이쪽도 같은 기준)를 씁니다. 상품그룹·추천그룹·기획전도 동일 — 근거와 주의사항은 [상품 관리 §3](products.md) 참고.
+
 ### 6.2 기본정보 폼 (`normalizeForm`, `dealController.js:106-152`)
 
 | name | 컬럼 | 검증 |
