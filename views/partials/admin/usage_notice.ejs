@@ -1,0 +1,55 @@
+<%
+  /*
+   * "이 화면에서 만든 것이 어디에 쓰이는가" 안내 카드.
+   *
+   * 상품 그룹·추천 그룹처럼 **여기서는 결과가 안 보이는** 화면용이다. 만든 것이 소비되는
+   * 자리를 모르면 운영자는 그룹만 쌓고 화면은 그대로인 상태에 빠진다. 그래서 제목 아래
+   * 회색 한 줄이 아니라, 좌측 강조바 + 소비처 칩으로 눈에 걸리게 세운다.
+   *
+   * 넘겨받는 값
+   *   heading  (필수) 한 줄 요약. 굵게 나간다.
+   *   chips    (선택) 소비처 이름 배열. 산문 대신 명사 덩어리로 보여 준다.
+   *   chipsLabel(선택) 칩 앞 라벨. 기본 '노출되는 곳'
+   *   note     (선택) 보조 설명 한 줄.
+   *   link     (선택) { href, label, blank } 소비처로 바로 가는 링크.
+   */
+  var _heading = heading;
+  var _chips = typeof chips !== 'undefined' && chips ? chips : [];
+  var _chipsLabel = typeof chipsLabel !== 'undefined' && chipsLabel ? chipsLabel : '노출되는 곳';
+  var _note = typeof note !== 'undefined' ? note : null;
+  var _link = typeof link !== 'undefined' ? link : null;
+%>
+<div class="mb-5 flex gap-0 rounded-lg border border-indigo-200 bg-indigo-50/60 overflow-hidden">
+  <div class="w-1 bg-indigo-500 shrink-0" aria-hidden="true"></div>
+  <div class="flex items-start gap-3 px-4 py-3.5">
+    <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white">
+      <i class="bi bi-diagram-3-fill text-sm"></i>
+    </span>
+    <div class="min-w-0">
+      <p class="text-sm font-bold text-indigo-900"><%= _heading %></p>
+
+      <% if (_chips.length) { %>
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          <span class="text-xs text-indigo-700/80"><%= _chipsLabel %></span>
+          <% _chips.forEach(function (c) { %>
+            <span class="inline-flex items-center rounded-md bg-white px-2 py-0.5 text-xs font-semibold text-indigo-700 border border-indigo-200">
+              <%= c %>
+            </span>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <% if (_note) { %>
+        <p class="mt-2 text-xs leading-relaxed text-indigo-800/80"><%= _note %></p>
+      <% } %>
+
+      <% if (_link) { %>
+        <a href="<%= _link.href %>" <%= _link.blank ? 'target="_blank" rel="noopener"' : '' %>
+           class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 no-underline">
+          <%= _link.label %>
+          <i class="bi bi-arrow-right-short text-base leading-none"></i>
+        </a>
+      <% } %>
+    </div>
+  </div>
+</div>

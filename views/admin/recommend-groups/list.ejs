@@ -11,16 +11,22 @@
   <div class="flex items-start justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold text-gray-900">상품 추천관리</h1>
-      <p class="mt-1 text-sm text-gray-500">
-        그룹 하나가 <a href="/recommend" target="_blank" class="text-indigo-600 hover:underline">추천 화면</a>의 섹션 하나가 됩니다.
-        그룹명이 섹션 제목으로 그대로 노출됩니다.
-      </p>
+      <p class="mt-1 text-sm text-gray-500">여기서 만든 그룹이 추천 화면의 섹션이 됩니다.</p>
     </div>
     <a href="/admin/recommend-groups/new"
        class="inline-flex items-center gap-1.5 h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline">
       <i class="bi bi-plus-lg"></i> 그룹 등록
     </a>
   </div>
+
+  <%- include('../../partials/admin/usage_notice', {
+        heading: '그룹 하나가 추천 화면(/recommend)의 섹션 하나가 됩니다.',
+        chips: ['그룹명 → 섹션 제목', '설명 → 추천 근거 문구', '순서 → 섹션 순서'],
+        chipsLabel: '이렇게 쓰입니다',
+        note: '페이지 빌더에 배치하지 않아도 저장 즉시 추천 화면에 반영됩니다. '
+            + '담긴 상품이 숨김·판매중지면 그 섹션은 그리지 않으므로, 전부 숨겨진 그룹은 화면에서 사라집니다.',
+        link: { href: '/recommend', label: '추천 화면 열어 확인하기', blank: true },
+      }) %>
 
   <% if (saved) { %>
     <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">

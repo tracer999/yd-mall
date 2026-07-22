@@ -222,6 +222,13 @@ UI 범위는 `services/display/productGroupService.js` `resolve()` 가 실제로
 저장 시 `resolveGroupType()` 이 `group_type` 을 `condition` 으로 고정한다 — `manual` 분기가
 `filter_condition_json` 을 일부러 건드리지 않아, manual 로 저장하면 방금 고친 폴백 조건이 버려지기 때문이다.
 
+**선택지 범위.** 편집 폼의 `menu_code` 셀렉트는 `menuShowcaseService.getMenuTargets(mallId, { productOnly: true })`
+가 만든다. `PRODUCT_EXCLUDED`(`EVENT`·`COUPON`·`MEMBERSHIP`·`EXHIBITION`)를 빼는 옵션이며,
+`normalizeMenuShowcase()` 도 **같은 옵션으로** 검증해야 폼 위조로 제외 메뉴가 저장되지 않는다.
+`EXCLUDED` 와 달리 `getPathMap()`(렌더 경로)에는 관여하지 않는다 — 이 메뉴들에도 배너형 쇼케이스는
+계속 걸려야 하므로, `bannerController` 는 옵션 없이 전체 목록을 그대로 쓴다.
+목록 화면은 `getList()` 가 붙이는 `menu_name`/`menu_path` 로 일반 그룹과 메뉴 쇼케이스 그룹을 구분해 보여준다.
+
 폴백은 `filter_condition_json` 에 인정 키(`badge`·`isNew`·`category_id`·`min_discount`·`in_stock`)가
 **하나라도 있을 때만** 동작한다. 빈 조건은 "몰 전체 상품"을 뜻하므로, 담긴 상품이 0건이라고 해서
 아무 상품이나 `추천 특가` 로 올리지 않기 위한 가드다. 미리보기도 같은 함수를 타므로 화면과 어긋나지 않는다.

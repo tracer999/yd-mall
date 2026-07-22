@@ -39,6 +39,15 @@ const EXCLUDED = new Set([
  */
 const EXACT_PATH_ONLY = new Set(['EXHIBITION']);
 
+/*
+ * 상품형 쇼케이스를 걸 수 없는 메뉴 — 상품 목록 화면이 아니라 '상품 캐러셀'이 문맥에 맞지 않는다.
+ * 이벤트&혜택·쿠폰·멤버십은 혜택 안내 화면이고, 기획전은 기획전마다 자체 상품 구성을 갖는다.
+ *
+ * EXCLUDED 와 달리 렌더 경로(getPathMap)에는 관여하지 않는다. 이 메뉴들에도 **배너형**
+ * 쇼케이스는 계속 걸 수 있어야 하므로, 관리자 상품 그룹 화면의 선택지에서만 뺀다.
+ */
+const PRODUCT_EXCLUDED = new Set(['EVENT', 'COUPON', 'MEMBERSHIP', 'EXHIBITION']);
+
 /** 상품형 메뉴의 상품 풀. 관리자 상품 피커가 이 풀로만 후보를 좁힌다. */
 const PRODUCT_POOLS = {
     SHOPPING_DEAL: 'deal',
@@ -93,9 +102,12 @@ async function resolveMenuCode(reqPath) {
 
 /**
  * 쇼케이스 대상 메뉴 목록 (관리자 선택지). 몰에서 켜져 있는 GNB 메뉴만.
+ *
  * @param {number} mallId
+ * @param {{ productOnly?: boolean }} [opts] productOnly=true 면 상품형을 걸 수 없는 메뉴
+ *        (PRODUCT_EXCLUDED)를 뺀다. 상품 그룹 화면이 쓰고, 배너 화면은 전체를 그대로 쓴다.
  */
-async function getMenuTargets(mallId = 1) {
+async function getMenuTargets(mallId = 1, { productOnly = false } = {}) {
     const [rows] = await pool.query(`
         SELECT f.feature_code, f.default_name, f.default_path, m.display_name
         FROM feature_menu f
@@ -107,6 +119,7 @@ async function getMenuTargets(mallId = 1) {
 
     return rows
         .filter(r => !EXCLUDED.has(r.feature_code))
+        .filter(r => !(productOnly && PRODUCT_EXCLUDED.has(r.feature_code)))
         .map(r => ({
             key: r.feature_code,
             name: r.display_name || r.default_name,
@@ -224,5 +237,6 @@ module.exports = {
     clearCache,
     EXCLUDED,
     EXACT_PATH_ONLY,
+    PRODUCT_EXCLUDED,
     PRODUCT_POOLS,
 };

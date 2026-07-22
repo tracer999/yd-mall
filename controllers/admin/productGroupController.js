@@ -173,13 +173,14 @@ function normalizeSortType(v) {
 /**
  * 메뉴 쇼케이스 지정 값 정규화.
  * 목록에 없는 코드는 무시한다(노출될 곳 없는 그룹이 생긴다).
+ * 셀렉트와 **같은 목록**(productOnly)으로 검증해야 화면에 없는 코드가 폼 위조로 들어오지 않는다.
  * @returns {Promise<{menuCode: string|null, showcaseTitle: string|null}>}
  */
 async function normalizeMenuShowcase(body, mallId) {
     const code = String(body.menu_code || '').trim();
     if (!code) return { menuCode: null, showcaseTitle: null };
 
-    const targets = await menuShowcaseService.getMenuTargets(mallId);
+    const targets = await menuShowcaseService.getMenuTargets(mallId, { productOnly: true });
     const target = targets.find(t => t.key === code);
     if (!target) return { menuCode: null, showcaseTitle: null };
 
@@ -206,9 +207,23 @@ exports.getList = async (req, res) => {
             ORDER BY g.id ASC
         `, [MALL_ID]);
 
+        /*
+         * 메뉴 상단 노출(쇼케이스) 그룹은 '어느 메뉴에 걸렸는지'까지 보여준다. 목록에서
+         * 일반 상품 그룹과 구분되지 않으면, 페이지 빌더에 연결하지 않았는데도 화면에 뜨는
+         * 그룹의 정체를 알 수 없다. 이름 조회는 전체 목록으로 한다(productOnly 아님) —
+         * 선택지에서 뺀 메뉴에 이미 걸려 있는 옛 그룹도 이름은 보여야 한다.
+         */
+        const menuMap = new Map(
+            (await menuShowcaseService.getMenuTargets(MALL_ID)).map(t => [t.key, t])
+        );
+
         for (const g of groups) {
             g.refs = await findReferencingSections(null, g.id);
             g.cond = parseCond(g.filter_condition_json);
+
+            const target = g.menu_code ? menuMap.get(g.menu_code) : null;
+            g.menu_name = g.menu_code ? (target ? target.name : g.menu_code) : null;
+            g.menu_path = target ? target.path : null;
         }
 
         res.render('admin/product-groups/list', {
@@ -285,7 +300,8 @@ async function renderForm(res, group, mallId, extra = {}) {
         sortTypes: SORT_TYPES,
         badges: BADGES,
         // 메뉴 쇼케이스 — 이 그룹을 어느 GNB 메뉴 상단 캐러셀로 쓸지
-        menuTargets: await menuShowcaseService.getMenuTargets(mallId),
+        // (이벤트&혜택·쿠폰·멤버십·기획전은 상품 캐러셀을 걸 수 없어 선택지에서 뺀다)
+        menuTargets: await menuShowcaseService.getMenuTargets(mallId, { productOnly: true }),
         poolLabel: poolKey ? POOL_LABELS[poolKey] : null,
         poolHint: poolKey ? POOL_HINTS[poolKey] : null,
         refs: group.id ? await findReferencingSections(null, group.id) : [],
