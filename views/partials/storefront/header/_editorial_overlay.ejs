@@ -107,6 +107,14 @@
       %>
       <div class="flex-1 flex items-center justify-end gap-4 sm:gap-5 yd-ed-actions">
         <a href="<%= user ? '/mypage' : '/auth/login' %>" aria-label="<%= user ? '마이쇼핑' : '로그인' %>" class="yd-ed-ico"><i class="bi bi-person text-xl"></i></a>
+        <%#
+          로그아웃 — PC 전용. 이 스킨의 PC 헤더에는 드로어 진입점(햄버거)이 없어서(가운데 nav 가 대신한다)
+          로그인한 사용자가 PC 에서 빠져나갈 방법이 없었다. 모바일은 드로어의 '회원 액션 3분할'이 담당하므로
+          여기서 또 내면 두 벌이 된다 → yd-ed-ico--pc 로 끊는다(md:hidden 류는 위 <style> 특이도에 진다).
+        %>
+        <% if (user) { %>
+          <a href="/auth/logout" aria-label="로그아웃" title="로그아웃" class="yd-ed-ico yd-ed-ico--pc hidden md:inline-flex"><i class="bi bi-box-arrow-right text-lg"></i></a>
+        <% } %>
         <a href="/cart" aria-label="장바구니" class="yd-ed-ico relative">
           <i class="bi bi-bag text-lg"></i>
           <% if (typeof cartCount !== 'undefined' && cartCount > 0) { %>
