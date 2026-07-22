@@ -384,8 +384,9 @@ exports.postUpdateStatus = async (req, res) => {
 
     try {
         await pool.query('UPDATE products SET status = ? WHERE id IN (?) AND mall_id = ?', [status, ids, req.adminMallId || 1]);
-        // 대표 SKU on/off 동기화 (생명주기는 products.status 가 유지)
-        await skuService.syncDefaultSkuStatus(ids, status);
+        // SKU on/off 동기화 (생명주기는 products.status 가 유지).
+        // 옵션 SKU 까지 함께 바꾼다 — 대표 SKU 만 켜면 상품은 판매중인데 고를 옵션이 없다.
+        await skuService.syncSkuStatusForProducts(ids, status);
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);
