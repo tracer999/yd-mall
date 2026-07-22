@@ -66,10 +66,12 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 | | `/admin/recommend-groups` | 상품 추천관리 (`/recommend` 랜딩의 섹션) | [recommend.md](./recommend.md) |
 | | `/admin/deals`, `/admin/deal-categories` | 쇼핑특가 — 기간·시간창·요일·선착순. **결제 금액에 직접 반영** | [deals.md](./deals.md) |
 | | `/admin/outlet`, `/admin/outlet/categories` | 아울렛(상시 재고 소진 채널) | [outlet.md](./outlet.md) |
-| **주문** | `/admin/sales` | 주문 목록·상세·상태 변경·취소 | [sales.md](./sales.md) |
-| | `/admin/claims` | 취소·반품·환불 클레임 | [claims.md](./claims.md) |
-| | `/admin/shipping` | 송장 입력·배송 완료 | [shipping.md](./shipping.md) |
+| **주문** | `/admin/sales` | 주문 목록·상세·상태 변경·취소 (**B2C 전용**) | [sales.md](./sales.md) |
+| | `/admin/claims` | 취소·반품·환불 클레임 (**B2C 전용**) | [claims.md](./claims.md) |
+| | `/admin/shipping` | 송장 입력·배송 완료 (**B2C 전용**) | [shipping.md](./shipping.md) |
 | | `/admin/shipping-policy` | 몰별 배송비 정책·지역 할증 | [shipping.md](./shipping.md) |
+| **B2B 주문** | `/admin/b2b/orders` | 기업 주문 승인(재고 차감)·입금확인·출고·세금계산서 | [b2b_orders.md](./b2b_orders.md) |
+| | `/admin/b2b/claims` | 기업 주문 취소·반품 + **계좌 환불** 마감 | [b2b_orders.md](./b2b_orders.md) |
 | | `/admin/shopify-orders` | Shopify 주문 (연동 비활성 상태) | — |
 | **전시** | `/admin/page-builder` | SDUI 페이지 빌더(섹션 조립·발행·롤백) | [page_builder.md](./page_builder.md) |
 | | `/admin/banners` | 배너 5종 + 메인 슬라이더(hero_slide) | [banners.md](./banners.md) |
@@ -120,9 +122,10 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 11. [아울렛](./outlet.md) — 아울렛 상품·카테고리, 노출 임계치(콘텐츠 게이트)
 
 ### 주문 · 배송
-12. [주문 및 매출 관리](./sales.md) — 목록·상세, 4축 상태 전이, 관리자 취소
-13. [클레임 관리](./claims.md) — 취소·반품·환불, 승인 트랜잭션, Toss 환불
+12. [주문 및 매출 관리](./sales.md) — 목록·상세, 4축 상태 전이, 관리자 취소 (B2C 전용)
+13. [클레임 관리](./claims.md) — 취소·반품·환불, 승인 트랜잭션, Toss 환불 (B2C 전용)
 14. [배송 관리](./shipping.md) — 송장 입력, 배송 완료, 배송비 정책
+14-1. [B2B 주문·클레임](./b2b_orders.md) — 화면 분리 이유, 상태 매핑, 계좌 환불 대기
 
 ### 전시 · 프로모션
 15. [페이지 빌더 · SDUI](./page_builder.md) — 섹션 13종, 리졸버 12종, 발행·롤백, 상품 그룹
