@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const skuService = require('../catalog/skuService');
 
 /*
  * 샘플 데이터 시더 (몰 빌더 — "샘플 데이터 포함")
@@ -173,6 +174,27 @@ async function seedSampleData(mallId) {
                     p.main_image, p.main_image, slug, p.badge || null,
                     p.is_new ? new Date() : null,
                 ]);
+            /*
+             * 대표 SKU 생성 — 빠뜨리면 "보이는데 담을 수 없는" 상품이 된다.
+             *
+             * 이 저장소는 "항상 SKU" 설계다(설계 §25.1). 재고·가격의 정본은 product_sku 이고
+             * 단일상품도 is_default=1 SKU 1행을 반드시 갖는다. SKU 가 없으면
+             * skuService.resolveSkuForLine 이 null 을 돌려주고, cartController 가
+             * 에러 메시지도 없이 redirect('back') 으로 담기를 삼킨다.
+             *
+             * 예전에는 이 시더만 SKU 를 만들지 않아(다른 생성 경로는 전부 만든다) 샘플 데이터로
+             * 몰을 찍을 때마다 그런 상품이 6건씩 태어났다. 몰 빌더라 새 몰마다 재발했다.
+             * 재고 100 은 위 INSERT 의 하드코딩 값과 같아야 한다(대표 SKU 는 products 의 미러).
+             */
+            await skuService.syncDefaultSkuFromProduct(r.insertId, {
+                mall_id: id,
+                price: p.price,
+                stock: 100,
+                purchase_price: 0,
+                status: 'ON',
+                sku_code: slug.toUpperCase(),
+            }, conn);
+
             prodIdByKey[p.sample_key] = r.insertId;
             seededProducts.push(p);
         }
