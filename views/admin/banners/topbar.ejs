@@ -28,6 +28,27 @@
   </div>
 <% } %>
 
+<%#
+  현재 헤더 스킨이 톱바를 그리는지 — 등록만 되고 화면에는 안 나오는 상태를 여기서 드러낸다.
+  판정 근거는 services/menu/headerSkins.js 의 rendersTopbar.
+%>
+<% if (headerSkinRendersTopbar) { %>
+  <div class="mb-3 px-4 py-2.5 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600 flex items-start gap-2">
+    <i class="bi bi-window-sidebar mt-0.5"></i>
+    <span>현재 헤더 스킨 <strong class="text-gray-800"><%= headerSkinLabel %></strong> 은 톱바를 노출합니다.
+      스킨은 <a href="/admin/header-settings" class="text-blue-600 hover:underline">쇼핑몰 설정 &gt; Header 설정</a>에서 바꿉니다.</span>
+  </div>
+<% } else { %>
+  <div class="mb-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900 flex items-start gap-2">
+    <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
+    <span><strong>지금 이 몰에서는 톱바가 노출되지 않습니다.</strong>
+      현재 헤더 스킨 <strong><%= headerSkinLabel %></strong> 은 톱바를 그리지 않습니다 —
+      아래에서 등록·저장해도 스토어프론트에는 나오지 않습니다.
+      <a href="/admin/header-settings" class="underline font-medium">쇼핑몰 설정 &gt; Header 설정</a>에서
+      톱바를 지원하는 스킨으로 바꾸면 바로 반영됩니다.</span>
+  </div>
+<% } %>
+
 <div class="mb-5 px-4 py-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800 leading-relaxed">
   <ul class="list-disc pl-4 space-y-0.5">
     <li><strong>배너와 알림이 모두 없으면 톱바 자체가 노출되지 않습니다.</strong></li>

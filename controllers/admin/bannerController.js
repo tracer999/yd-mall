@@ -2,6 +2,8 @@ const pool = require('../../config/db');
 const upload = require('../../middleware/upload');
 const menuShowcaseService = require('../../services/menu/menuShowcaseService');
 const topbarService = require('../../services/display/topbarService');
+const headerSkins = require('../../services/menu/headerSkins');
+const navigationService = require('../../services/menu/navigationService');
 const { visibleCategoryIdSet } = require('../../services/catalog/categoryScope');
 
 /*
@@ -747,10 +749,20 @@ async function deleteTopbarItem(conn, mallId, kind, slot) {
 exports.getTopbar = async (req, res) => {
     const mallId = req.adminMallId || 1;
     try {
+        /*
+         * 톱바는 **헤더 스킨이 그려 줘야** 나온다. 에디토리얼형처럼 톱바를 include 하지 않는
+         * 스킨을 쓰는 몰에서는 아무리 등록해도 화면에 안 나오는데, 그 사실을 알 방법이 없으면
+         * "저장이 안 됐나?" 로 이어진다. 그래서 지금 스킨과 노출 여부를 화면에 같이 낸다.
+         */
+        const navConfig = await navigationService.getConfig(mallId);
+        const headerSkin = navConfig.header_layout_type;
+
         res.render('admin/banners/topbar', {
             layout: 'layouts/admin_layout',
             title: '배너 관리',
             topbar: await topbarService.getTopbarForAdmin(mallId),
+            headerSkinLabel: headerSkins.labelOf(headerSkin),
+            headerSkinRendersTopbar: headerSkins.rendersTopbar(headerSkin),
             saved: req.query.saved === '1',
             error: req.query.error || null,
         });

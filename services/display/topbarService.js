@@ -15,6 +15,11 @@ const pool = require('../../config/db');
 
 const MAX_BANNERS = 3;
 
+/*
+ * "이 헤더 스킨이 톱바를 그리는가" 는 services/menu/headerSkins.js 의 rendersTopbar 가 답한다.
+ * 스킨 카탈로그와 같은 자리에 둬야 스킨을 추가할 때 함께 눈에 들어온다.
+ */
+
 async function getTopbar(mallId) {
     const [rows] = await pool.query(`
         SELECT id, kind, slot, message, image_url, link_url, new_window, updated_at

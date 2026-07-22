@@ -29,6 +29,22 @@
     return _unified ? list : list.slice(0, Number(_cfg.max_gnb_items) || 8);
   })();
 %>
+<%#
+  톱바(배너·알림) — 다른 두 스킨은 _pc_top.ejs 를 거쳐 include 하지만 이 스킨은 그 파셜을 쓰지 않는다.
+  여기서 빠지면 관리자 '톱바 배너·알림' 이 이 스킨에서만 조용히 무효가 된다(등록은 되는데 안 나옴).
+  톱바는 흐름(static)에 놓여 히어로를 아래로 밀고, 투명 헤더는 톱바 **아래**부터 히어로에 겹친다
+  — 히어로를 가리지 않아야 오버레이 디자인이 유지된다.
+  ⚠️ 스킨↔톱바 대응은 services/display/topbarService.js 의 TOPBAR_HEADER_SKINS 에도 있다(관리자 안내용).
+%>
+<%- include('./_topbar') %>
+
+<%#
+  헤더의 기준점(0높이).
+  히어로 페이지에서 헤더는 absolute 다 — 이 박스가 없으면 top-0 이 문서 최상단으로 잡혀 톱바를 덮는다.
+  히어로가 없는 페이지에서 헤더는 sticky 인데, 0높이 컨테이너 안의 sticky 는 움직일 범위가 없어
+  고정이 죽는다 → 그때는 아래 <style> 이 display:contents 로 이 박스를 없앤다.
+%>
+<div class="yd-ed-anchor">
 <header class="yd-ed-hdr absolute top-0 left-0 right-0 z-50" data-solid-after="80">
   <div class="max-w-[80rem] mx-auto px-5 lg:px-10">
     <%#
@@ -110,6 +126,7 @@
     </div>
   </div>
 </header>
+</div>
 
 <%# 전체 메뉴 드로어 — 드로어형 스킨과 공용. <header> 바깥이어야 백드롭이 헤더를 덮지 않는다. %>
 <%- include('./_drawer') %>
@@ -118,6 +135,14 @@
 <div id="gnb-cat-backdrop" class="hidden fixed inset-0 z-40 bg-black/20" aria-hidden="true"></div>
 
 <style>
+  /*
+   * 톱바 기준점 — 헤더(absolute)가 톱바 아래에서 시작하도록 잡아 주는 0높이 박스.
+   * 히어로가 없는 페이지의 헤더는 sticky 라 이 박스 안에 있으면 고정이 죽는다(부모 높이가 0).
+   * display:contents 로 박스를 없애면 헤더의 기준이 다시 body 가 되어 예전 동작 그대로다.
+   */
+  .yd-ed-anchor { position: relative; }
+  body:not(.yd-overlay-header) .yd-ed-anchor { display: contents; }
+
   /* 투명 → 스크롤 후 흰 배경으로 굳는다 */
   .yd-ed-hdr { transition: background-color .3s ease, box-shadow .3s ease, color .3s ease; }
   .yd-ed-hdr, .yd-ed-hdr .yd-ed-navlink, .yd-ed-hdr .yd-ed-ico, .yd-ed-hdr .yd-ed-logo { color: #fff; }

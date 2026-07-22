@@ -14,7 +14,9 @@
 1. **메인 슬라이더 (`hero_slide` + `banners` 의 `banner_type='MAIN'`)** — 홈 히어로. `/admin/banners/hero-slides` 하위.
 2. **배너 (`banners`)** — 카테고리·팝업·브랜드·메뉴별 배너. `/admin/banners` 본체.
 
-목록 상단 탭은 `메인 슬라이더 | 카테고리 배너 | 팝업 배너 | 브랜드 배너 | 메뉴별 배너` 5개이며, 공용 partial `views/admin/banners/_tabs.ejs` 가 렌더합니다(`activeTab` = `HERO|CATEGORY|POPUP|BRAND|MENU`).
+목록 상단 탭은 `메인 슬라이더 | 톱바 배너·알림 | 카테고리 배너 | 브랜드 배너 | 팝업 배너 | 메뉴별 배너 | 프로모션 배너` 7개이며, 공용 partial `views/admin/banners/_tabs.ejs` 가 렌더합니다(`activeTab` = `HERO|TOPBAR|CATEGORY|BRAND|POPUP|MENU|PROMO`).
+
+> **톱바만 저장 대상이 다릅니다.** `banners` 가 아니라 `header_topbar_item` 입니다(아래 §1-2).
 
 ### 메인 슬라이더 — 한 화면, 두 방식
 
@@ -33,7 +35,28 @@
 
 **메뉴별 배너 탭은 켜져 있는 GNB 메뉴를 전부 서브탭(pill)으로 펼칩니다.** 메뉴 하나를 고르면 그 메뉴의 배너만 보입니다(`?type=MENU&menu={feature_code}`). 서브탭 목록은 `feature_menu` 에서 동적으로 오므로, 메뉴를 켜고 끄면 탭도 따라 바뀝니다.
 
-> **몰 스코프:** `hero_slide` 만 `mall_id` 컬럼을 가지며 `req.adminMallId`(`middleware/adminMallContext.js`)로 스코프됩니다. **`banners` 테이블에는 `mall_id` 가 없어 전 몰 공용**입니다.
+> **몰 스코프:** `hero_slide`·`banners`·`header_topbar_item` 모두 `mall_id` 를 가지며 `req.adminMallId`(`middleware/adminMallContext.js`)로 스코프됩니다.
+> `banners.mall_id` 는 `scripts/migrations/20260720_banners_mall_scope.sql` 로 추가됐습니다 — 그 전에는 전 몰 공용이었고, `CATEGORY`·`BRAND` 는 조인한 `categories.mall_id` 로 우회했습니다. 카테고리가 글로벌화(`mall_id=0`)된 뒤로 그 우회는 몰을 전혀 가르지 못합니다.
+
+### 1-2. 톱바 배너·알림 — 헤더 스킨에 의존한다
+
+톱바는 `banners` 가 아니라 **`header_topbar_item`** 에 담습니다(배너 3슬롯 + 알림 1, `(mall_id, kind, slot)` UNIQUE). 슬롯이 고정이라 목록·등록 화면 없이 편집 한 장(`GET/POST /admin/banners/topbar`)으로 끝납니다.
+
+렌더 경로: `services/display/topbarService.getTopbar` → `middleware/topbar` → `res.locals.topbar` → `views/partials/storefront/header/_topbar.ejs`
+
+**그런데 `_topbar.ejs` 를 include 하는 것은 헤더 스킨입니다.** 그래서 스킨이 톱바를 그리지 않으면 등록·저장은 되는데 화면에는 아무것도 안 나옵니다 — 관리자가 원인을 알 방법이 없는 대표적인 함정이었습니다.
+
+| 헤더 스킨 (`navigation_config.header_layout_type`) | 톱바 include 경로 |
+|---|---|
+| `main_right_utility_v1` | `_pc_top.ejs` 경유 |
+| `compact_drawer_v1` | `_pc_top.ejs` 경유 |
+| `editorial_overlay_v1` | 스킨이 **직접** include |
+
+에디토리얼형은 투명 헤더가 히어로 위에 겹치는(`body.yd-overlay-header` + `.yd-ed-hdr { position: absolute }`) 구조라 그냥 넣으면 헤더가 톱바를 덮습니다. 그래서 톱바는 흐름(static)에 두고, 헤더를 0높이 `.yd-ed-anchor`(relative) 안에 넣어 **톱바 바로 아래**를 기준점으로 삼습니다. 히어로가 없는 페이지에서 헤더는 `sticky` 인데 0높이 컨테이너 안에서는 고정이 죽으므로, 그때는 `body:not(.yd-overlay-header) .yd-ed-anchor { display: contents }` 로 그 박스를 없앱니다.
+
+스킨 카탈로그는 **`services/menu/headerSkins.js` 한 벌**입니다(`value`·`label`·`navMode`·`supported`·`rendersTopbar`). `headerSettingsController`(Header 설정 화면)와 `bannerController.getTopbar`(톱바 화면의 노출 여부 안내)가 같은 목록을 봅니다.
+
+> ⚠️ **새 헤더 스킨을 추가할 때**: 스킨 템플릿에서 `_topbar.ejs` 를 include 했는지에 맞춰 `headerSkins.js` 의 `rendersTopbar` 를 설정할 것. 어긋나면 관리자 화면의 안내가 거짓말을 합니다.
 
 ---
 

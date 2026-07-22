@@ -15,43 +15,15 @@ const pool = require('../../config/db');
  */
 
 
-/**
- * 화이트리스트.
+/*
+ * 헤더 스킨 화이트리스트는 services/menu/headerSkins.js 한 벌이다.
+ * 배너 관리 > 톱바 화면도 같은 목록을 보고 "이 스킨이 톱바를 그리는가"를 안내한다.
  *
- * `supported: false` 는 컬럼은 있으나 렌더가 아직 소비하지 않는 값이다.
- * feature_menu.module_ready 와 같은 원칙으로 UI 에서 잠근다 — 켜도 안 바뀌는 스위치를
- * 운영자에게 내주면 설정과 화면이 어긋난다.
- */
-const HEADER_LAYOUT_TYPES = [
-    {
-        value: 'main_right_utility_v1', supported: true,
-        label: '기본형 — 카테고리 버튼 + 평면 GNB (3단 헤더)',
-        hint: '상단 유틸바 + 로고/검색 + GNB 3단. 카테고리는 [☰ 카테고리] 버튼의 드롭다운 패널(3단 캐스케이드)로 열리고, 일반 메뉴는 그 옆에 한 줄로 놓입니다.',
-        navMode: 'split',
-    },
-    {
-        value: 'compact_drawer_v1', supported: true,
-        label: '드로어형 — 햄버거 전체메뉴 + 아코디언 카테고리',
-        hint: '헤더에는 [☰]·로고·장바구니만 두고 메뉴 전체를 좌측 슬라이드 드로어에 담습니다. 카테고리 1뎁스가 일반 메뉴와 같은 목록에 놓이고, 하위 뎁스는 [+] 로 펼칩니다. 검색창도 드로어 안에 있습니다.',
-        navMode: 'unified',
-    },
-    {
-        value: 'editorial_overlay_v1', supported: true,
-        label: '에디토리얼형 — 투명 오버레이 헤더 (풀블리드 히어로용)',
-        hint: '투명 헤더가 풀블리드 히어로 위에 겹치고, 스크롤이 히어로를 지나면 흰 배경으로 굳습니다. 로고·중앙 메뉴·우측 아이콘의 라이프스타일 무드. 테마 3(에디토리얼)과 짝을 이룹니다.',
-        navMode: 'split',
-    },
-];
-
-/**
- * 레이아웃 ↔ nav_mode 는 짝이다. 레이아웃만 바꾸고 nav_mode 를 그대로 두면
+ * navModeOf — 레이아웃 ↔ nav_mode 는 짝이다. 레이아웃만 바꾸고 nav_mode 를 그대로 두면
  * "드로어 헤더인데 카테고리가 메뉴 목록에 없는" 깨진 조합이 나온다(반대도 마찬가지).
  * → 레이아웃을 저장할 때 nav_mode 를 함께 맞춘다. 운영자가 깨진 조합을 만들 수 없다.
  */
-function navModeOf(layoutValue) {
-    const hit = HEADER_LAYOUT_TYPES.find(o => o.value === layoutValue);
-    return (hit && hit.navMode) || 'split';
-}
+const { HEADER_SKINS: HEADER_LAYOUT_TYPES, navModeOf } = require('../../services/menu/headerSkins');
 
 /** 정수 필드의 허용 범위 */
 const LIMITS = {
