@@ -274,14 +274,46 @@ exports.getList = async (req, res) => {
          */
         let facets = [];
         let selectedFacets = {};
+        let brandFacetOptions = [];
         try {
-            facets = await facetService.getFacetsForCategory(selectedCategoryId);
-            const fp = facetService.buildPredicates(facets, q);
+            const _preFacetQuery = query;          // 필터 적용 전 스냅샷(브랜드 파셋 카운트용)
+            const _preFacetParams = [...params];
+
+            const allFacets = await facetService.getFacetsForCategory(selectedCategoryId);
+            // 술어는 정의 전체 기준으로 만든다. URL 로 들어온 필터는 화면에 안 보여도 적용돼야 한다.
+            const fp = facetService.buildPredicates(allFacets, q);
             if (fp.sql) {
                 query += ` AND ${fp.sql}`;
                 params.push(...fp.params);
             }
             selectedFacets = fp.selected;
+
+            /*
+             * 브랜드 필터 후보 = "지금 조건에서 실제로 상품이 있는 브랜드" 상위 30개 + 건수.
+             * 몰 전체 브랜드(1,300여 개)를 그대로 뿌리면 DOM 만 커지고 대부분 0건이다.
+             * 자기 자신(BRAND)은 조건에서 빼야 다른 브랜드가 0 으로 접히지 않는다.
+             */
+            const fpNoBrand = facetService.buildPredicates(allFacets, q, { exclude: ['BRAND'] });
+            let brandQuery = _preFacetQuery
+                + (fpNoBrand.sql ? ` AND ${fpNoBrand.sql}` : '')
+                + ' AND brand_category_id IS NOT NULL';
+            brandQuery = brandQuery.replace('SELECT *', 'SELECT brand_category_id AS id, COUNT(*) AS cnt')
+                + ' GROUP BY brand_category_id ORDER BY cnt DESC, brand_category_id ASC LIMIT 30';
+            const [brandRows] = await pool.query(brandQuery, [..._preFacetParams, ...fpNoBrand.params]);
+            if (brandRows.length) {
+                const [nameRows] = await pool.query(
+                    `SELECT id, name FROM categories WHERE id IN (${brandRows.map(() => '?').join(',')})`,
+                    brandRows.map((r) => r.id)
+                );
+                const nameById = new Map(nameRows.map((r) => [r.id, r.name]));
+                brandFacetOptions = brandRows
+                    .filter((r) => nameById.has(r.id))
+                    .map((r) => ({ id: r.id, name: nameById.get(r.id), count: r.cnt }));
+            }
+
+            // 화면에는 값이 실제로 있는 것만 그린다(0건 필터로 화면을 채우지 않는다).
+            const availability = await facetService.getAttributeAvailability(mallId);
+            facets = facetService.pruneUnavailable(allFacets, availability);
         } catch (facetErr) {
             console.error('[facet] 필터 해석 실패 — 필터 없이 목록만 렌더합니다.', facetErr);
         }
@@ -388,6 +420,9 @@ exports.getList = async (req, res) => {
             sortTabs: SORT_TABS,
             facets,
             selectedFacets,
+            brandFacetOptions,
+            // 뷰의 URL 빌더가 현재 쿼리를 그대로 이어붙이기 위해 필요하다.
+            currentQuery: Object.assign({}, req.query),
             seo,
             pagination: { page, perPage, total, totalPages }
         });

@@ -139,12 +139,28 @@ function findPreset(meta, code) {
     return list.find((p) => p.code === code) || null;
 }
 
-/** 'PRICE' 술어 — 프리셋 코드(P1,P3) 또는 직접 구간(30000-50000) 둘 다 받는다. */
-function pricePredicate(facet, raw) {
+/**
+ * 'PRICE' 술어. 세 가지 입력을 다 받는다.
+ *   price=P1,P3            프리셋 코드
+ *   price=30000-50000      직접 구간(열린 구간은 30000- / -50000)
+ *   price_min=&price_max=  직접 입력 폼(JS 없이 GET 으로 그대로 넘어온다)
+ */
+function pricePredicate(facet, raw, q) {
     const parts = splitValues(raw);
-    if (!parts.length) return null;
 
     const ranges = [];
+
+    // 직접 입력 폼이 먼저다 — 사용자가 방금 친 값이 프리셋보다 구체적이다.
+    const fMin = q && q.price_min !== undefined && q.price_min !== '' ? Number(q.price_min) : null;
+    const fMax = q && q.price_max !== undefined && q.price_max !== '' ? Number(q.price_max) : null;
+    if (Number.isFinite(fMin) || Number.isFinite(fMax)) {
+        ranges.push({
+            min: Number.isFinite(fMin) ? fMin : null,
+            max: Number.isFinite(fMax) ? fMax : null,
+        });
+    }
+
+    if (!parts.length && !ranges.length) return null;
     parts.forEach((p) => {
         const m = /^(\d*)-(\d*)$/.exec(p);
         if (m) {
@@ -219,22 +235,28 @@ function attributePredicate(facet, raw) {
  *
  * @param {Array} facets getFacetsForCategory() 결과
  * @param {object} q 병합된 쿼리스트링
+ * @param {{exclude?: string[]}} [opts] 특정 facet 을 빼고 만든다.
+ *        파셋 카운트를 낼 때 쓴다 — 자기 자신을 조건에 넣으면 다른 값이 전부 0 으로 보인다.
  * @returns {{sql:string, params:Array, selected:object}}
  */
-function buildPredicates(facets, q) {
+function buildPredicates(facets, q, opts) {
     const clauses = [];
     const params = [];
     const selected = {};
+    const exclude = new Set((opts && opts.exclude) || []);
 
     facets.forEach((facet) => {
         if (HANDLED_ELSEWHERE.has(facet.facet_code)) return;
         if (RESERVED_KEYS.has(facet.key)) return;
+        if (exclude.has(facet.facet_code)) return;
 
         const raw = q[facet.key];
-        if (raw == null || raw === '') return;
+        // 가격은 price_min/price_max 로도 들어오므로 raw 가 비어도 통과시킨다.
+        const isPrice = facet.facet_code === 'PRICE';
+        if (!isPrice && (raw == null || raw === '')) return;
 
         let piece = null;
-        if (facet.facet_code === 'PRICE') piece = pricePredicate(facet, raw);
+        if (isPrice) piece = pricePredicate(facet, raw, q);
         else if (facet.facet_code === 'DISCOUNT') piece = discountPredicate(facet, raw);
         else if (facet.facet_code === 'BENEFIT') piece = benefitPredicate(raw);
         else if (facet.facet_code === 'STOCK') piece = { sql: "(stock > 0 AND status <> 'SOLD_OUT')", params: [] };
@@ -251,15 +273,70 @@ function buildPredicates(facets, q) {
         if (piece) {
             clauses.push(piece.sql);
             params.push(...piece.params);
-            selected[facet.key] = splitValues(raw);
+            const picked = splitValues(raw);
+            if (picked.length) selected[facet.key] = picked;
         }
     });
 
     return { sql: clauses.join(' AND '), params, selected };
 }
 
+/**
+ * 몰에 **실제로 값이 있는** 속성 이름·값 목록.
+ *
+ * product_attribute 가 아직 비어 있으므로, 이걸 보지 않고 속성 필터를 그리면
+ * 무조건 0건이 나오는 필터가 화면을 가득 채운다. 값이 쌓이는 만큼만 노출한다(설계 §11 R-1).
+ *
+ * @returns {Promise<Map<string, Set<string>>>} attr_name → 값 집합
+ */
+async function getAttributeAvailability(mallId) {
+    const [rows] = await pool.query(
+        `SELECT pa.attr_name, pa.attr_value
+           FROM product_attribute pa
+          WHERE pa.is_searchable = 1
+            AND EXISTS (SELECT 1 FROM products p
+                         WHERE p.id = pa.product_id AND p.mall_id = ?
+                           AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK'))
+          GROUP BY pa.attr_name, pa.attr_value`,
+        [mallId]
+    );
+    const map = new Map();
+    rows.forEach((r) => {
+        if (!map.has(r.attr_name)) map.set(r.attr_name, new Set());
+        map.get(r.attr_name).add(r.attr_value);
+    });
+    return map;
+}
+
+/**
+ * 값이 없는 속성 필터를 걷어낸다. 값 목록도 실제 있는 것만 남긴다.
+ * ATTRIBUTE 가 아닌 필터(가격·브랜드·할인 등)는 그대로 둔다.
+ */
+function pruneUnavailable(facets, availability) {
+    return facets
+        .filter((f) => {
+            if (f.value_source !== 'ATTRIBUTE') return true;
+            return availability.has(f.source_key || f.facet_code);
+        })
+        .map((f) => {
+            if (f.value_source !== 'ATTRIBUTE') return f;
+            const have = availability.get(f.source_key || f.facet_code);
+            // 값 정의가 없는 열린 집합(저자·출판사 등)은 실제 값을 그대로 쓴다.
+            if (!f.values.length) {
+                return {
+                    ...f,
+                    values: [...have].sort().map((v) => ({ value_code: v, display_name: v, meta_json: null })),
+                };
+            }
+            return { ...f, values: f.values.filter((v) => have.has(v.value_code)) };
+        })
+        .filter((f) => f.value_source !== 'ATTRIBUTE' || f.values.length > 0);
+}
+
 module.exports = {
     getFacetsForCategory,
+    getAttributeAvailability,
+    pruneUnavailable,
     buildPredicates,
     facetKey,
     splitValues,

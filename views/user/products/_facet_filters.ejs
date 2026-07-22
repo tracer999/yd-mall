@@ -1,0 +1,145 @@
+<%#
+  상품 목록 필터(facet) 패널.
+  설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §8
+
+  받는 값
+    facets     facetService.getFacetsForCategory() → pruneUnavailable() 결과
+    h          { url, vals, on, toggleUrl, clearUrl, label } 헬퍼 (list.ejs 가 만든다)
+    basePath   폼 action 용 현재 목록 경로
+    query      현재 쿼리스트링 객체(직접 입력 폼의 hidden 용)
+
+  값이 없는 필터는 컨트롤러에서 이미 걷어냈다. 여기서는 "그리기"만 한다.
+-%>
+<%
+/*
+ * 값 목록 합성.
+ *   - facet_value_definition 이 있는 필터는 그대로 쓴다.
+ *   - 가격·할인율은 값이 아니라 **구간 프리셋**(meta.preset)이다. 카테고리마다 다르다(§3.3).
+ *   - 브랜드는 목록 결과에서 파생된다.
+ * 옵션이 하나도 없는 필터는 빈 줄만 남으므로 아예 그리지 않는다.
+ */
+function optionsOf(f) {
+    if (f.values && f.values.length) return f.values;
+    const meta = f.meta || {};
+    if (Array.isArray(meta.preset)) {
+        return meta.preset.map((p) => ({ value_code: p.code, display_name: p.name, meta_json: null }));
+    }
+    if (f.facet_code === 'BRAND') {
+        return (brandOptions || []).map((b) => ({
+            value_code: String(b.id), display_name: b.name, count: b.count, meta_json: null,
+        }));
+    }
+    return [];
+}
+
+const _fs = (facets || [])
+    .filter((f) => f.facet_code !== 'CATEGORY')
+    // 브랜드관에서는 브랜드 필터가 의미 없다(§5.1).
+    .filter((f) => !(f.facet_code === 'BRAND' && currentBrand))
+    .map((f) => Object.assign({}, f, { options: optionsOf(f) }))
+    .filter((f) => f.options.length > 0);
+
+const _primary = _fs.filter((f) => f.isPrimary);
+const _more = _fs.filter((f) => !f.isPrimary);
+// 선택된 항목을 한 줄로 모아 보여 준다(어떤 조건이 걸렸는지 한눈에).
+const _chips = [];
+_fs.forEach((f) => h.vals(f.key).forEach((v) => _chips.push({ f, v })));
+const _priceFacet = _fs.find((f) => f.facet_code === 'PRICE');
+%>
+<% if (_fs.length) { %>
+<section class="facet-panel" aria-label="상품 필터">
+
+    <% if (_chips.length) { %>
+    <div class="facet-chips">
+        <span class="facet-chips__lead">적용된 조건 <b><%= _chips.length %></b></span>
+        <% _chips.forEach((c) => { %>
+            <a class="facet-chip" href="<%= h.toggleUrl(c.f, c.v) %>">
+                <span class="facet-chip__k"><%= c.f.facet_name %></span>
+                <%= h.label(c.f, c.v) %>
+                <span class="facet-chip__x" aria-hidden="true">×</span>
+                <span class="sr-only">조건 해제</span>
+            </a>
+        <% }) %>
+        <a class="facet-chips__clear" href="<%= clearAllUrl %>">전체 해제</a>
+    </div>
+    <% } %>
+
+    <%
+    // 값 하나를 그린다. ui_type 이 위젯 모양을 정한다.
+    function renderValue(f, v) {
+        const on = h.on(f.key, v.value_code);
+        const meta = v.meta_json || {}; %>
+        <% if (f.ui_type === 'COLOR_SWATCH') { %>
+            <a href="<%= h.toggleUrl(f, v.value_code) %>" title="<%= v.display_name %>"
+               class="facet-sw <%= on ? 'is-on' : '' %> <%= meta.hex ? '' : 'is-multi' %>"
+               <% if (meta.hex) { %>style="--sw: <%= meta.hex %>"<% } %>><span class="sr-only"><%= v.display_name %></span></a>
+        <% } else if (f.ui_type === 'TOGGLE') { %>
+            <a href="<%= h.toggleUrl(f, v.value_code) %>" class="facet-pill <%= on ? 'is-on' : '' %>"><i class="bi <%= on ? 'bi-check-square-fill' : 'bi-square' %>"></i> <%= v.display_name %></a>
+        <% } else { %>
+            <a href="<%= h.toggleUrl(f, v.value_code) %>"
+               class="<%= f.ui_type === 'SIZE_GRID' ? 'facet-cell' : 'facet-pill' %> <%= on ? 'is-on' : '' %>"><%= v.display_name %><% if (v.count) { %><span class="facet-cnt"><%= v.count %></span><% } %></a>
+        <% } %>
+    <% }
+
+    // 필터 한 줄. 값이 많은 필터(브랜드 등)는 앞쪽만 펼치고 나머지는 접는다.
+    function renderRow(f) {
+        const cap = (f.meta && f.meta.collapseAfter) ? Number(f.meta.collapseAfter) : 0;
+        const head = cap > 0 ? f.options.slice(0, cap) : f.options;
+        const tail = cap > 0 ? f.options.slice(cap) : []; %>
+        <div class="facet-row">
+            <span class="facet-row__label"><%= f.facet_name %><% if (f.unit) { %><i><%= f.unit %></i><% } %></span>
+            <div class="facet-row__values <%= f.ui_type === 'SIZE_GRID' ? 'is-grid' : '' %>">
+                <% head.forEach((v) => { renderValue(f, v); }) %>
+                <% if (tail.length) { %>
+                    <details class="facet-inline-more">
+                        <summary>+<%= tail.length %>개</summary>
+                        <div class="facet-inline-more__body"><% tail.forEach((v) => { renderValue(f, v); }) %></div>
+                    </details>
+                <% } %>
+                <% if (h.vals(f.key).length) { %>
+                    <a href="<%= h.clearUrl(f.key) %>" class="facet-row__reset">초기화</a>
+                <% } %>
+            </div>
+        </div>
+    <% } %>
+
+    <% _primary.forEach((f) => { renderRow(f); }) %>
+
+    <%# 가격 직접 입력 — 프리셋만으로는 못 맞추는 구간을 위해. %>
+    <% if (_priceFacet) { %>
+    <div class="facet-row facet-row--price">
+        <span class="facet-row__label">가격 직접 입력</span>
+        <form class="facet-range" method="get" action="<%= basePath %>">
+            <% Object.keys(query || {}).forEach((k) => {
+                 if (['price', 'price_min', 'price_max', 'page', 'categoryId', 'brandId'].indexOf(k) !== -1) return;
+                 const val = query[k];
+                 if (val === undefined || val === null || val === '') return; %>
+                <input type="hidden" name="<%= k %>" value="<%= val %>">
+            <% }) %>
+            <input type="number" name="price_min" min="0" step="1000" inputmode="numeric" placeholder="최소"
+                   value="<%= (query && query.price_min) || '' %>" aria-label="최소 가격">
+            <span class="facet-range__dash">~</span>
+            <input type="number" name="price_max" min="0" step="1000" inputmode="numeric" placeholder="최대"
+                   value="<%= (query && query.price_max) || '' %>" aria-label="최대 가격">
+            <span class="facet-range__won">원</span>
+            <button type="submit">적용</button>
+            <% if ((query && query.price_min) || (query && query.price_max)) { %>
+                <a class="facet-range__reset" href="<%= h.url({ price_min: null, price_max: null, page: null }) %>">해제</a>
+            <% } %>
+        </form>
+    </div>
+    <% } %>
+
+    <% if (_more.length) { %>
+    <details class="facet-more">
+        <summary>
+            <span>상세 필터 <b><%= _more.length %></b>개 더보기</span>
+            <i class="bi bi-chevron-down"></i>
+        </summary>
+        <div class="facet-more__body">
+            <% _more.forEach((f) => { renderRow(f); }) %>
+        </div>
+    </details>
+    <% } %>
+</section>
+<% } %>
