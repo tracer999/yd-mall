@@ -29,6 +29,9 @@ const pool = require('../../config/db');
  * sku.status 는 옵션 노출 설정이라 별개다(파일 헤더). 새로 만드는 SKU 는 항상 ON.
  * fields.status 를 넘겨도 무시하므로 호출부는 그대로 둬도 된다.
  *
+ * `fields.stock` 이 undefined 면 재고를 건드리지 않는다(신규 생성 시에만 0). 재고의 편집
+ * 창구는 옵션·SKU 화면이라, 상품 폼 저장이 그 값을 덮어쓰면 안 된다.
+ *
  * @param {number} productId
  * @param {{mall_id?:number, price:number, stock:number, purchase_price?:number, sku_code?:string}} fields
  * @param {object} [conn] 트랜잭션 커넥션(없으면 pool)
@@ -45,8 +48,9 @@ async function syncDefaultSkuFromProduct(productId, fields, conn = pool) {
     if (prow && prow.product_type === 'OPTION') return null;
 
     const price = Number(fields.price) || 0;
-    const stock = Number(fields.stock) || 0;
     const purchasePrice = Number(fields.purchase_price) || 0;
+    const touchStock = fields.stock !== undefined && fields.stock !== null;
+    const stock = touchStock ? (Number(fields.stock) || 0) : 0;
 
     const [rows] = await conn.query(
         'SELECT id FROM product_sku WHERE product_id = ? AND is_default = 1 LIMIT 1',
@@ -57,12 +61,11 @@ async function syncDefaultSkuFromProduct(productId, fields, conn = pool) {
         // sku_code 는 예전엔 INSERT 에서만 넣어, 상품 폼에서 상품코드를 바꿔도 대표 SKU 는
         // 옛 코드를 들고 있었다(외부몰 발행 시 sellerManagerCode 가 어긋난다).
         // 다만 빈 값으로 덮어 지우지는 않는다 — COALESCE 로 값이 있을 때만 갱신.
-        await conn.query(
-            `UPDATE product_sku
-                SET price = ?, stock = ?, purchase_price = ?, sku_code = COALESCE(?, sku_code)
-              WHERE id = ?`,
-            [price, stock, purchasePrice, fields.sku_code || null, rows[0].id]
-        );
+        const sets = ['price = ?', 'purchase_price = ?', 'sku_code = COALESCE(?, sku_code)'];
+        const vals = [price, purchasePrice, fields.sku_code || null];
+        if (touchStock) { sets.splice(1, 0, 'stock = ?'); vals.splice(1, 0, stock); }
+        vals.push(rows[0].id);
+        await conn.query(`UPDATE product_sku SET ${sets.join(', ')} WHERE id = ?`, vals);
         return rows[0].id;
     }
 

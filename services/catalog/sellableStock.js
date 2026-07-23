@@ -101,8 +101,9 @@ async function loadSellableStock(productIds, conn = pool) {
  * `stock` 을 덮어써야 뷰·JSON-LD 가 고쳐지지 않은 채로 맞는 값을 읽는다.
  * 원본이 필요하면 `raw_stock` 에 남겨 둔다.
  *
- * SKU 행이 하나도 없으면 products.stock 을 그대로 둔다 — 관리자 목록의 eff_stock 폴백과
- * 같은 처리다. 없는 재고를 0 으로 단정해 멀쩡한 상품을 품절로 만들지 않는다.
+ * SKU 행이 하나도 없으면 **재고 0** 이다. 예전엔 products.stock 으로 폴백했는데,
+ * 재고의 소스 오브 트루스가 SKU 인 이상 "SKU 가 없다 = 팔 물건이 없다" 로 읽는 게 맞다.
+ * 모든 상품은 대표 SKU 를 갖게 되어(skuService) 이 분기는 사실상 방어선이다.
  *
  * @param {Array<object>|object} rows 상품 행(배열 또는 단건)
  * @param {{idKey?: string}} [opts] 상품 id 가 담긴 키(장바구니·히어로 슬라이드는 'product_id')
@@ -116,8 +117,7 @@ async function decorate(rows, opts = {}) {
 
     for (const row of list) {
         if (!row) continue;
-        const sellable = stockMap.get(Number(row[idKey]));
-        if (sellable == null) continue; // SKU 없음 → products.stock 유지
+        const sellable = stockMap.get(Number(row[idKey])) ?? 0; // SKU 없음 → 재고 0
         row.raw_stock = row.stock;
         row.stock = sellable;
         row.sellable_stock = sellable;

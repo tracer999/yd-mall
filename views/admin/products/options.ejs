@@ -12,7 +12,8 @@
 
     <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-6">
         옵션을 정의하고 <b>[조합 생성]</b> 을 누르면 옵션 조합별 SKU 행이 만들어집니다. 각 SKU 의 가격·재고를 입력한 뒤 저장하세요.
-        옵션을 모두 비우고 저장하면 단일상품으로 되돌아갑니다(대표 SKU 는 상품 편집 화면의 가격·재고를 따릅니다).
+        <b>기본 SKU</b> 는 상품이 항상 1개 갖는 행이라 삭제할 수 없고, 여기서 고친 가격·재고가 상품의 값이 됩니다.
+        옵션 조합 SKU 는 <b>[삭제]</b> 로 지울 수 있습니다. 옵션을 모두 비우고 저장하면 단일상품으로 되돌아갑니다.
     </div>
 
     <!-- 옵션 정의 -->
@@ -30,22 +31,25 @@
     <!-- SKU 그리드 -->
     <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="font-semibold text-gray-900">SKU (옵션 조합)</h2>
+            <h2 class="font-semibold text-gray-900">SKU</h2>
             <button type="button" id="genBtn" class="text-sm px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500">조합 생성</button>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-gray-500 border-b">
-                        <th class="py-2 pr-3">옵션 조합</th>
+                        <th class="py-2 pr-3">구분 / 옵션 조합</th>
                         <th class="py-2 px-2 w-28">판매가</th>
                         <th class="py-2 px-2 w-24">재고</th>
                         <th class="py-2 px-2 w-36">SKU코드</th>
                         <th class="py-2 px-2 w-20">상태</th>
+                        <th class="py-2 px-2 w-16"></th>
                     </tr>
                 </thead>
+                <%# 기본 SKU — 항상 맨 위 고정, 삭제 불가 %>
+                <tbody id="defaultBody"></tbody>
                 <tbody id="skuBody">
-                    <tr id="skuEmpty"><td colspan="5" class="py-6 text-center text-gray-400">옵션을 정의하고 [조합 생성] 을 누르세요.</td></tr>
+                    <tr id="skuEmpty"><td colspan="6" class="py-6 text-center text-gray-400">옵션을 정의하고 [조합 생성] 을 누르세요.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -64,6 +68,7 @@
     // 서버 초기 데이터
     const initOptions = <%- JSON.stringify(options || []) %>;
     const initSkus = <%- JSON.stringify(skus || []) %>;
+    const initDefaultSku = <%- JSON.stringify(defaultSku || null) %>;
 
     // value_id → value_name 맵 (기존 SKU 조합 복원용)
     const valueNameById = {};
@@ -71,6 +76,7 @@
 
     const optionsWrap = document.getElementById('optionsWrap');
     const skuBody = document.getElementById('skuBody');
+    const defaultBody = document.getElementById('defaultBody');
     const saveMsg = document.getElementById('saveMsg');
 
     // ── 옵션 UI ──
@@ -133,7 +139,70 @@
         tr.querySelector('.sku-stock').value = data ? data.stock : 0;
         tr.querySelector('.sku-code').value = data ? (data.sku_code || '') : '';
         tr.querySelector('.sku-status').value = data ? (data.status || 'ON') : 'ON';
+        tr.appendChild(removeCell(tr));
         return tr;
+    }
+
+    // 옵션 조합 SKU 는 행 단위로 지울 수 있다(저장 시 남은 행으로 전체를 다시 만든다).
+    function removeCell(tr) {
+        const td = document.createElement('td');
+        td.className = 'py-2 px-2 text-right';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'text-xs text-red-500 hover:text-red-700';
+        btn.textContent = '삭제';
+        btn.addEventListener('click', () => {
+            tr.remove();
+            if (!skuBody.querySelector('.sku-row')) renderSkuEmpty();
+        });
+        td.appendChild(btn);
+        return td;
+    }
+    function renderSkuEmpty() {
+        skuBody.innerHTML = '';
+        const tr = document.createElement('tr');
+        tr.id = 'skuEmpty';
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.className = 'py-6 text-center text-gray-400';
+        td.textContent = '옵션 조합 SKU 가 없습니다. 옵션을 정의하고 [조합 생성] 을 누르세요.';
+        tr.appendChild(td);
+        skuBody.appendChild(tr);
+    }
+
+    /*
+     * 기본(대표) SKU 행 — 상품이 항상 1행 갖는 SKU 라 삭제 버튼을 두지 않는다.
+     * 옵션상품은 기본 SKU 를 두지 않으므로(옵션 조합 SKU 만) 이 행도 그려지지 않는다.
+     */
+    function renderDefaultRow(data) {
+        defaultBody.innerHTML = '';
+        if (!data) return;
+        const tr = document.createElement('tr');
+        tr.className = 'default-sku-row border-b bg-gray-50';
+        tr.innerHTML =
+            '<td class="py-2 pr-3"><span class="px-1.5 py-0.5 rounded text-xs bg-gray-800 text-white">기본</span>' +
+            '<span class="ml-2 text-xs text-gray-500">옵션 없이 판매되는 기본 SKU</span></td>' +
+            '<td class="py-2 px-2"><input type="number" class="sku-price border rounded px-2 py-1 w-full" /></td>' +
+            '<td class="py-2 px-2"><input type="number" class="sku-stock border rounded px-2 py-1 w-full" /></td>' +
+            '<td class="py-2 px-2"><input type="text" class="sku-code border rounded px-2 py-1 w-full" /></td>' +
+            '<td class="py-2 px-2"><select class="sku-status border rounded px-2 py-1 w-full"><option value="ON">판매</option><option value="OFF">중지</option></select></td>' +
+            '<td class="py-2 px-2 text-right text-xs text-gray-400">삭제 불가</td>';
+        tr.querySelector('.sku-price').value = data.price != null ? data.price : BASE_PRICE;
+        tr.querySelector('.sku-stock').value = data.stock != null ? data.stock : 0;
+        tr.querySelector('.sku-code').value = data.sku_code || '';
+        tr.querySelector('.sku-status').value = data.status || 'ON';
+        defaultBody.appendChild(tr);
+    }
+
+    function readDefaultSku() {
+        const r = defaultBody.querySelector('.default-sku-row');
+        if (!r) return null;
+        return {
+            price: parseInt(r.querySelector('.sku-price').value, 10) || 0,
+            stock: parseInt(r.querySelector('.sku-stock').value, 10) || 0,
+            sku_code: r.querySelector('.sku-code').value.trim() || null,
+            status: r.querySelector('.sku-status').value,
+        };
     }
     function keyOf(names) { return names.join(''); }
 
@@ -153,7 +222,7 @@
         const combos = cartesian(opts.map(o => o.values));
         skuBody.innerHTML = '';
         combos.forEach(names => skuBody.appendChild(skuRow(names, existing[keyOf(names)])));
-        if (!combos.length) skuBody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-400">조합 없음</td></tr>';
+        if (!combos.length) skuBody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-gray-400">조합 없음</td></tr>';
     }
     document.getElementById('genBtn').addEventListener('click', generate);
 
@@ -177,7 +246,7 @@
             const resp = await fetch('/admin/products/options/' + PRODUCT_ID, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ options, skus }),
+                body: JSON.stringify({ options, skus, defaultSku: readDefaultSku() }),
             });
             const data = await resp.json();
             if (data.ok) {
@@ -195,6 +264,10 @@
     });
 
     // ── 초기 렌더 ──
+    // 기본 SKU 는 옵션 유무와 무관하게 먼저 그린다(있는 상품만). [조합 생성] 은 skuBody 만
+    // 다시 그리므로 이 행은 그대로 남는다.
+    renderDefaultRow(initDefaultSku);
+
     if (initOptions.length) {
         initOptions.forEach(o => optionsWrap.appendChild(optionRow(o.option_name, (o.values || []).map(v => v.value_name))));
         // 기존 SKU 조합 복원
@@ -203,7 +276,7 @@
             const names = (s.valueIds || []).map(id => valueNameById[id]).filter(Boolean);
             if (names.length) skuBody.appendChild(skuRow(names, { price: s.price, stock: s.stock, sku_code: s.sku_code, status: s.status }));
         });
-        if (!skuBody.children.length) skuBody.innerHTML = '<tr id="skuEmpty"><td colspan="5" class="py-6 text-center text-gray-400">옵션을 정의하고 [조합 생성] 을 누르세요.</td></tr>';
+        if (!skuBody.children.length) skuBody.innerHTML = '<tr id="skuEmpty"><td colspan="6" class="py-6 text-center text-gray-400">옵션을 정의하고 [조합 생성] 을 누르세요.</td></tr>';
     } else {
         optionsWrap.appendChild(optionRow());
     }

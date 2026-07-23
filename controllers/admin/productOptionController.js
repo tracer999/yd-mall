@@ -20,7 +20,8 @@ exports.getEditor = async (req, res) => {
         );
         if (!product) return res.redirect('/admin/products');
 
-        const { options, skus } = await optionService.getProductOptionsAndSkus(id);
+        // 관리자 편집기는 기본 SKU 도 함께 띄운다(삭제 불가 행).
+        const { options, skus, defaultSku } = await optionService.getProductOptionsAndSkus(id, pool, { includeDefault: true });
 
         res.render('admin/products/options', {
             layout: 'layouts/admin_layout',
@@ -28,6 +29,7 @@ exports.getEditor = async (req, res) => {
             product,
             options,
             skus,
+            defaultSku,
         });
     } catch (err) {
         console.error('[admin/options] getEditor error:', err);
@@ -70,6 +72,7 @@ exports.postSave = async (req, res) => {
         const result = await optionService.saveOptionProduct(conn, Number(id), mallId, {
             options: Array.isArray(payload.options) ? payload.options : [],
             skus: Array.isArray(payload.skus) ? payload.skus : [],
+            defaultSku: payload.defaultSku && typeof payload.defaultSku === 'object' ? payload.defaultSku : null,
         });
         await conn.commit();
         res.json({ ok: true, ...result });

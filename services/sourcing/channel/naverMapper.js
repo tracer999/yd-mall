@@ -219,7 +219,11 @@ function buildProductPayload(ctx) {
 
     const opt = buildOptionInfo(product, options, skus);
     const salePrice = opt ? opt.basePrice : toInt(product.price);
-    const stockQuantity = opt ? opt.totalStock : toInt(product.stock, 0);
+    // 단일상품 재고도 SKU 에서 낸다. products.stock 은 대표 SKU 의 미러일 뿐이라
+    // 옵션·SKU 화면에서 재고를 고치면 어긋난다(재고 기준은 SKU 뿐).
+    const stockQuantity = opt
+        ? opt.totalStock
+        : (skus || []).filter((s) => s.status !== 'OFF').reduce((a, s) => a + toInt(s.stock, 0), 0);
 
     const detailAttribute = {
         afterServiceInfo: {

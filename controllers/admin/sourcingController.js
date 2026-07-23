@@ -16,6 +16,7 @@ const importService = require('../../services/sourcing/importService');
 const { sanitize } = require('../../services/display/htmlSanitizer');
 const domeggookCategories = require('../../services/sourcing/supplier/domeggook/categories');
 const publishService = require('../../services/sourcing/publishService');
+const { sellableStockSql } = require('../../services/catalog/sellableStock');
 
 const BASE = '/admin/sourcing/connections';
 const NAVER_BASE = '/admin/sourcing/naver-taxonomy';
@@ -398,7 +399,7 @@ exports.postPublishToMall = async (req, res) => {
         if (r.failed) msg += ` (${r.failed}건 실패)`;
         const imgFailed = r.results.reduce((a, x) => a + (x.imageFailed || 0), 0);
         if (imgFailed) msg += ` 이미지 ${imgFailed}장은 가져오지 못했습니다.`;
-        msg += ' 판매 상태는 안전을 위해 기본 "판매중지"이니 상품 관리에서 확인 후 켜주세요.';
+        msg += ' 안전을 위해 기본 "판매중지 · 비노출"로 등록했으니 상품 관리에서 확인 후 켜주세요.';
 
         res.redirect(`${back}?msg=` + encodeURIComponent(msg));
     } catch (e) {
@@ -637,7 +638,7 @@ async function listPublishTargets(mallId, filters) {
     const offset = (page - 1) * PUBLISH_PAGE_SIZE;
 
     const [rows] = await pool.query(
-        `SELECT p.id, p.name, p.price, p.stock, p.status, p.product_type,
+        `SELECT p.id, p.name, p.price, ${sellableStockSql('p')} AS stock, p.status, p.product_type,
                 p.main_image, p.naver_category_id, p.product_code,
                 nc.whole_category_name AS naver_category_path,
                 m.id AS mapping_id, m.status AS map_status, m.origin_product_no,

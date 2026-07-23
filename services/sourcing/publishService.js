@@ -184,8 +184,14 @@ async function publishToMall(mallId, supplierProductId, opts = {}) {
     }
     const description = sanitize(sp.detail_html || '');
     const slug = await generateUniqueSlugFromName(name, null, null);
+    /*
+     * 가져온 상품은 검수 전이다(가격은 마진율만 곱한 자동 산정값, 상세 HTML 은 공급처 원문,
+     * 이미지는 일부 실패할 수 있다). 그래서 **상품 마스터에서** 판매중지 + 비노출로 만든다.
+     * SKU 는 건드리지 않는다 — SKU 의 on/off 는 옵션 셀렉트 박스 노출 설정이고,
+     * 여기서 내려 두면 나중에 판매를 켤 때 고를 수 있는 옵션이 하나도 없다.
+     */
     const status = ['ON', 'OFF', 'SOLD_OUT', 'COMING_SOON', 'RESTOCK'].includes(opts.status) ? opts.status : 'OFF';
-    const visibility = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'].includes(opts.visibility) ? opts.visibility : 'PUBLIC';
+    const visibility = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'].includes(opts.visibility) ? opts.visibility : 'HIDDEN';
 
     // 이미지 수집은 외부 I/O 라 트랜잭션 밖에서 먼저 끝낸다(락 유지 시간 최소화).
     const img = await ingestImages(sp);
@@ -226,7 +232,7 @@ async function publishToMall(mallId, supplierProductId, opts = {}) {
                     sp.supplier_item_no ? String(sp.supplier_item_no).slice(0, 100) : null,
                     sp.supplier_item_no ? String(sp.supplier_item_no).slice(0, 100) : null,
                     purchasePrice, price, Number(sp.inventory_qty) || 0,
-                    status === 'OFF' ? 'OFF' : 'ON',
+                    'ON', // 상품 마스터가 판매중지·비노출을 맡는다. SKU 는 항상 판매로 만든다.
                 ]
             );
             skuCount = 1;
@@ -276,7 +282,7 @@ async function publishToMall(mallId, supplierProductId, opts = {}) {
                         skuPurchase,
                         sellPrice(skuPurchase, marginRate),
                         Number(variant.qty) || 0,
-                        status === 'OFF' ? 'OFF' : 'ON',
+                        'ON', // 상품 마스터가 판매중지·비노출을 맡는다. SKU 는 항상 판매로 만든다.
                         r,
                     ]
                 );

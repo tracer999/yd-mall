@@ -12,14 +12,24 @@
  */
 
 const pool = require('../../config/db');
+const skuService = require('./skuService');
 
 /**
  * 상품의 옵션 + SKU 조합을 조회한다(관리자 편집/고객 표시 공용).
- * @returns {{options: Array, skus: Array}}
+ *
+ * 기본(대표) SKU 는 옵션 조합이 아니라서 기본적으로 제외한다 — 고객 상세의 옵션 셀렉트에
+ * 조합 아닌 행이 섞이면 안 된다. 관리자 편집기만 `includeDefault` 로 함께 받아
+ * 단일상품의 기본 SKU 를 화면에 띄운다.
+ *
+ * @param {number} productId
+ * @param {object} [conn]
+ * @param {{includeDefault?: boolean}} [opts]
+ * @returns {{options: Array, skus: Array, defaultSku: object|null}}
  *   options: [{id, option_name, values:[{id, value_name}]}]
  *   skus: [{id, sku_code, price, stock, status, valueIds:[product_option_value_id...]}]
+ *   defaultSku: 대표 SKU 1행(없으면 null) — includeDefault 일 때만 채운다
  */
-async function getProductOptionsAndSkus(productId, conn = pool) {
+async function getProductOptionsAndSkus(productId, conn = pool, opts = {}) {
     const [options] = await conn.query(
         'SELECT id, option_name, display_order FROM product_option WHERE product_id = ? ORDER BY display_order, id',
         [productId]
@@ -52,7 +62,16 @@ async function getProductOptionsAndSkus(productId, conn = pool) {
             s.valueIds = links.filter((l) => l.sku_id === s.id).map((l) => l.product_option_value_id);
         }
     }
-    return { options, skus };
+
+    let defaultSku = null;
+    if (opts.includeDefault) {
+        const [drows] = await conn.query(
+            'SELECT id, sku_code, barcode, price, stock, status FROM product_sku WHERE product_id = ? AND is_default = 1 LIMIT 1',
+            [productId]
+        );
+        defaultSku = drows[0] || null;
+    }
+    return { options, skus, defaultSku };
 }
 
 /**
@@ -62,23 +81,87 @@ async function getProductOptionsAndSkus(productId, conn = pool) {
  * @param {number} productId
  * @param {number} mallId
  * @param {{options: Array<{name:string, values:string[]}>,
- *          skus: Array<{valueNames:string[], price:number, stock:number, sku_code?:string, barcode?:string, status?:string}>}} payload
+ *          skus: Array<{valueNames:string[], price:number, stock:number, sku_code?:string, barcode?:string, status?:string}>,
+ *          defaultSku?: {price:number, stock:number, sku_code?:string, barcode?:string, status?:string}}} payload
  *
- * 기존 옵션·옵션SKU 는 지우고 새로 만든다(order_items.sku_id 는 FK 없는 스냅샷이라 이력 보존).
+ * 기존 **옵션 SKU** 는 지우고 새로 만든다(order_items.sku_id 는 FK 없는 스냅샷이라 이력 보존).
+ * 기본(대표) SKU 는 지우지 않는다 — 화면에서 삭제할 수 없는 행이고, 단일상품의 재고·가격이
+ * 여기 있다. payload.defaultSku 가 오면 그 값으로 갱신한다.
  * composite_component 가 참조하는 SKU 는 FK RESTRICT 로 보호되므로, 세트 구성 중인 SKU 가
  * 있으면 삭제가 막혀 예외가 난다(호출측이 롤백).
  */
+/**
+ * 화면에서 편집한 기본(대표) SKU 값을 반영한다. 대표 SKU 가 없으면 아무것도 하지 않는다
+ * (옵션상품은 대표 SKU 를 두지 않으므로 이 경로로 새로 만들지 않는다).
+ *
+ * products.price/stock 으로도 되쓴다. 상품 폼이 저장될 때 products → 대표 SKU 로
+ * 단방향 미러가 일어나므로(skuService), 여기서 되써 두지 않으면 폼 저장 한 번에
+ * 이 화면에서 고친 값이 옛 값으로 되돌아간다.
+ */
+async function applyDefaultSku(conn, productId, mallId, ds) {
+    if (!ds) return null;
+    const [drows] = await conn.query(
+        'SELECT id FROM product_sku WHERE product_id = ? AND is_default = 1 LIMIT 1',
+        [productId]
+    );
+    if (!drows.length) return null;
+
+    const price = Number(ds.price) || 0;
+    const stock = Number(ds.stock) || 0;
+    await conn.query(
+        `UPDATE product_sku
+            SET price = ?, stock = ?, sku_code = ?, barcode = ?, status = ?
+          WHERE id = ?`,
+        [price, stock, ds.sku_code || null, ds.barcode || null,
+         ds.status === 'OFF' ? 'OFF' : 'ON', drows[0].id]
+    );
+    await conn.query('UPDATE products SET price = ?, stock = ? WHERE id = ?', [price, stock, productId]);
+    return drows[0].id;
+}
+
 async function saveOptionProduct(conn, productId, mallId, payload) {
     const options = Array.isArray(payload.options) ? payload.options.filter((o) => o.name && o.values && o.values.length) : [];
     const skus = Array.isArray(payload.skus) ? payload.skus : [];
 
-    // 1) 기존 옵션·옵션SKU 제거 (대표 SKU 도 제거 — 옵션상품은 대표 SKU 를 두지 않는다)
+    // 1) 기존 옵션·옵션SKU 제거. 기본 SKU 는 남긴다(is_default = 0 조건).
     await conn.query('DELETE FROM product_option WHERE product_id = ?', [productId]); // value 는 CASCADE
-    await conn.query('DELETE FROM product_sku WHERE product_id = ?', [productId]);    // sku_option_value 는 CASCADE
+    await conn.query('DELETE FROM product_sku WHERE product_id = ? AND is_default = 0', [productId]); // sku_option_value 는 CASCADE
+
+    if (options.length) {
+        /*
+         * 옵션상품이 되면 기본 SKU 를 없앤다. 화면에서 "삭제 불가" 인 것은 사용자가 그 행만
+         * 지우는 조작을 막는다는 뜻이고, 단일 → 옵션 전환은 상품 구조 자체가 바뀌는 것이다.
+         * 남겨 두면 어떤 옵션 조합에도 매핑되지 않은 SKU 가 sellableStock 합에 그대로 더해져
+         * **판매가능재고가 이중 계상**된다(옵션상품은 대표 SKU 를 두지 않는다 — 이 파일 헤더).
+         */
+        await conn.query('DELETE FROM product_sku WHERE product_id = ? AND is_default = 1', [productId]);
+    } else {
+        // 2) 기본 SKU 갱신 — 이 화면이 단일상품 재고·가격의 편집 창구다.
+        //    products.price/stock 으로 미러백하지 않으면 상품 폼을 저장할 때 옛 값으로 되돌아간다.
+        await applyDefaultSku(conn, productId, mallId, payload.defaultSku);
+    }
 
     if (!options.length) {
-        // 옵션이 없으면 단일상품으로 되돌린다. 대표 SKU 는 상품 폼(skuService)이 다시 만든다.
+        // 옵션이 없으면 단일상품으로 되돌린다.
         await conn.query('UPDATE products SET product_type = ? WHERE id = ?', ['SINGLE', productId]);
+        /*
+         * 대표 SKU 가 아직 없으면 여기서 즉시 만든다. 관리자가 상품 폼을 다시 저장하기
+         * 전까지 SKU 0 행으로 남으면 재고가 0 으로 판정된다(sellableStock).
+         * 모든 상품은 항상 SKU 를 1행 이상 갖는다는 규칙을 이 경로에서도 지킨다.
+         */
+        const [[p]] = await conn.query(
+            'SELECT mall_id, price, stock, purchase_price, product_code FROM products WHERE id = ?',
+            [productId]
+        );
+        if (p) {
+            await skuService.syncDefaultSkuFromProduct(productId, {
+                mall_id: p.mall_id || mallId,
+                price: p.price,
+                stock: p.stock,
+                purchase_price: p.purchase_price,
+                sku_code: p.product_code,
+            }, conn);
+        }
         return { optionCount: 0, skuCount: 0 };
     }
 

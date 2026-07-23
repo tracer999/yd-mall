@@ -971,7 +971,8 @@ exports.postEdit = async (req, res) => {
             ['original_price', toNumber(original_price, null)],
             ['price', finalPrice],
             ['discount_rate', toNumber(discount_rate, 0)],
-            ['stock', toNumber(stock, 0)],
+            // 재고는 여기서 쓰지 않는다 — 편집 창구가 옵션·SKU 화면으로 넘어갔고,
+            // 수정 폼은 재고 칸을 보내지 않으므로 여기서 쓰면 0 으로 덮인다.
             ['status', status],
             // 신상품 판정 앵커. 비워두면 신상품에서 빠지므로 폼이 오늘 날짜를 프리필한다.
             ['sale_start_date', sale_start_date || null],
@@ -993,13 +994,12 @@ exports.postEdit = async (req, res) => {
             WHERE id=? AND mall_id=?
         `, updateValues);
 
-        // 대표 SKU 동기화 (전환기: products → 대표 SKU 단방향)
+        // 대표 SKU 동기화 (전환기: products → 대표 SKU 단방향).
+        // 재고는 빼고 보낸다 — 옵션·SKU 화면에서 고친 재고를 폼 저장이 덮으면 안 된다.
         await skuService.syncDefaultSkuFromProduct(Number(id), {
             mall_id: _mallId,
             price: finalPrice,
-            stock: toNumber(stock, 0),
             purchase_price: toNumber(purchase_price, 0),
-            status,
             sku_code: normalizedProductCode,
         });
 
@@ -1220,6 +1220,9 @@ exports.getDetail = async (req, res) => {
         if (rows.length === 0) return res.redirect('/admin/products');
 
         const product = rows[0];
+        // 화면의 "재고 수량" 을 SKU 기준(판매가능재고)으로 바꾼다. products.stock 을 그대로
+        // 보여주면 옵션상품에서 갱신되지 않은 값이 나온다. 원본은 raw_stock 에 남는다.
+        await decorateSellableStock([product]);
 
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
 
@@ -1264,6 +1267,9 @@ exports.getEdit = async (req, res) => {
         const _mallId = req.adminMallId || 1; // P5: 편집 중인 몰 스코프
         const [rows] = await pool.query('SELECT * FROM products WHERE id = ? AND mall_id = ?', [id, _mallId]);
         if (rows.length === 0) return res.redirect('/admin/products');
+
+        // 폼의 재고는 읽기 전용 표시라 SKU 기준 값으로 보여준다(옵션상품은 products.stock 이 stale).
+        await decorateSellableStock(rows);
 
         // P5: 편집 중인 몰의 카테고리만
         const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);

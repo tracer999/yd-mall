@@ -110,7 +110,7 @@
             <i class="bi bi-box-arrow-in-down"></i> 우리 몰 상품으로 등록
           </button>
           <span class="text-xs text-gray-500">
-            등록 시 <b>판매중지(OFF)</b> 상태로 만들어집니다 — 내용 확인 후 상품 관리에서 판매를 켜세요.
+            등록 시 <b>판매중지 · 비노출</b> 상태로 만들어집니다 — 내용 확인 후 상품 관리에서 판매·노출을 켜세요.
             <% if (variants.length) { %> 옵션 <%= variants.filter((v) => !v.is_hidden && v.available).length %>개가 SKU 로 생성됩니다.<% } %>
           </span>
         </div>
