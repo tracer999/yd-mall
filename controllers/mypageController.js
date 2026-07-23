@@ -610,6 +610,70 @@ exports.getPoints = async (req, res, next) => {
     }
 };
 
+/*
+ * 취소 · 반품 · 교환 신청 화면 (GET)
+ *
+ * 팝업이 아니라 전용 화면이다. 신청은 "어떤 상품을 돌려보낼지" 를 보면서 고르는 일이라
+ * 좁은 모달 안에서는 상품명·옵션·금액이 잘려 판단할 수가 없다.
+ *
+ * 고르는 방식은 둘 중 하나뿐이다 — **상품별 신청** 또는 **전체 신청**.
+ * 수량을 세게 하지 않는다. 같은 상품을 2개 사서 1개만 돌려보내는 일은 드물고,
+ * 그 드문 경우 때문에 모든 고객이 수량 입력을 마주하는 편이 나쁘다.
+ */
+exports.getClaimRequest = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        const orderId = Number(req.params.id);
+
+        const [[order]] = await pool.query(
+            'SELECT * FROM orders WHERE id = ? AND user_id = ?', [orderId, userId]);
+        if (!order) return res.redirect('/mypage/orders');
+
+        // 이미 처리 중인 신청이 있으면 새로 받지 않는다(주문 단위 가드와 같은 규칙).
+        if (order.claim_status === 'REQUESTED') {
+            return res.redirect(`/mypage/orders/${orderId}?claim_error=` +
+                encodeURIComponent('이미 처리 중인 신청이 있습니다. 처리 결과를 기다려 주세요.'));
+        }
+
+        const [[shipment]] = await pool.query(
+            "SELECT * FROM shipments WHERE order_id = ? AND direction = 'OUTBOUND'", [orderId]);
+
+        // 신청 가능 여부·유형은 claimService 가 판정한다(화면과 서버가 다른 규칙을 쓰지 않도록).
+        const allowed = claimService.claimability(order, shipment || null);
+        if (!allowed.types || !allowed.types.length) {
+            return res.redirect(`/mypage/orders/${orderId}?claim_error=` +
+                encodeURIComponent(allowed.reason || '지금은 신청할 수 없습니다.'));
+        }
+
+        const [items] = await pool.query(
+            `SELECT oi.*, p.thumbnail_image, p.slug
+               FROM order_items oi
+               LEFT JOIN products p ON oi.product_id = p.id
+              WHERE oi.order_id = ?
+              ORDER BY oi.id`, [orderId]);
+
+        // 이미 취소·반품한 만큼은 빼고 보여 준다.
+        const claimable = await partialClaimService.getClaimableItems(pool, orderId);
+        const byId = new Map(claimable.map((c) => [Number(c.id), c]));
+        const rows = items.map((it) => {
+            const c = byId.get(Number(it.id));
+            const remaining = c ? c.remaining_qty : Number(it.quantity);
+            return { ...it, remaining_qty: remaining, claimed_qty: c ? c.claimed_qty : 0 };
+        });
+
+        res.render('user/mypage/claim_request', {
+            title: allowed.types.includes('RETURN') ? '반품 · 교환 신청' : '주문 취소',
+            order,
+            items: rows,
+            selectable: rows.filter((r) => r.remaining_qty > 0),
+            types: allowed.types,
+            error: req.query.error || null,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 exports.cancelOrder = async (req, res, next) => {
     try {
         const userId = req.user.id;
@@ -635,17 +699,28 @@ exports.cancelOrder = async (req, res, next) => {
         const claimType = shipped ? (wantExchange ? 'EXCHANGE' : 'RETURN') : 'CANCEL';
 
         /*
-         * 부분 신청 — 화면에서 상품별 수량을 골랐으면 그 목록을 넘긴다.
-         * `item_qty[<order_item_id>]` 형태로 오며, 하나도 고르지 않았거나 전부 0이면
-         * 지금까지처럼 주문 전건 신청이 된다.
+         * 신청 범위 — 상품별이거나 전체거나, 둘 중 하나다.
+         *
+         *   item_id 가 오면  → 그 상품 **남은 수량 전부**
+         *   없으면(전체 버튼) → 주문 전건 (items = null)
+         *
+         * 수량은 받지 않는다. 화면에서 고르게 하지 않았으므로 서버도 세지 않는다 —
+         * 한쪽만 수량을 알면 "화면에는 1개라 적혀 있는데 2개가 취소된" 어긋남이 생긴다.
          */
         let items = null;
-        const qtyMap = req.body.item_qty;
-        if (qtyMap && typeof qtyMap === 'object') {
-            items = Object.entries(qtyMap)
-                .map(([orderItemId, q]) => ({ orderItemId: Number(orderItemId), quantity: Number(q) }))
-                .filter((i) => Number.isFinite(i.orderItemId) && Number.isFinite(i.quantity) && i.quantity > 0);
-            if (!items.length) items = null;
+        const rawItemId = Number(req.body.item_id);
+        if (Number.isFinite(rawItemId) && rawItemId > 0) {
+            const claimable = await partialClaimService.getClaimableItems(pool, Number(orderId));
+            const target = claimable.find((c) => Number(c.id) === rawItemId);
+            if (!target) {
+                return res.redirect(`/mypage/orders/${orderId}/claim?error=` +
+                    encodeURIComponent('주문에 없는 상품입니다.'));
+            }
+            if (target.remaining_qty <= 0) {
+                return res.redirect(`/mypage/orders/${orderId}/claim?error=` +
+                    encodeURIComponent(`'${target.product_name}' 은(는) 이미 처리되었습니다.`));
+            }
+            items = [{ orderItemId: rawItemId, quantity: target.remaining_qty }];
         }
 
         const result = await claimService.requestClaim({
@@ -660,7 +735,8 @@ exports.cancelOrder = async (req, res, next) => {
         });
 
         if (!result.ok) {
-            return res.redirect(`/mypage/orders/${orderId}?claim_error=` + encodeURIComponent(result.reason));
+            // 신청 화면으로 되돌려 사유를 그 자리에서 보여 준다(주문 상세로 튕기면 다시 들어와야 한다).
+            return res.redirect(`/mypage/orders/${orderId}/claim?error=` + encodeURIComponent(result.reason));
         }
 
         /*

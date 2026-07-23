@@ -1,0 +1,178 @@
+<%- include('./_shell_start') %>
+
+<%
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const canReturn = types.includes('RETURN');
+  const canExchange = types.includes('EXCHANGE');
+  const headline = canReturn ? '반품 · 교환 신청' : '주문 취소';
+  // 남은 상품이 주문 전체와 같은지 — 이미 일부를 처리한 주문이면 안내가 달라진다.
+  const partiallyDone = items.some((i) => i.claimed_qty > 0);
+%>
+
+<div class="bg-white rounded-lg shadow border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h3 class="text-lg font-bold text-gray-800"><%= headline %></h3>
+            <p class="mt-0.5 text-xs text-gray-500">주문번호 <%= order.order_number || order.id %></p>
+        </div>
+        <a href="/mypage/orders/<%= order.id %>" class="text-sm text-gray-500 hover:text-gray-800">주문 상세로 돌아가기</a>
+    </div>
+
+    <% if (error) { %>
+        <div class="mx-6 mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><%= error %></div>
+    <% } %>
+
+    <form method="POST" action="/mypage/orders/<%= order.id %>/cancel" id="claimForm" class="p-6 space-y-6">
+        <input type="hidden" name="reasonType" id="reasonType" value="CHANGE_OF_MIND">
+        <input type="hidden" name="reason" id="finalReason">
+
+        <!-- ① 신청 종류 (출고 후에만 선택지가 있다) -->
+        <% if (canExchange) { %>
+        <section>
+            <h4 class="text-sm font-bold text-gray-900 mb-2">1. 무엇을 신청하시나요?</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label class="flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer transition has-[:checked]:border-red-400 has-[:checked]:bg-red-50">
+                    <input type="radio" name="claim_type" value="RETURN" checked class="mt-0.5">
+                    <span>
+                        <span class="block text-sm font-semibold text-gray-900">반품</span>
+                        <span class="block text-xs text-gray-500 mt-0.5">상품을 돌려보내고 <b>환불</b>받습니다.</span>
+                    </span>
+                </label>
+                <label class="flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer transition has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">
+                    <input type="radio" name="claim_type" value="EXCHANGE" class="mt-0.5">
+                    <span>
+                        <span class="block text-sm font-semibold text-gray-900">교환</span>
+                        <span class="block text-xs text-gray-500 mt-0.5">같은 상품을 <b>다시 받습니다</b>(환불 없음).</span>
+                    </span>
+                </label>
+            </div>
+        </section>
+        <% } %>
+
+        <!-- ② 사유 -->
+        <section>
+            <h4 class="text-sm font-bold text-gray-900 mb-2"><%= canExchange ? '2' : '1' %>. 사유를 알려 주세요</h4>
+            <select id="reasonSelect" onchange="onReasonChange(this)"
+                    class="w-full sm:w-80 rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <% if (canReturn) { %>
+                    <option value="CHANGE_OF_MIND|단순 변심">단순 변심</option>
+                    <option value="DEFECT|상품 불량">상품 불량</option>
+                    <option value="WRONG_DELIVERY|오배송">오배송</option>
+                    <option value="OTHER|기타">기타 (직접 입력)</option>
+                <% } else { %>
+                    <option value="CHANGE_OF_MIND|단순 변심">단순 변심</option>
+                    <option value="CHANGE_OF_MIND|주문 실수">주문 실수</option>
+                    <option value="OTHER|배송 지연">배송 지연</option>
+                    <option value="OTHER|기타">기타 (직접 입력)</option>
+                <% } %>
+            </select>
+            <div id="etcBox" class="mt-2 hidden">
+                <textarea id="reasonDetail" rows="2" placeholder="사유를 입력해 주세요."
+                          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"></textarea>
+            </div>
+            <% if (canReturn) { %>
+                <p class="mt-2 text-xs text-gray-500">
+                    <b>단순 변심</b>은 왕복 배송비가 환불액에서 차감됩니다. <b>상품 불량 · 오배송</b>은 배송비를 받지 않습니다.
+                </p>
+            <% } %>
+        </section>
+
+        <!-- ③ 대상 상품 -->
+        <section>
+            <h4 class="text-sm font-bold text-gray-900 mb-1"><%= canExchange ? '3' : '2' %>. 어떤 상품인가요?</h4>
+            <p class="text-xs text-gray-500 mb-3">
+                상품별로 신청하거나, 아래 <b>전체 신청</b> 버튼으로 주문 전체를 한 번에 신청할 수 있습니다.
+                <% if (partiallyDone) { %><br><span class="text-amber-700">이미 처리된 상품은 신청할 수 없습니다.</span><% } %>
+            </p>
+
+            <ul class="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                <% items.forEach(function (it) { %>
+                    <li class="flex flex-wrap items-center gap-3 p-3 <%= it.remaining_qty > 0 ? '' : 'bg-gray-50' %>">
+                        <% if (it.thumbnail_image) { %>
+                            <img src="<%= it.thumbnail_image %>" alt="" class="h-14 w-14 rounded object-cover border border-gray-100">
+                        <% } else { %>
+                            <div class="h-14 w-14 rounded bg-gray-100"></div>
+                        <% } %>
+                        <div class="flex-1 min-w-[160px]">
+                            <p class="text-sm font-medium text-gray-900"><%= it.product_name %></p>
+                            <% if (it.option_snapshot) { %>
+                                <p class="text-xs text-gray-500"><%= it.option_snapshot %></p>
+                            <% } %>
+                            <p class="text-xs text-gray-500 mt-0.5">
+                                <%= won(it.product_price) %>원 · <%= it.quantity %>개
+                                <% if (it.claimed_qty > 0) { %>
+                                    <span class="text-amber-700">· <%= it.claimed_qty %>개 처리됨</span>
+                                <% } %>
+                            </p>
+                        </div>
+                        <div class="ml-auto">
+                            <% if (it.remaining_qty > 0) { %>
+                                <button type="submit" name="item_id" value="<%= it.id %>"
+                                        onclick="return prepare(this)"
+                                        class="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+                                    이 상품만 <%= canReturn ? '신청' : '취소' %>
+                                </button>
+                            <% } else { %>
+                                <span class="inline-block rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-400">처리 완료</span>
+                            <% } %>
+                        </div>
+                    </li>
+                <% }); %>
+            </ul>
+        </section>
+
+        <!-- ④ 전체 신청 -->
+        <section class="pt-1">
+            <% if (selectable.length) { %>
+                <button type="submit" onclick="return prepare(this, true)"
+                        class="w-full rounded-lg bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700">
+                    주문 전체 <%= canReturn ? '신청' : '취소' %>하기 (<%= selectable.length %>개 상품)
+                </button>
+                <p class="mt-2 text-xs text-gray-500 text-center">
+                    <% if (canReturn) { %>
+                        신청 후 담당자 확인을 거쳐 처리됩니다. 처리 상황은 <a href="/mypage/claims" class="underline">취소·반품 내역</a>에서 볼 수 있습니다.
+                    <% } else if (['PENDING','PAID'].includes(order.status)) { %>
+                        아직 출고 전이라 <b>신청 즉시 취소·환불이 완료</b>됩니다.
+                    <% } else { %>
+                        상품 준비가 시작되어 담당자 확인 후 처리됩니다.
+                    <% } %>
+                </p>
+            <% } else { %>
+                <p class="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500 text-center">신청할 수 있는 상품이 없습니다.</p>
+            <% } %>
+        </section>
+    </form>
+</div>
+
+<script>
+    // 옵션 값은 "REASON_TYPE|표시라벨" 형식이다. 유형은 서버가 귀책 판정에 쓴다.
+    function onReasonChange(select) {
+        const [type] = select.value.split('|');
+        document.getElementById('reasonType').value = type;
+        document.getElementById('etcBox').classList.toggle('hidden', type !== 'OTHER');
+    }
+
+    /*
+     * 제출 직전에 사유를 확정한다.
+     * 상품별 버튼은 name="item_id" 로 자기 값을 함께 보내고, 전체 버튼은 아무 값도 보내지 않는다
+     * (서버는 item_id 유무로 범위를 가른다).
+     */
+    function prepare(btn, isAll) {
+        const select = document.getElementById('reasonSelect');
+        const detail = document.getElementById('reasonDetail');
+        const [type, label] = select.value.split('|');
+
+        let reason = label;
+        if (type === 'OTHER') {
+            if (!detail.value.trim()) { alert('상세 사유를 입력해 주세요.'); detail.focus(); return false; }
+            reason = detail.value.trim();
+        }
+        document.getElementById('reasonType').value = type;
+        document.getElementById('finalReason').value = reason;
+
+        const what = isAll ? '주문 전체를' : '이 상품을';
+        return confirm(what + ' 신청할까요?');
+    }
+</script>
+
+<%- include('./_shell_end') %>
