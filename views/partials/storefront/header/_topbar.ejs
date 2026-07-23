@@ -5,12 +5,19 @@
    * res.locals.topbar 가 null 이면(= 등록된 배너·알림이 하나도 없으면) 아무것도 렌더하지 않는다.
    * 관리자: /admin/header-settings 의 '톱바(배너·알림)' 섹션.
    *
-   * 배너 크기는 **개수로 정한다** — 1개는 크게 한 폭, 2개는 절반씩, 3개는 1/3씩.
-   * 개수와 무관하게 같은 높이를 쓰면 3개일 때 톱바가 페이지를 잡아먹는다.
+   * 톱바는 **두 가지 모드**로 그린다. 판정 기준은 "이미지 배너가 하나라도 있는가".
+   *
+   *   A) 스트립 모드 (배너가 전부 텍스트) — 기본. 밴드를 최소 두께(상하 6px)로 눕히고,
+   *      각 배너를 **글자 길이만큼만 차지하는 알약(pill)** 으로 가운데 나열한다.
+   *      칸을 1/2·1/3 로 나눠 고정 높이를 주면 "여섯 글자"에도 카드 한 칸이 통째로 나가고
+   *      톱바가 페이지 상단을 잡아먹는다. 폭은 글자가 정하고, 높이는 한 줄이면 충분하다.
+   *
+   *   B) 카드 모드 (이미지 배너가 있음) — 이미지는 면적이 있어야 읽히므로 기존 그대로.
+   *      개수로 칸을 나누고(1개 한 폭 / 2개 2단 / 3개 3단) 개수별 고정 높이를 준다.
    *
    * 배너 내용의 우선순위: **이미지 1순위, 대체 텍스트가 폴백**.
    *   1) 이미지가 있으면 이미지를 낸다.
-   *   2) 이미지가 없으면 대체 텍스트를 '텍스트 배너'(이미지 배너와 같은 칸·같은 높이의 카드)로 낸다.
+   *   2) 이미지가 없으면 대체 텍스트를 텍스트 배너로 낸다(모드에 따라 알약 또는 카드).
    *   3) 이미지가 있는데 로드에 실패하면(404·차단 등) 클라이언트에서 텍스트 배너로 갈아끼운다.
    *      서버는 로드 성공 여부를 알 수 없으므로 폴백 마크업을 미리 숨겨서 함께 내려보낸다.
    */
@@ -19,11 +26,38 @@
 <% if (_tb) { %>
     <%
       const _n = _tb.banners.length;
+      const _hasImage = _tb.banners.some((b) => !!b.image_url);
+      const _textOnly = _n > 0 && !_hasImage;
+
       const _grid = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' }[_n] || 'grid-cols-1';
-      // 개수별 높이 — 많아질수록 낮게. 모바일은 한 단계 더 낮다.
+      // 개수별 높이 — 많아질수록 낮게. 모바일은 한 단계 더 낮다. (카드 모드 전용)
       const _h = { 1: 'h-20 md:h-28', 2: 'h-14 md:h-20', 3: 'h-11 md:h-16' }[_n] || '';
-      // 텍스트 배너의 글자 크기도 칸 크기를 따라간다 — 3단에 큰 글씨를 넣으면 잘린다.
+      // 텍스트 배너의 글자 크기도 칸 크기를 따라간다 — 3단에 큰 글씨를 넣으면 잘린다. (카드 모드 전용)
       const _ts = { 1: 'text-[15px] md:text-xl', 2: 'text-[13px] md:text-base', 3: 'text-[11px] md:text-sm' }[_n] || 'text-sm';
+
+      /*
+       * 알약 등급 — **글자 수가 디자인을 정한다.**
+       * 짧은 문구는 헤드라인처럼 강하게(흰 솔리드), 길어질수록 톤을 낮춰 배경에 눕힌다.
+       * 같은 스타일을 길이에 상관없이 쓰면 "신상품 입고"는 초라하고 "여름 시즌 최대 80% …"는 시끄럽다.
+       * 공백을 뺀 길이로 센다 — 한글은 공백이 적고 영문·숫자는 공백이 많아 그대로 세면 기준이 흔들린다.
+       */
+      const _tierOf = (s) => {
+        const len = String(s || '').replace(/\s/g, '').length;
+        return len <= 12 ? 'punch' : (len <= 28 ? 'base' : 'long');
+      };
+      const _pillBase = 'group inline-flex max-w-full items-center gap-1.5 rounded-full leading-[1.35] transition-all duration-200';
+      const _pill = {
+        // 12자 이하 — 반전 알약. 짧으니 가장 크고 진하게, 그림자로 한 겹 띄운다.
+        punch: 'px-3.5 py-[4px] text-[13px] md:text-sm font-extrabold tracking-[-0.01em] '
+             + 'bg-white text-[var(--gh-primary-dark)] shadow-[0_1px_2px_rgba(0,0,0,0.28)] '
+             + 'hover:-translate-y-px hover:shadow-[0_3px_8px_rgba(0,0,0,0.35)]',
+        // 13~28자 — 유리 알약. 바탕에 얹히되 테두리로 경계를 남긴다.
+        base: 'px-3 py-[4px] text-[12px] md:text-[13px] font-semibold text-white '
+            + 'bg-white/[0.14] ring-1 ring-inset ring-white/30 hover:bg-white/25 hover:ring-white/50',
+        // 29자 이상 — 고스트 알약. 읽을거리에 가까우므로 조용하게, 넘치면 말줄임.
+        long: 'px-2.5 py-[3px] text-[11px] md:text-xs font-medium text-white/85 '
+            + 'ring-1 ring-inset ring-white/20 hover:text-white hover:ring-white/40',
+      };
     %>
 
     <script>
@@ -44,7 +78,36 @@
          class="relative bg-[var(--gh-primary-dark)] text-white">
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <% if (_n) { %>
+            <% if (_textOnly) { %>
+                <%#
+                  스트립 모드 — 밴드 상하 여백은 6px 뿐.
+                  알약이 한 줄에 다 안 들어가면(좁은 화면) 줄바꿈 대신 **한 개씩 번갈아** 보여 준다.
+                  줄바꿈을 허용하면 3개일 때 모바일에서 3줄이 되어 얇은 띠라는 의도가 무너진다(아래 스크립트).
+                  pr-8 은 닫기(×) 자리 — 알약이 버튼 밑으로 들어가지 않게 비워 둔다.
+                %>
+                <div id="yd-topbar-strip" class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 py-1.5 pr-8">
+                    <% _tb.banners.forEach(function (b) { %>
+                        <%
+                          const _text = b.message || '';
+                          const _isLink = !!b.link_url;
+                          const _tier = _tierOf(_text);
+                          const _cls = _pillBase + ' ' + _pill[_tier];
+                        %>
+                        <% if (_isLink) { %>
+                            <a href="<%= b.link_url %>" <%- Number(b.new_window) ? 'target="_blank" rel="noopener noreferrer"' : '' %>
+                               class="<%= _cls %>">
+                        <% } else { %>
+                            <span class="<%= _cls %>">
+                        <% } %>
+                            <%# 말줄임은 긴 등급에만 — 짧은 문구는 잘릴 일이 없고, truncate 를 걸면 알약이 늘어난다. %>
+                            <span class="<%= _tier === 'long' ? 'block truncate max-w-[62vw] md:max-w-[46ch]' : 'whitespace-nowrap' %>"><%= _text %></span>
+                            <% if (_isLink) { %>
+                                <i class="bi bi-arrow-right text-[0.85em] opacity-70 transition-transform group-hover:translate-x-0.5"></i>
+                            <% } %>
+                        <% if (_isLink) { %></a><% } else { %></span><% } %>
+                    <% }); %>
+                </div>
+            <% } else if (_n) { %>
                 <div class="grid <%= _grid %> gap-2 py-2">
                     <% _tb.banners.forEach(function (b) { %>
                         <%
@@ -101,8 +164,8 @@
             <% } %>
 
             <% if (_tb.notice) { %>
-                <%# 알림 문구 — 배너와 함께 쓰면 배너 아래 한 줄. 닫기 버튼 자리(pr-10)를 비워 둔다. %>
-                <div class="flex items-center justify-center py-2 pr-8 text-center text-[13px] <%= _n ? 'border-t border-white/15' : '' %>">
+                <%# 알림 문구 — 배너와 함께 쓰면 배너 아래 한 줄. 닫기 버튼 자리(pr-8)를 비워 둔다. %>
+                <div class="flex items-center justify-center py-1.5 pr-8 text-center text-[13px] leading-[1.35] <%= _n ? 'border-t border-white/15' : '' %>">
                     <% if (_tb.notice.link_url) { %>
                         <a href="<%= _tb.notice.link_url %>" <%- Number(_tb.notice.new_window) ? 'target="_blank" rel="noopener noreferrer"' : '' %>
                            class="inline-flex items-center gap-1.5 hover:underline">
@@ -118,11 +181,108 @@
             <% } %>
         </div>
 
+        <%#
+          닫기 — 카드 모드에선 우상단, 스트립 모드에선 밴드가 버튼보다 얇아질 수 있으므로 세로 가운데.
+        %>
         <button type="button" id="yd-topbar-close" aria-label="상단 알림 닫기"
-                class="absolute top-1.5 right-1.5 md:right-3 flex items-center justify-center w-7 h-7 rounded-full text-white/80 hover:text-white hover:bg-white/15 transition-colors">
+                class="absolute right-1.5 md:right-3 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/15 transition-colors
+                       <%= (_textOnly && !_tb.notice) ? 'top-1/2 -translate-y-1/2 w-6 h-6' : 'top-1.5 w-7 h-7' %>">
             <i class="bi bi-x-lg text-xs"></i>
         </button>
     </div>
+
+    <% if (_textOnly && _n > 1) { %>
+    <script>
+      /*
+       * 스트립 모드 순환 — 알약이 한 줄에 다 안 들어갈 때만 하나씩 번갈아 보여 준다.
+       * 넘치는지는 폭을 재서 판단한다(글자 수·화면 폭·폰트에 따라 달라지므로 브레이크포인트로는 못 정한다).
+       * 다 들어가면 순환하지 않는다 — 가만히 있는 편이 읽기 쉽고, 링크도 바로 누를 수 있다.
+       */
+      (function () {
+        var strip = document.getElementById('yd-topbar-strip');
+        if (!strip) return;
+        var pills = Array.prototype.slice.call(strip.children);
+        if (pills.length < 2) return;
+
+        var INTERVAL = 4000;
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var idx = 0, timer = null, cycling = false;
+
+        var GAP = 8;   // gap-x-2
+
+        function overflows() {
+          /*
+           * 알약 폭의 합으로 잰다. flex-wrap 을 nowrap 으로 바꿔 scrollWidth 를 보는 방법은
+           * 자식이 flex-shrink 로 쪼그라들어 넘침이 사라지므로 항상 "들어간다"고 답한다.
+           */
+          pills.forEach(function (p) { p.style.display = ''; });
+          var total = GAP * (pills.length - 1);
+          pills.forEach(function (p) { total += p.getBoundingClientRect().width; });
+
+          // clientWidth 에는 닫기 버튼 자리(pr-8)가 들어 있다 — 빼야 실제로 알약이 쓸 수 있는 폭이다.
+          var cs = getComputedStyle(strip);
+          var avail = strip.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+          return total > avail + 1;
+        }
+
+        function show(i, animate) {
+          pills.forEach(function (p, k) { p.style.display = (k === i) ? '' : 'none'; });
+          if (animate && !reduce && pills[i].animate) {
+            pills[i].animate(
+              [{ opacity: 0, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }],
+              { duration: 260, easing: 'ease-out' }
+            );
+          }
+        }
+
+        function start() {
+          if (timer) return;
+          cycling = true;
+          show(idx, false);
+          timer = setInterval(function () {
+            idx = (idx + 1) % pills.length;
+            show(idx, true);
+          }, INTERVAL);
+        }
+
+        function stop() {
+          if (timer) { clearInterval(timer); timer = null; }
+          cycling = false;
+          pills.forEach(function (p) { p.style.display = ''; });
+        }
+
+        function apply() {
+          if (overflows()) start(); else stop();
+        }
+
+        // 읽는 중에 넘어가지 않게 — 마우스를 올리면 멈춘다.
+        strip.addEventListener('mouseenter', function () { if (cycling && timer) { clearInterval(timer); timer = null; } });
+        strip.addEventListener('mouseleave', function () { if (cycling && !timer) start(); });
+
+        /*
+         * 터치 기기엔 hover 가 없다 — 누르려는 순간 다음 알약으로 바뀌면 엉뚱한 링크를 누르게 된다.
+         * 손이 닿으면 잠시 멈춘다(보이는 알약은 그대로 두고 타이머만).
+         */
+        strip.addEventListener('touchstart', function () {
+          if (!cycling || !timer) return;
+          clearInterval(timer); timer = null;
+          setTimeout(function () { if (cycling && !timer) start(); }, 8000);
+        }, { passive: true });
+
+        var rt = null;
+        window.addEventListener('resize', function () {
+          clearTimeout(rt);
+          rt = setTimeout(function () { stop(); apply(); }, 150);
+        });
+
+        apply();
+        // 웹폰트가 늦게 오면 글자 폭이 달라진다 — 로드 후 한 번 더 판정한다.
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(function () { stop(); apply(); });
+        }
+      })();
+    </script>
+    <% } %>
 
     <script>
       /*

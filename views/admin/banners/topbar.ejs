@@ -52,8 +52,11 @@
 <div class="mb-5 px-4 py-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800 leading-relaxed">
   <ul class="list-disc pl-4 space-y-0.5">
     <li><strong>배너와 알림이 모두 없으면 톱바 자체가 노출되지 않습니다.</strong></li>
-    <li>배너는 <strong>등록 개수에 따라 크기가 달라집니다</strong> — 1개: 한 폭 큰 배너 / 2개: 2단 / 3개: 3단.
+    <li><strong>이미지 배너</strong>는 등록 개수에 따라 크기가 달라집니다 — 1개: 한 폭 큰 배너 / 2개: 2단 / 3개: 3단.
         현재 노출 중인 배너 <strong><%= _bannerCount %></strong>개.</li>
+    <li><strong>이미지 없이 텍스트만 등록하면</strong> 톱바가 아주 얇은 띠가 되고, 문구는
+        <strong>글자 길이만큼만 차지하는 알약</strong>으로 가운데 놓입니다.
+        글자 수가 적을수록 크고 진하게 노출됩니다(아래 미리보기 참고).</li>
     <li><strong>이미지가 1순위입니다.</strong> 이미지를 올리지 않았거나 이미지가 열리지 않으면,
         <strong>대체 텍스트</strong>가 이미지 배너와 같은 자리·같은 크기의 <strong>텍스트 배너</strong>로 노출됩니다.
         이미지와 대체 텍스트가 <strong>모두 비면</strong> 그 슬롯은 삭제됩니다.</li>
@@ -134,13 +137,15 @@
             <img data-tb-image alt="" style="display:none" class="w-full h-20 object-cover rounded border border-gray-100">
           <% } %>
 
+          <%#
+            텍스트 배너 미리보기 — 실제 톱바(스트립 모드)와 같은 모양.
+            글자 수에 따라 알약 등급이 달라지므로 밴드 높이가 아니라 알약 자체를 보여 준다.
+          %>
           <div data-tb-text-preview <%- _b.image_url ? 'style="display:none"' : '' %>
-               class="w-full h-20 rounded border border-gray-200 bg-slate-800 p-2">
-            <div class="w-full h-full flex items-center justify-center px-2 text-center rounded-md
-                        bg-gradient-to-br from-white/20 via-white/10 to-white/[0.04] ring-1 ring-inset ring-white/25">
-              <span data-tb-text-value class="font-semibold text-[13px] line-clamp-2 <%= _b.message ? 'text-white' : 'text-white/40 font-normal text-[11px]' %>"><%= _b.message || '대체 텍스트를 입력하면 이렇게 노출됩니다' %></span>
-            </div>
+               class="w-full rounded border border-gray-200 bg-slate-800 px-3 py-1.5 flex items-center justify-center min-h-[46px]">
+            <span data-tb-text-value class="text-white/40 text-[11px]"><%= _b.message || '대체 텍스트를 입력하면 이렇게 노출됩니다' %></span>
           </div>
+          <p data-tb-tier-hint class="text-[11px] text-gray-400 -mt-1"></p>
 
           <% if (_b.image_url) { %>
             <label class="inline-flex items-center gap-1.5 text-xs text-red-600">
@@ -205,10 +210,32 @@
   (function () {
     var PLACEHOLDER = '대체 텍스트를 입력하면 이렇게 노출됩니다';
 
+    /*
+     * 알약 등급 — 규칙은 스토어프론트(views/partials/storefront/header/_topbar.ejs)와 같아야 한다.
+     * 여기가 어긋나면 미리보기가 거짓말을 한다. 한쪽을 고치면 반드시 다른 쪽도 고칠 것.
+     * (색만 다르다 — 관리자 화면에는 스토어 테마 변수 --gh-primary-dark 가 없어 slate 로 대체)
+     */
+    var PILL_BASE = 'inline-flex max-w-full items-center rounded-full leading-[1.35]';
+    var PILL = {
+      punch: 'px-3.5 py-[4px] text-[13px] font-extrabold tracking-[-0.01em] bg-white text-slate-800 shadow-[0_1px_2px_rgba(0,0,0,0.28)]',
+      base: 'px-3 py-[4px] text-[12px] font-semibold text-white bg-white/[0.14] ring-1 ring-inset ring-white/30',
+      long: 'px-2.5 py-[3px] text-[11px] font-medium text-white/85 ring-1 ring-inset ring-white/20'
+    };
+    var TIER_HINT = {
+      punch: '짧은 문구 — 흰 알약으로 가장 강하게 노출됩니다. (공백 제외 12자 이하)',
+      base: '보통 길이 — 반투명 알약으로 노출됩니다. (공백 제외 13~28자)',
+      long: '긴 문구 — 작고 조용한 알약으로 노출되며, 화면이 좁으면 말줄임됩니다. (공백 제외 29자 이상)'
+    };
+    function tierOf(s) {
+      var n = String(s || '').replace(/\s/g, '').length;
+      return n <= 12 ? 'punch' : (n <= 28 ? 'base' : 'long');
+    }
+
     Array.prototype.forEach.call(document.querySelectorAll('[data-tb-slot]'), function (cell) {
       var img = cell.querySelector('[data-tb-image]');
       var textBox = cell.querySelector('[data-tb-text-preview]');
       var textVal = cell.querySelector('[data-tb-text-value]');
+      var hint = cell.querySelector('[data-tb-tier-hint]');
       var alt = cell.querySelector('[data-tb-alt]');
       var file = cell.querySelector('[data-tb-file]');
       var del = cell.querySelector('[data-tb-delete]');
@@ -227,11 +254,14 @@
         if (textBox) textBox.style.display = src ? 'none' : '';
 
         var value = alt ? alt.value.trim() : '';
+        var tier = tierOf(value);
         if (textVal) {
           textVal.textContent = value || PLACEHOLDER;
-          textVal.className = 'line-clamp-2 ' +
-            (value ? 'font-semibold text-[13px] text-white' : 'text-[11px] text-white/40');
+          textVal.className = value
+            ? (PILL_BASE + ' ' + PILL[tier] + (tier === 'long' ? ' block truncate' : ''))
+            : 'text-[11px] text-white/40';
         }
+        if (hint) hint.textContent = (value && !src) ? TIER_HINT[tier] : '';
       }
 
       if (alt) alt.addEventListener('input', sync);
