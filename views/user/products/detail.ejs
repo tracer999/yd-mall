@@ -387,6 +387,25 @@
                                                      data-is-option="<%= _hasOptions ? '1' : '0' %>"
                                                      <% if (_showB2bPrice) { %>data-b2b-price="1"<% } %>>
                                                     <% if (_hasOptions) { %>
+                                                        <%
+                                                          /*
+                                                           * 옵션값별 품절 표시.
+                                                           * 그 값으로 만들 수 있는 SKU 가 하나라도 있는데 전부 못 파는 상태면 '(품절)'.
+                                                           * 판정 기준은 아래 옵션선택 스크립트·결제와 같다 — status='ON' AND stock>0.
+                                                           * sellableStock 의 정의에는 stock_managed=1 이 더 붙지만, 여기 목록은 옵션 SKU(is_default=0)
+                                                           * 뿐이라 그 절이 걸릴 일이 없다 — 복합상품은 옵션 SKU 를 지우고 대표 SKU 하나만
+                                                           * stock_managed=0 으로 두기 때문이다(compositeService §112).
+                                                           * 조합 자체가 없는 값은 '품절'이 아니라 '판매 안 함'이라 표시하지 않는다
+                                                           * (선택하면 아래 요약줄이 "판매하지 않습니다"로 알려 준다).
+                                                           * 다축 상품에서 다른 축을 고른 뒤의 재판정은 아래 스크립트가 맡는다.
+                                                           */
+                                                          const _dSkus = (typeof productSkus !== 'undefined' && productSkus) || [];
+                                                          const _dSellable = (s) => s.status !== 'OFF' && Number(s.stock || 0) > 0;
+                                                          const _dValueSoldOut = (valueId) => {
+                                                            const matched = _dSkus.filter((s) => (s.valueIds || []).indexOf(valueId) >= 0);
+                                                            return matched.length > 0 && !matched.some(_dSellable);
+                                                          };
+                                                        %>
                                                         <div class="space-y-3 mb-4">
                                                             <% productOptions.forEach(function(opt, oi){ %>
                                                                 <div>
@@ -394,7 +413,7 @@
                                                                     <select class="opt-select w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-oi="<%= oi %>">
                                                                         <option value="">선택하세요</option>
                                                                         <% (opt.values||[]).forEach(function(v){ %>
-                                                                            <option value="<%= v.id %>"><%= v.value_name %></option>
+                                                                            <option value="<%= v.id %>" data-label="<%= v.value_name %>"><%= v.value_name %><%= _dValueSoldOut(v.id) ? ' (품절)' : '' %></option>
                                                                         <% }) %>
                                                                     </select>
                                                                 </div>
@@ -450,7 +469,33 @@
                                                     }
                                                     setEnabled(false);
 
+                                                    /*
+                                                     * 옵션값 라벨의 '(품절)' 재계산.
+                                                     * 서버가 이미 "전 조합 품절"인 값에는 붙여 놓았다(위 EJS). 여기서는 **이미 고른 다른 축**을
+                                                     * 반영해 다시 센다 — 색상을 고르면 그 색으로 만들 수 있는 사이즈만 보고 판정해야 하기 때문이다.
+                                                     * 원본 이름은 data-label 에 있어, 다시 그릴 때 '(품절)'이 겹쳐 붙지 않는다.
+                                                     */
+                                                    function sellable(s){ return s.status !== 'OFF' && Number(s.stock||0) > 0; }
+                                                    function refreshOptionLabels(){
+                                                        var picked = selects.map(function(s){ return s.value ? Number(s.value) : null; });
+                                                        selects.forEach(function(sel, i){
+                                                            [].slice.call(sel.options).forEach(function(o){
+                                                                if(!o.value) return;
+                                                                var base = o.dataset.label || o.textContent;
+                                                                var need = picked.slice();
+                                                                need[i] = Number(o.value);              // 이 칸은 후보값으로 바꿔 놓고 본다
+                                                                need = need.filter(function(v){ return v; });
+                                                                var matched = data.skus.filter(function(s){
+                                                                    return s.valueIds && need.every(function(id){ return s.valueIds.indexOf(id) >= 0; });
+                                                                });
+                                                                var out = matched.length > 0 && !matched.some(sellable);
+                                                                o.textContent = out ? base + ' (품절)' : base;
+                                                            });
+                                                        });
+                                                    }
+
                                                     function resolve(){
+                                                        refreshOptionLabels();
                                                         var ids = selects.map(function(s){ return s.value; });
                                                         if(ids.some(function(v){ return !v; })){ summaryEl.textContent='옵션을 선택하세요.'; selectedSkuInput.value=''; setEnabled(false); return; }
                                                         var idset = ids.map(Number);
@@ -470,6 +515,7 @@
                                                         else { summaryEl.textContent='재고 '+stock.toLocaleString()+'개'; setEnabled(true); }
                                                     }
                                                     selects.forEach(function(s){ s.addEventListener('change', resolve); });
+                                                    refreshOptionLabels();   // 서버가 그린 초기 표시를 같은 규칙으로 한 번 맞춘다
                                                 })();
                                                 </script>
                                                 <% } %>
