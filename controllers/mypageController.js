@@ -386,6 +386,42 @@ exports.getOrderDetail = async (req, res, next) => {
             };
         });
 
+        /*
+         * 적립 안내 — "구매확정을 누르면 얼마를 받는지" 를 누르기 **전에** 알려 준다.
+         *
+         * 적립금은 구매확정 시점에 지급되므로, 버튼만 있고 금액이 없으면 고객은
+         * 그 버튼을 눌러야 할 이유를 모른다. 리뷰 적립도 함께 보여 준다 —
+         * 배송완료 후 할 수 있는 일이 그 둘이기 때문이다.
+         */
+        const reward = { confirm: 0, alreadyConfirmed: 0, reviewCount: 0, reviewText: 0, reviewPhoto: 0 };
+        if (order.status === 'DELIVERED' && order.user_id) {
+            try {
+                if (order.confirmed_at) {
+                    // 이미 확정됐다면 실제로 지급된 금액을 보여 준다.
+                    const [[given]] = await pool.query(
+                        `SELECT COALESCE(SUM(amount), 0) AS amt FROM point_transactions
+                          WHERE order_id = ? AND transaction_type IN ('PURCHASE_CONFIRM','PURCHASE_ACCUMULATE')`,
+                        [orderId]);
+                    reward.alreadyConfirmed = Number(given.amt) || 0;
+                } else {
+                    const calc = await purchaseConfirmService.calcReward(pool, order);
+                    reward.confirm = calc.amount;
+                }
+
+                // 아직 리뷰를 쓰지 않은 품목 수 × 구간 적립액
+                const writable = await reviewService.getWritableItems(req.user.id, { orderId });
+                reward.reviewCount = writable.length;
+                if (writable.length) {
+                    const pv = await reviewService.previewReward(order.mall_id || req.mallId || 1, order.total_amount);
+                    reward.reviewText = pv.text;
+                    reward.reviewPhoto = pv.photo;
+                }
+            } catch (e) {
+                // 안내가 실패해도 주문 상세는 떠야 한다.
+                console.error('[mypage] 적립 안내 계산 실패:', e.message);
+            }
+        }
+
         res.render('user/mypage/order_detail', {
             title: '주문 상세',
             order,
@@ -393,6 +429,7 @@ exports.getOrderDetail = async (req, res, next) => {
             shipment: shipments[0] || null,
             claims,
             claimMsg,
+            reward,
             claimError: req.query.claim_error || null
         });
     } catch (err) {

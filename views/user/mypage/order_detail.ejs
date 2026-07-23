@@ -184,6 +184,63 @@
         </div>
     </div>
 
+    <%
+      /*
+       * 적립 안내 — 버튼을 누르기 **전에** 얼마를 받는지 알려 준다.
+       * 금액이 없으면 고객은 [구매확정] 을 눌러야 할 이유를 모른다(적립은 확정 시점에 나간다).
+       * 배송완료 이후에만 뜬다.
+       */
+      const rw = (typeof reward !== 'undefined' && reward) ? reward : null;
+      const showReward = rw && order.status === 'DELIVERED'
+                         && (rw.confirm > 0 || rw.alreadyConfirmed > 0 || (rw.reviewCount > 0 && rw.reviewText > 0));
+      const wonR = (n) => Number(n || 0).toLocaleString('ko-KR');
+    %>
+    <% if (showReward) { %>
+        <div class="mt-6 rounded-xl border border-[var(--gh-primary)]/30 bg-[var(--gh-primary)]/5 px-5 py-4">
+            <p class="text-sm font-bold text-gray-900 mb-2">
+                <i class="bi bi-coin text-[var(--gh-primary)] mr-1"></i>
+                <% if (rw.confirm > 0) { %>
+                    이 주문으로 <span class="text-[var(--gh-primary)]"><%= wonR(rw.confirm + (rw.reviewCount > 0 ? rw.reviewPhoto * rw.reviewCount : 0)) %>P</span> 까지 받으실 수 있습니다
+                <% } else if (rw.reviewCount > 0 && rw.reviewPhoto > 0) { %>
+                    리뷰를 쓰면 <span class="text-[var(--gh-primary)]"><%= wonR(rw.reviewPhoto * rw.reviewCount) %>P</span> 까지 받으실 수 있습니다
+                <% } else { %>
+                    적립 안내
+                <% } %>
+            </p>
+            <ul class="space-y-1.5 text-sm text-gray-700">
+                <% if (rw.confirm > 0) { %>
+                    <li class="flex items-start gap-2">
+                        <span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--gh-primary)] text-white text-[11px] font-bold">1</span>
+                        <span>
+                            <b>구매확정</b>을 누르면 <b class="text-[var(--gh-primary)]"><%= wonR(rw.confirm) %>P</b> 가 바로 적립됩니다.
+                            <span class="block text-xs text-gray-500 mt-0.5">확정 후에는 반품·교환을 신청할 수 없으니 상품을 확인한 뒤 눌러 주세요.</span>
+                        </span>
+                    </li>
+                <% } else if (rw.alreadyConfirmed > 0) { %>
+                    <li class="flex items-start gap-2">
+                        <span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-300 text-white text-[11px] font-bold"><i class="bi bi-check"></i></span>
+                        <span>구매확정으로 <b><%= wonR(rw.alreadyConfirmed) %>P</b> 를 적립해 드렸습니다.</span>
+                    </li>
+                <% } %>
+                <% if (rw.reviewCount > 0 && (rw.reviewText > 0 || rw.reviewPhoto > 0)) { %>
+                    <li class="flex items-start gap-2">
+                        <span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--gh-primary)] text-white text-[11px] font-bold"><%= rw.confirm > 0 ? '2' : '1' %></span>
+                        <span>
+                            <b>리뷰</b>를 쓰면 상품 1개당
+                            <b class="text-[var(--gh-primary)]"><%= wonR(rw.reviewText) %>P</b><% if (rw.reviewPhoto > rw.reviewText) { %>,
+                            <b class="text-[var(--gh-primary)]">사진을 올리면 <%= wonR(rw.reviewPhoto) %>P</b><% } %> 를 드립니다.
+                            <span class="block text-xs text-gray-500 mt-0.5">
+                                지금 <b><%= rw.reviewCount %>개</b> 상품에 쓸 수 있습니다
+                                <% if (rw.reviewPhoto > 0) { %>(최대 <%= wonR(rw.reviewPhoto * rw.reviewCount) %>P)<% } %> ·
+                                <a href="/mypage/reviews" class="underline">리뷰 쓰러 가기</a>
+                            </span>
+                        </span>
+                    </li>
+                <% } %>
+            </ul>
+        </div>
+    <% } %>
+
     <div class="mt-6 text-center">
         <a href="/mypage/orders"
             class="inline-block px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">목록으로
@@ -208,11 +265,18 @@
                                      && order.claim_status !== 'REQUESTED';
                 %>
                 <% if (canConfirm) { %>
+                    <%
+                      // 버튼에도 금액을 적는다 — 안내를 못 보고 지나쳐도 여기서 알 수 있다.
+                      const confirmPoint = (typeof reward !== 'undefined' && reward) ? reward.confirm : 0;
+                      const confirmMsg = confirmPoint > 0
+                        ? `구매를 확정할까요?\\n\\n${Number(confirmPoint).toLocaleString()}P 가 적립됩니다.\\n확정 후에는 반품·교환을 신청할 수 없습니다.`
+                        : '구매를 확정할까요?\\n\\n확정 후에는 반품·교환을 신청할 수 없습니다.';
+                    %>
                     <form action="/mypage/orders/<%= order.id %>/confirm" method="POST" class="inline"
-                          onsubmit="return confirm('구매를 확정할까요?\n\n확정하면 적립금이 지급되고, 이후에는 반품·교환을 신청할 수 없습니다.');">
+                          onsubmit="return confirm('<%= confirmMsg %>');">
                         <button type="submit"
                             class="inline-block px-6 py-2 ml-2 rounded-lg bg-[var(--gh-primary)] text-white font-medium hover:opacity-90 transition">
-                            구매확정
+                            구매확정<% if (confirmPoint > 0) { %> <span class="font-bold">+<%= Number(confirmPoint).toLocaleString() %>P</span><% } %>
                         </button>
                     </form>
                 <% } %>
