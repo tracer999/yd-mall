@@ -323,6 +323,8 @@ exports.updateSystemSettings = async (req, res) => {
         ['smtp_app_password', req.body.smtp_app_password, '지메일 앱 비밀번호'],
         ['smtp_password', req.body.smtp_password, 'SMTP 비밀번호 (지메일이 아닐 때)'],
         ['smtp_sender_email', req.body.smtp_sender_email, '발송자 이메일 주소'],
+        // 체크박스는 꺼져 있으면 전송되지 않는다 → 값이 없으면 '0'.
+        ['virtual_payment_enabled', req.body.virtual_payment_enabled ? '1' : '0', '가상결제 사용 여부 (1=결제사 연동 없이 주문 완료 처리)'],
         ['tosspayments_client_key', req.body.tosspayments_client_key, '토스페이먼츠 클라이언트 키 (결제창용)'],
         ['tosspayments_secret_key', req.body.tosspayments_secret_key, '토스페이먼츠 시크릿 키 (서버 결제 승인용)'],
         ['point_accumulate_rate', req.body.point_accumulate_rate, '구매 적립률 (%)'],

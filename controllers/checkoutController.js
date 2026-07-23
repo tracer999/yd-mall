@@ -1027,6 +1027,8 @@ exports.getPay = async (req, res) => {
         title: '결제하기',
         order,
         clientKey,
+        // 가상결제가 켜져 있으면 결제사 키가 있어도 가상으로 처리한다(개발·검수 중 전환 편의).
+        virtualPayment: isVirtualPaymentEnabled(),
         successUrl: `${baseUrl}/checkout/success`,
         failUrl: `${baseUrl}/checkout/fail`
     });
@@ -1118,8 +1120,26 @@ exports.getFail = (req, res) => {
  *      2) 테스트 확정 경로는 NODE_ENV 로 잠근다. 클라이언트가 켤 수 없다.
  *      3) 주문 소유자만 조회할 수 있다(비회원은 주문 생성 시 세션에 남긴 주문번호로 판정).
  */
+/*
+ * 가상결제 — 결제사 연동 없이 주문을 완료 처리하는 모드.
+ *
+ * 켜고 끄는 것은 **사이트 설정의 체크박스 하나**다(`virtual_payment_enabled`).
+ * 환경변수(NODE_ENV)로 판정하지 않는다 — 이 제품의 배포 서버는 `NODE_ENV=production`
+ * 으로 뜨기 때문에, 예전 조건(`NODE_ENV !== 'production'`)에서는 결제창에 테스트 링크가
+ * **보이는데 눌러도 아무 일이 없었다.** 완료 화면만 뜨고 주문은 PENDING 으로 남아,
+ * 결제한 줄 알았던 주문이 계속 '대기' 로 쌓였다.
+ *
+ * 설정 하나로 모으면 화면(버튼이 보이는 조건)과 서버(완료를 허용하는 조건)가 같은 값을
+ * 보게 되어 어긋날 수 없다.
+ */
+function isVirtualPaymentEnabled() {
+    const v = global.systemSettings ? global.systemSettings.virtual_payment_enabled : null;
+    return String(v) === '1';
+}
+exports.isVirtualPaymentEnabled = isVirtualPaymentEnabled;
+
 function isTestCheckoutAllowed(req) {
-    return process.env.NODE_ENV !== 'production' && req.query.test === '1';
+    return isVirtualPaymentEnabled() && req.query.test === '1';
 }
 
 function isOrderOwner(req, order) {

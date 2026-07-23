@@ -950,6 +950,38 @@
                 </div>
                 <div class="p-6 bg-white space-y-4">
                     <p class="text-xs text-gray-500 mb-4">상품 구매 시 결제에 사용됩니다. <a href="https://developers.tosspayments.com" target="_blank" rel="noopener" class="text-blue-600 hover:underline">토스페이먼츠 개발자센터</a>에서 API 키를 발급받으세요.</p>
+
+                    <%
+                      /*
+                       * 가상결제 — 결제사 계약 전에도 주문 흐름을 끝까지 확인하기 위한 스위치.
+                       * 이 체크 하나로 고객 결제창과 서버의 완료 허용 조건이 함께 바뀐다
+                       * (예전엔 서버가 NODE_ENV 로 판정해, 화면엔 테스트 링크가 보이는데
+                       *  눌러도 아무 일이 없고 주문이 '대기' 로 쌓이는 문제가 있었다).
+                       */
+                      const _virtualOn = systemSettings && systemSettings.virtual_payment_enabled === '1';
+                    %>
+                    <div class="rounded-md border <%= _virtualOn ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50' %> px-4 py-3">
+                        <label class="inline-flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" name="virtual_payment_enabled" value="1"
+                                <%= _virtualOn ? 'checked' : '' %>
+                                class="mt-0.5 w-4 h-4 rounded border-gray-300">
+                            <span>
+                                <span class="block text-sm font-semibold text-gray-800">가상결제 사용 (개발·테스트용)</span>
+                                <span class="block text-xs text-gray-600 mt-1 leading-relaxed">
+                                    켜면 <b>결제사 연동 없이</b> 주문이 완료됩니다. 결제창 대신 <b>[결제 없이 주문 완료]</b> 버튼이 나오고,
+                                    누르면 재고 차감·쿠폰 사용·적립까지 실제와 똑같이 처리됩니다. <b>돈은 청구되지 않습니다.</b>
+                                </span>
+                                <span class="block text-xs mt-1.5 <%= _virtualOn ? 'text-blue-800 font-medium' : 'text-red-700 font-medium' %>">
+                                    <% if (_virtualOn) { %>
+                                        지금 <b>가상결제</b>로 동작합니다. 실제 결제를 받으려면 이 체크를 끄고 아래 키를 넣으세요.
+                                    <% } else { %>
+                                        ⚠️ 실제 서비스로 열기 전에는 반드시 꺼 두세요. 켜 두면 고객이 돈을 내지 않고 주문할 수 있습니다.
+                                    <% } %>
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">클라이언트 키 (테스트)</label>
                         <p class="text-xs text-gray-500 mb-2">결제창 연동용. 테스트 키는 test_ 로 시작합니다.</p>
