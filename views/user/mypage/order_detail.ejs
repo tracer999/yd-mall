@@ -7,9 +7,39 @@
         <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"><%= claimError %></div>
     <% } %>
 
+    <%
+      /*
+       * 주문 단위 상태 띠.
+       * 부분 취소·부분 반품은 주문이 살아 있어 상태 뱃지만 보면 "정상 주문"으로 읽힌다.
+       * 결제 상태(PARTIAL_REFUNDED)를 근거로 한 줄 알려 준다.
+       */
+      const ORDER_STATUS_KO = { PENDING:'입금 대기', PAID:'결제 완료', PREPARING:'상품 준비중',
+                                SHIPPED:'배송중', DELIVERED:'배송 완료', CANCELLED:'취소', REFUNDED:'환불 완료' };
+      const isPartialRefunded = order.payment_status === 'PARTIAL_REFUNDED';
+    %>
+    <% if (isPartialRefunded) { %>
+        <div class="mb-4 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+            <b>이 주문은 일부 상품이 취소·반품되었습니다.</b>
+            아래 상품 목록에서 처리된 상품에 표시가 붙어 있으며, 나머지 상품은 그대로 배송됩니다.
+        </div>
+    <% } %>
+
     <div class="bg-white rounded-lg shadow border border-gray-100 mb-6">
-        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-            <h3 class="text-lg font-bold text-gray-800">주문 상세 정보</h3>
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-wrap justify-between items-center gap-2">
+            <div class="flex items-center gap-2">
+                <h3 class="text-lg font-bold text-gray-800">주문 상세 정보</h3>
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-full
+                    <%= order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                        order.status === 'PAID' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
+                        ['CANCELLED','REFUNDED'].includes(order.status) ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800' %>">
+                    <%= ORDER_STATUS_KO[order.status] || order.status %>
+                </span>
+                <% if (isPartialRefunded) { %>
+                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">부분 취소</span>
+                <% } %>
+            </div>
             <span class="text-sm text-gray-500">주문번호: <%= order.order_number || order.id %></span>
         </div>
         <div class="p-6">
@@ -82,9 +112,24 @@
             <h3 class="text-lg font-bold text-gray-800">주문 상품</h3>
         </div>
         <div class="divide-y divide-gray-100">
-            <% items.forEach(item=> { %>
-                <div class="p-6 flex gap-4 items-center">
-                    <div class="w-20 h-20 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
+            <%
+              /*
+               * 상품별 처리 상태.
+               * 주문이 통째로 취소된 경우(전건 클레임)는 상품 기록이 없으므로 주문 상태로 판정한다.
+               * 부분 취소한 상품이 정상 주문처럼 보이면 고객이 "취소가 안 됐다"고 받아들인다.
+               */
+              const orderCancelled = ['CANCELLED', 'REFUNDED'].includes(order.status);
+              const CLAIM_LABEL = { CANCEL: '취소', RETURN: '반품', EXCHANGE: '교환' };
+            %>
+            <% items.forEach(item=> {
+                 const claimedQty = orderCancelled ? Number(item.quantity) : Number(item.claimed_qty || 0);
+                 const claimType = item.claim_type || 'CANCEL';
+                 const pending = !orderCancelled && item.claim_pending;
+                 const fully = claimedQty >= Number(item.quantity) && claimedQty > 0;
+                 const partly = claimedQty > 0 && !fully;
+            %>
+                <div class="p-6 flex gap-4 items-center <%= fully && !pending ? 'bg-gray-50' : '' %>">
+                    <div class="w-20 h-20 bg-gray-100 rounded-md overflow-hidden flex-shrink-0 <%= fully && !pending ? 'opacity-50' : '' %>">
                         <% if (item.thumbnail_image) { %>
                             <img src="<%= item.thumbnail_image %>" alt="<%= item.product_name %>"
                                 class="w-full h-full object-cover">
@@ -94,7 +139,7 @@
                                 <% } %>
                     </div>
                     <div class="flex-1">
-                        <h4 class="font-medium text-gray-900">
+                        <h4 class="font-medium <%= fully && !pending ? 'text-gray-400 line-through' : 'text-gray-900' %>">
                             <% if (item.slug) { %>
                                 <a href="/products/<%= item.slug %>" class="hover:text-[var(--gh-primary)]">
                                     <%= item.product_name %>
@@ -103,15 +148,32 @@
                                     <%= item.product_name %>
                                         <% } %>
                         </h4>
+                        <% if (claimedQty > 0) { %>
+                            <div class="mt-1">
+                                <% if (pending) { %>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+                                        <%= CLAIM_LABEL[claimType] %> 신청 중<%= partly ? ' (' + claimedQty + '개)' : '' %>
+                                    </span>
+                                    <span class="ml-1 text-xs text-gray-500">담당자 확인 후 처리됩니다</span>
+                                <% } else { %>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+                                        <%= CLAIM_LABEL[claimType] %><%= claimType === 'EXCHANGE' ? ' 처리' : '됨' %><%= partly ? ' (' + claimedQty + '개)' : '' %>
+                                    </span>
+                                <% } %>
+                            </div>
+                        <% } %>
                         <div class="text-sm text-gray-500 mt-1">
                             <%= Number(item.product_price).toLocaleString() %>원 / <%= item.quantity %>개
+                            <% if (partly) { %>
+                                <span class="text-gray-400">· 남은 수량 <%= item.remaining_qty %>개</span>
+                            <% } %>
                         </div>
                     </div>
                     <div class="text-right">
-                        <div class="font-bold text-gray-900">
+                        <div class="font-bold <%= fully && !pending ? 'text-gray-400 line-through' : 'text-gray-900' %>">
                             <%= Number(item.total_price).toLocaleString() %>원
                         </div>
-                        <% if (order.status==='DELIVERED' && item.slug) { %>
+                        <% if (order.status==='DELIVERED' && item.slug && !fully) { %>
                             <a href="/products/<%= item.slug %>#review"
                                 class="inline-block mt-2 px-3 py-1 border border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 transition">리뷰
                                 작성</a>

@@ -347,10 +347,36 @@ exports.getOrderDetail = async (req, res, next) => {
          */
         const claimable = await partialClaimService.getClaimableItems(pool, orderId);
         const claimableById = new Map(claimable.map((c) => [Number(c.id), c]));
-        const itemsWithRemaining = items.map((it) => ({
-            ...it,
-            remaining_qty: claimableById.has(Number(it.id)) ? claimableById.get(Number(it.id)).remaining_qty : Number(it.quantity),
-        }));
+
+        /*
+         * 상품별 처리 상태 — **부분 취소한 상품이 정상 주문처럼 보이면 안 된다.**
+         * 어떤 상품이 취소·반품·교환됐는지, 아직 처리 중인지를 상품 줄에 그대로 표시한다.
+         * 전건 클레임은 `order_claim_items` 에 행이 없으므로 주문 상태로 판정한다(아래 뷰).
+         */
+        const [claimedRows] = await pool.query(`
+            SELECT ci.order_item_id,
+                   SUM(ci.quantity) AS qty,
+                   MAX(c.claim_type) AS claim_type,
+                   MIN(c.status = 'REQUESTED') AS all_done,
+                   MAX(c.status = 'REQUESTED') AS has_pending
+              FROM order_claim_items ci
+              JOIN order_claims c ON c.id = ci.claim_id
+             WHERE c.order_id = ? AND c.status IN ('REQUESTED', 'COMPLETED')
+             GROUP BY ci.order_item_id
+        `, [orderId]).catch(() => [[]]);
+        const claimedById = new Map(claimedRows.map((r) => [Number(r.order_item_id), r]));
+
+        const itemsWithRemaining = items.map((it) => {
+            const c = claimableById.get(Number(it.id));
+            const cl = claimedById.get(Number(it.id));
+            return {
+                ...it,
+                remaining_qty: c ? c.remaining_qty : Number(it.quantity),
+                claimed_qty: cl ? Number(cl.qty) : 0,
+                claim_type: cl ? cl.claim_type : null,
+                claim_pending: cl ? Number(cl.has_pending) === 1 : false,
+            };
+        });
 
         res.render('user/mypage/order_detail', {
             title: '주문 상세',
