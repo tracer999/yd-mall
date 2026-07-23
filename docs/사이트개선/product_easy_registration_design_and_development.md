@@ -210,15 +210,14 @@
 
 ## 5. 개발 로드맵 (단계별)
 
-> **구현 현황 (2026-07-15)** — 아래 표의 **1~3단계 + 4단계(폼) 완료**. 실제 반영된 것:
-> - `services/catalog/taxonomyResolver.js` 신설 — 정규화·초성·포함·편집거리 유사매칭 + 가드 경유 신규 생성 + 브랜드 `brand_profile` 스텁 자동 생성. AI 불필요(Standard 트랙).
-> - `controllers/admin/productController.js` `postAdd`/`postEdit` — 목록 미선택 시 자유 텍스트(`new_category_name`/`new_brand_name`)를 받아 **유사하면 매핑, 없으면 생성**.
-> - `postImportUrl` — 브랜드 완전일치 → **유사매칭**으로 교체(매칭 실패 시 이름을 폼 신규칸에 프리필).
-> - **카테고리도 임포트에서 추출**(2026-07-15 추가) — `productImporter` 가 JSON-LD `Product.category`·`BreadcrumbList` 리프·네이버 카테고리에서 분류 텍스트를 뽑아 `draft.category` 로 넘기고, `postImportUrl` 이 브랜드와 동일하게 유사매칭(매칭 실패 시 폼 "직접 입력"칸 프리필) → 저장 시 자동 생성. (임포트 출처에 분류 정보가 없으면 여전히 비어 옴 — 그때는 운영자 입력 또는 후속 AI/미분류 폴백 몫)
-> - `views/admin/products/form.ejs` — 카테고리·브랜드 셀렉트 아래 "직접 입력" 텍스트칸 추가.
-> - 동작 방식은 우선 **단일 임계값 자동 매핑/생성**(요청의 "있으면 저장·없으면 생성"에 직결). 임계값 기본 0.85, `TAXONOMY_MATCH_THRESHOLD` 로 조정. E2E 검증: 신규 1건·재조회 매칭·띄어쓰기 변형 중복 없음 PASS.
-> - **"미분류" 폴백 시드 완료**(2026-07-15 추가) — `taxonomyResolver.getUncategorizedCategoryId({mallId})` 가 몰별 "미분류" 카테고리를 find-or-create(멱등). `pc_visible=0·mobile_visible=0` 이라 **고객 GNB/드로어에는 숨고 관리자 목록에는 보인다**(스토어프론트 뷰는 `pcVisible!==0` 필터, 관리자 `getList` 는 무필터). `mallProvisioner` 가 몰 생성 시 시드하고, `postAdd`/`postEdit` 는 카테고리 근거가 전혀 없을 때(브랜드는 제외) 이 id 로 폴백해 `category_id=null` 유실을 막는다. 기존 몰 3개(health·general·main) 백필 완료.
-> - **미구현(후속)**: `assist`(후보 확인 UI) 모드, Quick Add(B-1), AI 채움(B-2·Premium), CSV(B-4), 정리 도구.
+> ⚠️ **정책 전환 — 이 로드맵을 그대로 읽지 말 것.**
+> [`네이버_기반_글로벌_카테고리_재구성_설계.md`](./네이버_기반_글로벌_카테고리_재구성_설계.md) §0 이 이 문서의 대전제("분류를 먼저 만들지 않는다 · 상품 등록 행위가 카테고리를 만든다")를 **의도적으로 뒤집었다.**
+> 지금 방침은 **네이버 L1~L3 표준 뼈대를 선(先)-시드**하고, 상품 등록은 "생성"보다 **"기존 표준 노드에 매칭"** 이 기본이다.
+> 아래 §2 의 유사매칭 엔진·무결성 가드·폭주 방지는 그 전환 뒤에도 그대로 쓰이지만, "자동 생성이 본체"라는 서술은 더 이상 현행 정책이 아니다.
+
+> **1~4단계 완료** — `taxonomyResolver`(유사매칭·자동생성·브랜드 스텁), `postAdd`/`postEdit`/`postImportUrl` 훅, 임포트 카테고리 추출, 폼 "직접 입력" 칸, 몰별 "미분류" 폴백 시드까지 반영됨. 상세는 git 이력 참조.
+>
+> **잔여(5~8단계)**: `assist`(후보 확인 UI) 모드 · Quick Add(B-1) · AI 채움(B-2·Premium) · CSV 대량등록(B-4) · 정리 도구(자동생성 뱃지·카테고리 병합).
 
 
 | 단계 | 산출물 | DDL |

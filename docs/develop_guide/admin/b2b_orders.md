@@ -96,7 +96,9 @@
 | `delivered` | `markDelivered()` | `status='SHIPPED'` 인 주문만 |
 | `reject` | `cancel()` | 출고·배송완료 주문은 거부(클레임으로 처리) |
 
-거래처 안내 메일은 `notify()` 가 `REQUESTED`·`APPROVED`·`PAID`·`SHIPPED`·`REJECTED` 단계에 보냅니다. **메일 실패는 주문 처리를 되돌리지 않습니다.**
+거래처 안내 메일은 `notify()` 가 `REQUESTED`·`APPROVED`·`PAID`·`SHIPPED`·`DELIVERED`·`REJECTED` 단계에 보냅니다. **메일 실패는 주문 처리를 되돌리지 않습니다.**
+
+`notify()` 는 이제 문구를 갖고 있지 않고 `orderMailer.notifyB2bOrder(orderId, kind)` 로 위임합니다 — 제목·본문은 `b2b_order_*` 템플릿에서 오고, 관리자가 `/admin/email-templates` 에서 고칠 수 있습니다(→ [`email_templates.md`](./email_templates.md)). B2B 클레임 승인·반려·환불완료 안내는 `orderMailer.notifyB2bClaim()` 이 담당합니다.
 
 ### 4-2. 클레임
 

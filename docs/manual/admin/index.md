@@ -43,6 +43,7 @@
 5. **[배송비 정책](/manual/admin/shipping)** — 배송비를 정합니다. (안 하면 기본값으로 동작합니다.)
 6. **[페이지 빌더](/manual/admin/page_builder)** — 홈 화면을 구성하고 **발행**합니다.
 7. **[메뉴 관리](/manual/admin/menus)** — 고객에게 보여 줄 상단 메뉴를 켭니다.
+8. **[이메일 템플릿 관리](/manual/admin/email_templates)** — 주문·배송 안내 메일에 몰 이름이 제대로 들어가는지 미리보기로 확인합니다. (기본 문구로 이미 발송되므로 필수는 아닙니다.)
 8. **[운영자 관리](/manual/admin/operators)** — 함께 운영할 담당자 계정을 추가합니다.
 9. 그 뒤로 **[쿠폰](/manual/admin/coupons)**, **[쇼핑특가](/manual/admin/deals)**, **[기획전](/manual/admin/exhibitions)** 등 프로모션을 운영합니다.
 

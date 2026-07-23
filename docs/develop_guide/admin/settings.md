@@ -155,7 +155,11 @@
 | **new_product_days** | **신상품 노출 기간(일)** — 판매 시작일 기준. 기본 100 |
 | **new_brand_days** | **신규 입점 브랜드 노출 기간(일)** — 입점일 기준. 기본 180 |
 
-> `domain` 은 `envMap` 에 없어 `process.env` 로는 주입되지 않습니다. 소비처가 `global.systemSettings.domain` 을 읽습니다.
+> `domain` 은 `envMap` 에 없어 `process.env` 로는 주입되지 않습니다. 소비처가 `global.systemSettings.domain` 을 읽습니다. 안내 메일의 `{{shop_url}}`·주문 상세 링크도 이 값에서 만들어집니다(→ [`email_templates.md`](./email_templates.md)).
+>
+> `admin_email` 은 이 화면이 아니라 **`/admin/email-templates` 상단**에서 저장합니다(운영자 알림 수신 주소). 값이 없으면 `site_settings.contact_email` 로 폴백합니다.
+>
+> **SMTP 설정은 "보내는 통로"만 정합니다.** 주문·배송 안내 메일의 제목·본문과 메일별 발송 여부는 `email_template` 테이블 + `emailTemplateRegistry` 가 관장합니다.
 >
 > **신상품·신규브랜드 기간 2키**도 `envMap` 에 없습니다. `services/catalog/newArrival.js` 가 `global.systemSettings` 에서 직접 읽어 SQL 술어에 넣습니다 — 값을 바꾸면 **배치 없이 즉시** 신상품 목록이 달라집니다. 판정 규칙은 [`products.md`](./products.md) §1.2 참고.
 

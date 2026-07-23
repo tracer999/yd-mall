@@ -57,6 +57,8 @@
 
 > **`대기`를 손으로 `결제완료`로 올리지 마세요.** `대기`는 돈이 안 들어온 주문입니다. 상태만 바꾼다고 돈이 들어오지 않습니다. 매출 집계와 재고가 함께 어긋납니다.
 
+> 📧 **고객이 결제를 마치는 순간 주문 완료 안내 메일이 자동으로 나갑니다.** 관리자가 따로 보낼 필요는 없습니다. 다만 **여기서 상태를 손으로 바꿔도 메일은 나가지 않습니다** — 메일은 고객의 실제 결제, 배송 관리의 송장 등록·배송완료 같은 **실제 처리 시점**에만 발송됩니다. 문구 변경·발송 중지는 [이메일 템플릿 관리](/manual/admin/email_templates)에서 합니다.
+
 ---
 
 ## 3. 주문 상세 화면
@@ -205,6 +207,7 @@
   <span class="manual-goto-label">함께 보면 좋은 문서</span>
   <a class="manual-goto is-sub" href="/manual/admin/shipping">배송 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/claims">클레임 관리</a>
+  <a class="manual-goto is-sub" href="/manual/admin/email_templates">이메일 템플릿 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/users">회원 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/coupons">쿠폰 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/points">포인트 관리</a>

@@ -1162,45 +1162,15 @@ B2B 판매 여부      ● 사용   ○ 미사용
 
 ---
 
-## §15. 구현 현황 (2026-07-21)
+## §15. 구현 현황
 
 **1~3단계 구현 완료.** 4단계(회사-다중사용자·여신·분할출고·ERP)는 미착수.
 
-### 적용된 마이그레이션
+> 완료분(적용 마이그레이션 4종 · 서비스/컨트롤러/라우트/뷰 구성 · 검증 90여 항목)의 정본은
+> [`develop_guide/admin/b2b_orders.md`](../develop_guide/admin/b2b_orders.md) 와 [`manual/user/b2b.md`](../manual/user/b2b.md) 다.
+> 이 절에는 **아직 유효한 함정과 잔여 과제만** 남긴다.
 
-| 스크립트 | 내용 |
-|---|---|
-| `scripts/migrate_b2b_phase1.sql` | `b2b_tier` · `business_profile` · `product_b2b_setting` · `b2b_volume_price` · `products.tax_type` |
-| `scripts/migrate_b2b_phase2.sql` | `carts.cart_type` · `orders.order_type/supply_amount/vat_amount/tax_free_amount/stock_deducted_at` · `order_items.supply_price/vat_price/price_source/list_price` · `b2b_order_detail` |
-| `scripts/migrate_b2b_phase3.sql` | `b2b_price_policy` · `b2b_price_item` · `quote` · `quote_item` · `quote_message` · `quote_attachment` · `quote_revision` |
-| `scripts/migrate_b2b_admin_menus.sql` | 관리자 `B2B 관리` 메뉴 5종 |
-
-전부 **재실행 가능**하다. MySQL 8.4 가 `ADD COLUMN IF NOT EXISTS` 를 지원하지 않아
-컬럼 추가는 INFORMATION_SCHEMA 조회 후 동적 실행한다.
-
-### 코드 구성
-
-```
-middleware/b2bContext.js               거래 컨텍스트 (app.js 전역 체인, siteSettings 뒤)
-services/b2b/
-  businessProfileService.js            사업자 프로필·체크섬·승인 전이
-  b2bPricingService.js                 가격 리졸버 (5단계 우선순위, read-time)
-  b2bTaxService.js                     공급가/부가세 분해 + 잔차 정합
-  b2bOrderService.js                   접수→승인(재고차감)→입금확인→기한초과 회수
-services/quote/
-  quoteStatusService.js                상태 10종 전이표 (단일 소스)
-  quoteService.js                      견적 CRUD·제안·재제안·수락·리비전
-  quoteConvertService.js               견적→주문 (FOR UPDATE 잠금, 확정가 복사)
-  quotePdfService.js                   pdfmake + 나눔고딕
-controllers/  b2bController · quoteController
-controllers/admin/  b2bMemberController · b2bSettingController · b2bProductController
-                    b2bOrderController · quoteAdminController
-routes/  b2b.js · quotes.js · admin/b2b.js
-views/  user/b2b/ · user/quote/ · user/checkout/b2b_received.ejs · admin/b2b/
-public/fonts/  NanumGothic-Regular.ttf · NanumGothic-Bold.ttf  (OFL, 커밋됨)
-```
-
-### 구현 중 발견해 고친 것
+### 구현 중 발견해 고친 것 (재발 방지 — 계속 유효)
 
 | 문제 | 영향 | 조치 |
 |---|---|---|
@@ -1209,19 +1179,6 @@ public/fonts/  NanumGothic-Regular.ttf · NanumGothic-Bold.ttf  (OFL, 커밋됨)
 | `getComplete` 가 테스트 모드에서 PENDING 을 자동 결제 처리 | B2B 주문이 그리로 가면 **승인 없이 재고 차감 + 결제완료** | 전용 `/checkout/b2b-received` 분리 |
 | 견적 전환 잠금에 `converted_order_id = 0` | 이 컬럼은 `orders(id)` FK — **제약 위반으로 전환 자체가 실패** | 트랜잭션 내 `SELECT … FOR UPDATE` 로 직렬화 |
 | pdfmake 0.3 은 `PdfPrinter` 를 export 하지 않음 | PDF 생성 불가 | 0.2.x 로 고정 |
-
-### 검증
-
-각 단계마다 컨트롤러를 직접 호출하되 `res.render` 를 **실제 EJS 렌더**로 바꿔 돌렸다
-(HTTP 없이 locals 누락까지 검출). 누적 90여 항목 통과. 확인한 것 중 중요한 것:
-
-- **B2C 회귀 없음** — 비활성 컨텍스트에서 가격·카드·장바구니·주문이 전부 예전 값 그대로
-- 재고: 접수 시 미차감 → 승인 시 차감 → 재승인 시 이중차감 없음 → 취소·기한초과 시 전량 복원
-- 가격 우선순위: 기본 → 수량구간 → 등급 → 계약가 순으로 뒤가 이김
-- 견적: 잘못된 전이 차단, 재제안 시 제안가 무효화, 수락 시 확정가 고정, 중복 전환 차단, 만료 처리
-- 보안: 등록증 경로 조작(`../../etc/passwd`) 403, 남의 견적·주문 접근 차단
-
-> 검증에 쓴 임시 데이터는 전부 삭제했다. 영구 반영된 것은 스키마와 `admin_menus` 5행뿐이다.
 
 ### 남은 것
 

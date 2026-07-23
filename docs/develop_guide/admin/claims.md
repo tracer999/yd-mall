@@ -77,6 +77,7 @@
    - `claim_status = 'COMPLETED'`
    - `refund_status` = 성공 `COMPLETED` / 실패 `FAILED`
 8. PG 환불이 실패했으면 `?refund_failed=1` 로 상세에 돌아와 수동 처리를 안내합니다.
+9. **처리 결과 안내 메일** — 컨트롤러가 `orderMailer.notifyClaimProcessed({ claimId, approved: true, memo })` 를 fire-and-forget 으로 부릅니다. 템플릿 `b2c_claim_approved`. 환불 금액은 `order_refunds.refund_amount`(최신 행)를 읽으므로 반품배송비 공제가 반영됩니다 → [`email_templates.md`](./email_templates.md)
 
 > **승인 후에도 `orders.status` 는 `CANCELLED` 입니다.** 반품이라고 해서 별도 주문 상태가 되지 않습니다.
 
@@ -94,6 +95,7 @@
 - `REQUESTED` 상태가 아니면 거부  
 - `order_claims`: `status='REJECTED'`, `processed_at`, `processed_by`, `admin_memo`  
 - `orders.claim_status = 'REJECTED'` 로 전이. **주문 상태(`orders.status`)는 그대로 둡니다** — 클레임만 닫습니다.
+- `orderMailer.notifyClaimProcessed({ approved: false, memo })` 로 반려 안내 발송. 템플릿 `b2c_claim_rejected` 의 `{{admin_memo}}` 에 **거절 사유가 그대로 실립니다**(고객이 읽는 문장).
 
 ---
 

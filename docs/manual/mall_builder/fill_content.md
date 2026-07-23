@@ -54,6 +54,23 @@
 
 > ⚠️ **페이지 빌더는 "발행"해야 반영됩니다.** 편집만 하고 발행하지 않으면 고객 화면은 그대로입니다.
 
+## 4) 주문 받기 전에 — 메일 확인
+
+<div class="manual-goto-bar">
+  <span class="manual-goto-label">이 단계 화면</span>
+  <a class="manual-goto" href="/admin/settings?tab=system" target="_blank">시스템 설정 (SMTP)</a>
+  <a class="manual-goto is-sub" href="/admin/email-templates" target="_blank">이메일 템플릿 관리</a>
+</div>
+
+주문이 들어오면 고객에게 **주문 완료·배송 시작·배송 완료 안내 메일이 자동으로 나갑니다.** 새 몰도 아무 설정 없이 기본 문구로 발송되므로 따로 만들 것은 없지만, 두 가지만 확인하세요.
+
+- **시스템 설정 > SMTP** — 발송 계정이 비어 있으면 어떤 메일도 나가지 않습니다.
+- **이메일 템플릿 관리** — 메일 맨 위에 뜨는 이름이 이 몰 이름이 맞는지 [미리보기]로 확인합니다. 문구를 이 몰 말투로 바꾸거나 특정 안내를 끌 수도 있습니다.
+
+**완료 판단:** 이메일 템플릿 관리에서 [테스트 발송]으로 보낸 메일이 내 메일함에 도착한다.
+
+---
+
 ## 최종 확인
 
 몰 리스트의 **스토어 링크**(`?mall=<코드> ↗`)를 눌러 손님이 보는 화면을 확인합니다. 카테고리·상품·메인 화면이 모두 정상이면 몰 하나가 완성된 것입니다.
@@ -64,5 +81,6 @@
   <a class="manual-goto is-sub" href="/manual/admin/categories">카테고리 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/menus">메뉴 관리</a>
   <a class="manual-goto is-sub" href="/manual/admin/page_builder">페이지 빌더</a>
+  <a class="manual-goto is-sub" href="/manual/admin/email_templates">이메일 템플릿 관리</a>
   <a class="manual-goto is-sub" href="/manual/mall_builder/delete_rebuild">4. 몰 지우고 다시 만들기</a>
 </div>

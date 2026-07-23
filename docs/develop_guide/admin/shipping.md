@@ -66,9 +66,12 @@
 4. **주문 상태:** `transition(conn, order_id, { status: 'SHIPPED' }, { actorType: 'ADMIN', memo: '송장 등록 (…)' })`  
    - 직접 UPDATE 가 아니라 `orderStatusService.transition()` 을 경유하므로 `order_status_logs` 에 이력이 남습니다.  
    - 이미 `SHIPPED` 면 값이 같아 no-op 입니다.
-5. **리다이렉트:** `/admin/shipping`
+5. **커밋 후 안내 메일:** `orderMailer.notifyOrderShipped(order_id)` — fire-and-forget(`.catch()`). 템플릿 `b2c_order_shipped` (→ [`email_templates.md`](./email_templates.md))
+6. **리다이렉트:** `/admin/shipping`
 
 송장을 등록하거나 수정하면 해당 주문의 상태가 자동으로 `SHIPPED`로 변경됩니다.
+
+> 등록·수정이 같은 핸들러라 **송장을 수정할 때도 출고 안내 메일이 다시 나갑니다.**
 
 ---
 
@@ -78,6 +81,7 @@
 - **동작 (단일 트랜잭션):**  
   1. `UPDATE shipments SET status='DELIVERED', delivered_at=NOW() WHERE order_id=?`  
   2. `transition(conn, order_id, { status: 'DELIVERED' }, { actorType: 'ADMIN', memo: '배송완료 처리' })`  
+  3. 커밋 후 `orderMailer.notifyOrderDelivered(order_id)` — 템플릿 `b2c_order_delivered`
 - **리다이렉트:** `/admin/shipping`
 
 > `shipments.delivered_at` 은 **반품 가능 기간(수령 후 7일)의 기준 시각**입니다. 이 값이 비어 있으면 반품 신청 시 기간 검사를 통과해 버립니다. → [클레임 관리](./claims.md)
