@@ -8,6 +8,29 @@ const { sellableStockSql } = require('../services/catalog/sellableStock');
 const dealSvc = require('../services/deal/dealService');
 const membershipEval = require('../services/membership/evaluationService');
 
+/*
+ * 마이페이지 주문 요약 카드가 쓰는 필터.
+ * 고객에게 `PAID`·`PREPARING` 같은 코드를 보여 주지 않으려고 묶음 이름으로 받는다.
+ */
+const ORDER_FILTERS = {
+    ongoing: { label: '주문중', statuses: ['PENDING', 'PAID', 'PREPARING'] },
+    shipping: { label: '배송중', statuses: ['SHIPPED'] },
+    done: { label: '배송완료', statuses: ['DELIVERED'] },
+    /*
+     * 반품/취소는 상태만으로 가릴 수 없다.
+     *   - 고객이 신청한 클레임 → 주문은 살아 있을 수 있다(부분 취소·부분 반품·교환)
+     *   - 관리자가 직권 취소한 주문 → `order_claims` 에 아무 기록이 없다
+     * 둘 중 하나라도 해당하면 "취소·반품과 관련된 주문"이므로 합쳐서 본다.
+     * 대시보드 카드의 숫자도 **이것과 같은 조건**으로 세야 눌렀을 때 건수가 맞는다.
+     */
+    claim: {
+        label: '반품/취소',
+        sql: `(o.status IN ('CANCELLED','REFUNDED')
+               OR EXISTS (SELECT 1 FROM order_claims c
+                           WHERE c.order_id = o.id AND c.status <> 'WITHDRAWN'))`,
+    },
+};
+
 exports.getDashboard = async (req, res, next) => {
     try {
         const userId = req.user.id;
@@ -80,6 +103,45 @@ exports.getDashboard = async (req, res, next) => {
         ).catch(() => [[{ recent_view_count: 0 }]]);
         const recentViewedCount = recent_view_count;
 
+        /*
+         * 주문 요약 3종 — 찜/최근본/포인트 카드 아래에 함께 보여 준다.
+         *
+         * 상태를 하나씩 늘어놓지 않고 **고객이 궁금해하는 단위**로 묶었다.
+         *   주문중   : 결제는 됐고 아직 안 떠난 것 (입금대기·결제완료·배송준비)
+         *   배송중   : 지금 오고 있는 것
+         *   반품/취소: 취소·반품·교환으로 처리 중이거나 처리된 것
+         *
+         * 배송완료는 "끝난 일"이라 카드로 띄우지 않는다 — 전체 주문 내역에서 본다.
+         */
+        const orderSummary = {
+            ongoing: (stats.PENDING || 0) + (stats.PAID || 0) + (stats.PREPARING || 0),
+            shipping: stats.SHIPPED || 0,
+            claim: 0,
+            claimPending: 0,   // 아직 처리되지 않은 신청 — 있으면 카드에 따로 표시한다
+        };
+
+        /*
+         * 반품/취소 건수 — **주문 단위**로 센다.
+         *
+         * 클레임만 세면 관리자가 직권 취소한 주문이 빠지고(그 주문에는 클레임 기록이 없다),
+         * 주문 상태만 보면 부분 취소·부분 반품·교환이 빠진다(주문이 살아 있다).
+         * 카드를 누르면 `/mypage/orders?filter=claim` 목록으로 가므로
+         * **그 목록과 똑같은 조건**으로 세야 숫자와 건수가 어긋나지 않는다.
+         */
+        const [[claimRow]] = await pool.query(
+            `SELECT COUNT(*) AS total,
+                    COALESCE(SUM(
+                        EXISTS (SELECT 1 FROM order_claims c
+                                 WHERE c.order_id = o.id AND c.status = 'REQUESTED')
+                    ), 0) AS pending
+               FROM orders o
+              WHERE o.user_id = ?
+                AND ${ORDER_FILTERS.claim.sql}`,
+            [userId]
+        ).catch(() => [[{ total: 0, pending: 0 }]]);
+        orderSummary.claim = Number(claimRow ? claimRow.total : 0) || 0;
+        orderSummary.claimPending = Number(claimRow ? claimRow.pending : 0) || 0;
+
         // 3. 최근 활동 (리뷰 + 문의) 3건 조회
         const [recentActivities] = await pool.query(
             `SELECT 'review' as type, id, content, created_at, product_id
@@ -112,6 +174,7 @@ exports.getDashboard = async (req, res, next) => {
             pointsBalance,
             likesCount: likes_count,
             recentViewedCount,
+            orderSummary,
             membership
         });
     } catch (err) {
@@ -149,10 +212,24 @@ exports.getOrders = async (req, res, next) => {
         const limit = 10;
         const offset = (page - 1) * limit;
 
-        // 전체 주문 수 조회
+        const filterKey = Object.prototype.hasOwnProperty.call(ORDER_FILTERS, req.query.filter)
+            ? req.query.filter : null;
+        const filter = filterKey ? ORDER_FILTERS[filterKey] : null;
+
+        const where = ['o.user_id = ?'];
+        const params = [userId];
+        if (filter && filter.statuses) {
+            where.push(`o.status IN (${filter.statuses.map(() => '?').join(',')})`);
+            params.push(...filter.statuses);
+        } else if (filter && filter.sql) {
+            where.push(filter.sql);
+        }
+        const whereSql = `WHERE ${where.join(' AND ')}`;
+
+        // 전체 주문 수 조회 (필터가 걸리면 그 안에서)
         const [[{ count }]] = await pool.query(
-            'SELECT COUNT(*) as count FROM orders WHERE user_id = ?',
-            [userId]
+            `SELECT COUNT(*) as count FROM orders o ${whereSql}`,
+            params
         );
 
         const totalPages = Math.ceil(count / limit);
@@ -163,10 +240,10 @@ exports.getOrders = async (req, res, next) => {
                     (SELECT product_name FROM order_items WHERE order_id = o.id ORDER BY id ASC LIMIT 1) as first_product_name,
                     (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
              FROM orders o
-             WHERE o.user_id = ?
+             ${whereSql}
              ORDER BY o.created_at DESC
              LIMIT ? OFFSET ?`,
-            [userId, limit, offset]
+            [...params, limit, offset]
         );
 
         // 표시용 상품명 가공
@@ -183,7 +260,9 @@ exports.getOrders = async (req, res, next) => {
             orders,
             currentPage: page,
             totalPages,
-            totalOrders: count
+            totalOrders: count,
+            filterKey,
+            filterLabel: filter ? filter.label : null
         });
     } catch (err) {
         next(err);
