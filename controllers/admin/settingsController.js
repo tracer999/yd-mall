@@ -307,6 +307,7 @@ exports.updateSystemSettings = async (req, res) => {
         ['point_min_use', req.body.point_min_use, '포인트 최소 사용 단위 (원)'],
         ['point_expiry_months', req.body.point_expiry_months, '포인트 유효기간(개월). 0 = 소멸 없음'],
         ['auto_deliver_days', req.body.auto_deliver_days, '발송 후 자동 배송완료 처리 일수. 0 = 자동 처리 안 함'],
+        ['auto_confirm_days', req.body.auto_confirm_days, '배송완료 후 자동 구매확정 일수(적립금 지급 시점). 0 = 자동 확정 안 함'],
         // 문자·알림톡 — 체크박스는 꺼져 있으면 전송되지 않으므로 '0' 으로 저장한다.
         ['sms_enabled', req.body.sms_enabled ? '1' : '0', '문자·알림톡 발송 사용 여부 (0=발송 안 함)'],
         ['sms_provider', req.body.sms_provider, '문자 중계사 (aligo | solapi)'],

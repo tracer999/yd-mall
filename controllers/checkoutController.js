@@ -191,9 +191,16 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
                 );
             }
 
-            // 적립은 상품 결제액에만 붙인다. 배송비에 적립을 주면 배송비를 내고 포인트를 버는 셈이 된다.
-            // 적립률: 주문 시점 스냅샷에 저장된 등급 유효 적립률(기본률+등급 가산/대체)을 쓴다.
-            // 스냅샷이 없으면(비회원·등급 미설정) 시스템 기본률로 폴백한다.
+            /*
+             * 적립은 **결제 시점에 주지 않는다. 구매확정 시점에 준다**(purchaseConfirmService).
+             *
+             * 결제 즉시 주면 반품하는 고객에게도 일단 줬다가 도로 뺏어야 하고, 이미 써 버렸으면
+             * 회수할 수도 없다(취소 복원이 "잔액만큼만" 깎는 이유가 이것이다).
+             * 구매확정 때 주면 그 문제 자체가 없어지고, 부분 반품분을 뺀 실제 결제액으로 정확히 계산된다.
+             *
+             * 여기서는 **얼마가 적립될 예정인지**만 계산해 스냅샷에 남긴다(주문 완료 화면 안내용).
+             * 실제 지급은 고객이 구매확정을 누르거나, 배송완료 후 설정한 기간이 지나 자동 확정될 때다.
+             */
             const baseRate = getNumberSetting('point_accumulate_rate', DEFAULT_POINT_RATE);
             const [[snap]] = await conn.query(
                 'SELECT grade_point_rate FROM order_membership_benefit_snapshot WHERE order_id = ?',
@@ -203,23 +210,8 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
             const netShipping = (Number(orderRow.shipping_fee) || 0) - (Number(orderRow.shipping_discount) || 0);
             const payAmount = Math.max(0, (Number(orderRow.total_amount) || 0) - netShipping);
             const accumulate = Math.floor((payAmount * rate) / 100);
-            if (accumulate > 0) {
-                await conn.query(
-                    'UPDATE users SET points_balance = points_balance + ? WHERE id = ?',
-                    [accumulate, userId]
-                );
-                /*
-                 * 유효기간은 **적립하는 이 순간** 새긴다. 나중에 일괄로 채우면 이미 지급된
-                 * 포인트에 소급 적용하는 꼴이라 "어제까지 있던 포인트가 오늘 사라졌다" 가 된다.
-                 * 기능이 꺼져 있으면(point_expiry_months=0) NULL 이 들어가 기한 없음이 된다.
-                 */
-                await conn.query(
-                    `INSERT INTO point_transactions (user_id, amount, transaction_type, order_id, description, expires_at)
-                     VALUES (?, ?, ?, ?, ?, ${pointExpiry.expiresAtSql()})`,
-                    [userId, accumulate, 'PURCHASE_ACCUMULATE', orderId, `구매 적립 (${rate}%)`]
-                );
-            }
-            // 스냅샷에 실제 적립액 기록(있을 때만).
+
+            // 스냅샷에 적립 예정액 기록(있을 때만).
             if (snap) {
                 await conn.query(
                     'UPDATE order_membership_benefit_snapshot SET grade_point_expected = ? WHERE order_id = ?',

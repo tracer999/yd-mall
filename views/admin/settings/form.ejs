@@ -835,6 +835,19 @@
                                 value="<%= (systemSettings && systemSettings.auto_deliver_days) || '0' %>"
                                 class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">자동 구매확정 (일)</label>
+                            <p class="text-xs text-gray-500 mb-2">
+                                <b class="text-gray-700">적립금은 구매확정 시점에 지급됩니다.</b>
+                                배송완료 후 이 일수가 지나도 고객이 확정하지 않으면 자동으로 확정하고 적립금을 지급합니다.
+                                <b>0 이면 자동 확정하지 않습니다</b> — 이 경우 고객이 직접 [구매확정]을 누르지 않으면
+                                <b class="text-red-600">적립금이 지급되지 않습니다.</b>
+                                반품 가능 기간(7일)보다 짧게 넣어도 7일이 지나야 확정됩니다.
+                            </p>
+                            <input type="number" name="auto_confirm_days" min="0" max="60"
+                                value="<%= (systemSettings && systemSettings.auto_confirm_days) || '7' %>"
+                                class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
                     </div>
                 </div>
             </div>

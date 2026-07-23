@@ -51,6 +51,13 @@ function claimability(order, shipment) {
     if (order.status === 'CANCELLED' || order.status === 'REFUNDED') {
         return { type: null, types: [], reason: '이미 취소된 주문입니다.' };
     }
+    /*
+     * 구매확정은 고객이 "물건을 받아들였다"고 선언한 것이다. 그 뒤로는 반품을 받지 않는다.
+     * (확정과 동시에 적립금이 나가므로, 확정 후 반품을 받으면 적립분을 다시 회수해야 한다)
+     */
+    if (order.confirmed_at) {
+        return { type: null, types: [], reason: '구매확정된 주문은 반품·교환을 신청할 수 없습니다. 고객센터로 문의해 주세요.' };
+    }
     if (CANCELLABLE.has(order.status)) return { type: 'CANCEL', types: ['CANCEL'], reason: null };
 
     if (RETURNABLE.has(order.status)) {

@@ -4,6 +4,7 @@ const orderMailer = require('../services/email/orderMailer');
 const { benefitLabel } = require('../services/coupon/discountCalculator');
 const claimService = require('../services/order/claimService');
 const partialClaimService = require('../services/order/partialClaimService');
+const purchaseConfirmService = require('../services/order/purchaseConfirmService');
 const { sellableStockSql } = require('../services/catalog/sellableStock');
 const dealSvc = require('../services/deal/dealService');
 const membershipEval = require('../services/membership/evaluationService');
@@ -334,12 +335,19 @@ exports.getOrderDetail = async (req, res, next) => {
             [orderId]
         );
 
-        const claimMsg = {
+        const rawClaim = String(req.query.claim || '');
+        let claimMsg = {
             cancel_done: '주문이 취소되었습니다.',
             cancel_requested: '취소 신청이 접수되었습니다. 처리 결과를 기다려 주세요.',
             return_requested: '반품 신청이 접수되었습니다. 처리 결과를 기다려 주세요.',
             exchange_requested: '교환 신청이 접수되었습니다. 회수 안내를 기다려 주세요.',
-        }[req.query.claim] || null;
+            confirm_done: '구매확정이 완료되었습니다. 이용해 주셔서 감사합니다.',
+        }[rawClaim] || null;
+        // 적립이 함께 나간 경우 금액을 문구에 실어 준다(confirm_done_1200 형태).
+        const rewardMatch = rawClaim.match(/^confirm_done_(\d+)$/);
+        if (rewardMatch) {
+            claimMsg = `구매확정이 완료되었습니다. ${Number(rewardMatch[1]).toLocaleString()}P 를 적립해 드렸습니다.`;
+        }
 
         /*
          * 상품별 신청 가능 수량 — 이미 취소·반품한 만큼은 빼고 보여 준다.
@@ -646,6 +654,30 @@ exports.getPoints = async (req, res, next) => {
  * 수량을 세게 하지 않는다. 같은 상품을 2개 사서 1개만 돌려보내는 일은 드물고,
  * 그 드문 경우 때문에 모든 고객이 수량 입력을 마주하는 편이 나쁘다.
  */
+/*
+ * 구매확정 (POST)
+ * 고객이 "잘 받았다"고 확정하는 순간이며, 이때 적립금이 지급된다.
+ * 확정 후에는 반품·교환을 신청할 수 없다(claimService.claimability 가 막는다).
+ */
+exports.confirmPurchase = async (req, res, next) => {
+    try {
+        const orderId = Number(req.params.id);
+        const result = await purchaseConfirmService.confirmPurchase(orderId, {
+            source: 'CUSTOMER',
+            userId: req.user.id,
+        });
+        if (!result.ok) {
+            return res.redirect(`/mypage/orders/${orderId}?claim_error=` + encodeURIComponent(result.reason));
+        }
+        const msg = result.reward > 0
+            ? `confirm_done_${result.reward}`
+            : 'confirm_done';
+        res.redirect(`/mypage/orders/${orderId}?claim=${msg}`);
+    } catch (err) {
+        next(err);
+    }
+};
+
 exports.getClaimRequest = async (req, res, next) => {
     try {
         const userId = req.user.id;

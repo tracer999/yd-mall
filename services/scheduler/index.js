@@ -91,9 +91,22 @@ async function runPointExpiry() {
     return r;
 }
 
+/* ── 잡 4: 구매확정 자동 처리 ───────────────────────────────────
+ * 배송완료 후 N일이 지나도 고객이 확정하지 않은 주문을 자동으로 확정한다.
+ * **적립금은 구매확정 때 지급되므로**, 이 잡이 꺼져 있고 고객도 버튼을 누르지 않으면
+ * 포인트가 영영 지급되지 않는다. 그래서 이 항목만은 기본값이 켜져 있다(배송완료 7일).
+ */
+async function runAutoConfirm() {
+    const { autoConfirmDue } = require('../order/purchaseConfirmService');
+    const r = await autoConfirmDue();
+    if (r.done) console.log(`[scheduler] 구매확정 자동 처리: ${r.done}건 (배송완료 ${r.days}일 경과)`);
+    return r;
+}
+
 const JOBS = [
     { name: '약관 예약 시행', fn: runPolicyActivation },
     { name: '배송완료 자동 처리', fn: runAutoDeliver },
+    { name: '구매확정 자동 처리', fn: runAutoConfirm },
     { name: '포인트 소멸', fn: runPointExpiry },
 ];
 

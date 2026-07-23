@@ -18,6 +18,7 @@ router.get('/orders', mypageController.getOrders);
 router.get('/orders/:id', mypageController.getOrderDetail);
 // 취소·반품·교환 신청은 전용 화면에서 한다(팝업 아님).
 router.get('/orders/:id/claim', mypageController.getClaimRequest);
+router.post('/orders/:id/confirm', mypageController.confirmPurchase);
 router.post('/orders/:id/cancel', mypageController.cancelOrder);
 
 // 취소·반품 내역
