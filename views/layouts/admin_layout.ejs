@@ -360,7 +360,8 @@
     <main class="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 scroll-smooth">
       <%# 컨텐츠 폭 상한을 두지 않는다 — 관리자는 테이블 화면이 대부분이라
           1280px 상한(max-w-7xl)이 넓은 표를 전부 가로 스크롤로 만들었다.
-          읽기 폭 제한이 필요한 폼 화면은 각 뷰가 자기 max-w 로 잡는다. %>
+          리스트뿐 아니라 상세·폼 등 모든 콘텐츠 뷰도 자체 래퍼를 w-full 로 쓴다.
+          (예외: fixed inset-0 모달과 독립 팝업창은 자기 max-w 를 유지) %>
       <div class="w-full pb-10">
         <%# transform/translate 계열 유틸은 넣지 말 것 — position:fixed 자식(모달·팝업)의
             컨테이닝 블록이 되어 화면 기준이 아니라 이 카드 기준으로 배치된다 %>
