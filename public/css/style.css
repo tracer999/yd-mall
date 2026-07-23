@@ -79,6 +79,7 @@
     --color-sky-50: oklch(97.7% 0.013 236.62);
     --color-sky-100: oklch(95.1% 0.026 236.824);
     --color-sky-200: oklch(90.1% 0.058 230.902);
+    --color-sky-300: oklch(82.8% 0.111 230.318);
     --color-sky-500: oklch(68.5% 0.169 237.323);
     --color-sky-600: oklch(58.8% 0.158 241.966);
     --color-sky-700: oklch(50% 0.134 242.749);
@@ -2218,6 +2219,9 @@
   }
   .border-sky-200 {
     border-color: var(--color-sky-200);
+  }
+  .border-sky-300 {
+    border-color: var(--color-sky-300);
   }
   .border-sky-500 {
     border-color: var(--color-sky-500);
@@ -4991,6 +4995,13 @@
       }
     }
   }
+  .hover\:bg-sky-100 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-sky-100);
+      }
+    }
+  }
   .hover\:bg-sky-700 {
     &:hover {
       @media (hover: hover) {
@@ -5859,6 +5870,11 @@
   .sm\:col-span-7 {
     @media (width >= 40rem) {
       grid-column: span 7 / span 7;
+    }
+  }
+  .sm\:col-span-9 {
+    @media (width >= 40rem) {
+      grid-column: span 9 / span 9;
     }
   }
   .sm\:col-span-12 {
@@ -6752,6 +6768,11 @@
   .lg\:overflow-visible {
     @media (width >= 64rem) {
       overflow: visible;
+    }
+  }
+  .lg\:p-6 {
+    @media (width >= 64rem) {
+      padding: calc(var(--spacing) * 6);
     }
   }
   .lg\:p-8 {
