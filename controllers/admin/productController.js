@@ -1067,11 +1067,15 @@ exports.getList = async (req, res) => {
         const VISIBILITIES = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
         const STOCKS = ['in', 'out'];
         const B2BS = ['b2b', 'normal'];
+        // 출처 — 이 상품이 어디서 왔는가. MALL 은 관리자가 직접 등록한 것, 나머지는 외부에서 가져온 것.
+        // 공급처 상품은 카테고리·브랜드가 비어 있고 원본 가격이 외부에서 바뀌므로 운영 방법이 다르다.
+        const SOURCES = ['MALL', 'DOMEGGOOK', 'DOMEME', 'ONCHANNEL', 'NAVER_SMARTSTORE'];
 
         const status = STATUSES.includes(req.query.status) ? req.query.status : '';
         const visibility = VISIBILITIES.includes(req.query.visibility) ? req.query.visibility : '';
         const stock = STOCKS.includes(req.query.stock) ? req.query.stock : '';
         const b2b = B2BS.includes(req.query.b2b) ? req.query.b2b : '';
+        const source = SOURCES.includes(req.query.source) ? req.query.source : '';
         // 카테고리/브랜드 필터 — 숫자 id, 또는 'none'(미설정: 값이 비어 있는 상품만).
         const categoryUnset = req.query.categoryId === 'none';
         const brandUnset = req.query.brandId === 'none';
@@ -1094,6 +1098,10 @@ exports.getList = async (req, res) => {
         if (visibility) {
             whereClause += ' AND p.visibility = ?';
             queryParams.push(visibility);
+        }
+        if (source) {
+            whereClause += ' AND p.source_channel = ?';
+            queryParams.push(source);
         }
         // 재고 필터는 판매 가능 기준 — 프론트 품절 표시·결제 검증과 같은 정의를 쓴다(sellableStock).
         // 예전엔 SKU 의 status 를 안 봐서, 전 옵션이 OFF 라 실제로는 못 파는 상품도 '재고 있음' 으로 잡혔다.
@@ -1192,7 +1200,7 @@ exports.getList = async (req, res) => {
             keyword,
             // 미설정 필터는 'none' 문자열로 뷰·페이지네이션에 실어 나른다.
             filters: {
-                status, visibility, stock, b2b,
+                status, visibility, stock, b2b, source,
                 categoryId: categoryUnset ? 'none' : categoryId,
                 brandId: brandUnset ? 'none' : brandId,
             },

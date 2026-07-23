@@ -1,9 +1,9 @@
 <%
   const _kw = typeof keyword !== 'undefined' ? keyword : '';
-  const _f  = typeof filters !== 'undefined' ? filters : { status:'', visibility:'', stock:'', b2b:'', categoryId:null, brandId:null };
+  const _f  = typeof filters !== 'undefined' ? filters : { status:'', visibility:'', stock:'', b2b:'', source:'', categoryId:null, brandId:null };
   const _cats   = typeof filterCategories !== 'undefined' ? filterCategories : [];
   const _brands = typeof filterBrands !== 'undefined' ? filterBrands : [];
-  const _hasFilter = !!(_kw || _f.status || _f.visibility || _f.stock || _f.b2b || _f.categoryId || _f.brandId);
+  const _hasFilter = !!(_kw || _f.status || _f.visibility || _f.stock || _f.b2b || _f.source || _f.categoryId || _f.brandId);
 
   /* 페이지네이션·개수변경 링크가 필터를 잃지 않도록 현재 필터를 전부 실어 나른다. */
   const _qs = (extra) => {
@@ -13,6 +13,7 @@
     if (_f.visibility) params.set('visibility', _f.visibility);
     if (_f.stock) params.set('stock', _f.stock);
     if (_f.b2b) params.set('b2b', _f.b2b);
+    if (_f.source) params.set('source', _f.source);
     if (_f.categoryId) params.set('categoryId', _f.categoryId);
     if (_f.brandId) params.set('brandId', _f.brandId);
     params.set('perPage', pagination.perPage);
@@ -28,6 +29,19 @@
 
   const STATUS_LABELS = { ON:'판매중', OFF:'판매중지', SOLD_OUT:'품절', COMING_SOON:'출시예정', RESTOCK:'재입고예정' };
   const VIS_LABELS = { PUBLIC:'전체공개', HIDDEN:'숨김', MEMBER_ONLY:'회원전용' };
+  /* 상품 출처(products.source_channel) — 라벨과 뱃지 색. 몰상품은 대다수라 회색으로 눌러 두고
+     외부에서 가져온 것만 색을 준다(목록에서 "섞여 있다"가 한눈에 보여야 한다). */
+  const SOURCE_LABELS = {
+    MALL: '몰상품', DOMEGGOOK: '도매꾹', DOMEME: '도매매',
+    ONCHANNEL: '온채널', NAVER_SMARTSTORE: '네이버 스토어',
+  };
+  const SOURCE_BADGE = {
+    MALL: 'bg-gray-100 text-gray-600',
+    DOMEGGOOK: 'bg-orange-100 text-orange-800',
+    DOMEME: 'bg-amber-100 text-amber-800',
+    ONCHANNEL: 'bg-cyan-100 text-cyan-800',
+    NAVER_SMARTSTORE: 'bg-green-100 text-green-800',
+  };
 %>
 <form action="/admin/products" method="GET" class="mb-4 rounded-lg border border-gray-200 bg-white p-4">
     <input type="hidden" name="perPage" value="<%= pagination.perPage %>">
@@ -76,6 +90,17 @@
                 <option value="">전체</option>
                 <option value="b2b"    <%= _f.b2b === 'b2b'    ? 'selected' : '' %>>사업자 상품</option>
                 <option value="normal" <%= _f.b2b === 'normal' ? 'selected' : '' %>>일반 상품</option>
+            </select>
+        </div>
+
+        <%# 출처 — 직접 등록한 몰 상품과 외부에서 가져온 상품은 운영 방법이 달라 따로 볼 수 있어야 한다. %>
+        <div class="w-36">
+            <label class="block mb-1 text-xs font-medium text-gray-500">상품 출처</label>
+            <select name="source" class="w-full h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="">전체</option>
+                <% Object.entries(SOURCE_LABELS).forEach(([v, label]) => { %>
+                    <option value="<%= v %>" <%= _f.source === v ? 'selected' : '' %>><%= label %></option>
+                <% }) %>
             </select>
         </div>
 
@@ -239,7 +264,13 @@
                                     </a>
                                 </div>
                                 <div class="text-sm text-gray-500"><%= p.provider %></div>
-                                <div class="mt-1 flex gap-1">
+                                <div class="mt-1 flex flex-wrap gap-1">
+                                    <%# 출처 — 이 상품이 어디서 온 것인지. 값이 없는 옛 행도 몰상품으로 읽는다. %>
+                                    <% const _src = p.source_channel || 'MALL'; %>
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= SOURCE_BADGE[_src] || SOURCE_BADGE.MALL %>"
+                                          title="상품 출처: <%= SOURCE_LABELS[_src] || _src %>">
+                                        <%= SOURCE_LABELS[_src] || _src %>
+                                    </span>
                                     <% if (p.product_type === 'OPTION') { %>
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">옵션 <%= p.sku_count %>종</span>
                                     <% } else { %>

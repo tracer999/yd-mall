@@ -38,6 +38,8 @@ const REFERER = 'https://domeggook.com/';
 // 초과값이 에러 없이 잘려 들어간다. 실사용 최고가는 2,500만원대이므로 1억을 상한으로 둔다.
 // 설계: docs/사이트개선/카테고리_브랜드_상품필터_설계.md §1.5 D-2
 const MAX_PRICE = 100000000;
+// products.source_channel 에 넣을 수 있는 공급처 토큰(supplier_product.supplier 와 동일).
+const SOURCE_CHANNELS = ['DOMEGGOOK', 'DOMEME', 'ONCHANNEL'];
 
 /** 원 단위 노이즈를 없애기 위해 10원 단위로 반올림한다. */
 function roundPrice(v) {
@@ -202,12 +204,16 @@ async function publishToMall(mallId, supplierProductId, opts = {}) {
 
         const [pr] = await conn.query(
             `INSERT INTO products
-                (mall_id, category_id, product_type, name, product_code, provider,
+                (mall_id, category_id, product_type, source_channel, name, product_code, provider,
                  description, main_image, thumbnail_image,
                  purchase_price, price, stock, status, visibility, slug)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 mallId, categoryId, isOption ? 'OPTION' : 'SINGLE',
+                // 출처는 여기서만 기본값(MALL)이 아닌 값을 쓴다. 상품 목록의 출처 뱃지·필터가 이 값을 읽는다.
+                // 화이트리스트로 거르는 이유: enum 밖의 값이 들어오면 비엄격 sql_mode 가 빈 문자열로 삼켜
+                // 필터에서 영영 안 잡히는 상품이 된다.
+                SOURCE_CHANNELS.includes(sp.supplier) ? sp.supplier : 'MALL',
                 name,
                 sp.supplier_item_no ? String(sp.supplier_item_no).slice(0, 100) : null,
                 sp.seller_nick ? String(sp.seller_nick).slice(0, 100) : null,

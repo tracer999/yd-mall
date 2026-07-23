@@ -154,6 +154,13 @@
                 const _statusLabel = { ON: '판매중', OFF: '중지(판매중단)', SOLD_OUT: '품절', COMING_SOON: '판매예정', RESTOCK: '재입고예정' };
                 const _visibilityLabel = { PUBLIC: '노출 (기본)', HIDDEN: '노출중지 (프론트 전체 숨김)', MEMBER_ONLY: '로그인전용 (로그인 회원만 노출)' };
                 const _distLabel = { ONLINE_ONLY: '온라인판매가능', OFFLINE_ONLY: '오프라인판매전용' };
+                /* 상품 출처(products.source_channel) — 목록 화면(list.ejs)과 같은 라벨·색을 쓴다. */
+                const _srcLabel = { MALL: '몰상품', DOMEGGOOK: '도매꾹', DOMEME: '도매매', ONCHANNEL: '온채널', NAVER_SMARTSTORE: '네이버 스토어' };
+                const _srcBadge = {
+                    MALL: 'bg-gray-100 text-gray-600', DOMEGGOOK: 'bg-orange-100 text-orange-800',
+                    DOMEME: 'bg-amber-100 text-amber-800', ONCHANNEL: 'bg-cyan-100 text-cyan-800',
+                    NAVER_SMARTSTORE: 'bg-green-100 text-green-800',
+                };
                 const _badgeLabel = { BEST: 'BEST', NEW: 'NEW', RECOMMEND: '추천', DEADLINE_SALE: '기간임박할인', GREENHUB_SPECIAL: '와이디몰특가' };
                 const _badges = (product.product_badge || '').split(',').filter(Boolean);
             %>
@@ -165,6 +172,20 @@
                         <i class="bi bi-sliders text-gray-500"></i> 기본 설정
                     </h3>
                     <dl class="divide-y divide-gray-100 text-sm">
+                        <%# 출처 — 외부에서 가져온 상품은 원본 가격·재고가 공급처에서 바뀌므로
+                            여기서 편집한 값이 덮어써질 수 있다. 편집 전에 알아야 하는 정보라 맨 위에 둔다. %>
+                        <div class="flex px-5 py-2.5">
+                            <dt class="w-32 shrink-0 text-gray-500">상품 출처</dt>
+                            <dd>
+                                <% const _src = product.source_channel || 'MALL'; %>
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= _srcBadge[_src] || _srcBadge.MALL %>">
+                                    <%= _srcLabel[_src] || _src %>
+                                </span>
+                                <% if (_src !== 'MALL') { %>
+                                    <span class="ml-1 text-xs text-gray-500">외부에서 가져온 상품입니다.</span>
+                                <% } %>
+                            </dd>
+                        </div>
                         <div class="flex px-5 py-2.5">
                             <dt class="w-32 shrink-0 text-gray-500">상품코드</dt>
                             <dd class="text-gray-900 font-mono"><%= product.product_code || '-' %></dd>

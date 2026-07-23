@@ -263,6 +263,9 @@ CREATE TABLE IF NOT EXISTS `products` (
   `mall_id` bigint NOT NULL DEFAULT '1' COMMENT '몰 ID(멀티몰)',
   `category_id` int DEFAULT NULL COMMENT '카테고리 ID (FK, type=NORMAL)',
   `brand_category_id` int DEFAULT NULL COMMENT '브랜드 카테고리 ID (FK, type=BRAND)',
+  -- 출처는 상품을 만든 경로가 박아 준다. MALL=관리자 직접 등록(기본), 나머지는 외부에서 가져온 것.
+  -- NAVER_SMARTSTORE 는 "네이버에서 가져옴"이지 "네이버로 발행함"이 아니다(발행은 channel_product_mapping).
+  `source_channel` enum('MALL','DOMEGGOOK','DOMEME','ONCHANNEL','NAVER_SMARTSTORE') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'MALL' COMMENT '상품 출처. MALL=관리자 직접 등록, 나머지는 외부 공급처/채널에서 가져옴',
   `name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '상품명',
   `product_code` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '상품코드 (관리자 입력)',
   `provider` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '공급 업체',
@@ -302,6 +305,7 @@ CREATE TABLE IF NOT EXISTS `products` (
   KEY `idx_products_product_code` (`product_code`),
   KEY `idx_products_mall` (`mall_id`),
   KEY `idx_products_sale_start` (`mall_id`,`sale_start_date`),
+  KEY `idx_products_mall_source` (`mall_id`,`source_channel`),
   CONSTRAINT `fk_products_brand_category` FOREIGN KEY (`brand_category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL,
   CONSTRAINT `products_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL,
   CONSTRAINT `products_ibfk_2` FOREIGN KEY (`theme_category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
