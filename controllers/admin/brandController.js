@@ -352,6 +352,9 @@ exports.getEdit = async (req, res) => {
         );
         const ptotalPages = Math.max(1, Math.ceil(ptotal / BRAND_PROD_PER_PAGE));
         const curProdPage = Math.min(prodPage, ptotalPages);
+        // 상단 요약의 상품 수도 목록 화면과 같은 **라이브 집계**로 맞춘다.
+        // brand_stat(캐시)를 그대로 쓰면 재계산 전에는 아래 상품 목록 건수와 어긋나 보인다.
+        brand.product_count = ptotal;
         const [assignedProducts] = await pool.query(
             `SELECT id, name, product_code, main_image, price, stock, status, visibility
                FROM products WHERE mall_id = ? AND brand_category_id = ?
