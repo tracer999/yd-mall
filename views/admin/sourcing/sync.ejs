@@ -1,0 +1,258 @@
+<%
+  /* 외부몰 연동 · 재고 연동
+     전송은 POST /sync/stock (우리 몰 → 네이버), 대사 조회는 GET ?check=상품ID (읽기 전용).
+     ⚠ 재고의 정본은 우리 몰이다. 네이버 값을 우리 DB 에 쓰지 않는다. */
+  const won = (v) => (v == null ? '-' : Number(v).toLocaleString('ko-KR') + '원');
+  const listUrl = (over) => {
+    const p = new URLSearchParams({ q: q || '' });
+    if (onlyDiff) p.set('diff', '1');
+    Object.entries(over || {}).forEach(([k, v]) => {
+      if (v === null) p.delete(k); else p.set(k, String(v));
+    });
+    return '/admin/sourcing/sync?' + p.toString();
+  };
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <div class="mb-3 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
+      <i class="bi bi-shop text-lg text-indigo-600"></i>
+      <span class="text-sm font-medium text-indigo-700">현재 편집 몰</span>
+      <span class="text-lg font-bold text-indigo-900"><%= (adminMall && adminMall.name) || ('mall #' + adminMallId) %></span>
+    </div>
+    <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+    <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
+  </div>
+
+  <% if (msg) { %>
+    <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800"><%= msg %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+      <i class="bi bi-exclamation-triangle mr-1"></i><%= error %>
+    </div>
+  <% } %>
+
+  <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    <b>재고의 기준은 이 몰입니다.</b> 여기서 보내는 값은 <b>판매가능재고</b>
+    (판매중이고 재고를 직접 관리하는 SKU 의 합)이며, 네이버 쪽 값을 우리 몰에 덮어쓰지 않습니다.
+    [네이버 재고 확인]은 <b>조회만</b> 합니다.
+    <div class="mt-1 text-xs">
+      주문 수집·발주·송장 반영은 다음 차수 과제라 이 화면에 없습니다. 지금은 <b>재고 전송(수동)</b>만 제공합니다.
+    </div>
+    <div class="mt-1 text-xs">
+      <b>전송 성공(200)이 곧 반영은 아닙니다.</b> 특히 옵션상품은 전송 뒤
+      [네이버 재고 확인]으로 실제 값을 한 번 대사하세요.
+    </div>
+  </div>
+
+  <!-- 대사 결과 -->
+  <% if (check) { %>
+    <div class="mb-6 bg-white shadow-sm rounded-lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">네이버 재고 확인 — <%= check.name %></h2>
+          <p class="mt-1 text-xs text-gray-500">원상품 <%= check.originProductNo %> · 네이버 판매상태 <%= check.naverStatus || '-' %></p>
+        </div>
+        <span class="rounded px-2 py-1 text-xs <%= check.matched ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' %>">
+          <%= check.matched ? '일치' : '불일치' %>
+        </span>
+      </div>
+      <div class="px-6 py-4 grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <div class="text-xs text-gray-500">우리 몰 판매가능재고</div>
+          <div class="text-xl font-bold text-gray-900"><%= check.ourStock %></div>
+        </div>
+        <div>
+          <div class="text-xs text-gray-500">네이버 현재 재고</div>
+          <div class="text-xl font-bold text-gray-900"><%= check.naverStock %></div>
+        </div>
+      </div>
+      <% if (check.options.length) { %>
+        <div class="px-6 pb-4">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600">
+              <tr>
+                <th class="px-3 py-2 text-left">네이버 옵션</th>
+                <th class="px-3 py-2 w-24 text-right">재고</th>
+                <th class="px-3 py-2 w-20 text-center">판매</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <% check.options.forEach((o) => { %>
+                <tr>
+                  <td class="px-3 py-2 text-gray-700"><%= o.name || ('옵션 ' + (o.id || '')) %></td>
+                  <td class="px-3 py-2 text-right text-gray-900"><%= o.stock %></td>
+                  <td class="px-3 py-2 text-center text-xs <%= o.usable ? 'text-emerald-600' : 'text-gray-400' %>">
+                    <%= o.usable ? '가능' : '중지' %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+      <div class="px-6 py-3 border-t border-gray-200 text-right">
+        <a href="<%= listUrl({ check: null }) %>" class="text-sm text-gray-500 hover:text-indigo-600">닫기</a>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- 필터 -->
+  <div class="bg-white shadow-sm rounded-lg mb-6">
+    <form method="get" action="/admin/sourcing/sync" class="p-6 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+      <div class="sm:col-span-7">
+        <label class="block text-sm text-gray-600 mb-1">상품명 · 원상품번호 검색</label>
+        <input type="text" name="q" value="<%= q %>" placeholder="예) 홍삼 또는 13614646079"
+               class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+      </div>
+      <div class="sm:col-span-3">
+        <label class="inline-flex items-center gap-2 text-sm text-gray-600">
+          <input type="checkbox" name="diff" value="1" <%= onlyDiff ? 'checked' : '' %> class="h-4 w-4">
+          마지막 전송과 다른 것만
+        </label>
+      </div>
+      <div class="sm:col-span-2">
+        <button type="submit"
+          class="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+          <i class="bi bi-funnel"></i> 조회
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <form method="post" action="/admin/sourcing/sync/stock" id="stock-form">
+    <input type="hidden" name="q" value="<%= q %>">
+    <input type="hidden" name="diff" value="<%= onlyDiff ? '1' : '' %>">
+
+    <div class="bg-white shadow-sm rounded-lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">네이버에 등록된 상품 <span class="text-gray-400 text-base">(<%= rows.length %>건)</span></h2>
+          <p class="mt-1 text-xs text-gray-500">
+            한 번에 최대 <b><%= pushLimit %>건</b>. 마지막 전송과 값이 같으면 호출하지 않고 건너뜁니다.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <input type="checkbox" name="force" value="1" class="h-4 w-4">
+            변경이 없어도 강제 전송
+          </label>
+          <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+            <i class="bi bi-upload"></i> 선택 상품 재고 전송
+          </button>
+        </div>
+      </div>
+
+      <% if (!rows.length) { %>
+        <div class="p-10 text-center text-sm text-gray-500">
+          네이버에 등록된 상품이 없습니다.
+          <div class="mt-2 text-xs text-gray-400">
+            <a href="/admin/sourcing/publish" class="text-indigo-600 hover:underline">[스마트스토어 등록]</a> 으로 올리거나,
+            <a href="/admin/sourcing/channel-import" class="text-indigo-600 hover:underline">[스토어 상품 가져오기]</a> 로 기존 상품을 연결하세요.
+          </div>
+        </div>
+      <% } else { %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600">
+              <tr>
+                <th class="px-4 py-3 w-10 text-left"><input type="checkbox" id="chk-all" class="h-4 w-4"></th>
+                <th class="px-4 py-3 text-left">상품</th>
+                <th class="px-4 py-3 w-24 text-center">유형</th>
+                <th class="px-4 py-3 w-28 text-right">우리 재고</th>
+                <th class="px-4 py-3 w-28 text-right">마지막 전송</th>
+                <th class="px-4 py-3 w-24 text-center">상태</th>
+                <th class="px-4 py-3 w-28 text-center">확인</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <% rows.forEach((r) => { %>
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-3 align-top">
+                    <input type="checkbox" name="product_id" value="<%= r.product_id %>" class="chk-item h-4 w-4">
+                  </td>
+                  <td class="px-4 py-3 align-top">
+                    <div class="font-medium text-gray-900">
+                      <a href="/admin/products/edit/<%= r.product_id %>" class="hover:text-indigo-600"><%= r.name %></a>
+                    </div>
+                    <div class="mt-0.5 text-xs text-gray-400">
+                      원상품 <%= r.origin_product_no %>
+                      <% if (r.channel_product_no) { %> · 채널상품 <%= r.channel_product_no %><% } %>
+                      · <%= won(r.price) %>
+                    </div>
+                    <div class="mt-0.5 text-xs text-gray-400">
+                      SKU <%= r.sku_count %>건 중 옵션 매핑 <%= r.mapped_sku_count %>건
+                      <% if (r.mapped_sku_count === 0) { %>
+                        <span class="text-amber-600">— 옵션 매핑이 없어 상품 단위 재고만 전송됩니다</span>
+                      <% } %>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 align-top text-center">
+                    <span class="rounded px-2 py-1 text-xs <%= r.source_type === 'CHANNEL_IMPORT' ? 'bg-sky-50 text-sky-700' : 'bg-indigo-50 text-indigo-700' %>">
+                      <%= r.source_type === 'CHANNEL_IMPORT' ? '역수집' : '우리 등록' %>
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 align-top text-right font-medium text-gray-900"><%= r.sellable_stock %></td>
+                  <td class="px-4 py-3 align-top text-right <%= r.diff ? 'text-red-600 font-medium' : 'text-gray-500' %>">
+                    <%= r.never_sent ? '-' : r.last_sent_total %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-center text-xs text-gray-600"><%= r.sale_status || r.status %></td>
+                  <td class="px-4 py-3 align-top text-center">
+                    <a href="<%= listUrl({ check: r.product_id }) %>"
+                       class="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                      네이버 재고 확인
+                    </a>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="px-6 py-4 border-t border-gray-200 text-xs text-gray-500">
+          전송 결과(요청·응답 원본)는 <code>channel_publish_log</code> 에 <code>action='STOCK'</code> 으로 남습니다.
+          실패 시 네이버 문의에 필요한 <code>GNCP-GW-Trace-ID</code> 도 함께 기록됩니다.
+        </div>
+      <% } %>
+    </div>
+  </form>
+</div>
+
+<script>
+  (function () {
+    var all = document.getElementById('chk-all');
+    var form = document.getElementById('stock-form');
+    if (!form) return;
+    var items = function () { return form.querySelectorAll('.chk-item'); };
+
+    if (all) {
+      all.addEventListener('change', function () {
+        items().forEach(function (c) { c.checked = all.checked; });
+      });
+    }
+
+    var LIMIT = <%= pushLimit %>;
+    form.addEventListener('submit', function (e) {
+      var checked = 0;
+      items().forEach(function (c) { if (c.checked) checked++; });
+      if (!checked) {
+        e.preventDefault();
+        alert('재고를 전송할 상품을 선택해 주세요.');
+        return;
+      }
+      // 외부몰에 실제로 쓰는 작업이라 한 번 확인받는다.
+      if (!confirm(checked + '건의 재고를 스마트스토어로 전송합니다. 계속할까요?')) {
+        e.preventDefault();
+        return;
+      }
+      if (checked > LIMIT) {
+        alert('한 번에 ' + LIMIT + '건까지만 처리됩니다. 나머지는 다시 선택해 주세요.');
+      }
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn) { btn.disabled = true; btn.textContent = '전송 중…'; }
+    });
+  })();
+</script>

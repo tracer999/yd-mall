@@ -16,6 +16,8 @@ const importService = require('../../services/sourcing/importService');
 const { sanitize } = require('../../services/display/htmlSanitizer');
 const domeggookCategories = require('../../services/sourcing/supplier/domeggook/categories');
 const publishService = require('../../services/sourcing/publishService');
+const channelImport = require('../../services/sourcing/channel/naverChannelImport');
+const stockSync = require('../../services/sourcing/channel/naverStockSync');
 const { sellableStockSql } = require('../../services/catalog/sellableStock');
 
 const BASE = '/admin/sourcing/connections';
@@ -142,28 +144,178 @@ exports.postSetting = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// 1차 나머지 화면 — 골격 플레이스홀더
+// 스토어 상품 가져오기 (역방향) — **네이버 → 우리 몰**
+//
+// ⚠ /admin/sourcing/import(공급처 → 우리 몰)·/publish(우리 몰 → 네이버)와 방향이 다르다.
 // ---------------------------------------------------------------------------
 
-function placeholder(title, subtitle, note) {
-    return (req, res) => res.render('admin/sourcing/placeholder', {
-        layout: 'layouts/admin_layout',
-        title,
-        subtitle,
-        note,
-    });
-}
+const CHANNEL_IMPORT_BASE = '/admin/sourcing/channel-import';
+const SYNC_BASE = '/admin/sourcing/sync';
 
-exports.getChannelImport = placeholder(
-    '스토어 상품 가져오기 (역방향)',
-    '스마트스토어에 직접 등록된 상품을 우리 몰로 가져옵니다.',
-    'Phase 3에서 구현됩니다.'
-);
-exports.getSync = placeholder(
-    '재고·주문 가져오기',
-    '"가져오기" 버튼으로 재고·주문을 그 시점에 조회·동기화합니다. (1차, 배치 없음)',
-    'Phase 3~5에서 구현됩니다.'
-);
+// 조회는 GET 쿼리로 받는다 — 뒤로가기·새로고침이 그대로 동작해야 한다(getImport 와 같은 규칙).
+exports.getChannelImport = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    /*
+     * 네이버 목록 조회는 **상품명 검색을 제공하지 않는다**(실호출 확인 — naverChannelImport
+     * §buildSearchRequest). 그래서 서버로 보내는 조건은 판매자관리코드·채널상품번호뿐이고,
+     * 상품명은 화면에서 조회 결과를 걸러 보는 방식으로 처리한다.
+     */
+    const code = (req.query.code || '').trim();
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const size = channelImport.PAGE_SIZES.includes(Number(req.query.size)) ? Number(req.query.size) : 50;
+
+    // 메뉴로 처음 들어왔을 때 자동으로 외부 API 를 부르지 않는다(호출 한도 보호).
+    const fetched = req.query.fetch === '1';
+
+    // 외부 실시간 데이터라 304 로 화면이 멈춘 것처럼 보이면 안 된다.
+    res.set('Cache-Control', 'no-store');
+
+    const view = {
+        layout: 'layouts/admin_layout',
+        title: '외부몰 연동 · 스토어 상품 가져오기 (역방향)',
+        subtitle: '스마트스토어에 직접 등록해 둔 상품을 우리 몰 상품으로 가져옵니다. (네이버 → 우리 몰)',
+        code, page, size, fetched,
+        pageSizes: channelImport.PAGE_SIZES,
+        importLimit: channelImport.IMPORT_LIMIT,
+        result: null,
+        categoryTree: [],
+        msg: req.query.msg || '',
+        error: req.query.error || '',
+    };
+
+    try {
+        // 가져오기 시 자동 매핑에 실패한 상품이 들어갈 기본 카테고리를 고를 수 있게 한다.
+        view.categoryTree = await publishService.getMallCategoryTree(mallId);
+    } catch (e) {
+        // 카테고리 트리는 부가 정보다 — 실패해도 조회 화면은 떠야 한다.
+        console.error('[sourcing/channel-import] 카테고리 트리 로드 실패:', e.message);
+    }
+
+    if (fetched) {
+        try {
+            view.result = await channelImport.searchStoreProducts(mallId, {
+                code, page, size, actor: actorOf(req),
+            });
+        } catch (e) {
+            view.error = e.message;
+        }
+    }
+
+    res.render('admin/sourcing/channel_import', view);
+};
+
+// 선택 상품을 우리 몰로 가져온다.
+exports.postChannelImportRun = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const raw = req.body.origin_no;
+    const originNos = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+
+    const back = `${CHANNEL_IMPORT_BASE}?fetch=1`
+        + `&code=${encodeURIComponent(req.body.code || '')}`
+        + `&page=${encodeURIComponent(req.body.page || 1)}`
+        + `&size=${encodeURIComponent(req.body.size || 50)}`;
+
+    try {
+        const r = await channelImport.importMany(mallId, originNos, {
+            actor: actorOf(req),
+            fallbackCategoryId: Number(req.body.fallback_category_id) || null,
+            status: req.body.status,
+            visibility: req.body.visibility,
+        });
+
+        let msg = `${r.success}건 가져오기 완료`;
+        if (r.skipped) msg += ` · ${r.skipped}건 건너뜀(이미 연결됨)`;
+        if (r.failed) msg += ` · ${r.failed}건 실패`;
+        if (r.overLimit) msg += ` (한 번에 최대 ${r.limit}건까지만 처리됩니다 — 나머지는 다시 선택해 주세요)`;
+
+        const uncategorized = r.results.filter((x) => x.ok && !x.categoryMatched).length;
+        if (uncategorized) msg += ` · 카테고리 자동 매핑 실패 ${uncategorized}건(상품 수정에서 지정하세요)`;
+
+        const firstError = r.results.find((x) => !x.ok && !x.skipped);
+        if (firstError) msg += ` · 첫 실패 사유: ${firstError.error}`;
+
+        res.redirect(`${back}&msg=` + encodeURIComponent(msg));
+    } catch (e) {
+        res.redirect(`${back}&error=` + encodeURIComponent(e.message));
+    }
+};
+
+// ---------------------------------------------------------------------------
+// 재고 연동 — **우리 몰 → 네이버**(전송) + 네이버 현재 재고 조회(대사, 읽기 전용)
+//
+// 재고의 정본은 우리 몰(services/catalog/sellableStock.js)이다. 네이버 값을
+// 우리 DB 에 덮어쓰지 않는다 — 그러면 결제·주문 재고가 조용히 어긋난다.
+// ---------------------------------------------------------------------------
+
+exports.getSync = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const q = (req.query.q || '').trim();
+    const onlyDiff = req.query.diff === '1';
+
+    res.set('Cache-Control', 'no-store');
+
+    const view = {
+        layout: 'layouts/admin_layout',
+        title: '외부몰 연동 · 재고 연동',
+        subtitle: '우리 몰의 판매가능재고를 스마트스토어로 전송합니다. (우리 몰 → 네이버 · 수동 실행)',
+        q, onlyDiff,
+        rows: [],
+        pushLimit: stockSync.PUSH_LIMIT,
+        check: null,
+        msg: req.query.msg || '',
+        error: req.query.error || '',
+    };
+
+    try {
+        view.rows = await stockSync.listTargets(mallId, { q, onlyDiff });
+    } catch (e) {
+        view.error = e.message;
+    }
+
+    // 대사 조회는 명시적으로 요청했을 때만 외부 API 를 부른다.
+    const checkId = Number(req.query.check) || 0;
+    if (checkId) {
+        try {
+            view.check = await stockSync.fetchChannelStock(mallId, checkId, { actor: actorOf(req) });
+        } catch (e) {
+            view.error = e.message;
+        }
+    }
+
+    res.render('admin/sourcing/sync', view);
+};
+
+exports.postStockPush = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const raw = req.body.product_id;
+    const ids = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+
+    const back = `${SYNC_BASE}?q=${encodeURIComponent(req.body.q || '')}`
+        + (req.body.diff === '1' ? '&diff=1' : '');
+
+    try {
+        const r = await stockSync.pushMany(mallId, ids, {
+            actor: actorOf(req),
+            // 변경이 없어도 보낸다 — 대사 후 강제 재전송용.
+            force: req.body.force === '1',
+        });
+
+        let msg = `${r.success}건 전송 완료`;
+        if (r.skipped) msg += ` · ${r.skipped}건 건너뜀(변경 없음)`;
+        if (r.failed) msg += ` · ${r.failed}건 실패`;
+        if (r.overLimit) msg += ` (한 번에 최대 ${r.limit}건)`;
+
+        const partial = r.results.filter((x) => x.ok && x.unmappedSellable).length;
+        if (partial) msg += ` · 옵션 매핑이 없어 일부 SKU 를 못 보낸 상품 ${partial}건`;
+
+        const firstError = r.results.find((x) => !x.ok && !x.skipped);
+        if (firstError) msg += ` · 첫 실패 사유: ${firstError.error}`;
+
+        res.redirect(`${back}&msg=` + encodeURIComponent(msg));
+    } catch (e) {
+        res.redirect(`${back}&error=` + encodeURIComponent(e.message));
+    }
+};
 
 // ---------------------------------------------------------------------------
 // 상품 가져오기 — 공급처 검색 → 선택 → 중간 테이블 적재 (Phase 2)

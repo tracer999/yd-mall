@@ -1,0 +1,290 @@
+<%
+  /* 외부몰 연동 · 스토어 상품 가져오기 (역방향)
+     조회는 GET(?fetch=1), 가져오기는 POST /channel-import/run.
+     ⚠ 방향: 네이버 → 우리 몰. /import(공급처→우리몰)·/publish(우리몰→네이버)와 다르다. */
+  const r = result || null;
+  const won = (v) => (v == null ? '-' : Number(v).toLocaleString('ko-KR') + '원');
+  const qs = (over) => {
+    const p = new URLSearchParams({
+      fetch: '1', code: code || '', page: String(page), size: String(size),
+    });
+    Object.entries(over || {}).forEach(([k, v]) => p.set(k, String(v)));
+    return '/admin/sourcing/channel-import?' + p.toString();
+  };
+  // 카테고리 트리를 평평한 "대 > 중 > 소" 목록으로 편다(폴백 카테고리 select 용).
+  const flatCats = [];
+  (function walk(nodes, trail) {
+    (nodes || []).forEach((n) => {
+      const path = trail.concat([n.n]);
+      if (n.k && n.k.length) walk(n.k, path);
+      else flatCats.push({ id: n.i, label: path.join(' > ') });
+    });
+  })(categoryTree, []);
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <div class="mb-3 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
+      <i class="bi bi-shop text-lg text-indigo-600"></i>
+      <span class="text-sm font-medium text-indigo-700">현재 편집 몰</span>
+      <span class="text-lg font-bold text-indigo-900"><%= (adminMall && adminMall.name) || ('mall #' + adminMallId) %></span>
+    </div>
+    <h1 class="text-2xl font-bold text-gray-900"><%= title %></h1>
+    <p class="mt-1 text-sm text-gray-500"><%= subtitle %></p>
+  </div>
+
+  <% if (msg) { %>
+    <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800"><%= msg %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+      <i class="bi bi-exclamation-triangle mr-1"></i><%= error %>
+    </div>
+  <% } %>
+
+  <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    <b>방향 확인</b> — 이 화면은 <b>스마트스토어 → 우리 몰</b>입니다.
+    우리 몰 상품을 네이버에 올리는 것은 <a href="/admin/sourcing/publish" class="underline">[스마트스토어 등록]</a> 화면입니다.
+    연결된 자기 스토어의 상품만 조회됩니다(다른 판매자 스토어는 조회 불가).
+  </div>
+
+  <!-- 조회 -->
+  <div class="bg-white shadow-sm rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h2 class="text-lg font-bold text-gray-800">스토어 상품 조회</h2>
+      <p class="mt-1 text-xs text-gray-500">
+        네이버 커머스 API 를 실시간 호출합니다. 조회는 읽기만 하며 우리 몰 데이터를 바꾸지 않습니다.
+      </p>
+    </div>
+    <form method="get" action="/admin/sourcing/channel-import" class="p-6 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+      <input type="hidden" name="fetch" value="1">
+      <div class="sm:col-span-7">
+        <label class="block text-sm text-gray-600 mb-1">
+          판매자관리코드 또는 채널상품번호 <span class="text-xs text-gray-400">(비우면 전체 조회)</span>
+        </label>
+        <input type="text" name="code" value="<%= code %>" placeholder="예) 2078873367 또는 13674751564"
+               class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+        <p class="mt-1 text-xs text-gray-400">
+          네이버 목록 조회는 <b>상품명 검색을 제공하지 않습니다.</b> 비우고 조회한 뒤
+          아래 [목록에서 이름으로 찾기]로 걸러 보세요.
+        </p>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">개수</label>
+        <select name="size" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <% pageSizes.forEach((n) => { %>
+            <option value="<%= n %>" <%= Number(size) === n ? 'selected' : '' %>><%= n %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="sm:col-span-3">
+        <button type="submit"
+          class="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+          <i class="bi bi-cloud-download"></i> 스토어 상품 조회
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <% if (r) { %>
+    <form method="post" action="/admin/sourcing/channel-import/run" id="import-form">
+      <input type="hidden" name="code" value="<%= code %>">
+      <input type="hidden" name="page" value="<%= page %>">
+      <input type="hidden" name="size" value="<%= size %>">
+
+      <div class="bg-white shadow-sm rounded-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">조회 결과 <span class="text-gray-400 text-base">(<%= r.totalElements %>건)</span></h2>
+            <p class="mt-1 text-xs text-gray-500">
+              한 번에 최대 <b><%= importLimit %>건</b>까지 가져옵니다. 건당 상세조회 1회 + 이미지 다운로드가 있어 시간이 걸립니다.
+            </p>
+            <div class="mt-2">
+              <input type="text" id="name-filter" placeholder="목록에서 이름으로 찾기 (이 페이지 안에서만 걸러 냅니다)"
+                     class="w-72 rounded-md border border-gray-300 text-sm px-3 py-1.5">
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-end gap-2">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">카테고리 자동 매핑 실패 시</label>
+              <select name="fallback_category_id" class="rounded-md border border-gray-300 text-sm px-3 py-2">
+                <option value="">미분류로 두기</option>
+                <% flatCats.forEach((c) => { %>
+                  <option value="<%= c.id %>"><%= c.label %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">가져온 뒤 상태</label>
+              <select name="status" class="rounded-md border border-gray-300 text-sm px-3 py-2">
+                <option value="OFF">판매중지(권장)</option>
+                <option value="ON">판매중</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">노출</label>
+              <select name="visibility" class="rounded-md border border-gray-300 text-sm px-3 py-2">
+                <option value="HIDDEN">비노출(권장)</option>
+                <option value="PUBLIC">노출</option>
+              </select>
+            </div>
+            <button type="submit"
+              class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+              <i class="bi bi-download"></i> 선택 상품 가져오기
+            </button>
+          </div>
+        </div>
+
+        <% if (!r.items.length) { %>
+          <div class="p-10 text-center text-sm text-gray-500">
+            조회된 상품이 없습니다.
+            <div class="mt-2 text-xs text-gray-400">
+              스토어에 상품이 있는데도 0건이면 응답 형식이 다를 수 있습니다 —
+              <b>[외부몰 연동 · 스마트스토어 등록]</b> 화면의 전송 로그(channel_publish_log)에 원본 응답이 남아 있습니다.
+            </div>
+          </div>
+        <% } else { %>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="bg-gray-50 text-gray-600">
+                <tr>
+                  <th class="px-4 py-3 w-10 text-left"><input type="checkbox" id="chk-all" class="h-4 w-4"></th>
+                  <th class="px-4 py-3 w-16 text-left">이미지</th>
+                  <th class="px-4 py-3 text-left">상품명</th>
+                  <th class="px-4 py-3 w-28 text-right">판매가</th>
+                  <th class="px-4 py-3 w-20 text-right">재고</th>
+                  <th class="px-4 py-3 w-24 text-center">판매상태</th>
+                  <th class="px-4 py-3 w-36 text-center">우리 몰 연결</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <% r.items.forEach((it) => { %>
+                  <tr class="hover:bg-gray-50 item-row" data-name="<%= it.name %>">
+                    <td class="px-4 py-3 align-top">
+                      <% if (it.linkState === 'NEW') { %>
+                        <%# 채널상품번호는 목록 응답에만 있다 — 가져오기까지 값을 들고 간다(원상품번호와 별개 번호). %>
+                        <input type="checkbox" name="origin_no" value="<%= it.originProductNo %>:<%= it.channelProductNo || '' %>" class="chk-item h-4 w-4">
+                      <% } else { %>
+                        <span class="text-xs text-gray-300">-</span>
+                      <% } %>
+                    </td>
+                    <td class="px-4 py-3 align-top">
+                      <% if (it.imageUrl) { %>
+                        <img src="<%= it.imageUrl %>" alt="" class="h-12 w-12 rounded object-cover border border-gray-200" loading="lazy">
+                      <% } else { %>
+                        <div class="h-12 w-12 rounded bg-gray-100"></div>
+                      <% } %>
+                    </td>
+                    <td class="px-4 py-3 align-top">
+                      <div class="font-medium text-gray-900"><%= it.name %></div>
+                      <div class="mt-0.5 text-xs text-gray-400">
+                        원상품 <%= it.originProductNo %>
+                        <% if (it.channelProductNo) { %> · 채널상품 <%= it.channelProductNo %><% } %>
+                        <% if (it.sellerManagementCode) { %> · 판매자코드 <%= it.sellerManagementCode %><% } %>
+                      </div>
+                      <% if (it.categoryName) { %>
+                        <div class="mt-0.5 text-xs text-gray-400"><%= it.categoryName %></div>
+                      <% } %>
+                    </td>
+                    <td class="px-4 py-3 align-top text-right font-medium text-gray-900"><%= won(it.salePrice) %></td>
+                    <td class="px-4 py-3 align-top text-right text-gray-600"><%= it.stockQuantity %></td>
+                    <td class="px-4 py-3 align-top text-center text-xs text-gray-600"><%= it.statusType || '-' %></td>
+                    <td class="px-4 py-3 align-top text-center">
+                      <% if (it.linkState === 'BUILDER') { %>
+                        <span class="rounded bg-indigo-50 px-2 py-1 text-xs text-indigo-700">우리가 등록함</span>
+                        <div class="mt-1 text-xs text-gray-400">상품 #<%= it.mallProductId %></div>
+                      <% } else if (it.linkState === 'IMPORTED') { %>
+                        <span class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">이미 가져옴</span>
+                        <div class="mt-1 text-xs text-gray-400">
+                          <a href="/admin/products/edit/<%= it.mallProductId %>" class="text-indigo-600 hover:underline">상품 #<%= it.mallProductId %></a>
+                        </div>
+                      <% } else { %>
+                        <span class="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700">새 상품</span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <span class="text-xs text-gray-500">
+              가져온 상품은 <b>판매중지·비노출</b>로 들어옵니다(배송·고시 정보가 우리 몰 정책과 다를 수 있어서입니다).
+              내용을 확인한 뒤 상품 관리에서 판매를 켜세요.
+            </span>
+            <div class="flex items-center gap-2">
+              <% if (r.page > 1) { %>
+                <a href="<%= qs({ page: r.page - 1 }) %>"
+                   class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">이전</a>
+              <% } %>
+              <span class="text-sm text-gray-600"><%= r.page %> / <%= r.totalPages || 1 %></span>
+              <% if (r.page < (r.totalPages || 1)) { %>
+                <a href="<%= qs({ page: r.page + 1 }) %>"
+                   class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">다음</a>
+              <% } %>
+            </div>
+          </div>
+        <% } %>
+      </div>
+    </form>
+  <% } else if (!fetched) { %>
+    <div class="bg-white shadow-sm rounded-lg p-10 text-center">
+      <i class="bi bi-cloud-download text-3xl text-gray-300"></i>
+      <p class="mt-3 text-sm text-gray-500">[스토어 상품 조회]를 누르면 연결된 스마트스토어의 상품을 불러옵니다.</p>
+      <p class="mt-1 text-xs text-gray-400">외부 API 호출이라 메뉴 진입만으로는 조회하지 않습니다.</p>
+    </div>
+  <% } %>
+</div>
+
+<script>
+  /* 전체선택 + 선택 개수 상한 안내. 상한은 서버가 최종적으로 자르지만
+     여기서 미리 알려 줘야 "왜 일부만 됐지?" 가 생기지 않는다. */
+  (function () {
+    var all = document.getElementById('chk-all');
+    var form = document.getElementById('import-form');
+    if (!form) return;
+    var items = function () { return form.querySelectorAll('.chk-item'); };
+
+    if (all) {
+      all.addEventListener('change', function () {
+        items().forEach(function (c) { c.checked = all.checked; });
+      });
+    }
+
+    /* 목록 내 이름 필터. 네이버가 상품명 검색을 주지 않아 화면에서 거른다.
+       "이 페이지 안에서만" 이라는 점을 라벨에 적어 두지 않으면 전체 검색으로 오해한다. */
+    var nf = document.getElementById('name-filter');
+    if (nf) {
+      nf.addEventListener('input', function () {
+        var kw = nf.value.trim().toLowerCase();
+        form.querySelectorAll('.item-row').forEach(function (tr) {
+          var hit = !kw || (tr.dataset.name || '').toLowerCase().indexOf(kw) >= 0;
+          tr.style.display = hit ? '' : 'none';
+          if (!hit) { var c = tr.querySelector('.chk-item'); if (c) c.checked = false; }
+        });
+      });
+    }
+
+    var LIMIT = <%= importLimit %>;
+    form.addEventListener('submit', function (e) {
+      var checked = 0;
+      items().forEach(function (c) { if (c.checked) checked++; });
+      if (!checked) {
+        e.preventDefault();
+        alert('가져올 상품을 선택해 주세요.');
+        return;
+      }
+      if (checked > LIMIT) {
+        if (!confirm(checked + '건을 선택했습니다. 한 번에 ' + LIMIT + '건까지만 처리되며 나머지는 다시 선택해야 합니다. 계속할까요?')) {
+          e.preventDefault();
+          return;
+        }
+      }
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn) { btn.disabled = true; btn.textContent = '가져오는 중…'; }
+    });
+  })();
+</script>

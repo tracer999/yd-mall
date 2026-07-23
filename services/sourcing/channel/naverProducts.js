@@ -71,24 +71,33 @@ async function changeStatus(cred, originProductNo, statusType, extra = {}) {
 }
 
 /**
- * 옵션별 재고·가격 변경 — v1.
+ * 옵션별 재고·가격 변경 — v1. **본문은 호출부가 만들어 넘긴다**(얇은 통로).
  *
  * ⚠ 옵션을 하나씩 반복 호출하지 말 것(N+1 금지). **배열 전체를 한 번에** 보낸다.
  * ⚠ useStockManagement 를 false 로 보내면 수량이 9,999 로 덮여 버린다.
+ * ⚠ **본문 shape 는 아직 실호출로 검증되지 않았다.** 조립은
+ *   naverStockSync.buildStockRequest() 한 곳에만 있고, 여기는 그대로 실어 보내기만 한다.
+ *   스펙이 달랐음이 확인되면 고칠 곳은 그 함수뿐이다.
  */
-async function updateOptionStock(cred, originProductNo, optionCombinations, salePrice) {
-    const body = {
-        optionInfo: {
-            useStockManagement: true,
-            optionCombinations,
-        },
-    };
-    if (salePrice != null) body.productSalePrice = { salePrice: Number(salePrice) };
+async function updateOptionStock(cred, originProductNo, body) {
     return naverClient.apiPut(
         cred,
         `/v1/products/origin-products/${encodeURIComponent(originProductNo)}/option-stock`,
         body
     );
+}
+
+/**
+ * 판매자 상품 목록 조회 — v1. **역방향 수집(네이버 → 우리 몰)의 입구**다.
+ *
+ * ⚠ 이 저장소에서 아직 실호출로 검증되지 않은 유일한 엔드포인트다.
+ *   요청 조립과 응답 정규화를 이 파일이 아니라 naverChannelImport.js 의
+ *   buildSearchRequest() / normalizeSearchResponse() 한 곳씩에 가둬 뒀다.
+ *   응답 shape 가 다르면 고칠 곳은 그 두 함수뿐이다(naverNoticeSchema 와 같은 방식).
+ *   첫 호출의 원본 응답은 channel_publish_log(action='FETCH') 에 그대로 남는다.
+ */
+async function searchProducts(cred, body) {
+    return naverClient.apiPost(cred, '/v1/products/search', body);
 }
 
 /**
@@ -121,6 +130,7 @@ module.exports = {
     getChannelProduct,
     changeStatus,
     updateOptionStock,
+    searchProducts,
     getProvidedNoticeTypes,
     getProvidedNoticeSchema,
     getInspections,

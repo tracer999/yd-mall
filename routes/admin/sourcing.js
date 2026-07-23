@@ -64,8 +64,16 @@ router.get('/publish/addressbooks', requireMenuAccess('/admin/sourcing/publish')
 router.post('/publish/run', requireMenuAccess('/admin/sourcing/publish'), c.postPublishToNaver);
 router.post('/publish/:id/verify', requireNumericId(), requireMenuAccess('/admin/sourcing/publish'), c.postVerifyPublished);
 
+/*
+ * 스토어 상품 가져오기 — **네이버 → 우리 몰** 방향(역방향).
+ * 위의 /import(공급처 → 우리 몰)·/publish(우리 몰 → 네이버)와 방향이 다르다.
+ */
 router.get('/channel-import', requireMenuAccess('/admin/sourcing/channel-import'), c.getChannelImport);
+router.post('/channel-import/run', requireMenuAccess('/admin/sourcing/channel-import'), c.postChannelImportRun);
+
+// 재고 연동 — 우리 몰 판매가능재고를 네이버로 전송(쓰기) + 네이버 현재값 조회(읽기).
 router.get('/sync', requireMenuAccess('/admin/sourcing/sync'), c.getSync);
+router.post('/sync/stock', requireMenuAccess('/admin/sourcing/sync'), c.postStockPush);
 
 // 네이버 카테고리 리소스 — 현황·수동수집·스케줄 + 상품폼 검색 API
 router.get('/naver-taxonomy', requireMenuAccess('/admin/sourcing/naver-taxonomy'), c.getNaverTaxonomy);

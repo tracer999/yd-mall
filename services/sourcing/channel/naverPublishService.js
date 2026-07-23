@@ -100,27 +100,8 @@ async function getNaverCredential(mallId) {
     return c;
 }
 
-async function writeLog(row) {
-    try {
-        await pool.query(
-            `INSERT INTO channel_publish_log
-                (mall_id, channel, product_id, mapping_id, action, ok, http_status, message,
-                 request_json, response_json, duration_ms, actor)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                row.mallId, CHANNEL, row.productId || null, row.mappingId || null,
-                row.action, row.ok ? 1 : 0, row.httpStatus || null,
-                (row.message || '').slice(0, 4000),
-                row.request ? JSON.stringify(row.request) : null,
-                row.response ? JSON.stringify(row.response) : null,
-                row.durationMs || null, row.actor || null,
-            ]
-        );
-    } catch (e) {
-        // 로그 실패가 등록 자체를 깨뜨리면 안 된다.
-        console.error('[naver/publish] 로그 적재 실패:', e.message);
-    }
-}
+// 로그 규약은 등록·역수집·재고전송이 공유한다(channelLog.js). 세 벌로 갈라지면 추적이 깨진다.
+const { writeLog } = require('./channelLog');
 
 /** 매핑 행을 가져오거나 만든다. */
 async function upsertMapping(mallId, productId, patch = {}) {
