@@ -21,7 +21,8 @@
        class="inline-flex items-center gap-1 h-[34px] px-3 text-xs font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 no-underline">
         <i class="bi bi-receipt"></i> 거래명세서
     </a>
-    <form action="/admin/sales/status" method="POST" class="flex items-center gap-2">
+    <form action="/admin/sales/status" method="POST" class="flex items-center gap-2"
+          onsubmit="return confirmStatusChange(this);">
         <input type="hidden" name="id" value="<%= order.id %>">
         <select name="status">
             <option value="PENDING" <%=order.status==='PENDING' ? 'selected' : '' %>>대기</option>
@@ -36,6 +37,54 @@
     </form>
     </div>
 </div>
+
+<%
+  /*
+   * 상태 변경은 정상 흐름이 아니라 **바로잡기용**이다.
+   * 이 안내가 없으면 운영자가 여기서 배송중으로 바꿔 놓고 송장은 등록하지 않아,
+   * 고객 화면에 배송조회가 없는 '배송중' 주문이 생긴다.
+   */
+%>
+<div class="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+    <p class="font-semibold"><i class="bi bi-exclamation-triangle mr-1"></i>위의 [상태 변경]은 평소에 쓰는 기능이 아닙니다.</p>
+    <p class="mt-1.5 text-[13px] leading-relaxed">
+        주문 상태는 아래처럼 <b>제자리에서 자동으로</b> 바뀝니다. 여기서 바꾸는 것은
+        <b>무언가 잘못됐을 때 바로잡는 용도</b>입니다.
+    </p>
+    <div class="mt-2 overflow-x-auto">
+        <table class="text-[13px] w-full">
+            <thead class="text-amber-800/70">
+                <tr><th class="text-left py-1 pr-4 font-medium w-24">상태</th><th class="text-left py-1 font-medium">언제 이렇게 바뀌나</th></tr>
+            </thead>
+            <tbody class="align-top">
+                <tr><td class="py-0.5 pr-4"><b>결제완료</b></td><td class="py-0.5">고객이 결제를 마치면 자동</td></tr>
+                <tr><td class="py-0.5 pr-4"><b>배송준비</b></td><td class="py-0.5">운영자가 출고를 준비할 때 여기서 바꿉니다 <span class="text-amber-700">(정상 사용)</span></td></tr>
+                <tr><td class="py-0.5 pr-4"><b>배송중</b></td><td class="py-0.5"><a href="/admin/shipping" class="underline">배송 관리</a>에서 <b>송장번호를 등록</b>하면 자동</td></tr>
+                <tr><td class="py-0.5 pr-4"><b>배송완료</b></td><td class="py-0.5"><a href="/admin/shipping" class="underline">배송 관리</a>의 배송완료 처리(개별·일괄) 또는 발송 후 자동 처리</td></tr>
+                <tr><td class="py-0.5 pr-4"><b>취소</b></td><td class="py-0.5"><a href="/admin/claims" class="underline">클레임 관리</a>에서 고객 신청을 승인할 때</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <ul class="mt-2 text-[13px] space-y-1 list-disc pl-4">
+        <li>여기서 <b>배송중</b>으로 바꾸면 <b>송장이 등록되지 않습니다.</b> 고객 화면에 배송조회 버튼이 없는 배송중 주문이 됩니다 — 송장은 배송 관리에서 넣으세요.</li>
+        <li>여기서 <b>취소</b>로 바꾸면 재고·쿠폰·적립금이 복원되고 <b>실제 환불이 실행</b>됩니다. 되돌릴 수 없습니다.</li>
+        <li>고객이 신청한 취소·반품은 이 화면이 아니라 <a href="/admin/claims" class="underline">클레임 관리</a>에서 처리해야 귀책·반품배송비가 함께 기록됩니다.</li>
+    </ul>
+</div>
+
+<script>
+    // 되돌릴 수 없는 전환은 한 번 더 묻는다.
+    function confirmStatusChange(form) {
+        const v = form.status.value;
+        if (v === 'CANCELLED') {
+            return confirm('이 주문을 취소 처리할까요?\n\n재고·쿠폰·적립금이 복원되고 실제 환불이 실행됩니다. 되돌릴 수 없습니다.\n\n고객이 신청한 취소·반품이라면 [클레임 관리]에서 처리하세요.');
+        }
+        if (v === 'SHIPPED') {
+            return confirm('배송중으로 바꿀까요?\n\n여기서는 송장번호가 등록되지 않아 고객이 배송조회를 할 수 없습니다.\n송장을 넣으려면 [배송 관리]를 이용하세요.');
+        }
+        return true;
+    }
+</script>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Order Info -->

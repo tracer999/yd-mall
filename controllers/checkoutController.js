@@ -153,8 +153,16 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
         }
 
         await conn.query(
-            // stock_deducted_at: 재고를 깎았다는 사실. 취소 시 복원 판정이 이 값을 본다(B2B 와 공용).
-            `UPDATE orders SET status = 'PAID', payment_key = ?, payment_method = ?, paid_at = NOW(),
+            /*
+             * stock_deducted_at: 재고를 깎았다는 사실. 취소 시 복원 판정이 이 값을 본다(B2B 와 공용).
+             *
+             * `payment_status` 를 함께 올린다. 예전엔 `status` 만 PAID 로 바꿔서, 결제가 끝난
+             * 주문인데도 결제 상태가 `PENDING`(미결제)으로 남았다 — 주문 목록·상세·내려받기에서
+             * "결제완료 주문인데 미결제"로 보였다. B2B 는 입금 확인 때 둘 다 올리고 있었는데
+             * (b2bOrderService) 일반 결제만 빠져 있었다.
+             */
+            `UPDATE orders SET status = 'PAID', payment_status = 'PAID',
+                    payment_key = ?, payment_method = ?, paid_at = NOW(),
                     stock_deducted_at = COALESCE(stock_deducted_at, NOW())
               WHERE id = ?`,
             [paymentKey, paymentMethod, orderId]
