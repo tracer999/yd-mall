@@ -103,6 +103,14 @@
                 </div>
             </div>
             <% } %>
+        <%# 옵션상품인데 옵션을 고르지 않고 결제로 넘어간 경우. 재고 부족과 구분해 안내한다. %>
+        <% if (typeof optionError !== 'undefined' && optionError) { %>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+                <div class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                    <i class="bi bi-exclamation-circle mr-2"></i><b>옵션을 선택해 주세요.</b> 옵션을 고르셔야 주문할 수 있습니다.
+                </div>
+            </div>
+            <% } %>
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
                     <div class="flex flex-wrap items-center gap-3">
                         <button onclick="history.length > 1 ? history.back() : location.href='/products'" class="inline-flex items-center text-sm font-bold text-gray-700 hover:text-[color:var(--gh-primary-dark)] transition-colors py-1.5 px-2 -ml-2 rounded-lg hover:bg-gray-100">

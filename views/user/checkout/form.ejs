@@ -39,6 +39,12 @@ const _won = (n) => Number(n || 0).toLocaleString('ko-KR');
         <!-- Hidden Inputs -->
         <input type="hidden" name="product_id" value="<%= query.product_id %>">
         <input type="hidden" name="quantity" value="<%= query.quantity %>">
+        <%#
+           바로구매로 고른 옵션. 이 줄이 없으면 결제(POST)에서 옵션이 유실되고,
+           옵션상품은 대표 SKU 가 없어 재고가 0으로 판정된다
+           — 화면에는 재고가 있는데 "재고가 부족합니다(최대 0개)" 로 튕기던 원인.
+        %>
+        <input type="hidden" name="sku_id" value="<%= query.sku_id || '' %>">
         <input type="hidden" name="cart" value="<%= query.cart %>">
         <input type="hidden" name="guest" value="<%= isGuest ? '1' : '0' %>">
         <%# 공동구매 바로구매일 때만 값이 있다. postForm 이 이 값으로 공동구매가를 재계산한다. %>

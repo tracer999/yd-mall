@@ -380,12 +380,34 @@ exports.getForm = async (req, res) => {
         const pid = parseInt(product_id, 10);
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
         const [rows] = await pool.query(
-            `SELECT ${PRODUCT_SCOPE_COLS}, p.main_image, p.thumbnail_image FROM products p WHERE p.id = ? AND p.status = 'ON'`,
+            `SELECT ${PRODUCT_SCOPE_COLS}, p.main_image, p.thumbnail_image, p.product_type, p.slug
+               FROM products p WHERE p.id = ? AND p.status = 'ON'`,
             [pid]
         );
         if (rows.length === 0) return res.redirect('/products');
         const p = rows[0];
-        items = [{ ...toScopeItem(p), quantity: qty, image: p.main_image || p.thumbnail_image }];
+
+        /*
+         * 바로구매로 넘어온 옵션(sku_id)을 여기서 붙들어 주문서까지 들고 간다.
+         *
+         * 예전엔 이 값을 받지도, 뷰로 넘기지도 않아 결제(POST) 단계에서 유실됐다.
+         * 옵션상품은 대표 SKU 가 없으므로(설계상 옵션 SKU 만 둔다) sku_id 없이 결제하면
+         * `resolveSkuForLine` 이 null 을 돌려주고 재고가 0으로 판정됐다 —
+         * 화면에는 멀쩡히 재고가 있는데 "재고가 부족합니다. (최대 0개)" 로 튕기던 원인이다.
+         */
+        const selectedSkuId = parseInt(req.query.sku_id, 10) || null;
+
+        // 옵션상품인데 옵션이 없으면 주문서를 그리지 않고 상품 화면에서 고르게 한다.
+        // (주문서까지 갔다가 결제 버튼에서 튕기면 무엇이 잘못됐는지 알 수 없다)
+        if (p.product_type === 'OPTION' && !selectedSkuId) {
+            const path = p.slug ? `/products/${encodeURIComponent(p.slug)}` : `/products/view/${pid}`;
+            return res.redirect(`${path}?error=option`);
+        }
+
+        items = [{
+            ...toScopeItem(p), quantity: qty, sku_id: selectedSkuId,
+            image: p.main_image || p.thumbnail_image,
+        }];
     }
 
     if (items.length === 0) return res.redirect('/products');
@@ -648,15 +670,26 @@ exports.postForm = async (req, res) => {
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
         const selectedSkuId = parseInt(req.body.sku_id, 10) || null;
         const [rows] = await pool.query(
-            `SELECT ${PRODUCT_SCOPE_COLS}, p.slug FROM products p WHERE p.id = ? AND p.status = 'ON'`, [pid]
+            `SELECT ${PRODUCT_SCOPE_COLS}, p.slug, p.product_type FROM products p WHERE p.id = ? AND p.status = 'ON'`, [pid]
         );
         if (rows.length === 0) return res.redirect('/products');
         const p = rows[0];
+        const path = p.slug ? `/products/${encodeURIComponent(p.slug)}` : `/products/view/${pid}`;
+
+        /*
+         * 옵션상품은 **대표 SKU 를 두지 않는다**(설계상 옵션 SKU 만 있다).
+         * 그래서 sku_id 없이 여기까지 오면 `resolveSkuForLine` 이 null 을 돌려주고
+         * 재고가 0으로 계산된다 — 원인은 "재고 없음" 이 아니라 "옵션 미선택" 이다.
+         * 둘을 구분해 알려 주지 않으면 재고가 멀쩡한 상품에서 "재고가 부족합니다" 를 보게 된다.
+         */
+        if (p.product_type === 'OPTION' && !selectedSkuId) {
+            return res.redirect(`${path}?error=option`);
+        }
+
         // 선택 SKU(없으면 대표 SKU) 재고로 조기 검증. SKU 가 없으면 팔 물건이 없다는 뜻이라 0.
         const preSku = await skuService.resolveSkuForLine(pid, selectedSkuId);
         const stock = preSku ? Math.max(0, preSku.stock || 0) : 0;
         if (qty > stock) {
-            const path = p.slug ? `/products/${encodeURIComponent(p.slug)}` : `/products/view/${pid}`;
             return res.redirect(`${path}?error=stock&max=${stock}`);
         }
         items = [{ ...toScopeItem(p), quantity: qty, sku_id: selectedSkuId }];

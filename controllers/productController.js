@@ -699,6 +699,8 @@ exports.getDetail = async (req, res) => {
             kakaoJsKey,
             kakaoChannelUrl,
             stockError: req.query.error === 'stock' ? req.query.max : null,
+            // 옵션상품인데 옵션을 고르지 않고 결제로 넘어간 경우(재고 부족과 구분해 안내한다)
+            optionError: req.query.error === 'option',
             recommendedProducts,
             shopifyMapping,
             outletInfo,
