@@ -18,6 +18,7 @@ const domeggookCategories = require('../../services/sourcing/supplier/domeggook/
 const publishService = require('../../services/sourcing/publishService');
 const channelImport = require('../../services/sourcing/channel/naverChannelImport');
 const stockSync = require('../../services/sourcing/channel/naverStockSync');
+const directPublish = require('../../services/sourcing/channel/naverDirectPublish');
 const { sellableStockSql } = require('../../services/catalog/sellableStock');
 
 const BASE = '/admin/sourcing/connections';
@@ -454,6 +455,8 @@ exports.getStaging = async (req, res) => {
             subtitle: '공급처에서 가져온 원본 스냅샷입니다. 확인·재수집 후 우리 몰 상품으로 등록합니다.',
             list, stats, filters, categoryTree, defaultMargin,
             supplierLabel: importService.SUPPLIER_LABEL,
+            // [스마트스토어로 바로 전송] 1회 상한 — 화면 안내 문구가 이 값을 그대로 쓴다.
+            directLimit: directPublish.DIRECT_LIMIT,
             msg: req.query.msg || '',
             error: req.query.error || '',
         });
@@ -552,6 +555,65 @@ exports.postPublishToMall = async (req, res) => {
         const imgFailed = r.results.reduce((a, x) => a + (x.imageFailed || 0), 0);
         if (imgFailed) msg += ` 이미지 ${imgFailed}장은 가져오지 못했습니다.`;
         msg += ' 안전을 위해 기본 "판매중지 · 비노출"로 등록했으니 상품 관리에서 확인 후 켜주세요.';
+
+        res.redirect(`${back}?msg=` + encodeURIComponent(msg));
+    } catch (e) {
+        res.redirect(`${back}?error=` + encodeURIComponent(e.message));
+    }
+};
+
+/*
+ * 가져온 상품 → **스마트스토어 바로 전송**.
+ * 우리 몰 등록 + 네이버 등록을 한 번에 수행한다(중간 테이블에서 네이버로 곧장 쏘는 것이
+ * 아니라 두 단계를 이어 붙인 것 — 이유는 naverDirectPublish.js 헤더 참고).
+ */
+exports.postPublishStagingToNaver = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const raw = req.body.id || req.params.id;
+    const ids = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    const back = req.params.id ? `${STAGING_BASE}/${req.params.id}` : STAGING_BASE;
+
+    try {
+        const r = await directPublish.publishStagingToNaver(mallId, ids, {
+            categoryId: req.body.category_id,
+            marginRate: req.body.margin_rate === '' ? null : req.body.margin_rate,
+            naverCategoryId: req.body.naver_category_id,
+            status: req.body.status,
+            visibility: req.body.visibility,
+            actor: actorOf(req),
+        });
+
+        // ① 에서 전량 실패 — 네이버 단계는 돌지 않았고 만들어진 상품도 없다.
+        if (!r.naver && !r.createdProductIds) {
+            const first = r.mall.results.find((x) => !x.ok);
+            return res.redirect(`${back}?error=` + encodeURIComponent(
+                (first ? first.error : '우리 몰 등록에 실패했습니다.') + ' (네이버 전송은 시도하지 않았습니다)'
+            ));
+        }
+
+        /*
+         * ① 은 됐는데 ② 가 통째로 막힌 경우(자격증명·등록 기본값 미설정 등).
+         * **상품은 이미 만들어졌다** — 이 사실을 반드시 알려야 몰에 조용히 쌓이지 않는다.
+         */
+        if (!r.naver) {
+            return res.redirect(`${back}?error=` + encodeURIComponent(
+                `우리 몰에는 ${r.mall.success}건이 등록됐지만 네이버 전송은 시작하지 못했습니다: ${r.naverError}`
+                + ' — 설정을 마친 뒤 [스마트스토어 등록] 화면에서 해당 상품을 다시 보내세요.'
+            ));
+        }
+
+        let msg = `${r.success}건을 스마트스토어에 등록했습니다.`;
+        msg += ` (우리 몰 등록 ${r.mall.success}건`;
+        if (r.mall.skipped) msg += ` · 이미 등록 ${r.mall.skipped}건 건너뜀`;
+        if (r.mall.failed) msg += ` · 우리 몰 등록 실패 ${r.mall.failed}건`;
+        msg += ')';
+        if (r.naver.failed) {
+            const first = r.naver.results.find((x) => !x.ok && !x.skipped);
+            msg += ` · 네이버 전송 실패 ${r.naver.failed}건`;
+            if (first) msg += ` — 첫 사유: ${first.error}`;
+            msg += ' (우리 몰 상품은 만들어졌으니 [스마트스토어 등록] 화면에서 다시 시도할 수 있습니다)';
+        }
+        if (r.overLimit) msg += ` · 한 번에 최대 ${r.limit}건까지만 처리됩니다`;
 
         res.redirect(`${back}?msg=` + encodeURIComponent(msg));
     } catch (e) {

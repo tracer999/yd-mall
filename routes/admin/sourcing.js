@@ -44,7 +44,10 @@ router.get('/staging', requireMenuAccess('/admin/sourcing/staging'), c.getStagin
 router.post('/staging/delete', requireMenuAccess('/admin/sourcing/staging'), c.postStagingDelete);
 // 우리 몰 상품으로 등록(스마트스토어 등록 아님) — 목록 일괄 / 상세 단건
 router.post('/staging/publish', requireMenuAccess('/admin/sourcing/staging'), c.postPublishToMall);
+// 우리 몰 등록 + 네이버 등록을 한 번에 — 정적 세그먼트를 :id 보다 먼저 선언한다(Express 5).
+router.post('/staging/publish-naver', requireMenuAccess('/admin/sourcing/staging'), c.postPublishStagingToNaver);
 router.post('/staging/:id/publish', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postPublishToMall);
+router.post('/staging/:id/publish-naver', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postPublishStagingToNaver);
 router.get('/staging/:id', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.getStagingDetail);
 router.post('/staging/:id/refresh', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postStagingRefresh);
 router.post('/staging/:id/delete', requireNumericId(), requireMenuAccess('/admin/sourcing/staging'), c.postStagingDelete);

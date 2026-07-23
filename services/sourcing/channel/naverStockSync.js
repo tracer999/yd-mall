@@ -16,9 +16,11 @@
  *
  *   옵션상품 → PUT /v1/products/origin-products/{no}/option-stock
  *       { "optionInfo": { "useStockManagement": true, "optionCombinations": [...] },
- *         "stockQuantity": N }
+ *         "stockQuantity": N, "productSalePrice": { "salePrice": 기준가 } }
  *       · `optionInfo` 는 필수다. 빼면 400 `optionInfo: 데이터를 입력해 주세요.`
+ *       · `productSalePrice` 도 필수다. 빼면 400 `옵션가 수정 시 판매가를 필수 입력해 주세요.`
  *       · 등록 페이로드처럼 `originProduct` 로 감싸면 **같은 400** 이 난다(평평한 구조다).
+ *       · 옵션별 재고가 실제로 반영되는 것까지 확인했다(브라운 100 → 95 → 100).
  *
  *   단일상품 → **option-stock 으로는 재고가 바뀌지 않는다.**
  *       빈 조합(`optionCombinations: []`)으로 보내면 **200 을 주고도 값이 그대로**다
@@ -30,8 +32,7 @@
  *
  *   조립·분기는 buildStockRequest() / pushStock() 두 곳에만 있다.
  *
- * ⚠ 옵션상품 경로는 **호출 형식까지만 확인**했다(현재 테스트 스토어에 옵션상품이 없다).
- *   실제 반영은 전송 후 [네이버 재고 확인]으로 대사해 확인할 것.
+ * ⚠ 옵션상품은 **판매가가 함께 전송된다**(네이버가 요구). 재고만 보내는 것이 불가능하다.
  */
 
 const pool = require('../../../config/db');
@@ -121,18 +122,24 @@ async function listTargets(mallId, opts = {}) {
  * 옵션상품용 전송 본문 조립. **shape 는 실호출로 확정됐다**(파일 헤더 참고).
  *
  * ⚠ useStockManagement=false 로 보내면 네이버가 수량을 9,999 로 덮는다 — 항상 true.
+ * ⚠ **`productSalePrice` 는 필수다.** 빼면 400 `옵션가 수정 시 판매가를 필수 입력해 주세요.`
+ *   옵션 `price` 가 판매가 대비 추가금액이라 기준가 없이는 해석할 수 없기 때문이다.
+ *   → 즉 **옵션상품은 재고만 보낼 수 없고 판매가가 함께 나간다.** 우리 SKU 최저가가
+ *   그대로 네이버 판매가가 되므로, 우리 몰에서 가격을 고치면 전송 시 네이버에도 반영된다.
  *
- * @param {{stockQuantity:number, combinations:Array}} ctx
+ * @param {{stockQuantity:number, combinations:Array, basePrice?:number}} ctx
  * @returns {object} 요청 본문
  */
 function buildStockRequest(ctx) {
-    return {
+    const body = {
         optionInfo: {
             useStockManagement: true,
             optionCombinations: Array.isArray(ctx.combinations) ? ctx.combinations : [],
         },
         stockQuantity: toInt(ctx.stockQuantity, 0),
     };
+    if (ctx.basePrice != null) body.productSalePrice = { salePrice: toInt(ctx.basePrice) };
+    return body;
 }
 
 /**

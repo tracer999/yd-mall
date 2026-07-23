@@ -167,6 +167,39 @@
             선택한 상품 전부에 <b>같은 카테고리·마진율</b>이 적용됩니다. 상품마다 다르게 하려면 상세 화면에서 개별 등록하세요.
             등록 결과는 <b>판매중지(OFF)</b> 상태이며, <b>이미 등록된 상품은 선택할 수 없습니다.</b>
           </p>
+
+          <!-- 스마트스토어 바로 전송 — 위 [우리 몰에 등록]과 같은 체크박스를 쓰고 formaction 만 다르다.
+               "중간 테이블 → 네이버" 직행이 아니라 우리 몰 등록을 먼저 하고 이어서 보내는 것이다
+               (매핑·재고 동기화가 products/product_sku 를 기준으로 동작하기 때문). -->
+          <div class="border-t border-emerald-200 pt-3">
+            <div class="flex flex-wrap items-start gap-4">
+              <div class="flex-1 min-w-[420px]">
+                <label class="block text-xs text-gray-600 mb-1">
+                  네이버 카테고리(리프) <span class="text-gray-400">— 비우면 위 우리 몰 카테고리에 연결된 값을 씁니다</span>
+                </label>
+                <div class="relative">
+                  <input type="text" id="nv-cat-search" autocomplete="off" placeholder="두 글자 이상 입력 (예: 백팩, 반팔티셔츠)"
+                         class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+                  <input type="hidden" name="naver_category_id" id="nv-cat-id" value="">
+                  <div id="nv-cat-results"
+                       class="hidden absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border border-gray-200 bg-white shadow-lg"></div>
+                </div>
+                <p id="nv-cat-picked" class="mt-1 text-xs text-gray-400">선택된 카테고리 없음</p>
+              </div>
+              <div class="pt-5">
+                <button type="submit" id="publish-naver-btn" formaction="/admin/sourcing/staging/publish-naver"
+                  class="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+                  <i class="bi bi-send"></i> 스마트스토어로 바로 전송
+                </button>
+              </div>
+            </div>
+            <p class="mt-2 text-xs text-gray-500">
+              <b>우리 몰 등록 + 네이버 등록을 한 번에</b> 수행합니다(우리 몰 상품은 그대로 만들어집니다).
+              건당 2~4초가 걸려 <b>한 번에 최대 <%= directLimit %>건</b>까지만 처리합니다.
+              네이버 등록 기본값과 자격증명이 먼저 설정돼 있어야 하며,
+              상태를 <b>판매중지</b>로 두면 네이버에서도 <b>전시중지</b>로 올라갑니다.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -329,5 +362,93 @@
         if (!confirm(n + '건을 중간 테이블에서 삭제할까요? (공급처 원본에는 영향 없음)')) e.preventDefault();
       });
     }
+  })();
+</script>
+
+<script>
+  /* 네이버 리프 카테고리 검색 — 사용자는 코드를 알 수 없으므로 이름으로 고르고
+     실제 전송값(hidden)은 여기서 채운다. publish.ejs 의 위젯과 같은 규약이며,
+     검색 API 는 is_leaf=1 · is_active=1 만 돌려준다. */
+  (function () {
+    var input = document.getElementById('nv-cat-search');
+    var box = document.getElementById('nv-cat-results');
+    var hidden = document.getElementById('nv-cat-id');
+    var picked = document.getElementById('nv-cat-picked');
+    var btn = document.getElementById('publish-naver-btn');
+    if (!input || !box || !hidden || !btn) return;
+
+    var timer = null;
+    var seq = 0;
+
+    function close() { box.classList.add('hidden'); box.innerHTML = ''; }
+
+    function choose(item) {
+      hidden.value = item.naver_category_id;
+      picked.textContent = '선택됨 — ' + item.whole_category_name + ' (ID ' + item.naver_category_id + ')';
+      picked.className = 'mt-1 text-xs text-sky-700 font-medium';
+      input.value = item.whole_category_name;
+      close();
+    }
+
+    function search(q) {
+      var my = ++seq;
+      fetch('/admin/sourcing/naver-taxonomy/search?q=' + encodeURIComponent(q) + '&limit=20')
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (my !== seq) return;   // 늦게 온 이전 요청이 최신 결과를 덮지 않게
+          var rows = (j && j.data) || [];
+          box.innerHTML = '';
+          if (!rows.length) {
+            var none = document.createElement('div');
+            none.className = 'px-3 py-2 text-xs text-gray-500';
+            none.textContent = '검색 결과가 없습니다. 다른 낱말로 찾아보세요.';
+            box.appendChild(none);
+          } else {
+            rows.forEach(function (item) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'block w-full text-left px-3 py-2 text-xs hover:bg-sky-50 border-b border-gray-100';
+              b.innerHTML = '<div class="text-gray-800"></div><div class="text-gray-400"></div>';
+              b.children[0].textContent = item.whole_category_name;
+              b.children[1].textContent = 'ID ' + item.naver_category_id;
+              b.addEventListener('click', function () { choose(item); });
+              box.appendChild(b);
+            });
+          }
+          box.classList.remove('hidden');
+        })
+        .catch(function () { close(); });
+    }
+
+    input.addEventListener('input', function () {
+      hidden.value = '';
+      picked.textContent = '선택된 카테고리 없음';
+      picked.className = 'mt-1 text-xs text-gray-400';
+      var q = input.value.trim();
+      clearTimeout(timer);
+      if (q.length < 2) { close(); return; }
+      timer = setTimeout(function () { search(q); }, 250);
+    });
+
+    document.addEventListener('click', function (e) {
+      if (e.target !== input && !box.contains(e.target)) close();
+    });
+
+    /* 외부몰에 실제로 등록하는 작업이라 한 번 확인받는다.
+       이미 우리 몰에 등록된 건은 ① 단계에서 건너뛰므로 대상 수에서 빼고 센다. */
+    btn.addEventListener('click', function (e) {
+      var n = 0;
+      document.querySelectorAll('.chk-item:checked').forEach(function (c) {
+        if (!c.dataset.published) n++;
+      });
+      if (!n) {
+        e.preventDefault();
+        alert('전송할 상품을 선택하세요. (이미 우리 몰에 등록된 상품은 대상이 아닙니다)');
+        return;
+      }
+      if (!confirm(n + '건을 우리 몰에 등록한 뒤 스마트스토어로 전송합니다. 계속할까요?')) {
+        e.preventDefault();
+      }
+    });
   })();
 </script>

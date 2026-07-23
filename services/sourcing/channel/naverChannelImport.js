@@ -34,6 +34,7 @@ const cred = require('../credential');
 const naverProducts = require('./naverProducts');
 const { writeLog, CHANNEL } = require('./channelLog');
 const { generateUniqueSlugFromName } = require('../../catalog/slugService');
+const taxonomyResolver = require('../../catalog/taxonomyResolver');
 const { sanitize } = require('../../display/htmlSanitizer');
 const urlIngest = require('../../media/urlIngest');
 
@@ -309,6 +310,15 @@ async function searchStoreProducts(mallId, opts = {}) {
 
 /**
  * 네이버 리프 카테고리 → 우리 몰 카테고리.
+ *
+ * ★ 네이버 리프는 L4 가 대부분(활성 리프 4,999 중 3,468)인데 우리 글로벌 카테고리는
+ *   **네이버 L1~L3 만** 시드한다(categoryReflect — 우리 카테고리가 최대 3뎁스라서).
+ *   그래서 ID 완전일치만 보면 L4 상품이 전부 미분류로 떨어진다.
+ *   L3 까지는 항상 반영돼 있으므로 **L4 는 상위 L3 로 잘라 비교**한다
+ *   (예: 스포츠/레저>등산>등산의류>반팔티셔츠 → 등산의류).
+ *   이 폴백은 상품 폼 저장 경로가 쓰는 taxonomyResolver 와 같은 함수를 재사용한다
+ *   — 같은 상품이 어느 경로로 들어오든 같은 카테고리에 붙어야 한다.
+ *
  * 매칭이 없으면 null 을 돌려주고 **가져오기를 막지 않는다**(미분류로 들어온다).
  *
  * ⚠ collation 드리프트 — categories.naver_category_id 는 general_ci, naver_category 는
@@ -317,6 +327,8 @@ async function searchStoreProducts(mallId, opts = {}) {
  */
 async function resolveMallCategory(mallId, leafCategoryId) {
     if (!leafCategoryId) return null;
+
+    // 1) 몰 전용 카테고리를 포함한 완전일치(L1~L3, 또는 운영자가 직접 연결해 둔 L4).
     const [rows] = await pool.query(
         `SELECT id FROM categories
           WHERE type = 'NORMAL' AND mall_id IN (0, ?) AND naver_category_id = ?
@@ -324,7 +336,11 @@ async function resolveMallCategory(mallId, leafCategoryId) {
           LIMIT 1`,
         [mallId, String(leafCategoryId)]
     );
-    return rows.length ? Number(rows[0].id) : null;
+    if (rows.length) return Number(rows[0].id);
+
+    // 2) L4 → 상위 L3 폴백(글로벌 카테고리 기준).
+    const hit = await taxonomyResolver.resolveByNaverCategoryId({ naverCategoryId: String(leafCategoryId) });
+    return hit && hit.id ? Number(hit.id) : null;
 }
 
 /**
