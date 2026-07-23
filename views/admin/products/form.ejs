@@ -100,11 +100,23 @@
                                     <div class="mt-2 relative" id="naver-cat-widget">
                                         <input type="text" id="naver_cat_search" autocomplete="off"
                                             class="w-full text-sm border-dashed"
-                                            placeholder="🔎 네이버 카테고리에서 찾기 (예: 홍삼)">
+                                            placeholder="🔎 네이버 카테고리에서 찾기 (예: 홍삼)"
+                                            value="<%= product && product.naver_category_path ? product.naver_category_path : '' %>">
                                         <input type="hidden" name="naver_category_id" id="naver_category_id"
                                             value="<%= product && product.naver_category_id ? product.naver_category_id : '' %>">
                                         <div id="naver_cat_results"
                                             class="hidden absolute z-20 mt-1 w-full max-h-60 overflow-auto bg-white border rounded-md shadow-lg text-sm"></div>
+                                        <% if (product && product.naver_category_id) { %>
+                                            <p class="text-[11px] mt-1 flex items-center gap-2">
+                                                <span class="<%= product.naver_category_inactive ? 'text-amber-600' : 'text-emerald-600' %>">
+                                                    지정됨 · ID <%= product.naver_category_id %><%
+                                                    %><% if (!product.naver_category_path) { %> (수집 목록에 없는 분류)<% } %><%
+                                                    %><% if (product.naver_category_inactive) { %> · 네이버에서 비활성<% } %>
+                                                </span>
+                                                <button type="button" id="naver_cat_clear"
+                                                    class="text-gray-400 hover:text-red-500 underline">지정 해제</button>
+                                            </p>
+                                        <% } %>
                                         <p class="text-[11px] text-gray-400 mt-1">
                                             네이버 스마트스토어 분류를 근거로 몰 카테고리를 만듭니다. 선택 시 네이버 카테고리 ID 도 상품에 함께 저장됩니다.
                                         </p>
@@ -1216,6 +1228,20 @@
         var timer = null;
 
         function hideResults() { results.classList.add('hidden'); results.innerHTML = ''; }
+
+        /*
+         * [지정 해제] — 검색창만 지우면 hidden 에 ID 가 남아 "지웠는데 그대로 저장되는" 상태가 된다.
+         * 화면에서 지운 것과 저장되는 값을 일치시킨다.
+         */
+        var clearBtn = document.getElementById('naver_cat_clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                hidden.value = '';
+                search.value = '';
+                hideResults();
+                clearBtn.parentElement.remove();
+            });
+        }
 
         function pick(item) {
             // 네이버 전체 경로(대>중>소>세) 중 우리 몰 최대 3단계(마지막)만 자유입력 칸에 넣는다

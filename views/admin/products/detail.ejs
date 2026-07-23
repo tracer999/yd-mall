@@ -238,7 +238,15 @@
                         <% } %>
                         <div class="flex px-5 py-2.5">
                             <dt class="w-32 shrink-0 text-gray-500">네이버 카테고리</dt>
-                            <dd class="<%= product.naver_category_id ? 'text-gray-900' : 'text-gray-400' %>"><%= product.naver_category_id ? '설정됨' : '미설정' %></dd>
+                            <dd class="<%= product.naver_category_id ? 'text-gray-900' : 'text-gray-400' %>">
+                                <% if (!product.naver_category_id) { %>미설정<% } else { %>
+                                    <%= product.naver_category_path || '(수집 목록에 없는 분류)' %>
+                                    <span class="text-xs text-gray-400">ID <%= product.naver_category_id %></span>
+                                    <% if (product.naver_category_inactive) { %>
+                                        <span class="text-xs text-amber-600">네이버에서 비활성</span>
+                                    <% } %>
+                                <% } %>
+                            </dd>
                         </div>
                     </dl>
                 </div>

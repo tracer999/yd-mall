@@ -1217,6 +1217,28 @@ exports.getList = async (req, res) => {
     }
 };
 
+/*
+ * 상품에 저장된 네이버 카테고리 ID 에 표시용 이름을 붙인다.
+ * ID(예: 50002630)만으로는 사람이 무슨 분류인지 알 수 없어, 화면에는 전체 경로를 보여준다.
+ * naver_category 에 행이 없으면 아직 수집 전이거나 네이버에서 사라진 분류다 — 그때는
+ * 값이 있다는 사실과 ID 만 보여준다(임의로 "미설정" 으로 깎아내리면 데이터가 없는 줄 안다).
+ */
+async function decorateNaverCategory(product) {
+    if (!product) return;
+    product.naver_category_path = null;
+    product.naver_category_inactive = false;
+    if (!product.naver_category_id) return;
+
+    const [[row]] = await pool.query(
+        `SELECT whole_category_name, name, is_active
+           FROM naver_category WHERE naver_category_id = ? LIMIT 1`,
+        [String(product.naver_category_id)]
+    );
+    if (!row) return;
+    product.naver_category_path = row.whole_category_name || row.name || null;
+    product.naver_category_inactive = !row.is_active;
+}
+
 exports.getDetail = async (req, res) => {
     const { id } = req.params;
     const MALL_ID = req.adminMallId || 1;
@@ -1234,6 +1256,7 @@ exports.getDetail = async (req, res) => {
         // 화면의 "재고 수량" 을 SKU 기준(판매가능재고)으로 바꾼다. products.stock 을 그대로
         // 보여주면 옵션상품에서 갱신되지 않은 값이 나온다. 원본은 raw_stock 에 남는다.
         await decorateSellableStock([product]);
+        await decorateNaverCategory(product);
 
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
 
@@ -1281,6 +1304,8 @@ exports.getEdit = async (req, res) => {
 
         // 폼의 재고는 읽기 전용 표시라 SKU 기준 값으로 보여준다(옵션상품은 products.stock 이 stale).
         await decorateSellableStock(rows);
+        // 저장된 네이버 카테고리를 검색창에 이름으로 되살린다(값은 hidden 에만 있어 빈칸으로 보였다).
+        await decorateNaverCategory(rows[0]);
 
         // P5: 편집 중인 몰의 카테고리만
         const [productCategories] = await pool.query("SELECT id, name, parent_id, depth, display_order FROM categories WHERE type = 'NORMAL' AND mall_id IN (0, ?) ORDER BY depth ASC, display_order ASC, id ASC", [_mallId]);
