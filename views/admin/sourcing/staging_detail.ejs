@@ -104,16 +104,45 @@
           </div>
         <% } %>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <button type="submit"
             class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
             <i class="bi bi-box-arrow-in-down"></i> 우리 몰 상품으로 등록
           </button>
+
+          <%#
+            스마트스토어 바로 전송 — 같은 폼(카테고리·마진율)을 쓰고 formaction 만 바꾼다.
+            재판매 금지 상품은 **버튼 자체를 그리지 않는다**(서버도 거부하지만, 누를 수 있게
+            두면 안 된다). 목록 화면과 같은 원칙이다.
+          %>
+          <% if (p.resale_allowed !== 0) { %>
+            <button type="submit" id="publish-naver-one"
+              formaction="/admin/sourcing/staging/<%= p.id %>/publish-naver"
+              class="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-sky-700">
+              <i class="bi bi-send"></i> 스마트스토어로 바로 전송
+            </button>
+          <% } else { %>
+            <span class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-gray-50 px-5 py-2.5 text-sm text-gray-400"
+                  title="공급처가 오픈마켓 재판매를 금지한 상품입니다">
+              <i class="bi bi-slash-circle"></i> 스마트스토어 전송 불가 (재판매 금지)
+            </span>
+          <% } %>
+
           <span class="text-xs text-gray-500">
             등록 시 <b>판매중지 · 비노출</b> 상태로 만들어집니다 — 내용 확인 후 상품 관리에서 판매·노출을 켜세요.
             <% if (variants.length) { %> 옵션 <%= variants.filter((v) => !v.is_hidden && v.available).length %>개가 SKU 로 생성됩니다.<% } %>
           </span>
         </div>
+
+        <% if (p.resale_allowed !== 0) { %>
+          <p class="text-xs text-gray-500">
+            <b>[스마트스토어로 바로 전송]</b> 은 우리 몰에 등록한 뒤 이어서 네이버로 보냅니다.
+            네이버 카테고리는 위에서 고른 <b>우리 몰 카테고리에 연결된 값</b>을 씁니다 —
+            연결돼 있지 않으면 전송 단계에서 막히며, 그때는
+            <a href="/admin/sourcing/publish" class="text-indigo-600 hover:underline">[스마트스토어 등록]</a> 화면에서
+            리프 카테고리를 지정한 뒤 보내시면 됩니다.
+          </p>
+        <% } %>
       </form>
     <% } %>
   </div>
@@ -329,5 +358,30 @@
     }
     if (input) input.addEventListener('input', render);
     render();
+  })();
+</script>
+
+<script>
+  /*
+   * 스마트스토어 바로 전송 — 외부몰에 실제로 등록하는 작업이라 한 번 확인받는다.
+   *
+   * ⚠ 카테고리 검사를 **확인창보다 먼저** 한다. 폼의 onsubmit 에 맡기면
+   *   "보낼까요?" 에 예를 누른 뒤에야 "카테고리를 선택하세요" 가 떠서 순서가 어색하다
+   *   (목록 화면도 카테고리 → 확인 순이다).
+   */
+  (function () {
+    var btn = document.getElementById('publish-naver-one');
+    if (!btn) return;
+    btn.addEventListener('click', function (e) {
+      var cat = document.querySelector('input[name="category_id"]');
+      if (!cat || !cat.value) {
+        e.preventDefault();
+        alert('우리 몰 카테고리를 선택하세요.');
+        return;
+      }
+      if (!confirm('이 상품을 우리 몰에 등록한 뒤 스마트스토어로 전송할까요?\n스마트스토어에 실제로 등록되는 작업입니다.')) {
+        e.preventDefault();
+      }
+    });
   })();
 </script>
