@@ -1206,6 +1206,9 @@ exports.getList = async (req, res) => {
             },
             filterCategories,
             filterBrands,
+            // 삭제 결과 알림 — postDelete 가 쿼리로 실어 보낸다(차단 사유를 화면에서 읽어야 하므로).
+            error: typeof req.query.error === 'string' ? req.query.error.slice(0, 300) : '',
+            deleted: typeof req.query.deleted === 'string' ? req.query.deleted.slice(0, 100) : '',
             pagination: { page, perPage, total, totalPages }
         });
     } catch (err) {
@@ -1317,32 +1320,114 @@ exports.postUploadImage = async (req, res) => {
     }
 };
 
+/*
+ * 목록으로 되돌아가는 URL — 삭제 후에도 보고 있던 필터·페이지를 유지한다.
+ * return_url 은 폼이 실어 보낸 값이라 신뢰할 수 없다. /admin/products 로 시작하는
+ * 내부 경로만 통과시킨다(오픈 리다이렉트 차단). 형식은 categoryController.backUrl 과 같다.
+ */
+function productListUrl(req, extra = {}) {
+    const raw = String(req.body.return_url || '');
+    const safe = /^\/admin\/products(\?[^\\]*)?$/.test(raw) && !raw.startsWith('/admin//');
+    const base = safe ? raw : '/admin/products';
+
+    const [path, qs] = base.split('?');
+    const sp = new URLSearchParams(qs || '');
+    for (const [k, v] of Object.entries(extra)) {
+        if (v === null || v === undefined || v === '') sp.delete(k);
+        else sp.set(k, v);
+    }
+    const s = sp.toString();
+    return s ? `${path}?${s}` : path;
+}
+
+/*
+ * 상품 삭제 — 되돌릴 수 없는 완전 삭제다.
+ *
+ * 목록의 행별 [삭제] 버튼이 체크박스와 무관하게 그 상품 하나만 지운다.
+ * (예전에는 이 버튼의 폼이 일괄처리 폼 **안에** 중첩돼 있어 브라우저가 내부 폼을 버렸고,
+ *  결과적으로 /status/update 가 대신 제출돼 아무것도 삭제되지 않았다.)
+ *
+ * 아래 세 가지는 삭제 전에 반드시 막는다.
+ *
+ *  1) 판매중지(OFF)가 아닌 상품
+ *     팔고 있는 상품이 한 번의 클릭으로 사라지면 주문·노출이 동시에 깨진다.
+ *     먼저 판매를 내리게 해서 "지금 파는 물건인가"를 확인하는 단계를 만든다.
+ *
+ *  2) 주문에 걸려 있는 상품
+ *     order_items.product_id 는 ON DELETE SET NULL 이다. 그대로 지우면 주문 항목은 남고
+ *     상품 링크만 조용히 끊겨 과거 주문에서 무엇을 팔았는지 추적할 수 없게 된다.
+ *     한 건이라도 주문 이력이 있으면 차단한다(오래된 주문도 손상 정도는 같다).
+ *
+ *  3) 세트·기획상품의 구성으로 쓰이는 상품
+ *     composite_component.component_sku_id 는 RESTRICT 라, 상품을 지우며 product_sku 를
+ *     CASCADE 로 지우려는 순간 DB 가 막아 500 이 난다. 미리 잡아 사유를 알려 준다.
+ *
+ * 통과하면 리뷰·기획전·특가·좋아요 등 연결 데이터는 CASCADE 로 함께 사라진다.
+ */
 exports.postDelete = async (req, res) => {
     const { id } = req.body;
     const MALL_ID = req.adminMallId || 1;
+    const productId = Number(id);
+
+    if (!productId) return res.redirect(productListUrl(req, { error: '삭제할 상품을 찾을 수 없습니다.' }));
+
     try {
         // P5: 편집 중인 몰 소유 상품만 삭제(크로스몰 삭제·Shopify 오발화 방지)
-        const [[owned]] = await pool.query('SELECT id FROM products WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
-        if (!owned) return res.redirect('/admin/products');
+        const [[owned]] = await pool.query(
+            'SELECT id, name, status FROM products WHERE id = ? AND mall_id = ?', [productId, MALL_ID]
+        );
+        if (!owned) return res.redirect(productListUrl(req, { error: '삭제할 상품을 찾을 수 없습니다.' }));
+
+        const label = `「${owned.name}」`;
+
+        // 1) 판매중지 상품만 삭제 가능.
+        if (owned.status !== 'OFF') {
+            return res.redirect(productListUrl(req, {
+                error: `${label} 은(는) 판매중지 상태가 아니라 삭제할 수 없습니다. 먼저 [판매중지 처리] 한 뒤 삭제하세요.`,
+            }));
+        }
+
+        // 2) 주문 이력이 있으면 차단.
+        const [[ordered]] = await pool.query(
+            'SELECT COUNT(*) AS n FROM order_items WHERE product_id = ?', [productId]
+        );
+        if (ordered.n > 0) {
+            return res.redirect(productListUrl(req, {
+                error: `${label} 은(는) 주문 ${ordered.n}건에 포함돼 있어 삭제할 수 없습니다. 지우면 과거 주문에서 어떤 상품을 팔았는지 확인할 수 없게 됩니다. 판매중지 상태로 두세요.`,
+            }));
+        }
+
+        // 3) 세트·기획상품 구성으로 쓰이면 차단(DB RESTRICT 로 500 나기 전에).
+        const [[composed]] = await pool.query(
+            `SELECT COUNT(*) AS n
+               FROM composite_component cc
+               JOIN product_sku s ON s.id = cc.component_sku_id
+              WHERE s.product_id = ?`, [productId]
+        );
+        if (composed.n > 0) {
+            return res.redirect(productListUrl(req, {
+                error: `${label} 은(는) 세트·기획상품의 구성으로 쓰이고 있어 삭제할 수 없습니다. 세트·기획상품 관리에서 구성에서 먼저 빼세요.`,
+            }));
+        }
 
         // 물리 파일 경로는 삭제 전에 수집한다(product_images 가 CASCADE 로 사라지므로)
-        const mediaUrls = await productMedia.collectProductMediaUrls(Number(id));
+        const mediaUrls = await productMedia.collectProductMediaUrls(productId);
 
         // Shopify 상품 삭제 동기화 — DB 삭제 전에 실행 (매핑 테이블 읽어야 하므로)
-        await deleteProductById(Number(id))
-            .catch(e => console.error(`[Shopify Sync] 상품 삭제 동기화 실패 (id=${id}): ${e.message}`));
+        await deleteProductById(productId)
+            .catch(e => console.error(`[Shopify Sync] 상품 삭제 동기화 실패 (id=${productId}): ${e.message}`));
 
-        await pool.query('DELETE FROM products WHERE id = ? AND mall_id = ?', [id, MALL_ID]);
+        await pool.query('DELETE FROM products WHERE id = ? AND mall_id = ?', [productId, MALL_ID]);
 
         // 고아 이미지/영상 파일 정리(다른 상품이 참조하지 않는 것만). 실패해도 삭제는 성공 처리.
         productMedia.deleteOrphanMedia(mediaUrls)
-            .then(r => { if (r.removed) console.log(`[product media] 상품 ${id} 삭제 — 파일 ${r.removed}개 정리(보존 ${r.kept})`); })
-            .catch(e => console.error(`[product media] 정리 실패 (id=${id}): ${e.message}`));
+            .then(r => { if (r.removed) console.log(`[product media] 상품 ${productId} 삭제 — 파일 ${r.removed}개 정리(보존 ${r.kept})`); })
+            .catch(e => console.error(`[product media] 정리 실패 (id=${productId}): ${e.message}`));
 
-        res.redirect('/admin/products');
+        res.redirect(productListUrl(req, { deleted: owned.name }));
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Server Error');
+        console.error('[product] postDelete:', err.message);
+        res.redirect(productListUrl(req, { error: '상품을 삭제하는 중 오류가 발생했습니다.' }));
     }
 };
 

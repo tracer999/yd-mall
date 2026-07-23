@@ -43,6 +43,18 @@
     NAVER_SMARTSTORE: 'bg-green-100 text-green-800',
   };
 %>
+<%# 삭제 결과 — 성공은 초록, 차단 사유는 빨강. 사유가 화면에 보여야 다음 행동(판매중지 처리 등)으로 이어진다. %>
+<% if (typeof deleted !== 'undefined' && deleted) { %>
+    <div class="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">
+        「<%= deleted %>」 상품을 삭제했습니다.
+    </div>
+<% } %>
+<% if (typeof error !== 'undefined' && error) { %>
+    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+        <%= error %>
+    </div>
+<% } %>
+
 <form action="/admin/products" method="GET" class="mb-4 rounded-lg border border-gray-200 bg-white p-4">
     <input type="hidden" name="perPage" value="<%= pagination.perPage %>">
     <%# 카테고리는 3뎁스 캐스케이드 셀렉트가 이 hidden 을 갱신해 제출한다(값: id | 'none' | ''). %>
@@ -372,10 +384,13 @@
                                 <div class="flex flex-col items-center gap-1">
                                     <a href="/admin/products/edit/<%= p.id %>" class="inline-flex items-center justify-center w-full h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</a>
                                     <a href="/admin/products/options/<%= p.id %>" class="inline-flex items-center justify-center w-full h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline">옵션·SKU</a>
-                                    <form action="/admin/products/delete" method="POST" class="w-full" onsubmit="return confirm('「<%= p.name %>」 상품을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.');">
-                                        <input type="hidden" name="id" value="<%= p.id %>">
-                                        <button type="submit" class="inline-flex items-center justify-center w-full h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
-                                    </form>
+                                    <%# 삭제는 아래 일괄처리 폼 **밖**의 단일 폼으로 보낸다.
+                                        여기에 <form> 을 두면 일괄처리 폼 안에 중첩돼 브라우저가 그것을 버리고,
+                                        삭제 버튼이 일괄처리(/status/update)를 대신 제출한다 — 그래서 삭제가 안 됐다. %>
+                                    <button type="button"
+                                        onclick="deleteProduct(<%= p.id %>, this.dataset.name)"
+                                        data-name="<%= p.name %>"
+                                        class="inline-flex items-center justify-center w-full h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
                                 </div>
                             </td>
                         </tr>
@@ -388,6 +403,14 @@
                 </tbody>
             </table>
         </div>
+    </form>
+
+    <%# 행별 삭제 전용 폼 — 일괄처리 폼 밖에 하나만 둔다(폼 중첩 금지).
+        deleteProduct() 가 id 를 채워 제출하므로 체크박스 선택과 아무 상관이 없다.
+        return_url 로 지금 보고 있는 필터·페이지를 그대로 되돌려 받는다. %>
+    <form action="/admin/products/delete" method="POST" id="delete-product-form" class="hidden">
+        <input type="hidden" name="id" id="delete-product-id">
+        <input type="hidden" name="return_url" value="/admin/products?<%= _qs({ page: pagination.page }) %>">
     </form>
 
     <% if (pagination.totalPages > 1) { %>
@@ -760,6 +783,15 @@
 </script>
 
 <script>
+    /* 행별 [삭제] — 체크박스 선택과 무관하게 누른 줄의 상품 하나만 지운다.
+       실제로 지울 수 있는지(판매중지·주문없음·세트미사용)는 서버가 판정하고,
+       막히면 사유가 목록 상단 빨간 띠로 돌아온다. */
+    function deleteProduct(id, name) {
+        if (!confirm('「' + name + '」 상품을 삭제하시겠습니까?\n\n삭제하면 되돌릴 수 없고, 이 상품의 리뷰·기획전·특가 연결도 함께 사라집니다.\n판매중지 상태가 아니거나 주문 이력이 있으면 삭제되지 않습니다.')) return;
+        document.getElementById('delete-product-id').value = id;
+        document.getElementById('delete-product-form').submit();
+    }
+
     /* perPage 는 URL 에 이미 있을 수 있다. 새로 append 하면 중복 키가 되어 서버가 기본값으로 되돌린다. */
     function changePerPage(value) {
         const url = new URL(location.href);
