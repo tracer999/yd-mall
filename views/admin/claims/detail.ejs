@@ -4,13 +4,17 @@
   const TYPE = { CANCEL: '취소', RETURN: '반품', EXCHANGE: '교환' };
   const REASON = { CHANGE_OF_MIND: '단순 변심', DEFECT: '불량', WRONG_DELIVERY: '오배송', OTHER: '기타' };
   const isOpen = claim.status === 'REQUESTED';
-  const refundPreview = Math.max(0, Number(claim.total_amount) - (claim.responsible === 'CUSTOMER' && claim.claim_type === 'RETURN' ? suggestedReturnFee : 0));
+  // 예상 환불액은 컨트롤러가 계산해 넘긴다(부분 클레임이면 안분된 금액).
+  const isExchange = claim.claim_type === 'EXCHANGE';
 %>
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
   <a href="/admin/claims" class="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-block">← 클레임 목록</a>
 
   <% if (typeof error !== 'undefined' && error) { %>
     <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"><%= error %></div>
+  <% } %>
+  <% if (typeof message !== 'undefined' && message) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800"><%= message %></div>
   <% } %>
   <% if (typeof refund_failed !== 'undefined' && refund_failed) { %>
     <div class="mb-4 px-4 py-3 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-800">
@@ -40,9 +44,51 @@
         <% } %>
       </div>
 
+      <!-- 클레임 대상 상품 (부분 클레임일 때만) -->
+      <% if (claimItems && claimItems.length) { %>
+        <div class="bg-white rounded-xl shadow-sm border border-amber-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-700">
+              <span class="inline-flex items-center px-2 py-0.5 mr-1.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">일부 상품</span>
+              <%= TYPE[claim.claim_type] %> 대상
+            </h3>
+            <span class="text-xs text-gray-400">주문 전체가 아니라 아래 상품만 처리됩니다</span>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="text-xs text-gray-500 border-b border-gray-100">
+              <tr>
+                <th class="text-left py-1.5">상품</th>
+                <th class="text-center py-1.5 w-24">신청/주문</th>
+                <th class="text-right py-1.5 w-28"><%= claim.status === 'COMPLETED' ? '환불 몫' : '상품금액' %></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <% claimItems.forEach(function (ci) { %>
+                <tr>
+                  <td class="py-2 text-gray-700">
+                    <%= ci.product_name %>
+                    <% if (ci.option_snapshot) { %><span class="text-gray-400 text-xs">[<%= ci.option_snapshot %>]</span><% } %>
+                  </td>
+                  <td class="py-2 text-center text-gray-600"><b><%= ci.quantity %></b> / <%= ci.ordered_qty %></td>
+                  <td class="py-2 text-right text-gray-900">
+                    <%= won(claim.status === 'COMPLETED' ? ci.refund_amount : ci.product_price * ci.quantity) %>원
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+          <% if (claim.status !== 'COMPLETED') { %>
+            <p class="mt-3 text-xs text-gray-500 leading-relaxed">
+              환불액은 승인할 때 확정됩니다. 쿠폰·등급 할인과 사용 포인트를 <b>이 상품이 차지한 금액 비율만큼</b> 나눠 뺀 금액이며,
+              배송비는 남은 상품이 있는 동안에는 돌려주지 않습니다(마지막 상품까지 처리되면 함께 환불).
+            </p>
+          <% } %>
+        </div>
+      <% } %>
+
       <!-- 주문 상품 -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">주문 상품</h3>
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">주문 상품 <span class="text-xs font-normal text-gray-400">(주문 전체)</span></h3>
         <ul class="divide-y divide-gray-100">
           <% items.forEach(function (i) { %>
             <li class="py-2 flex justify-between text-sm">
@@ -57,6 +103,68 @@
           <div class="flex justify-between font-bold"><span>결제금액</span><span><%= won(claim.total_amount) %>원</span></div>
         </div>
       </div>
+
+      <!-- 반품 회수 (취소 건은 회수할 물건이 없다) -->
+      <% if (claim.claim_type !== 'CANCEL') { %>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-700">회수 <span class="text-xs font-normal text-gray-400">(고객 → 우리)</span></h3>
+            <% if (returnShipment && returnShipment.status === 'RETURNED') { %>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-[11px] font-bold">회수 완료</span>
+            <% } else if (returnShipment) { %>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-bold">회수 중</span>
+            <% } else { %>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-bold">미등록</span>
+            <% } %>
+          </div>
+
+          <form action="/admin/claims/<%= claim.id %>/return-shipment" method="POST" class="flex flex-wrap items-end gap-2">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">택배사</label>
+              <select name="courier_company" class="rounded-md border-gray-300 text-sm">
+                <option value="">선택</option>
+                <% couriers.forEach(function (c) { %>
+                  <option value="<%= c.name %>" <%= returnShipment && returnShipment.courier_company === c.name ? 'selected' : '' %>><%= c.name %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="flex-1 min-w-[160px]">
+              <label class="block text-xs text-gray-500 mb-1">회수 송장번호</label>
+              <input type="text" name="tracking_number" value="<%= returnShipment ? (returnShipment.tracking_number || '') : '' %>"
+                     placeholder="회수 접수 번호" class="w-full rounded-md border-gray-300 text-sm">
+            </div>
+            <button type="submit" class="h-[38px] px-4 rounded-md bg-gray-800 text-white text-sm hover:bg-gray-700">
+              <%= returnShipment ? '수정' : '등록' %>
+            </button>
+          </form>
+
+          <% const rUrl = returnShipment ? trackingUrl(returnShipment.courier_company, returnShipment.tracking_number) : null; %>
+          <% if (returnShipment) { %>
+            <div class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+              <p class="text-xs text-gray-500">
+                접수 <%= dt(returnShipment.shipped_at) %>
+                <% if (returnShipment.picked_up_at) { %> · 회수 완료 <%= dt(returnShipment.picked_up_at) %><% } %>
+                <% if (rUrl) { %>
+                  · <a href="<%= rUrl %>" target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800">배송 조회</a>
+                <% } %>
+              </p>
+              <% if (returnShipment.status !== 'RETURNED') { %>
+                <form action="/admin/claims/<%= claim.id %>/return-received" method="POST"
+                      onsubmit="return confirm('물건이 실제로 도착했나요? 회수 완료로 표시합니다.');">
+                  <button type="submit" class="h-[32px] px-3 rounded-md border border-green-300 bg-green-50 text-green-800 text-xs font-medium hover:bg-green-100">
+                    회수 완료 처리
+                  </button>
+                </form>
+              <% } %>
+            </div>
+          <% } else { %>
+            <p class="mt-2 text-xs text-gray-400">
+              회수 송장을 등록해 두면 물건이 언제 돌아오는지 추적할 수 있습니다.
+              <%= claim.claim_type === 'EXCHANGE' ? '교환은 회수 후 같은 상품을 다시 보내면 됩니다(배송 관리에서 새 송장 등록).' : '' %>
+            </p>
+          <% } %>
+        </div>
+      <% } %>
 
       <!-- 환불 내역 -->
       <% if (refunds.length) { %>
@@ -117,14 +225,30 @@
               <label class="block text-xs font-medium text-gray-600 mb-1">메모</label>
               <textarea name="memo" rows="2" class="w-full text-sm border-gray-300 rounded-md"></textarea>
             </div>
-            <div class="p-3 bg-green-50 rounded text-sm">
-              <div class="flex justify-between"><span class="text-gray-600">예상 환불액</span><span class="font-bold text-green-700"><%= won(refundPreview) %>원</span></div>
-              <% if (!claim.payment_key) { %>
-                <p class="text-xs text-gray-500 mt-1">PG 결제 내역이 없어 실제 환불은 발생하지 않습니다(재고·쿠폰·적립금만 복원).</p>
-              <% } %>
-            </div>
+            <% if (isExchange) { %>
+              <div class="p-3 bg-blue-50 rounded text-sm text-blue-900">
+                <p class="font-medium">교환은 환불이 없습니다.</p>
+                <p class="text-xs mt-1 leading-relaxed">
+                  물건을 회수하고 같은 상품을 다시 보내므로 결제·재고를 건드리지 않습니다.
+                  승인한 뒤 위에서 <b>회수 송장</b>을 등록하고, 물건이 도착하면 배송 관리에서 재발송 송장을 등록하세요.
+                </p>
+              </div>
+            <% } else { %>
+              <div class="p-3 bg-green-50 rounded text-sm">
+                <div class="flex justify-between">
+                  <span class="text-gray-600">예상 환불액<%= (claimItems && claimItems.length) ? ' (일부 상품)' : '' %></span>
+                  <span class="font-bold text-green-700"><%= won(refundPreview) %>원</span>
+                </div>
+                <% if (claimItems && claimItems.length) { %>
+                  <p class="text-xs text-gray-500 mt-1">결제금액 <%= won(claim.total_amount) %>원 중 대상 상품 몫입니다(할인·포인트 비율 배분 후).</p>
+                <% } %>
+                <% if (!claim.payment_key) { %>
+                  <p class="text-xs text-gray-500 mt-1">PG 결제 내역이 없어 실제 환불은 발생하지 않습니다(재고·쿠폰·적립금만 복원).</p>
+                <% } %>
+              </div>
+            <% } %>
             <button type="submit" class="w-full py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
-              승인 (복원 + 환불)
+              <%= isExchange ? '교환 승인' : '승인 (복원 + 환불)' %>
             </button>
           </form>
 

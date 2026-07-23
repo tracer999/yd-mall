@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const orderMailer = require('../services/email/orderMailer');
 const { benefitLabel } = require('../services/coupon/discountCalculator');
 const claimService = require('../services/order/claimService');
+const partialClaimService = require('../services/order/partialClaimService');
 const { sellableStockSql } = require('../services/catalog/sellableStock');
 const dealSvc = require('../services/deal/dealService');
 const membershipEval = require('../services/membership/evaluationService');
@@ -258,12 +259,24 @@ exports.getOrderDetail = async (req, res, next) => {
             cancel_done: '주문이 취소되었습니다.',
             cancel_requested: '취소 신청이 접수되었습니다. 처리 결과를 기다려 주세요.',
             return_requested: '반품 신청이 접수되었습니다. 처리 결과를 기다려 주세요.',
+            exchange_requested: '교환 신청이 접수되었습니다. 회수 안내를 기다려 주세요.',
         }[req.query.claim] || null;
+
+        /*
+         * 상품별 신청 가능 수량 — 이미 취소·반품한 만큼은 빼고 보여 준다.
+         * 이 값이 없으면 고객이 2개 산 물건을 3개 반품 신청하는 화면이 만들어진다.
+         */
+        const claimable = await partialClaimService.getClaimableItems(pool, orderId);
+        const claimableById = new Map(claimable.map((c) => [Number(c.id), c]));
+        const itemsWithRemaining = items.map((it) => ({
+            ...it,
+            remaining_qty: claimableById.has(Number(it.id)) ? claimableById.get(Number(it.id)).remaining_qty : Number(it.quantity),
+        }));
 
         res.render('user/mypage/order_detail', {
             title: '주문 상세',
             order,
-            items,
+            items: itemsWithRemaining,
             shipment: shipments[0] || null,
             claims,
             claimMsg,
@@ -534,7 +547,28 @@ exports.cancelOrder = async (req, res, next) => {
         const [[order]] = await pool.query('SELECT status FROM orders WHERE id = ? AND user_id = ?', [orderId, userId]);
         if (!order) return res.status(404).send('주문을 찾을 수 없습니다.');
 
-        const claimType = ['SHIPPED', 'DELIVERED'].includes(order.status) ? 'RETURN' : 'CANCEL';
+        const shipped = ['SHIPPED', 'DELIVERED'].includes(order.status);
+        /*
+         * 출고 후에는 반품과 교환 중에서 고객이 고른다(출고 전이면 언제나 취소).
+         * 교환은 물건을 회수하고 같은 물건을 다시 보내는 것이라 환불이 없다.
+         */
+        const wantExchange = shipped && req.body.claim_type === 'EXCHANGE';
+        const claimType = shipped ? (wantExchange ? 'EXCHANGE' : 'RETURN') : 'CANCEL';
+
+        /*
+         * 부분 신청 — 화면에서 상품별 수량을 골랐으면 그 목록을 넘긴다.
+         * `item_qty[<order_item_id>]` 형태로 오며, 하나도 고르지 않았거나 전부 0이면
+         * 지금까지처럼 주문 전건 신청이 된다.
+         */
+        let items = null;
+        const qtyMap = req.body.item_qty;
+        if (qtyMap && typeof qtyMap === 'object') {
+            items = Object.entries(qtyMap)
+                .map(([orderItemId, q]) => ({ orderItemId: Number(orderItemId), quantity: Number(q) }))
+                .filter((i) => Number.isFinite(i.orderItemId) && Number.isFinite(i.quantity) && i.quantity > 0);
+            if (!items.length) items = null;
+        }
+
         const result = await claimService.requestClaim({
             orderId: Number(orderId),
             userId,
@@ -543,6 +577,7 @@ exports.cancelOrder = async (req, res, next) => {
             reasonDetail: reason,
             requestedBy: 'CUSTOMER',
             mallId: req.mallId || 1,
+            items,
         });
 
         if (!result.ok) {
@@ -561,7 +596,14 @@ exports.cancelOrder = async (req, res, next) => {
             autoApproved: Boolean(result.autoApproved),
         }).catch((err) => console.error('[mail] 클레임 접수 안내 실패:', err.message));
 
-        const msg = result.autoApproved ? 'cancel_done' : (claimType === 'RETURN' ? 'return_requested' : 'cancel_requested');
+        // 문자·알림톡 — 설정이 없으면 조용히 건너뛴다.
+        require('../services/notify/claimNotifier')
+            .notifyRequested({ orderId: Number(orderId), claimType, autoApproved: Boolean(result.autoApproved) })
+            .catch((err) => console.error('[sms] 클레임 접수 안내 실패:', err.message));
+
+        const msg = result.autoApproved
+            ? 'cancel_done'
+            : (claimType === 'EXCHANGE' ? 'exchange_requested' : (claimType === 'RETURN' ? 'return_requested' : 'cancel_requested'));
         res.redirect(`/mypage/orders/${orderId}?claim=${msg}`);
     } catch (err) {
         next(err);

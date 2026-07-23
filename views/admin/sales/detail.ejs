@@ -12,6 +12,15 @@
         <% } %>
     </div>
 
+    <div class="flex items-center gap-2">
+    <a href="/admin/sales/<%= order.id %>/invoice" target="_blank"
+       class="inline-flex items-center gap-1 h-[34px] px-3 text-xs font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 no-underline">
+        <i class="bi bi-printer"></i> 주문서
+    </a>
+    <a href="/admin/sales/<%= order.id %>/invoice?type=statement" target="_blank"
+       class="inline-flex items-center gap-1 h-[34px] px-3 text-xs font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 no-underline">
+        <i class="bi bi-receipt"></i> 거래명세서
+    </a>
     <form action="/admin/sales/status" method="POST" class="flex items-center gap-2">
         <input type="hidden" name="id" value="<%= order.id %>">
         <select name="status">
@@ -25,6 +34,7 @@
         <button type="submit"
             class="inline-flex items-center justify-center h-[38px] min-w-[140px] px-8 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">상태 변경</button>
     </form>
+    </div>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

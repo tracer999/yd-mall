@@ -3,6 +3,7 @@ const groupBuySvc = require('../services/groupBuy/groupBuyService');
 const liveSvc = require('../services/live/liveService');
 const dealSvc = require('../services/deal/dealService');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
+const pointExpiry = require('../services/point/pointExpiryService');
 const { redeemCouponCode, reserveCouponForOrder } = require('../services/coupon/couponIssueService');
 const {
     combinationGroup, couponableAmount, calcOrderDiscount, calcShippingDiscount,
@@ -199,8 +200,14 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
                     'UPDATE users SET points_balance = points_balance + ? WHERE id = ?',
                     [accumulate, userId]
                 );
+                /*
+                 * 유효기간은 **적립하는 이 순간** 새긴다. 나중에 일괄로 채우면 이미 지급된
+                 * 포인트에 소급 적용하는 꼴이라 "어제까지 있던 포인트가 오늘 사라졌다" 가 된다.
+                 * 기능이 꺼져 있으면(point_expiry_months=0) NULL 이 들어가 기한 없음이 된다.
+                 */
                 await conn.query(
-                    'INSERT INTO point_transactions (user_id, amount, transaction_type, order_id, description) VALUES (?, ?, ?, ?, ?)',
+                    `INSERT INTO point_transactions (user_id, amount, transaction_type, order_id, description, expires_at)
+                     VALUES (?, ?, ?, ?, ?, ${pointExpiry.expiresAtSql()})`,
                     [userId, accumulate, 'PURCHASE_ACCUMULATE', orderId, `구매 적립 (${rate}%)`]
                 );
             }
@@ -590,14 +597,21 @@ exports.postForm = async (req, res) => {
     let items = [];
     if (cart === '1' && req.user) {
         const [rows] = await pool.query(
-            `SELECT c.quantity, c.sku_id, ${PRODUCT_SCOPE_COLS}, p.stock
+            `SELECT c.quantity, c.sku_id, ${PRODUCT_SCOPE_COLS}
              FROM carts c JOIN products p ON c.product_id = p.id
              WHERE c.user_id = ? AND p.status = 'ON'`,
             [req.user.id]
         );
         for (const r of rows) {
             const qty = r.quantity || 1;
-            const stock = (r.stock != null && r.stock >= 0) ? r.stock : 0;
+            /*
+             * 라인이 가리키는 SKU 재고로만 검증한다. 예전엔 products.stock 을 봤는데
+             * 옵션상품에서는 그 값이 갱신되지 않아(stale) 검증이 사실상 무의미했고,
+             * 그렇다고 판매가능재고 합계로 바꾸면 재고 2개짜리 옵션을 상품 전체 합계로
+             * 통과시킨다. 확정 차감(validateStockForOrder)과 같은 라인 단위 기준을 쓴다.
+             */
+            const sku = await skuService.resolveSkuForLine(r.product_id, r.sku_id);
+            const stock = sku ? Math.max(0, sku.stock || 0) : 0;
             if (qty > stock) {
                 return res.redirect(`/cart?error=stock&product=${r.product_id}&max=${stock}`);
             }
@@ -634,13 +648,13 @@ exports.postForm = async (req, res) => {
         const qty = Math.max(1, parseInt(quantity, 10) || 1);
         const selectedSkuId = parseInt(req.body.sku_id, 10) || null;
         const [rows] = await pool.query(
-            `SELECT ${PRODUCT_SCOPE_COLS}, p.stock, p.slug FROM products p WHERE p.id = ? AND p.status = 'ON'`, [pid]
+            `SELECT ${PRODUCT_SCOPE_COLS}, p.slug FROM products p WHERE p.id = ? AND p.status = 'ON'`, [pid]
         );
         if (rows.length === 0) return res.redirect('/products');
         const p = rows[0];
-        // 옵션상품이면 선택 SKU 재고로, 아니면 대표 SKU(=products.stock) 로 조기 검증.
+        // 선택 SKU(없으면 대표 SKU) 재고로 조기 검증. SKU 가 없으면 팔 물건이 없다는 뜻이라 0.
         const preSku = await skuService.resolveSkuForLine(pid, selectedSkuId);
-        const stock = preSku ? Math.max(0, preSku.stock || 0) : ((p.stock != null && p.stock >= 0) ? p.stock : 0);
+        const stock = preSku ? Math.max(0, preSku.stock || 0) : 0;
         if (qty > stock) {
             const path = p.slug ? `/products/${encodeURIComponent(p.slug)}` : `/products/view/${pid}`;
             return res.redirect(`${path}?error=stock&max=${stock}`);

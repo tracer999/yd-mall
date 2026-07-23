@@ -6,7 +6,15 @@ const categoryOptionController = require('../../controllers/admin/categoryOption
 const facetController = require('../../controllers/admin/facetController');
 const upload = require('../../middleware/upload');
 
+// CSV 는 디스크에 남길 이유가 없다(한 번 읽고 버린다) → 메모리 저장.
+const multer = require('multer');
+const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
 router.get('/', productController.getList);
+// `/:id` 류보다 먼저 — 뒤에 두면 'bulk' 가 상품 id 로 잡힌다.
+router.get('/bulk', productController.getBulkForm);
+router.get('/bulk/export', productController.getBulkExport);
+router.post('/bulk', csvUpload.single('file'), productController.postBulkImport);
 router.get('/add', productController.getAdd);
 router.post('/add', upload.fields([
     { name: 'main_image', maxCount: 1 },

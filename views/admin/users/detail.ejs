@@ -44,6 +44,13 @@
   </div>
 </div>
 
+<% if (typeof message !== 'undefined' && message) { %>
+  <div class="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 break-all"><%= message %></div>
+<% } %>
+<% if (typeof error !== 'undefined' && error) { %>
+  <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><%= error %></div>
+<% } %>
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
   <!-- 좌측: 기본/연락처 정보 -->
   <div class="lg:col-span-2 space-y-6">
@@ -65,51 +72,109 @@
     </div>
     <% } %>
     <div class="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
-      <h3 class="text-sm font-semibold text-gray-700 mb-4">기본 정보</h3>
-      <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-gray-700">
-        <div>
-          <dt class="text-gray-500">이름</dt>
-          <dd class="font-medium">
-            <%= user.name || '-' %>
-          </dd>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-gray-700">기본 정보</h3>
+        <span class="text-xs text-gray-400">고객 문의로 들어온 오기입을 여기서 고칩니다</span>
+      </div>
+
+      <% const bd = user.birthdate ? new Date(user.birthdate).toISOString().split('T')[0] : ''; %>
+      <form action="/admin/users/<%= user.id %>/edit" method="POST" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+          <div>
+            <label class="block text-gray-500 mb-1">이름</label>
+            <input type="text" name="name" value="<%= user.name || '' %>" maxlength="50" required
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-gray-500 mb-1">이메일 <span class="text-gray-300">(로그인 아이디 — 변경 불가)</span></label>
+            <input type="text" value="<%= user.email || '' %>" disabled
+                   class="w-full px-3 py-2 rounded-md border border-gray-100 bg-gray-50 text-sm text-gray-400">
+          </div>
+          <div>
+            <label class="block text-gray-500 mb-1">전화번호</label>
+            <input type="text" name="phone" value="<%= user.phone || '' %>" maxlength="20"
+                   placeholder="010-0000-0000" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-gray-500 mb-1">생년월일</label>
+            <input type="date" name="birthdate" value="<%= bd %>"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-gray-500 mb-1">성별</label>
+            <select name="gender" class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+              <option value="" <%= !user.gender ? 'selected' : '' %>>선택 안 함</option>
+              <option value="M" <%= user.gender === 'M' ? 'selected' : '' %>>남성</option>
+              <option value="F" <%= user.gender === 'F' ? 'selected' : '' %>>여성</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-500 mb-1">우편번호</label>
+            <input type="text" name="zipcode" value="<%= user.zipcode || '' %>" maxlength="10"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-gray-500 mb-1">주소</label>
+            <input type="text" name="address" value="<%= user.address || '' %>" maxlength="255"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-gray-500 mb-1">상세 주소</label>
+            <input type="text" name="detailed_address" value="<%= user.detailed_address || '' %>" maxlength="255"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-gray-500 mb-1">기본 수령인</label>
+            <input type="text" name="receiver_name" value="<%= user.receiver_name || '' %>" maxlength="50"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-gray-500 mb-1">보조 연락처</label>
+            <input type="text" name="phone_sub" value="<%= user.phone_sub || '' %>" maxlength="20"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-gray-500 mb-1">기본 배송 요청사항</label>
+            <input type="text" name="delivery_request" value="<%= user.delivery_request || '' %>" maxlength="255"
+                   class="w-full px-3 py-2 rounded-md border border-gray-200 text-sm">
+          </div>
         </div>
-        <div>
-          <dt class="text-gray-500">이메일</dt>
-          <dd class="font-medium break-all">
-            <%= user.email || '-' %>
-          </dd>
+
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="marketing_agreed" value="1" <%= user.marketing_agreed ? 'checked' : '' %>
+                 class="w-4 h-4 rounded border-gray-300">
+          마케팅 정보 수신 동의
+        </label>
+
+        <div class="pt-2 flex items-center gap-2">
+          <button type="submit"
+                  class="inline-flex items-center justify-center h-[38px] px-5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">
+            정보 저장
+          </button>
+          <span class="text-xs text-gray-400">포인트 잔액은 포인트 관리에서 이력을 남기며 조정합니다.</span>
         </div>
-        <div>
-          <dt class="text-gray-500">전화번호</dt>
-          <dd class="font-medium">
-            <%= user.phone || '-' %>
-          </dd>
-        </div>
-        <div>
-          <dt class="text-gray-500">생년월일</dt>
-          <dd class="font-medium">
-            <%= user.birthdate ? user.birthdate.toISOString().split('T')[0] : '-' %>
-          </dd>
-        </div>
-        <div>
-          <dt class="text-gray-500">주소</dt>
-          <dd class="font-medium">
-            <%= user.address || '-' %>
-          </dd>
-        </div>
-        <div>
-          <dt class="text-gray-500">상세 주소</dt>
-          <dd class="font-medium">
-            <%= user.detailed_address || '-' %>
-          </dd>
-        </div>
-        <div>
-          <dt class="text-gray-500">우편번호</dt>
-          <dd class="font-medium">
-            <%= user.zipcode || '-' %>
-          </dd>
-        </div>
-      </dl>
+      </form>
+
+      <div class="mt-5 pt-5 border-t border-gray-100">
+        <h4 class="text-sm font-semibold text-gray-700 mb-1">비밀번호 초기화</h4>
+        <% if (!user.password_hash) { %>
+          <p class="text-xs text-gray-500">
+            소셜 로그인 전용 계정이라 비밀번호가 없습니다.
+            가입에 쓴 소셜 계정(<%= user.kakao_id ? '카카오' : (user.google_id ? '구글' : '소셜') %>)으로 로그인하도록 안내하세요.
+          </p>
+        <% } else { %>
+          <p class="text-xs text-gray-500 mb-2">
+            임시 비밀번호를 새로 만들어 회원 메일로 보냅니다. 발송에 실패해도 화면에 표시되니 전화로 안내할 수 있습니다.
+          </p>
+          <form action="/admin/users/<%= user.id %>/reset-password" method="POST"
+                onsubmit="return confirm('임시 비밀번호를 발급할까요? 기존 비밀번호는 즉시 쓸 수 없게 됩니다.');">
+            <button type="submit"
+                    class="inline-flex items-center gap-1 h-[34px] px-3 text-xs font-medium rounded-md border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100">
+              <i class="bi bi-key"></i> 임시 비밀번호 발급
+            </button>
+          </form>
+        <% } %>
+      </div>
     </div>
 
     <div class="bg-white shadow-sm rounded-xl p-6 border border-gray-100">

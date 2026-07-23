@@ -5,6 +5,7 @@ const policyController = require('../../controllers/admin/policyController');
 // All routes here are prefixed with /admin/policies
 
 router.get('/', policyController.getPolicies); // List versions
+router.get('/agreements', policyController.getAgreements); // 회원 동의 이력 (`/:id` 보다 먼저)
 router.get('/create', policyController.createPolicyForm); // Create form
 router.post('/create', policyController.createPolicy); // Create action
 router.post('/:id/active', policyController.activatePolicy); // Toggle active action

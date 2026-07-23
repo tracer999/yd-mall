@@ -122,9 +122,50 @@
     </div>
 </div>
 
-<!-- ③ 주문 현황 -->
+<!-- ③ 매출 현황 -->
+<% const won = (n) => Number(n || 0).toLocaleString('ko-KR'); %>
 <div class="mb-6">
-    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">③ 주문 현황</h3>
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">③ 매출 현황</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <p class="text-xs text-gray-500">오늘 매출</p>
+            <p class="mt-1 text-2xl font-bold text-gray-900"><%= won(revenue.todayAmount) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+            <p class="mt-1 text-xs text-gray-500">
+                <%= revenue.todayCount %>건
+                <% if (revenue.changeRate === null) { %>
+                    <span class="text-gray-300">· 어제 매출 없음</span>
+                <% } else if (revenue.changeRate >= 0) { %>
+                    <span class="text-red-500 font-medium">· 어제 대비 +<%= revenue.changeRate %>%</span>
+                <% } else { %>
+                    <span class="text-blue-500 font-medium">· 어제 대비 <%= revenue.changeRate %>%</span>
+                <% } %>
+            </p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <p class="text-xs text-gray-500">어제 매출</p>
+            <p class="mt-1 text-2xl font-bold text-gray-700"><%= won(revenue.yesterdayAmount) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+            <p class="mt-1 text-xs text-gray-400">전일 결제 기준</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <p class="text-xs text-gray-500">이번 달 매출</p>
+            <p class="mt-1 text-2xl font-bold text-gray-900"><%= won(revenue.monthAmount) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+            <p class="mt-1 text-xs text-gray-500"><%= revenue.monthCount %>건</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <p class="text-xs text-gray-500">누적 매출</p>
+            <p class="mt-1 text-2xl font-bold text-gray-700"><%= won(revenue.totalAmount) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+            <p class="mt-1 text-xs text-gray-400">취소·환불 제외</p>
+        </div>
+    </div>
+    <p class="mt-2 text-xs text-gray-400">
+        결제가 살아 있는 주문(결제완료·배송준비·배송중·배송완료)만 셉니다. 대기·취소·환불은 빠지며,
+        기준 시각은 주문일이 아니라 <b>결제일</b>입니다. 몰을 구분하지 않은 전체 합계입니다.
+    </p>
+</div>
+
+<!-- ③-2 주문 현황 -->
+<div class="mb-6">
+    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">③-2 주문 현황</h3>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <% orderStats.forEach(stat => { %>
             <a href="/admin/sales?status=<%= stat.status %>"
@@ -136,6 +177,7 @@
                         stat.status === 'CANCELLED' ? 'text-gray-400' : 'text-gray-900' %>
                 "><%= stat.count %></span>
                 <span class="text-xs text-gray-500 mt-1"><%= stat.label %></span>
+                <span class="text-[11px] text-gray-400 mt-0.5"><%= won(stat.amount) %>원</span>
             </a>
         <% }); %>
     </div>

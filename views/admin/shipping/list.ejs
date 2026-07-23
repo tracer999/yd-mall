@@ -1,12 +1,38 @@
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
     <p class="text-sm text-gray-500">결제 완료 및 배송 준비 중인 주문을 관리합니다.</p>
+    <a href="/admin/shipping/bulk"
+       class="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-gray-800 text-white text-sm hover:bg-gray-700 no-underline">
+        <i class="bi bi-upload"></i> 송장 일괄 등록
+    </a>
 </div>
 
+<% if (typeof flash !== 'undefined' && flash) { %>
+    <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"><%= flash %></div>
+<% } %>
+
+<%
+  /* 행마다 송장 등록 폼이 이미 있어 폼을 겹칠 수 없다.
+     빈 폼을 표 밖에 두고 체크박스는 HTML5 `form` 속성으로 연결한다. */
+%>
+<form action="/admin/shipping/delivered/bulk" method="POST" id="bulkDeliveredForm"
+      onsubmit="return confirm('선택한 주문을 배송완료로 처리할까요? 이후 고객이 반품을 신청할 수 있습니다.');"></form>
+
 <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-100">
+    <div class="px-6 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+        <label class="inline-flex items-center gap-2 text-sm text-gray-600">
+            <input type="checkbox" id="checkAll" class="w-4 h-4 rounded border-gray-300">
+            배송중인 주문 전체 선택
+        </label>
+        <button type="submit" form="bulkDeliveredForm"
+                class="px-3 py-1.5 rounded-md bg-gray-800 text-white text-xs font-medium hover:bg-gray-700">
+            선택한 주문 배송완료 처리
+        </button>
+    </div>
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
+                    <th scope="col" class="px-4 py-3 w-10"></th>
                     <th scope="col"
                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">주문번호
                     </th>
@@ -28,6 +54,12 @@
                 <% if (orders && orders.length> 0) { %>
                     <% orders.forEach(order=> { %>
                         <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-4 py-4 align-top">
+                                <% if (order.status === 'SHIPPED') { %>
+                                    <input type="checkbox" name="order_ids" value="<%= order.id %>" form="bulkDeliveredForm"
+                                           class="bulk-check w-4 h-4 rounded border-gray-300">
+                                <% } %>
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                                 <a href="/admin/sales/<%= order.id %>">
                                     <%= order.order_number %>
@@ -106,23 +138,20 @@
                                 <form action="/admin/shipping/tracking" method="POST" class="flex gap-2">
                                     <input type="hidden" name="order_id" value="<%= order.id %>">
                                     <div class="flex-1">
-                                        <select name="courier_company"
-                                            class="mb-1">
+                                        <select name="courier_company" class="mb-1">
                                             <option value="">택배사 선택</option>
-                                            <option value="CJ대한통운" <%=order.courier_company==='CJ대한통운' ? 'selected' : ''
-                                                %>>CJ대한통운</option>
-                                            <option value="우체국택배" <%=order.courier_company==='우체국택배' ? 'selected' : ''
-                                                %>>우체국택배</option>
-                                            <option value="한진택배" <%=order.courier_company==='한진택배' ? 'selected' : '' %>
-                                                >한진택배</option>
-                                            <option value="롯데택배" <%=order.courier_company==='롯데택배' ? 'selected' : '' %>
-                                                >롯데택배</option>
-                                            <option value="로젠택배" <%=order.courier_company==='로젠택배' ? 'selected' : '' %>
-                                                >로젠택배</option>
+                                            <% couriers.forEach(function(c){ %>
+                                                <option value="<%= c.name %>" <%= order.courier_company === c.name ? 'selected' : '' %>><%= c.name %></option>
+                                            <% }) %>
                                         </select>
                                         <input type="text" name="tracking_number" placeholder="운송장 번호"
                                             value="<%= order.tracking_number || '' %>"
                                             class="min-w-[180px]">
+                                        <% const tUrl = trackingUrl(order.courier_company, order.tracking_number); %>
+                                        <% if (tUrl) { %>
+                                            <a href="<%= tUrl %>" target="_blank" rel="noopener"
+                                               class="block mt-1 text-xs text-blue-600 hover:text-blue-800">배송 조회 <i class="bi bi-box-arrow-up-right text-[10px]"></i></a>
+                                        <% } %>
                                     </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-center align-middle">
@@ -146,10 +175,17 @@
                         <% }) %>
                             <% } else { %>
                                 <tr>
-                                    <td colspan="5" class="px-6 py-10 text-center text-gray-500">배송 대상 주문이 없습니다.</td>
+                                    <td colspan="6" class="px-6 py-10 text-center text-gray-500">배송 대상 주문이 없습니다.</td>
                                 </tr>
                                 <% } %>
             </tbody>
         </table>
     </div>
 </div>
+
+<script>
+  // "전체 선택"은 배송중(체크박스가 있는) 주문만 고른다.
+  document.getElementById('checkAll')?.addEventListener('change', function () {
+    document.querySelectorAll('.bulk-check').forEach((c) => { c.checked = this.checked; });
+  });
+</script>

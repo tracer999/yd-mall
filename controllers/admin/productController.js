@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { syncProductById, syncProductsByIds, deleteProductById, isShopifySyncEnabled } = require('../../services/shopify/syncService');
 const newArrival = require('../../services/catalog/newArrival');
-const { sellableCond, inStockSql } = require('../../services/catalog/sellableStock');
+const { sellableCond, inStockSql, decorate: decorateSellableStock } = require('../../services/catalog/sellableStock');
 const productImporter = require('../../services/catalog/productImporter');
 const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
 const taxonomyMapper = require('../../services/catalog/taxonomyMapper');
@@ -223,6 +223,9 @@ exports.getProductSEOView = async (req, res) => {
         }
 
         const product = rows[0];
+        // 재고는 SKU 기준. 미리보기가 실제 상세페이지(sellableStock.decorate)와 다른
+        // availability 를 보여주면 안 된다 — 옵션상품은 products.stock 이 stale 하다.
+        await decorateSellableStock([product]);
 
         // ===== 사용자 상세와 동일한 SEO 메타/OG/JSON-LD 구성 =====
         const siteSettings = res.locals.siteSettings || {};
@@ -384,10 +387,10 @@ exports.postUpdateStatus = async (req, res) => {
     const ids = Array.isArray(product_ids) ? product_ids : [product_ids];
 
     try {
+        // 판매 상태는 상품 마스터에만 쓴다. SKU 로 전파하지 않는다 —
+        // 노출·장바구니·결제는 products.status 게이트가 막고, sku.status 는
+        // 옵션 셀렉트 박스의 노출 설정이라 별개다(skuService 헤더).
         await pool.query('UPDATE products SET status = ? WHERE id IN (?) AND mall_id = ?', [status, ids, req.adminMallId || 1]);
-        // SKU on/off 동기화 (생명주기는 products.status 가 유지).
-        // 옵션 SKU 까지 함께 바꾼다 — 대표 SKU 만 켜면 상품은 판매중인데 고를 옵션이 없다.
-        await skuService.syncSkuStatusForProducts(ids, status);
         res.redirect('/admin/products');
     } catch (err) {
         console.error(err);
@@ -1163,8 +1166,9 @@ exports.getList = async (req, res) => {
             const aggMap = new Map(aggs.map((a) => [a.product_id, a]));
             for (const p of products) {
                 const a = aggMap.get(p.id);
-                p.eff_stock = a ? Number(a.eff_stock) : (p.stock || 0);
-                p.total_stock = a ? Number(a.total_stock) : (p.stock || 0);
+                // SKU 가 없으면 재고 0 — products.stock 으로 폴백하지 않는다(재고 기준은 SKU 뿐).
+                p.eff_stock = a ? Number(a.eff_stock) : 0;
+                p.total_stock = a ? Number(a.total_stock) : 0;
                 p.price_min = a && a.price_min != null ? Number(a.price_min) : (p.price || 0);
                 p.price_max = a && a.price_max != null ? Number(a.price_max) : (p.price || 0);
                 p.sku_count = a ? Number(a.sku_count) : 0;
@@ -1353,5 +1357,54 @@ exports.postShopifySync = async (req, res) => {
     } catch (err) {
         console.error('[Shopify Sync] 일괄 동기화 오류:', err.message);
         res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/* ------------------------------------------------------------------
+ * 상품 CSV 일괄 등록 · 수정 (2-1)
+ *
+ * 초기 상품 적재와 주기적인 가격·재고 일괄 조정을 화면에서 끝내기 위한 창구다.
+ * 규칙(무엇을 다루고 무엇을 안 다루는지)은 services/catalog/productBulkService.js 주석 참고.
+ * ------------------------------------------------------------------ */
+
+const productBulk = require('../../services/catalog/productBulkService');
+const csvUtil = require('../../services/export/csv');
+
+/** 현재 편집 몰의 상품을 CSV 로 내려받는다. 이 파일이 곧 수정 양식이다. */
+exports.getBulkExport = async (req, res) => {
+    try {
+        const mallId = req.adminMallId || 1;
+        const rows = await productBulk.exportRows(pool, mallId);
+        csvUtil.sendCsv(res, `상품목록_${new Date().toISOString().slice(0, 10)}.csv`, rows, productBulk.csvColumns());
+    } catch (err) {
+        console.error('[product] bulk export:', err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.getBulkForm = (req, res) => {
+    res.render('admin/products/bulk', {
+        layout: 'layouts/admin_layout',
+        title: '상품 일괄 등록·수정',
+        columns: productBulk.COLUMNS,
+        result: null,
+    });
+};
+
+exports.postBulkImport = async (req, res) => {
+    const render = (result) => res.render('admin/products/bulk', {
+        layout: 'layouts/admin_layout',
+        title: '상품 일괄 등록·수정',
+        columns: productBulk.COLUMNS,
+        result,
+    });
+    try {
+        if (!req.file) return render({ error: 'CSV 파일을 선택하세요.' });
+        const mallId = req.adminMallId || 1;
+        const result = await productBulk.importCsv(pool, mallId, req.file.buffer.toString('utf8'));
+        render(result);
+    } catch (err) {
+        console.error('[product] bulk import:', err.message);
+        render({ error: '파일을 읽지 못했습니다. 엑셀에서 [다른 이름으로 저장] → <b>CSV UTF-8</b> 로 저장했는지 확인하세요.' });
     }
 };

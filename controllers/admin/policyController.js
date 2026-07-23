@@ -26,6 +26,73 @@ exports.getPolicies = async (req, res) => {
     }
 };
 
+/*
+ * 회원 동의 이력 (1-6)
+ *
+ * 개인정보 관련 분쟁·점검에서 "이 회원이 언제 어느 버전에 동의했는가" 를 제시해야 한다.
+ * 지금까지 그 기록은 DB(`user_policy_agreements`)에만 있고 화면이 없어 개발자를 불러야 했다.
+ *
+ * 두 갈래로 본다 — **버전별**(이 개정본에 누가 동의했나)과 **회원별**(이 사람이 무엇에 동의했나).
+ * 검색은 회원 이름·이메일로 받는다. 운영자가 아는 단서가 그것뿐이기 때문이다.
+ */
+exports.getAgreements = async (req, res) => {
+    try {
+        const keyword = String(req.query.q || '').trim();
+        const versionId = Number.parseInt(req.query.version, 10);
+        const hasVersion = Number.isFinite(versionId);
+
+        const where = [];
+        const params = [];
+        if (hasVersion) { where.push('a.policy_version_id = ?'); params.push(versionId); }
+        if (keyword) {
+            where.push('(u.name LIKE ? OR u.email LIKE ?)');
+            params.push(`%${keyword}%`, `%${keyword}%`);
+        }
+        const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+        const PER_PAGE = 100;
+        const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+
+        const [[{ total }]] = await pool.query(`
+            SELECT COUNT(*) AS total
+              FROM user_policy_agreements a
+              JOIN users u ON u.id = a.user_id
+              ${whereSql}`, params);
+        const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+        const currentPage = Math.min(page, totalPages);
+
+        const [rows] = await pool.query(`
+            SELECT a.id, a.agreed_at,
+                   u.id AS user_id, u.name AS user_name, u.email AS user_email,
+                   p.id AS policy_id, p.type, p.version, p.effective_date
+              FROM user_policy_agreements a
+              JOIN users u ON u.id = a.user_id
+              JOIN policy_versions p ON p.id = a.policy_version_id
+              ${whereSql}
+              ORDER BY a.agreed_at DESC
+              LIMIT ? OFFSET ?`,
+            [...params, PER_PAGE, (currentPage - 1) * PER_PAGE]);
+
+        // 버전 선택 목록 — 각 버전에 몇 명이 동의했는지 함께 보여 준다.
+        const [versions] = await pool.query(`
+            SELECT p.id, p.type, p.version, p.effective_date, p.is_active,
+                   (SELECT COUNT(*) FROM user_policy_agreements a WHERE a.policy_version_id = p.id) AS agreed_count
+              FROM policy_versions p
+             ORDER BY p.type, p.effective_date DESC, p.id DESC`);
+
+        res.render('admin/policies/agreements', {
+            layout: 'layouts/admin_layout',
+            title: '회원 동의 이력',
+            rows, versions, keyword,
+            selectedVersion: hasVersion ? versionId : null,
+            page: currentPage, totalPages, totalCount: total,
+        });
+    } catch (err) {
+        console.error('[policy] getAgreements:', err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
 // View single policy version detail
 exports.getPolicyDetail = async (req, res) => {
     const id = req.params.id;

@@ -1,7 +1,11 @@
-<div class="mb-6 flex justify-between items-center">
+<div class="mb-6 flex justify-between items-center gap-3">
     <div>
         <p class="text-sm text-gray-500">이용약관 및 개인정보 처리방침의 버전을 관리합니다.</p>
     </div>
+    <a href="/admin/policies/agreements"
+        class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline gap-1.5 whitespace-nowrap">
+        <i class="bi bi-clipboard-check"></i> 회원 동의 이력
+    </a>
     <a href="/admin/policies/create"
         class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700 no-underline gap-2 whitespace-nowrap">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -11,6 +15,12 @@
         </svg>
         새 버전 등록
     </a>
+</div>
+
+<div class="mb-6 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+    <b>시행일을 미래 날짜로 저장하면 그날 자동으로 시행됩니다.</b>
+    자정에 사람이 직접 활성화 버튼을 누를 필요가 없습니다. 시행일이 되면 같은 종류의 이전 버전은 자동으로 내려갑니다.
+    <span class="text-blue-700">(확인 주기 10분)</span>
 </div>
 
 <div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">

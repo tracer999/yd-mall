@@ -1,0 +1,94 @@
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+  <div class="flex items-center gap-2 text-sm text-gray-600">
+    <a href="/admin/shipping" class="text-gray-400 hover:text-gray-600"><i class="bi bi-arrow-left-circle"></i></a>
+    <span class="text-base font-semibold text-gray-900">송장 일괄 등록</span>
+  </div>
+  <a href="/admin/shipping/bulk/template"
+     class="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 no-underline">
+    <i class="bi bi-download"></i> 양식 내려받기
+  </a>
+</div>
+
+<% if (result && result.error) { %>
+  <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><%- result.error %></div>
+<% } %>
+
+<% if (result && result.ok) { %>
+  <div class="mb-4 rounded-md border <%= result.failed.length ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50' %> px-4 py-3">
+    <p class="text-sm font-semibold <%= result.failed.length ? 'text-amber-900' : 'text-green-900' %>">
+      전체 <%= result.total %>줄 · 등록 <%= result.ok.length %>건<% if (result.failed.length) { %> · 실패 <%= result.failed.length %>건<% } %>
+    </p>
+    <% if (result.ok.length) { %>
+      <p class="mt-1 text-xs text-gray-600">등록된 주문은 <b>배송중</b>으로 바뀌고 고객에게 출고 안내 메일이 나갔습니다.</p>
+    <% } %>
+  </div>
+
+  <% if (result.failed.length) { %>
+    <div class="mb-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <h3 class="text-sm font-semibold text-gray-800">처리하지 못한 줄</h3>
+        <p class="text-xs text-gray-500 mt-0.5">아래 줄만 고쳐서 다시 올리면 됩니다. 이미 등록된 줄을 다시 올려도 덮어쓰기만 됩니다.</p>
+      </div>
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500">
+          <tr><th class="px-4 py-2 text-left w-20">줄</th><th class="px-4 py-2 text-left w-48">주문번호</th><th class="px-4 py-2 text-left">사유</th></tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% result.failed.forEach(function(f){ %>
+            <tr>
+              <td class="px-4 py-2 text-gray-500"><%= f.lineNo %>번째</td>
+              <td class="px-4 py-2 font-medium text-gray-800"><%= f.orderNumber || '-' %></td>
+              <td class="px-4 py-2 text-red-700"><%= f.reason %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+<% } %>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 bg-white border border-gray-200 rounded-lg p-6">
+    <h3 class="text-sm font-semibold text-gray-800 mb-3">파일 올리기</h3>
+    <form action="/admin/shipping/bulk" method="POST" enctype="multipart/form-data" class="space-y-4">
+      <input type="file" name="file" accept=".csv,text/csv" required
+             class="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-800 file:text-white file:text-sm hover:file:bg-gray-700">
+      <p class="text-xs text-gray-500">
+        엑셀에서 작업했다면 <b>[다른 이름으로 저장] → 파일 형식 <span class="text-gray-800">CSV UTF-8(쉼표로 분리)</span></b> 로 저장한 뒤 올려 주세요.
+        <code>.xlsx</code> 파일은 그대로 읽을 수 없습니다.
+      </p>
+      <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">일괄 등록</button>
+    </form>
+
+    <div class="mt-6 pt-5 border-t border-gray-100">
+      <h4 class="text-sm font-semibold text-gray-800 mb-2">파일 형식</h4>
+      <p class="text-xs text-gray-600 mb-2">첫 줄은 제목 줄이고, 아래 세 칸이 반드시 있어야 합니다. 순서는 상관없고 참고용 칸이 더 있어도 됩니다.</p>
+      <div class="overflow-x-auto">
+        <table class="text-xs border border-gray-200">
+          <thead class="bg-gray-50">
+            <tr><th class="border border-gray-200 px-3 py-1.5">주문번호</th><th class="border border-gray-200 px-3 py-1.5">택배사</th><th class="border border-gray-200 px-3 py-1.5">송장번호</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="border border-gray-200 px-3 py-1.5">ORD20260723001</td><td class="border border-gray-200 px-3 py-1.5">CJ대한통운</td><td class="border border-gray-200 px-3 py-1.5">123456789012</td></tr>
+            <tr><td class="border border-gray-200 px-3 py-1.5">ORD20260723002</td><td class="border border-gray-200 px-3 py-1.5">우체국택배</td><td class="border border-gray-200 px-3 py-1.5">987654321098</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="mt-3 text-xs text-gray-500 space-y-1 list-disc pl-4">
+        <li>이미 송장이 있는 주문은 <b>덮어씁니다.</b> 잘못 올렸으면 고쳐서 다시 올리면 됩니다.</li>
+        <li>취소·환불된 주문, 결제 전 주문, 기업(B2B) 주문은 건너뜁니다.</li>
+        <li>한 줄이 실패해도 나머지 줄은 그대로 등록됩니다.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-lg p-6">
+    <h3 class="text-sm font-semibold text-gray-800 mb-1">택배사 이름</h3>
+    <p class="text-xs text-gray-500 mb-3">아래 이름으로 적어 주세요. <code>CJ</code>, <code>대한통운</code> 처럼 줄여 적어도 알아봅니다.</p>
+    <ul class="text-sm text-gray-700 space-y-1">
+      <% couriers.forEach(function(c){ %>
+        <li class="flex items-center gap-1.5"><i class="bi bi-dot text-gray-300"></i><%= c.name %></li>
+      <% }) %>
+    </ul>
+  </div>
+</div>

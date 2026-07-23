@@ -198,8 +198,12 @@ exports.postAdd = async (req, res) => {
             code = await ensureUniqueCode(conn, base);
         }
 
+        // 도메인은 저장 시점에 정규화한다 — 운영자는 `https://shop.example.com/` 처럼 붙여 넣기 마련인데,
+        // 접속 해석기(mallContext)는 순수 호스트로 비교하므로 여기서 맞춰 두지 않으면 영영 매칭되지 않는다.
+        const domain = mallContext.normalizeHost(req.body.domain) || null;
+
         const draft = {
-            id: null, code, name, domain: req.body.domain,
+            id: null, code, name, domain,
             is_active: 1, is_default: wantDefault ? 1 : 0,
             preset_key: presetKey,
         };
@@ -210,11 +214,15 @@ exports.postAdd = async (req, res) => {
         const [[dup]] = await conn.query('SELECT id FROM mall WHERE code = ?', [code]);
         if (dup) return renderForm(res, draft, { error: `코드 '${code}' 는 이미 사용 중입니다.` });
 
+        if (domain) {
+            const [[dupDomain]] = await conn.query('SELECT name FROM mall WHERE domain = ?', [domain]);
+            if (dupDomain) return renderForm(res, draft, { error: `도메인 '${domain}' 은 이미 '${dupDomain.name}' 몰이 쓰고 있습니다. 한 도메인은 한 몰에만 연결할 수 있습니다.` });
+        }
+
         await conn.beginTransaction();
         const [r] = await conn.query(
             'INSERT INTO mall (code, name, preset_key, domain, is_active, is_default) VALUES (?, ?, ?, ?, ?, 0)',
-            [code, name.slice(0, 100), presetKey,
-             String(req.body.domain || '').trim() || null, req.body.is_active ? 1 : 0]
+            [code, name.slice(0, 100), presetKey, domain, req.body.is_active ? 1 : 0]
         );
         newMallId = r.insertId;
         if (wantDefault) await setDefault(conn, newMallId);
@@ -278,6 +286,12 @@ exports.postEdit = async (req, res) => {
         const [[dup]] = await conn.query('SELECT id FROM mall WHERE code = ? AND id <> ?', [code, id]);
         if (dup) return renderForm(res, Object.assign({}, mall, { code, name }), { error: `코드 '${code}' 는 다른 몰이 쓰고 있습니다.` });
 
+        const domain = mallContext.normalizeHost(req.body.domain) || null;
+        if (domain) {
+            const [[dupDomain]] = await conn.query('SELECT name FROM mall WHERE domain = ? AND id <> ?', [domain, id]);
+            if (dupDomain) return renderForm(res, Object.assign({}, mall, { code, name, domain }), { error: `도메인 '${domain}' 은 이미 '${dupDomain.name}' 몰이 쓰고 있습니다. 한 도메인은 한 몰에만 연결할 수 있습니다.` });
+        }
+
         const wantDefault = !!req.body.is_default;
         let wantActive = req.body.is_active ? 1 : 0;
 
@@ -289,7 +303,7 @@ exports.postEdit = async (req, res) => {
 
         await conn.beginTransaction();
         await conn.query('UPDATE mall SET code = ?, name = ?, domain = ?, is_active = ? WHERE id = ?',
-            [code, name.slice(0, 100), String(req.body.domain || '').trim() || null, wantActive, id]);
+            [code, name.slice(0, 100), domain, wantActive, id]);
         if (wantDefault && !mall.is_default) await setDefault(conn, id);
         await conn.commit();
 

@@ -1,5 +1,7 @@
 const pool = require('../../config/db');
+const bcrypt = require('bcrypt');
 const emailService = require('../../services/emailService');
+const { generateTempPassword } = require('../../shared/tempPassword');
 
 /*
  * ── 일반회원 관리 (기업회원 제외) ──
@@ -247,10 +249,111 @@ exports.getDetail = async (req, res) => {
             issuedCoupons,
             pointTransactions,
             userOrders,
-            totalOrderAmount
+            totalOrderAmount,
+            message: req.query.message || null,
+            error: req.query.error || null
         });
     } catch (err) {
         console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+/*
+ * 회원 정보 수정 — 전화 문의로 들어오는 "주소를 잘못 넣었어요" 를 처리하는 창구.
+ *
+ * 손대지 않는 값이 있다. **이메일**은 로그인 아이디이자 소셜 계정 연결 키라 관리자가 바꾸면
+ * 회원이 자기 계정에 못 들어간다. **포인트 잔액**은 포인트 관리에서 이력을 남기며 조정해야 하고,
+ * 여기서 숫자를 덮어쓰면 지급 내역과 잔액이 어긋난다. 그래서 둘 다 이 화면 밖이다.
+ */
+exports.postEdit = async (req, res) => {
+    const id = Number(req.params.id);
+    const back = (msg, isError) =>
+        res.redirect(`/admin/users/${id}?${isError ? 'error' : 'message'}=` + encodeURIComponent(msg));
+    try {
+        const row = await loadUserForGuard(id);
+        if (!row) return res.redirect('/admin/users?error=' + encodeURIComponent('대상 회원을 찾을 수 없습니다.'));
+        if (row.business_profile_id) return res.redirect(`/admin/b2b/members/${row.business_profile_id}`);
+
+        const s = (v, max) => {
+            const t = String(v == null ? '' : v).trim();
+            return t ? t.slice(0, max) : null;
+        };
+        const name = s(req.body.name, 50);
+        if (!name) return back('이름은 비울 수 없습니다.', true);
+
+        // 생년월일은 비어 있거나 YYYY-MM-DD 여야 한다. 형식이 어긋나면 저장하지 않고 되돌린다.
+        const birthdate = s(req.body.birthdate, 10);
+        if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) return back('생년월일 형식이 올바르지 않습니다.', true);
+
+        const gender = ['M', 'F', ''].includes(String(req.body.gender || '')) ? (s(req.body.gender, 10)) : null;
+
+        await pool.query(
+            `UPDATE users SET
+                name = ?, phone = ?, birthdate = ?, gender = ?,
+                zipcode = ?, address = ?, detailed_address = ?,
+                receiver_name = ?, phone_sub = ?, delivery_request = ?,
+                marketing_agreed = ?
+             WHERE id = ?`,
+            [
+                name, s(req.body.phone, 20), birthdate, gender,
+                s(req.body.zipcode, 10), s(req.body.address, 255), s(req.body.detailed_address, 255),
+                s(req.body.receiver_name, 50), s(req.body.phone_sub, 20), s(req.body.delivery_request, 255),
+                req.body.marketing_agreed ? 1 : 0,
+                id,
+            ]
+        );
+        back('회원 정보를 수정했습니다.');
+    } catch (err) {
+        console.error('[users] postEdit:', err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+/*
+ * 비밀번호 초기화 — 임시 비밀번호를 만들어 저장하고 회원에게 메일로 보낸다.
+ *
+ * 관리자에게 "회원의 비밀번호를 직접 정하게" 하지 않는다. 관리자가 아는 비밀번호를 회원 계정에
+ * 심어 두는 꼴이라, 그 계정으로 무엇을 하든 회원이 했는지 관리자가 했는지 구분할 수 없게 된다.
+ * 메일 발송이 실패해도 초기화 자체는 유효하므로, 화면에 임시 비밀번호를 함께 보여 전화로 안내할 수 있게 한다.
+ */
+exports.postResetPassword = async (req, res) => {
+    const id = Number(req.params.id);
+    const back = (msg, isError) =>
+        res.redirect(`/admin/users/${id}?${isError ? 'error' : 'message'}=` + encodeURIComponent(msg));
+    try {
+        const [[user]] = await pool.query(
+            'SELECT id, email, name, password_hash, signup_provider FROM users WHERE id = ?', [id]);
+        if (!user) return res.redirect('/admin/users?error=' + encodeURIComponent('대상 회원을 찾을 수 없습니다.'));
+
+        // 소셜 전용 계정은 비밀번호라는 것이 없다. 여기서 만들어 주면 로그인 경로가 둘로 갈린다.
+        if (!user.password_hash) {
+            return back('소셜 로그인 전용 계정이라 비밀번호가 없습니다. 가입에 쓴 소셜 계정으로 로그인하도록 안내하세요.', true);
+        }
+
+        const temp = generateTempPassword();
+        const hash = await bcrypt.hash(temp, 10);
+        await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, id]);
+
+        let mailNote = '';
+        if (user.email) {
+            try {
+                await emailService.sendEmail({
+                    to: user.email,
+                    subject: '[비밀번호 초기화] 임시 비밀번호가 발급되었습니다',
+                    html: `<p>${user.name || ''}님, 요청하신 비밀번호가 초기화되었습니다.</p>
+                           <p>임시 비밀번호: <b style="font-size:18px">${temp}</b></p>
+                           <p>로그인 후 <b>마이페이지 &gt; 회원정보 수정</b>에서 반드시 새 비밀번호로 바꿔 주세요.</p>`,
+                });
+                mailNote = ` ${user.email} 로 안내 메일을 보냈습니다.`;
+            } catch (e) {
+                console.error('[users] 임시 비밀번호 메일 실패:', e.message);
+                mailNote = ' (메일 발송에 실패했으니 아래 비밀번호를 직접 안내해 주세요)';
+            }
+        }
+        back(`임시 비밀번호: ${temp}${mailNote}`);
+    } catch (err) {
+        console.error('[users] postResetPassword:', err.message);
         res.status(500).send('Server Error');
     }
 };

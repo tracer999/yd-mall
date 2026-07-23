@@ -1,0 +1,100 @@
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+  <div class="flex items-center gap-2 text-sm text-gray-600">
+    <a href="/admin/products" class="text-gray-400 hover:text-gray-600"><i class="bi bi-arrow-left-circle"></i></a>
+    <span class="text-base font-semibold text-gray-900">상품 일괄 등록·수정</span>
+  </div>
+  <a href="/admin/products/bulk/export"
+     class="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 no-underline">
+    <i class="bi bi-download"></i> 현재 상품 내려받기 (= 수정 양식)
+  </a>
+</div>
+
+<% if (result && result.error) { %>
+  <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><%- result.error %></div>
+<% } %>
+
+<% if (result && result.created) { %>
+  <div class="mb-4 rounded-md border <%= result.failed.length ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50' %> px-4 py-3">
+    <p class="text-sm font-semibold <%= result.failed.length ? 'text-amber-900' : 'text-green-900' %>">
+      전체 <%= result.total %>줄 · 새로 등록 <%= result.created.length %>건 · 수정 <%= result.updated.length %>건<% if (result.failed.length) { %> · 실패 <%= result.failed.length %>건<% } %>
+    </p>
+  </div>
+
+  <% if (result.failed.length) { %>
+    <div class="mb-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <h3 class="text-sm font-semibold text-gray-800">처리하지 못한 줄</h3>
+        <p class="text-xs text-gray-500 mt-0.5">아래 줄만 고쳐 다시 올리면 됩니다. 성공한 줄을 다시 올려도 같은 값으로 덮어쓸 뿐입니다.</p>
+      </div>
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500">
+          <tr><th class="px-4 py-2 text-left w-20">줄</th><th class="px-4 py-2 text-left w-40">상품코드</th><th class="px-4 py-2 text-left">상품명 / 사유</th></tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% result.failed.forEach(function (f) { %>
+            <tr>
+              <td class="px-4 py-2 text-gray-500"><%= f.lineNo %>번째</td>
+              <td class="px-4 py-2 font-mono text-xs text-gray-700"><%= f.code || '-' %></td>
+              <td class="px-4 py-2">
+                <span class="text-gray-800"><%= f.name || '' %></span>
+                <div class="text-red-700 text-xs mt-0.5"><%= f.reason %></div>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+<% } %>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    <div class="bg-white border border-gray-200 rounded-lg p-6">
+      <h3 class="text-sm font-semibold text-gray-800 mb-3">파일 올리기</h3>
+      <form action="/admin/products/bulk" method="POST" enctype="multipart/form-data" class="space-y-4">
+        <input type="file" name="file" accept=".csv,text/csv" required
+               class="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-800 file:text-white file:text-sm hover:file:bg-gray-700">
+        <p class="text-xs text-gray-500">
+          엑셀에서 작업했다면 <b>[다른 이름으로 저장] → 파일 형식 <span class="text-gray-800">CSV UTF-8(쉼표로 분리)</span></b> 로 저장한 뒤 올려 주세요.
+          <code>.xlsx</code> 파일은 그대로 읽을 수 없습니다.
+        </p>
+        <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">일괄 반영</button>
+      </form>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-lg p-6">
+      <h3 class="text-sm font-semibold text-gray-800 mb-3">동작 방식</h3>
+      <ul class="text-sm text-gray-600 space-y-2 list-disc pl-5">
+        <li><b>상품코드가 이미 있으면 수정</b>, 없으면 새로 등록합니다. 상품코드를 비우면 언제나 새 상품입니다.</li>
+        <li><b>빈 칸은 "그대로 둠"</b> 입니다. 가격만 고치려면 가격 칸만 채우면 되고, 나머지 값은 손대지 않습니다.
+            <span class="text-gray-400">(값을 지우려면 상품 수정 화면에서 지워야 합니다)</span></li>
+        <li>새 상품은 <b>판매가</b>가 반드시 있어야 합니다. 재고를 비우면 0으로 등록됩니다.</li>
+        <li>카테고리·브랜드는 <b>이름</b>으로 적습니다. 없는 이름이면 그 줄만 실패하며, 카테고리 관리에서 먼저 만들어야 합니다.</li>
+        <li>한 줄이 실패해도 나머지 줄은 그대로 반영됩니다.</li>
+        <li><b>지금 편집 중인 몰</b>에 반영됩니다. 다른 몰에 넣으려면 몰을 바꾼 뒤 올리세요.</li>
+      </ul>
+      <p class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500 leading-relaxed">
+        이미지 · 상세설명 · 옵션 · SKU 는 이 파일로 다루지 않습니다. 표로 표현할 수 없는 값이라
+        상품 등록·수정 화면에서 개별로 작업해야 합니다.
+      </p>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-lg p-6">
+    <h3 class="text-sm font-semibold text-gray-800 mb-1">파일의 칸</h3>
+    <p class="text-xs text-gray-500 mb-3">순서는 상관없고, 필요 없는 칸은 빼도 됩니다. <b>상품명</b>은 반드시 있어야 합니다.</p>
+    <ul class="text-sm text-gray-700 space-y-1.5">
+      <% columns.forEach(function (c) { %>
+        <li class="flex items-start gap-1.5">
+          <i class="bi bi-dot text-gray-300"></i>
+          <span><%= c.label %><% if (c.key === 'name') { %> <span class="text-red-500 text-xs">필수</span><% } %></span>
+        </li>
+      <% }); %>
+    </ul>
+    <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500 space-y-2">
+      <div><b class="text-gray-700">판매상태</b><br>판매중 · 판매중지 · 품절 · 입고예정 · 재입고</div>
+      <div><b class="text-gray-700">노출</b><br>공개 · 숨김 · 회원전용</div>
+      <div><b class="text-gray-700">과세</b><br>과세 · 면세 · 영세</div>
+    </div>
+  </div>
+</div>

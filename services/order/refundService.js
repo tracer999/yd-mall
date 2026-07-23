@@ -95,8 +95,18 @@ async function cancelTossPayment(paymentKey, cancelReason, cancelAmount) {
  *
  * @returns {Promise<{ok:boolean, pending?:boolean, refundId:number, method:string, reason?:string}>}
  */
-async function refundOrder(conn, { order, claimId = null, returnShippingFee = 0, reason = '주문 취소' }) {
-    const { refundAmount, shippingFeeRefund, deducted } = calcRefundAmount(order, returnShippingFee);
+async function refundOrder(conn, { order, claimId = null, returnShippingFee = 0, reason = '주문 취소', overrideAmount = null }) {
+    const calc = calcRefundAmount(order, returnShippingFee);
+    /*
+     * 부분 취소·부분 반품은 환불액이 주문 전액이 아니라 **안분된 금액**이다.
+     * 그 계산은 partialClaimService 가 하고(할인 비율 배분·반올림 잔여 흡수), 여기서는 결과만 받는다.
+     * 이때 배송비 환급 표시도 안분 결과를 따라야 하므로 0 으로 둔다 — 전액 배송비를 돌려준 것처럼
+     * 기록되면 정산 리포트의 배송비 합계가 부풀어 오른다.
+     */
+    const isPartial = overrideAmount != null;
+    const refundAmount = isPartial ? Math.max(0, Number(overrideAmount) || 0) : calc.refundAmount;
+    const shippingFeeRefund = isPartial ? 0 : calc.shippingFeeRefund;
+    const deducted = calc.deducted;
 
     // B2B 무통장 — 받은 돈이 있으면 사람이 계좌로 돌려줘야 한다(자동 환불 수단이 없다).
     const isB2bBankTransfer = order.order_type === 'B2B' && order.payment_status === 'PAID' && refundAmount > 0;
@@ -131,8 +141,9 @@ async function refundOrder(conn, { order, claimId = null, returnShippingFee = 0,
     }
 
     // 전액 환불이면 cancelAmount 를 보내지 않는다(토스가 전액으로 처리).
-    const partial = deducted > 0 ? refundAmount : null;
-    const result = await cancelTossPayment(order.payment_key, reason, partial);
+    // 부분 클레임은 언제나 금액을 명시해야 한다 — 생략하면 토스가 결제 전액을 취소해 버린다.
+    const partialAmount = (isPartial || deducted > 0) ? refundAmount : null;
+    const result = await cancelTossPayment(order.payment_key, reason, partialAmount);
 
     if (result.ok) {
         await conn.query(

@@ -1,0 +1,188 @@
+<%
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const d = (v) => (v ? new Date(v).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) : '-');
+  const maxNet = Math.max(1, ...daily.map((r) => Math.abs(r.net)));
+%>
+
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+  <div>
+    <p class="text-sm text-gray-500">기간별 매출과 환불을 집계합니다. 회계·정산 자료의 기준이 됩니다.</p>
+  </div>
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="/admin/sales" class="px-3 py-2 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 no-underline">주문 목록</a>
+    <a href="/admin/sales/settlement/export?<%= exportQuery %>"
+       class="px-3 py-2 rounded-md bg-gray-800 text-white text-sm hover:bg-gray-700 no-underline">엑셀 내려받기</a>
+  </div>
+</div>
+
+<form method="get" action="/admin/sales/settlement" class="mb-6 flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-lg p-4">
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">시작일</label>
+    <input type="date" name="from" value="<%= from %>" class="rounded-md border-gray-300 text-sm">
+  </div>
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">종료일</label>
+    <input type="date" name="to" value="<%= to %>" class="rounded-md border-gray-300 text-sm">
+  </div>
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">몰</label>
+    <select name="mallId" class="rounded-md border-gray-300 text-sm">
+      <option value="">전체 몰</option>
+      <% malls.forEach(function (m) { %>
+        <option value="<%= m.id %>" <%= selectedMallId === Number(m.id) ? 'selected' : '' %>><%= m.name %></option>
+      <% }); %>
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">구분</label>
+    <select name="orderType" class="rounded-md border-gray-300 text-sm">
+      <option value="">전체</option>
+      <option value="B2C" <%= orderType === 'B2C' ? 'selected' : '' %>>일반(B2C)</option>
+      <option value="B2B" <%= orderType === 'B2B' ? 'selected' : '' %>>기업(B2B)</option>
+    </select>
+  </div>
+  <button type="submit" class="h-[38px] px-4 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">조회</button>
+</form>
+
+<!-- 요약 -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+  <div class="rounded-xl border border-gray-200 bg-white p-4">
+    <p class="text-xs text-gray-500">매출</p>
+    <p class="mt-1 text-2xl font-bold text-gray-900"><%= won(summary.gross) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+    <p class="mt-1 text-xs text-gray-500">주문 <%= summary.orderCount %>건 · 객단가 <%= won(summary.avgOrderValue) %>원</p>
+  </div>
+  <div class="rounded-xl border border-gray-200 bg-white p-4">
+    <p class="text-xs text-gray-500">환불</p>
+    <p class="mt-1 text-2xl font-bold text-red-600">-<%= won(summary.refundAmount) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+    <p class="mt-1 text-xs text-gray-500"><%= summary.refundCount %>건 · 반품비 회수 <%= won(summary.returnFee) %>원</p>
+  </div>
+  <div class="rounded-xl border-2 border-gray-800 bg-white p-4">
+    <p class="text-xs text-gray-500">순매출</p>
+    <p class="mt-1 text-2xl font-bold text-gray-900"><%= won(summary.net) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+    <p class="mt-1 text-xs text-gray-400">매출 − 환불</p>
+  </div>
+  <div class="rounded-xl border border-gray-200 bg-white p-4">
+    <p class="text-xs text-gray-500">배송비 수취</p>
+    <p class="mt-1 text-2xl font-bold text-gray-700"><%= won(summary.shippingFee - summary.shippingDiscount) %><span class="text-sm font-medium text-gray-400 ml-0.5">원</span></p>
+    <p class="mt-1 text-xs text-gray-500">청구 <%= won(summary.shippingFee) %> · 할인 <%= won(summary.shippingDiscount) %></p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+  <!-- 할인 구성 -->
+  <div class="bg-white border border-gray-200 rounded-lg p-5">
+    <h3 class="text-sm font-semibold text-gray-800 mb-3">할인 · 포인트 사용</h3>
+    <dl class="space-y-2 text-sm">
+      <div class="flex justify-between"><dt class="text-gray-500">상품금액 합계</dt><dd class="text-gray-900"><%= won(summary.itemsAmount) %>원</dd></div>
+      <div class="flex justify-between"><dt class="text-gray-500">쿠폰 할인</dt><dd class="text-gray-900">-<%= won(summary.couponDiscount) %>원</dd></div>
+      <div class="flex justify-between"><dt class="text-gray-500">등급 할인</dt><dd class="text-gray-900">-<%= won(summary.gradeDiscount) %>원</dd></div>
+      <div class="flex justify-between"><dt class="text-gray-500">포인트 사용</dt><dd class="text-gray-900">-<%= won(summary.pointUsed) %>원</dd></div>
+      <div class="flex justify-between pt-2 border-t border-gray-100 font-semibold"><dt>실 결제액</dt><dd><%= won(summary.gross) %>원</dd></div>
+    </dl>
+  </div>
+
+  <!-- 결제수단 -->
+  <div class="bg-white border border-gray-200 rounded-lg p-5">
+    <h3 class="text-sm font-semibold text-gray-800 mb-3">결제수단별</h3>
+    <% if (byPayment.length) { %>
+      <ul class="space-y-2 text-sm">
+        <% byPayment.forEach(function (p) { %>
+          <li class="flex justify-between">
+            <span class="text-gray-600"><%= p.method %> <span class="text-xs text-gray-400">(<%= p.order_count %>건)</span></span>
+            <span class="text-gray-900"><%= won(p.amount) %>원</span>
+          </li>
+        <% }); %>
+      </ul>
+    <% } else { %>
+      <p class="text-sm text-gray-400">이 기간에 결제 내역이 없습니다.</p>
+    <% } %>
+  </div>
+
+  <!-- 안내 -->
+  <div class="bg-gray-50 border border-gray-200 rounded-lg p-5">
+    <h3 class="text-sm font-semibold text-gray-800 mb-2">집계 기준</h3>
+    <ul class="text-xs text-gray-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+      <li><b>매출</b>은 결제가 살아 있는 주문(결제완료·배송준비·배송중·배송완료)의 결제금액 합계이며, <b>결제일</b> 기준입니다.</li>
+      <li><b>환불</b>은 실제로 환불이 완료된 날 기준입니다. 지난달 주문이 이번 달 환불되면 이번 달에서 빠집니다.</li>
+      <li>부분 환불도 그대로 반영됩니다(주문은 살아 있고 일부만 빠짐).</li>
+      <li>대기(미결제) 주문은 매출에 넣지 않습니다.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 일자별 -->
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
+  <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
+    <h3 class="text-sm font-semibold text-gray-800">일자별</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500">
+        <tr>
+          <th class="px-4 py-2 text-left w-28">일자</th>
+          <th class="px-4 py-2 text-right w-24">주문</th>
+          <th class="px-4 py-2 text-right w-32">매출</th>
+          <th class="px-4 py-2 text-right w-32">환불</th>
+          <th class="px-4 py-2 text-right w-32">순매출</th>
+          <th class="px-4 py-2 text-left">비중</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <% daily.forEach(function (r) { %>
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 text-gray-700"><%= d(r.day) %></td>
+            <td class="px-4 py-2 text-right text-gray-600"><%= r.orderCount %></td>
+            <td class="px-4 py-2 text-right text-gray-900"><%= won(r.gross) %></td>
+            <td class="px-4 py-2 text-right <%= r.refund ? 'text-red-600' : 'text-gray-300' %>"><%= r.refund ? '-' + won(r.refund) : '-' %></td>
+            <td class="px-4 py-2 text-right font-medium <%= r.net < 0 ? 'text-red-600' : 'text-gray-900' %>"><%= won(r.net) %></td>
+            <td class="px-4 py-2">
+              <div class="h-2 rounded-full <%= r.net < 0 ? 'bg-red-400' : 'bg-blue-400' %>"
+                   style="width: <%= Math.round((Math.abs(r.net) / maxNet) * 100) %>%"></div>
+            </td>
+          </tr>
+        <% }); %>
+        <% if (!daily.length) { %>
+          <tr><td colspan="6" class="px-4 py-10 text-center text-gray-500">이 기간에 매출이 없습니다.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 상품별 -->
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
+    <h3 class="text-sm font-semibold text-gray-800">상품별 매출 <span class="text-xs font-normal text-gray-400">상위 50</span></h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500">
+        <tr>
+          <th class="px-4 py-2 text-left">상품</th>
+          <th class="px-4 py-2 text-right w-24">주문수</th>
+          <th class="px-4 py-2 text-right w-24">수량</th>
+          <th class="px-4 py-2 text-right w-32">금액</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <% byProduct.forEach(function (p) { %>
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2">
+              <% if (p.product_id) { %>
+                <a href="/admin/products/<%= p.product_id %>/edit" class="text-gray-800 hover:text-blue-700"><%= p.product_name %></a>
+              <% } else { %>
+                <span class="text-gray-800"><%= p.product_name %></span>
+              <% } %>
+            </td>
+            <td class="px-4 py-2 text-right text-gray-600"><%= p.order_count %></td>
+            <td class="px-4 py-2 text-right text-gray-600"><%= p.qty %></td>
+            <td class="px-4 py-2 text-right text-gray-900"><%= won(p.amount) %>원</td>
+          </tr>
+        <% }); %>
+        <% if (!byProduct.length) { %>
+          <tr><td colspan="4" class="px-4 py-10 text-center text-gray-500">이 기간에 판매된 상품이 없습니다.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>

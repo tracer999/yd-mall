@@ -1,0 +1,121 @@
+<%
+  const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR', { hour12: false }) : '-');
+  const d  = (v) => (v ? new Date(v).toLocaleDateString('ko-KR') : '-');
+  const TYPE = { TERMS: '이용약관', PRIVACY: '개인정보 처리방침' };
+  const qs = (over) => {
+    const p = [];
+    if (over.version ?? selectedVersion) p.push('version=' + (over.version ?? selectedVersion));
+    if (over.q ?? keyword) p.push('q=' + encodeURIComponent(over.q ?? keyword));
+    if (over.page) p.push('page=' + over.page);
+    return p.length ? '?' + p.join('&') : '';
+  };
+%>
+
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+  <div class="flex items-center gap-2 text-sm text-gray-600">
+    <a href="/admin/policies" class="text-gray-400 hover:text-gray-600"><i class="bi bi-arrow-left-circle"></i></a>
+    <span class="text-base font-semibold text-gray-900">회원 동의 이력</span>
+  </div>
+  <form method="get" action="/admin/policies/agreements" class="flex flex-wrap items-center gap-2">
+    <% if (selectedVersion) { %><input type="hidden" name="version" value="<%= selectedVersion %>"><% } %>
+    <input type="search" name="q" value="<%= keyword %>" placeholder="회원 이름 · 이메일"
+           class="w-full sm:w-56 rounded-md border-gray-300 text-sm">
+    <button type="submit" class="px-3 py-2 rounded-md bg-gray-800 text-white text-sm hover:bg-gray-700">검색</button>
+  </form>
+</div>
+
+<p class="mb-4 text-xs text-gray-500 leading-relaxed">
+  회원이 <b>가입 시점에 동의한 약관 버전</b>과 그 시각입니다. 개인정보 관련 문의·점검 시 근거 자료로 씁니다.
+  약관을 새로 시행해도 기존 회원의 과거 동의 기록은 그대로 남습니다.
+</p>
+
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+  <!-- 버전 목록 -->
+  <div class="lg:col-span-1">
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <h3 class="text-sm font-semibold text-gray-800">버전별 동의 수</h3>
+      </div>
+      <ul class="divide-y divide-gray-50 max-h-[32rem] overflow-y-auto">
+        <li>
+          <a href="/admin/policies/agreements<%= keyword ? '?q=' + encodeURIComponent(keyword) : '' %>"
+             class="flex items-center justify-between px-4 py-2.5 text-sm no-underline <%= !selectedVersion ? 'bg-blue-50 text-blue-800 font-medium' : 'text-gray-700 hover:bg-gray-50' %>">
+            <span>전체</span><span class="text-xs text-gray-400"><%= totalCount %></span>
+          </a>
+        </li>
+        <% versions.forEach(function (v) { %>
+          <li>
+            <a href="/admin/policies/agreements<%= qs({ version: v.id, page: 0 }) %>"
+               class="flex items-center justify-between gap-2 px-4 py-2.5 text-sm no-underline <%= selectedVersion === Number(v.id) ? 'bg-blue-50 text-blue-800 font-medium' : 'text-gray-700 hover:bg-gray-50' %>">
+              <span class="truncate">
+                <%= TYPE[v.type] || v.type %> <span class="text-gray-400">v<%= v.version %></span>
+                <% if (v.is_active) { %><span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-800">시행중</span><% } %>
+                <br><span class="text-xs text-gray-400"><%= d(v.effective_date) %> 시행</span>
+              </span>
+              <span class="text-xs text-gray-400 shrink-0"><%= v.agreed_count %></span>
+            </a>
+          </li>
+        <% }); %>
+        <% if (!versions.length) { %>
+          <li class="px-4 py-6 text-center text-sm text-gray-400">등록된 약관 버전이 없습니다.</li>
+        <% } %>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 동의 이력 -->
+  <div class="lg:col-span-3">
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+          <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+            <tr>
+              <th class="px-4 py-3 text-left">회원</th>
+              <th class="px-4 py-3 text-left">동의한 약관</th>
+              <th class="px-4 py-3 text-left w-48">동의 일시</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <% rows.forEach(function (r) { %>
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3">
+                  <a href="/admin/users/<%= r.user_id %>" class="font-medium text-blue-600 hover:text-blue-800"><%= r.user_name || '이름 없음' %></a>
+                  <div class="text-xs text-gray-400"><%= r.user_email || '-' %></div>
+                </td>
+                <td class="px-4 py-3">
+                  <a href="/admin/policies/<%= r.policy_id %>" class="text-gray-800 hover:text-blue-700">
+                    <%= TYPE[r.type] || r.type %> <span class="text-gray-400">v<%= r.version %></span>
+                  </a>
+                  <div class="text-xs text-gray-400"><%= d(r.effective_date) %> 시행본</div>
+                </td>
+                <td class="px-4 py-3 text-gray-600"><%= dt(r.agreed_at) %></td>
+              </tr>
+            <% }); %>
+            <% if (!rows.length) { %>
+              <tr><td colspan="3" class="px-4 py-10 text-center text-gray-500">
+                <%= keyword ? `'${keyword}' 로 찾은 동의 이력이 없습니다.` : '동의 이력이 없습니다.' %>
+              </td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+
+      <% if (totalPages > 1) { %>
+        <div class="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+          <p class="text-sm text-gray-500">전체 <b><%= totalCount %></b>건 · <%= page %>/<%= totalPages %> 쪽</p>
+          <div class="flex items-center gap-1">
+            <% if (page > 1) { %>
+              <a href="<%= qs({ page: page - 1 }) %>" class="px-2 py-1 text-sm text-gray-500 hover:text-gray-800">이전</a>
+            <% } %>
+            <% for (let p = Math.max(1, page - 2); p <= Math.min(totalPages, page + 2); p++) { %>
+              <a href="<%= qs({ page: p }) %>" class="px-3 py-1 text-sm rounded-md <%= p === page ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-100' %>"><%= p %></a>
+            <% } %>
+            <% if (page < totalPages) { %>
+              <a href="<%= qs({ page: page + 1 }) %>" class="px-2 py-1 text-sm text-gray-500 hover:text-gray-800">다음</a>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>

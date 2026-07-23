@@ -9,31 +9,44 @@
  *     따라서 상품 저장 시 products → 대표 SKU 로 **단방향 동기화**한다.
  *   - Phase 3 에서 SKU 가 원천이 되면 방향을 뒤집는다(SKU → products 미러).
  *
- * status 규칙: products.status 는 생명주기(ON/OFF/SOLD_OUT/COMING_SOON/RESTOCK).
- *   SKU.status 는 on/off 2값뿐 → OFF 만 OFF, 나머지는 ON. 구매가능 판정은
- *   products.status 게이트 + SKU 재고/on-off 의 합성으로 별도 처리한다.
+ * status 규칙: 두 값은 **서로 다른 것을 뜻하며 전파하지 않는다.**
+ *   products.status  상품 자체의 판매 여부. 노출(목록)·장바구니·결제를 막는 유일한 게이트다
+ *                    (productController 목록 쿼리 / cartController / checkoutController).
+ *   sku.status       옵션 선택 셀렉트 박스에 그 옵션을 띄울지 말지(detail.ejs 의 sellable 판정).
+ *
+ *   그래서 상품을 판매중지해도 SKU 는 건드리지 않는다 — 상품 게이트가 이미 막고,
+ *   SKU 까지 내리면 상품을 다시 켤 때 고를 수 있는 옵션이 하나도 없는 상태가 된다.
+ *   판매 상태·노출은 **상품 마스터에서만** 갱신한다.
  */
 
 const pool = require('../../config/db');
 
-/** products.status(5값) → sku.status(on/off) */
-function mapProductStatusToSku(status) {
-    return status === 'OFF' ? 'OFF' : 'ON';
-}
-
 /**
  * 상품의 대표 SKU 를 products 값으로 맞춘다(없으면 생성).
- * 단일상품·전환기 동기화용. price/stock/purchase_price/status 만 다룬다.
+ * 단일상품·전환기 동기화용. price/stock/purchase_price 를 다룬다.
+ *
+ * status 는 미러하지 않는다 — 상품 판매중지는 products.status 게이트가 담당하고
+ * sku.status 는 옵션 노출 설정이라 별개다(파일 헤더). 새로 만드는 SKU 는 항상 ON.
+ * fields.status 를 넘겨도 무시하므로 호출부는 그대로 둬도 된다.
  *
  * @param {number} productId
- * @param {{mall_id?:number, price:number, stock:number, purchase_price?:number, status?:string, sku_code?:string}} fields
+ * @param {{mall_id?:number, price:number, stock:number, purchase_price?:number, sku_code?:string}} fields
  * @param {object} [conn] 트랜잭션 커넥션(없으면 pool)
  */
 async function syncDefaultSkuFromProduct(productId, fields, conn = pool) {
+    /*
+     * 옵션상품은 대표 SKU 를 두지 않는다(optionService 헤더). 그런데 상품 편집 폼은
+     * product_type 을 보지 않고 이 함수를 부르기 때문에, 옵션상품을 폼에서 한 번만
+     * 저장해도 대표 SKU 가 되살아났다. 그러면 sellableStock 이 옵션 SKU 합에
+     * 폼의 products.stock 을 한 번 더 더해 **판매가능재고가 이중 계상**된다.
+     * 가드를 호출부가 아니라 여기 두는 이유: 호출부가 늘어도 규칙이 새지 않는다.
+     */
+    const [[prow]] = await conn.query('SELECT product_type FROM products WHERE id = ?', [productId]);
+    if (prow && prow.product_type === 'OPTION') return null;
+
     const price = Number(fields.price) || 0;
     const stock = Number(fields.stock) || 0;
     const purchasePrice = Number(fields.purchase_price) || 0;
-    const skuStatus = mapProductStatusToSku(fields.status);
 
     const [rows] = await conn.query(
         'SELECT id FROM product_sku WHERE product_id = ? AND is_default = 1 LIMIT 1',
@@ -41,11 +54,14 @@ async function syncDefaultSkuFromProduct(productId, fields, conn = pool) {
     );
 
     if (rows.length) {
+        // sku_code 는 예전엔 INSERT 에서만 넣어, 상품 폼에서 상품코드를 바꿔도 대표 SKU 는
+        // 옛 코드를 들고 있었다(외부몰 발행 시 sellerManagerCode 가 어긋난다).
+        // 다만 빈 값으로 덮어 지우지는 않는다 — COALESCE 로 값이 있을 때만 갱신.
         await conn.query(
             `UPDATE product_sku
-                SET price = ?, stock = ?, purchase_price = ?, status = ?
+                SET price = ?, stock = ?, purchase_price = ?, sku_code = COALESCE(?, sku_code)
               WHERE id = ?`,
-            [price, stock, purchasePrice, skuStatus, rows[0].id]
+            [price, stock, purchasePrice, fields.sku_code || null, rows[0].id]
         );
         return rows[0].id;
     }
@@ -53,48 +69,20 @@ async function syncDefaultSkuFromProduct(productId, fields, conn = pool) {
     const [result] = await conn.query(
         `INSERT INTO product_sku
             (mall_id, product_id, sku_code, purchase_price, price, stock, stock_managed, status, is_default)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, 1)`,
-        [fields.mall_id || 1, productId, fields.sku_code || null, purchasePrice, price, stock, skuStatus]
+         VALUES (?, ?, ?, ?, ?, ?, 1, 'ON', 1)`,
+        [fields.mall_id || 1, productId, fields.sku_code || null, purchasePrice, price, stock]
     );
     return result.insertId;
 }
 
-/**
- * 상품 상태 변경을 SKU 로 전파한다(목록의 일괄 상태 변경용). products.status → sku.status
+/*
+ * syncSkuStatusForProducts 는 제거했다.
  *
- * 예전에는 **대표 SKU 만** 바꿨다. 그래서 옵션상품을 [판매중 처리] 해도 옵션 SKU 는
- * OFF 로 남아, 상품은 판매중인데 살 수 있는 옵션이 하나도 없는 상태가 됐다.
- *
- * 규칙
- *   판매중지(OFF) → 전 SKU OFF. 판매를 멈추라는 지시에 예외를 두지 않는다.
- *   그 외(ON·품절·출시예정·재입고예정) → 대표 SKU 는 항상 ON(단일상품의 재고가 여기 있다),
- *     옵션 SKU 는 **팔 수 있는 것만** ON 으로 올린다. 재고 0 인 옵션까지 켜면
- *     고객이 고를 수는 있는데 담을 수 없는 옵션이 생긴다.
- *     stock_managed=0 은 재고를 자기가 들고 있지 않은 SKU(복합상품 등)라 재고 조건에서 뺀다.
- *
- * ⚠️ 옵션·SKU 화면에서 특정 옵션만 꺼 뒀더라도, 재고가 있으면 이 일괄 처리로 다시 켜진다.
- *    개별 옵션을 계속 꺼 두려면 일괄 처리 대신 옵션·SKU 화면에서 관리한다.
+ * 상품 상태를 SKU 로 전파하던 함수인데, 전파 자체가 잘못된 전제였다. 상품 판매중지는
+ * products.status 게이트만으로 노출·장바구니·결제가 전부 막히므로 SKU 를 내릴 이유가 없고,
+ * 내려 두면 다시 켤 때 옵션이 전부 품절로 보여 살 수 있는 조합이 하나도 없었다.
+ * 판매 상태·노출은 상품 마스터에서만 갱신하고, SKU 의 on/off 는 옵션·SKU 화면이 관장한다.
  */
-async function syncSkuStatusForProducts(productIds, productStatus, conn = pool) {
-    const ids = Array.isArray(productIds) ? productIds : [productIds];
-    if (!ids.length) return;
-
-    if (mapProductStatusToSku(productStatus) === 'OFF') {
-        await conn.query('UPDATE product_sku SET status = ? WHERE product_id IN (?)', ['OFF', ids]);
-        return;
-    }
-
-    await conn.query(
-        'UPDATE product_sku SET status = ? WHERE product_id IN (?) AND is_default = 1',
-        ['ON', ids]
-    );
-    await conn.query(
-        `UPDATE product_sku SET status = 'ON'
-          WHERE product_id IN (?) AND is_default = 0 AND status = 'OFF'
-            AND (stock > 0 OR stock_managed = 0)`,
-        [ids]
-    );
-}
 
 /** 상품의 대표 SKU 1행(가격·재고·상태). 없으면 null. */
 async function getDefaultSku(productId, conn = pool) {
@@ -140,7 +128,7 @@ async function resolveSkuForLine(productId, skuId, conn = pool) {
  */
 async function getOrderLineSkus(conn, orderId) {
     const [rows] = await conn.query(
-        `SELECT oi.product_id, oi.product_name, oi.quantity,
+        `SELECT oi.id AS order_item_id, oi.product_id, oi.product_name, oi.quantity,
                 COALESCE(oi.sku_id, ds.id) AS sku_id
            FROM order_items oi
            LEFT JOIN product_sku ds ON ds.product_id = oi.product_id AND ds.is_default = 1
@@ -260,10 +248,39 @@ async function restoreStockForOrder(conn, orderId) {
     }
 }
 
+/**
+ * 주문의 **일부 품목만** 재고를 되돌린다(부분 취소·부분 반품).
+ * 전건 복원(restoreStockForOrder)과 같은 규칙을 쓰되 수량만 지정분으로 바꾼다 —
+ * 복합상품이면 구성 SKU 를 `되돌릴수량 × 구성수량` 만큼 되돌리는 것도 그대로다.
+ *
+ * @param {Map<number, number>} qtyByItemId order_items.id → 되돌릴 수량
+ */
+async function restoreStockForItems(conn, orderId, qtyByItemId) {
+    const lines = await getOrderLineSkus(conn, orderId);
+    for (const line of lines) {
+        const qty = Number(qtyByItemId.get(Number(line.order_item_id))) || 0;
+        if (qty <= 0 || !line.sku_id) continue;
+
+        const [[sku]] = await conn.query(
+            'SELECT id, product_id, is_default, stock_managed FROM product_sku WHERE id = ? FOR UPDATE',
+            [line.sku_id]
+        );
+        if (!sku) continue;
+
+        if (sku.stock_managed === 0) {
+            const comps = await getComponentsOfComposite(conn, sku.product_id);
+            for (const c of comps) {
+                const [[cs]] = await conn.query('SELECT id, product_id, is_default FROM product_sku WHERE id = ? FOR UPDATE', [c.component_sku_id]);
+                if (cs) await _restoreSku(conn, cs, qty * c.quantity);
+            }
+        } else {
+            await _restoreSku(conn, sku, qty);
+        }
+    }
+}
+
 module.exports = {
-    mapProductStatusToSku,
     syncDefaultSkuFromProduct,
-    syncSkuStatusForProducts,
     getDefaultSku,
     getSkusByProduct,
     resolveSkuForLine,
@@ -271,4 +288,5 @@ module.exports = {
     validateStockForOrder,
     deductStockForOrder,
     restoreStockForOrder,
+    restoreStockForItems,
 };

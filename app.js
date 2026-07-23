@@ -362,6 +362,12 @@ const liveRoutes = require('./routes/live');
 
     app.listen(PORT, HOST, () => {
         console.log(`Server running on http://${HOST}:${PORT}`);
+        /*
+         * 주기 작업(약관 예약 시행 · 배송완료 자동 처리 · 포인트 소멸).
+         * 서버에 crontab 을 심을 수 없는 납품 환경을 전제로 앱 안에서 돈다.
+         * PM2 fork · instances:1 이라 중복 실행되지 않는다(services/scheduler 주석 참고).
+         */
+        require('./services/scheduler').start();
     });
 }
 

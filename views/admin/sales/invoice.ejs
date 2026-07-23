@@ -1,0 +1,140 @@
+<%
+  const isStatement = type === 'statement';
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR', { hour12: false }) : '-');
+  const d  = (v) => (v ? new Date(v).toLocaleDateString('ko-KR') : '-');
+  // 부가세는 주문에 기록돼 있으면 그 값을, 없으면 과세 기준 역산(공급가 = 결제금액/1.1)으로 보여 준다.
+  const supply = order.supply_amount != null ? Number(order.supply_amount) : Math.round(Number(order.total_amount || 0) / 1.1);
+  const vat    = order.vat_amount    != null ? Number(order.vat_amount)    : Number(order.total_amount || 0) - supply;
+  const addr = [order.receiver_address, order.receiver_detailed_address].filter(Boolean).join(' ') || order.shipping_address || '-';
+%>
+<title><%= isStatement ? '거래명세서' : '주문서' %> — <%= order.order_number %></title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Malgun Gothic", "맑은 고딕", sans-serif; color: #111; margin: 0; padding: 24px; background: #f3f4f6; }
+  .sheet { max-width: 820px; margin: 0 auto; background: #fff; padding: 40px; }
+  h1 { font-size: 26px; letter-spacing: .4em; text-align: center; margin: 0 0 4px; }
+  .sub { text-align: center; color: #6b7280; font-size: 12px; margin-bottom: 28px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .party { margin-bottom: 20px; }
+  .party td, .party th { border: 1px solid #d1d5db; padding: 7px 10px; }
+  .party th { background: #f9fafb; width: 90px; text-align: left; font-weight: 600; color: #374151; }
+  .items th, .items td { border: 1px solid #d1d5db; padding: 8px 10px; }
+  .items th { background: #f9fafb; font-weight: 600; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .center { text-align: center; }
+  .total-row td { background: #f9fafb; font-weight: 700; }
+  .meta { display: flex; justify-content: space-between; font-size: 12px; color: #4b5563; margin-bottom: 16px; }
+  .memo { margin-top: 22px; font-size: 12px; color: #6b7280; line-height: 1.7; }
+  .sign { margin-top: 30px; text-align: right; font-size: 13px; }
+  .toolbar { max-width: 820px; margin: 0 auto 14px; display: flex; gap: 8px; justify-content: flex-end; }
+  .btn { padding: 8px 14px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px; font-size: 13px; cursor: pointer; text-decoration: none; color: #374151; }
+  .btn-primary { background: #111827; color: #fff; border-color: #111827; }
+  @media print { body { background: #fff; padding: 0; } .toolbar { display: none; } .sheet { padding: 0; max-width: none; } }
+</style>
+
+<div class="toolbar">
+  <a class="btn" href="/admin/sales/<%= order.id %>">주문 상세로</a>
+  <a class="btn" href="/admin/sales/<%= order.id %>/invoice?type=<%= isStatement ? 'order' : 'statement' %>">
+    <%= isStatement ? '주문서로 보기' : '거래명세서로 보기' %>
+  </a>
+  <button class="btn btn-primary" onclick="window.print()">인쇄 / PDF 저장</button>
+</div>
+
+<div class="sheet">
+  <h1><%= isStatement ? '거래명세서' : '주 문 서' %></h1>
+  <p class="sub"><%= settings.company_name || order.mall_name || '' %></p>
+
+  <div class="meta">
+    <span>주문번호 <b><%= order.order_number %></b></span>
+    <span>발행일 <%= d(new Date()) %> · 주문일 <%= dt(order.created_at) %></span>
+  </div>
+
+  <table class="party">
+    <tr>
+      <th>공급자</th>
+      <td>
+        <b><%= settings.company_name || '-' %></b>
+        <%= settings.ceo_name ? ' (대표 ' + settings.ceo_name + ')' : '' %><br>
+        사업자등록번호 <%= settings.business_number || '-' %>
+        <%= settings.mail_order_number ? ' · 통신판매업 ' + settings.mail_order_number : '' %><br>
+        <%= settings.address || '' %><br>
+        <%= [settings.contact_phone, settings.contact_email].filter(Boolean).join(' · ') %>
+      </td>
+    </tr>
+    <tr>
+      <th><%= isStatement ? '공급받는자' : '주문자' %></th>
+      <td>
+        <b><%= order.buyer_name || order.customer_name || '-' %></b><br>
+        <%= [order.buyer_phone, order.buyer_email].filter(Boolean).join(' · ') %>
+      </td>
+    </tr>
+    <tr>
+      <th>받는 분</th>
+      <td>
+        <b><%= order.receiver_name || '-' %></b> <%= order.receiver_phone || '' %><br>
+        <%= order.receiver_zipcode ? '(' + order.receiver_zipcode + ') ' : '' %><%= addr %>
+        <% if (order.shipping_message) { %><br><span style="color:#6b7280">요청: <%= order.shipping_message %></span><% } %>
+      </td>
+    </tr>
+    <% if (shipment && shipment.tracking_number) { %>
+    <tr>
+      <th>배송</th>
+      <td><%= shipment.courier_company || '' %> <%= shipment.tracking_number %>
+        <%= shipment.shipped_at ? ' · 발송 ' + d(shipment.shipped_at) : '' %></td>
+    </tr>
+    <% } %>
+  </table>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th style="width:38px">No</th>
+        <th>상품명</th>
+        <th style="width:120px">옵션</th>
+        <th style="width:60px">수량</th>
+        <th style="width:100px">단가</th>
+        <th style="width:110px">금액</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% items.forEach(function(it, i) { %>
+      <tr>
+        <td class="center"><%= i + 1 %></td>
+        <td><%= it.product_name %></td>
+        <td class="center"><%= it.option_snapshot || '-' %></td>
+        <td class="center"><%= it.quantity %></td>
+        <td class="num"><%= won(it.product_price) %></td>
+        <td class="num"><%= won(it.total_price) %></td>
+      </tr>
+      <% }) %>
+      <% if (!items.length) { %>
+      <tr><td colspan="6" class="center" style="padding:24px; color:#9ca3af">품목이 없습니다.</td></tr>
+      <% } %>
+    </tbody>
+    <tfoot>
+      <tr><td colspan="5" class="num">상품 합계</td><td class="num"><%= won(order.subtotal_amount) %></td></tr>
+      <tr><td colspan="5" class="num">배송비</td><td class="num"><%= won(order.shipping_fee) %></td></tr>
+      <% if (Number(order.shipping_discount) > 0) { %>
+      <tr><td colspan="5" class="num">배송비 할인</td><td class="num">-<%= won(order.shipping_discount) %></td></tr><% } %>
+      <% if (Number(order.coupon_discount) > 0) { %>
+      <tr><td colspan="5" class="num">쿠폰 할인</td><td class="num">-<%= won(order.coupon_discount) %></td></tr><% } %>
+      <% if (Number(order.grade_discount) > 0) { %>
+      <tr><td colspan="5" class="num">등급 할인</td><td class="num">-<%= won(order.grade_discount) %></td></tr><% } %>
+      <% if (Number(order.point_used) > 0) { %>
+      <tr><td colspan="5" class="num">포인트 사용</td><td class="num">-<%= won(order.point_used) %></td></tr><% } %>
+      <% if (isStatement) { %>
+      <tr><td colspan="5" class="num">공급가액</td><td class="num"><%= won(supply) %></td></tr>
+      <tr><td colspan="5" class="num">부가세</td><td class="num"><%= won(vat) %></td></tr>
+      <% } %>
+      <tr class="total-row"><td colspan="5" class="num">합계 금액</td><td class="num"><%= won(order.total_amount) %> 원</td></tr>
+    </tfoot>
+  </table>
+
+  <p class="memo">
+    결제수단 <%= order.payment_method || '-' %> · 결제일시 <%= dt(order.paid_at) %><br>
+    <% if (isStatement) { %>위와 같이 거래 명세를 제출합니다.<% } else { %>주문해 주셔서 감사합니다.<% } %>
+  </p>
+
+  <p class="sign"><b><%= settings.company_name || '' %></b> (인)</p>
+</div>

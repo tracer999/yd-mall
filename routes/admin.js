@@ -8,6 +8,9 @@ const { requireMenuAccess } = require('../middleware/adminRoleGuard');
 // Auth Routes
 router.get('/login', authController.getLogin);
 router.post('/login', authController.postLogin);
+// 비밀번호 찾기는 로그인 전에 써야 하므로 adminAuth 앞에 둔다.
+router.get('/login/forgot', authController.getForgot);
+router.post('/login/forgot', authController.postForgot);
 router.get('/logout', authController.logout);
 
 // Protected Routes
@@ -27,6 +30,9 @@ router.get('/', (req, res) => {
 	return res.redirect(first && first.path ? first.path : '/admin/dashboard');
 });
 router.get('/dashboard', dashboardController.getDashboard);
+// 내 계정 — 메뉴 권한(requireMenuAccess)을 걸지 않는다. 자기 비밀번호는 누구나 바꿀 수 있어야 한다.
+router.get('/account/password', authController.getMyPassword);
+router.post('/account/password', authController.postMyPassword);
 router.get('/design-guide', (req, res) => {
 	res.render('admin/design_guide', {
 		layout: 'layouts/admin_layout',

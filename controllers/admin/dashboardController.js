@@ -28,7 +28,7 @@ exports.getDashboard = async (req, res) => {
         // ── 모든 쿼리 병렬 실행 ─────────────────────────────────
         const [
             [usersRow], [productsRow], [inquiriesRow],
-            [orderCounts],
+            [orderCounts], [revenueRow],
             [uvRow], [pvRow],
             [avgDurTodayRow], [avgDurYestRow],
             [bounceRow],
@@ -58,12 +58,31 @@ exports.getDashboard = async (req, res) => {
                        COALESCE(SUM(DATE(created_at) = CURDATE()), 0) AS today_new
                 FROM inquiries
             `),
-            // Q4: 주문 상태별 카운트
+            // Q4: 주문 상태별 카운트 + 금액
+            //     "오늘 얼마 팔았나"를 볼 곳이 여기 말고 없다. 건수만으로는 장사가 되는지 알 수 없다.
             pool.query(`
-                SELECT status, COUNT(*) AS count
+                SELECT status, COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS amount
                 FROM orders
-                WHERE status IN ('PENDING','PAID','PREPARING','SHIPPED','CANCELLED')
+                WHERE status IN ('PENDING','PAID','PREPARING','SHIPPED','DELIVERED','CANCELLED')
                 GROUP BY status
+            `),
+            /*
+             * Q4-2: 매출 요약
+             * 매출로 인정하는 상태는 **결제가 살아 있는 주문**뿐이다 — 결제완료·배송준비·배송중·배송완료.
+             * 대기(미결제)·취소·환불은 돈이 들어오지 않았거나 되돌아간 건이라 뺀다(베스트 집계와 같은 기준).
+             * 기준 시각은 `paid_at` 이다. 주문을 넣은 날과 결제가 끝난 날이 갈리면 매출은 결제일에 잡혀야 한다.
+             */
+            pool.query(`
+                SELECT
+                    COALESCE(SUM(DATE(paid_at) = CURDATE()), 0)                                   AS today_cnt,
+                    COALESCE(SUM(CASE WHEN DATE(paid_at) = CURDATE() THEN total_amount END), 0)   AS today_amount,
+                    COALESCE(SUM(CASE WHEN DATE(paid_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN total_amount END), 0) AS yesterday_amount,
+                    COALESCE(SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN total_amount END), 0)       AS month_amount,
+                    COALESCE(SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 END), 0)                  AS month_cnt,
+                    COALESCE(SUM(total_amount), 0)                                                AS total_amount
+                FROM orders
+                WHERE status IN ('PAID','PREPARING','SHIPPED','DELIVERED')
+                  AND paid_at IS NOT NULL
             `),
             // Q5: 오늘 UV + 신규/재방문
             pool.query(`
@@ -269,11 +288,27 @@ exports.getDashboard = async (req, res) => {
             PENDING: '대기', PAID: '결제완료', PREPARING: '배송준비',
             SHIPPED: '배송중', CANCELLED: '취소'
         };
-        const orderStats = ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'CANCELLED'].map(s => ({
-            status: s,
-            label: orderStatusLabels[s],
-            count: (orderCounts.find(r => r.status === s) || {}).count || 0
-        }));
+        const orderStats = ['PENDING', 'PAID', 'PREPARING', 'SHIPPED', 'CANCELLED'].map(s => {
+            const row = orderCounts.find(r => r.status === s) || {};
+            return { status: s, label: orderStatusLabels[s], count: row.count || 0, amount: Number(row.amount) || 0 };
+        });
+
+        // ③-2 매출 요약 — 어제 대비 증감률까지 계산해 둔다(숫자만 보면 좋은지 나쁜지 알 수 없다).
+        const rv = revenueRow[0] || {};
+        const todayAmount = Number(rv.today_amount) || 0;
+        const yesterdayAmount = Number(rv.yesterday_amount) || 0;
+        const revenue = {
+            todayAmount,
+            todayCount: Number(rv.today_cnt) || 0,
+            yesterdayAmount,
+            monthAmount: Number(rv.month_amount) || 0,
+            monthCount: Number(rv.month_cnt) || 0,
+            totalAmount: Number(rv.total_amount) || 0,
+            // 어제가 0이면 증감률을 낼 수 없다(0으로 나눌 수 없다) → null 로 두고 화면에서 '-' 로 표시한다.
+            changeRate: yesterdayAmount > 0
+                ? Number((((todayAmount - yesterdayAmount) / yesterdayAmount) * 100).toFixed(1))
+                : null,
+        };
 
         // ④ 추이 차트
         const trendChart = {
@@ -400,6 +435,7 @@ exports.getDashboard = async (req, res) => {
                 bounceRate: Number(bounceRate)
             },
             orderStats,
+            revenue,
             trendChart,
             chartPeriod,
             deviceBreakdown,

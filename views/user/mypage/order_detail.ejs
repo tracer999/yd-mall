@@ -141,20 +141,64 @@
                 <% if (canCancel || canReturn) { %>
                     <button type="button" onclick="openCancelModal()"
                         class="inline-block px-6 py-2 ml-2 border border-red-300 bg-red-50 rounded-lg text-red-700 hover:bg-red-100 transition">
-                        <%= isReturn ? '반품 신청' : '주문 취소' %></button>
+                        <%= isReturn ? '반품 · 교환 신청' : '주문 취소' %></button>
 
                     <div id="cancelModal"
                         class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50"
                         style="display: none;">
-                        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                        <div class="relative top-10 mx-auto p-5 border w-[26rem] max-w-[95vw] shadow-lg rounded-md bg-white">
                             <div class="mt-3 text-center">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900"><%= isReturn ? '반품 신청' : '주문 취소' %></h3>
+                                <h3 class="text-lg leading-6 font-medium text-gray-900"><%= isReturn ? '반품 · 교환 신청' : '주문 취소' %></h3>
                                 <% if (isReturn) { %>
                                     <p class="mt-1 text-xs text-gray-500">단순 변심은 왕복 배송비가 부과됩니다. 불량·오배송은 무료입니다.</p>
                                 <% } %>
                                 <div class="mt-2 px-2 py-3">
                                     <form id="cancelForm" action="/mypage/orders/<%= order.id %>/cancel" method="POST">
                                         <input type="hidden" name="reasonType" id="reasonType" value="CHANGE_OF_MIND">
+
+                                        <% if (isReturn) { %>
+                                            <div class="mb-4 text-left">
+                                                <label class="block text-gray-700 text-sm font-bold mb-2">신청 종류</label>
+                                                <div class="flex gap-2">
+                                                    <label class="flex-1 flex items-center gap-2 border rounded px-3 py-2 cursor-pointer text-sm has-[:checked]:border-red-400 has-[:checked]:bg-red-50">
+                                                        <input type="radio" name="claim_type" value="RETURN" checked> 반품 <span class="text-xs text-gray-400">(환불)</span>
+                                                    </label>
+                                                    <label class="flex-1 flex items-center gap-2 border rounded px-3 py-2 cursor-pointer text-sm has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">
+                                                        <input type="radio" name="claim_type" value="EXCHANGE"> 교환 <span class="text-xs text-gray-400">(재발송)</span>
+                                                    </label>
+                                                </div>
+                                                <p class="mt-1 text-xs text-gray-400">교환은 같은 상품을 다시 보내 드리며 환불은 없습니다.</p>
+                                            </div>
+                                        <% } %>
+
+                                        <%
+                                          // 신청 가능한 수량이 남은 품목만 고르게 한다.
+                                          const pickable = items.filter((it) => Number(it.remaining_qty) > 0);
+                                        %>
+                                        <% if (pickable.length) { %>
+                                            <div class="mb-4 text-left">
+                                                <label class="block text-gray-700 text-sm font-bold mb-2">신청할 상품</label>
+                                                <div class="space-y-1.5 max-h-52 overflow-y-auto border rounded p-2">
+                                                    <% pickable.forEach(function (it) { %>
+                                                        <div class="flex items-center gap-2 text-sm">
+                                                            <span class="flex-1 truncate text-gray-700" title="<%= it.product_name %>">
+                                                                <%= it.product_name %>
+                                                                <% if (it.option_snapshot) { %><span class="text-gray-400 text-xs">[<%= it.option_snapshot %>]</span><% } %>
+                                                            </span>
+                                                            <select name="item_qty[<%= it.id %>]" class="border rounded py-1 px-2 text-sm w-20">
+                                                                <% for (let q = 0; q <= Number(it.remaining_qty); q++) { %>
+                                                                    <option value="<%= q %>" <%= q === Number(it.remaining_qty) ? 'selected' : '' %>><%= q %>개</option>
+                                                                <% } %>
+                                                            </select>
+                                                        </div>
+                                                    <% }); %>
+                                                </div>
+                                                <p class="mt-1 text-xs text-gray-400">
+                                                    일부만 신청할 수 있습니다. 수량을 <b>0</b>으로 두면 그 상품은 제외됩니다.
+                                                    <% if (isReturn) { %>배송비는 남은 상품이 있는 동안에는 환불되지 않습니다.<% } %>
+                                                </p>
+                                            </div>
+                                        <% } %>
                                         <div class="mb-4 text-left">
                                             <label class="block text-gray-700 text-sm font-bold mb-2" for="cancelReasonSelect"><%= isReturn ? '반품' : '취소' %> 사유</label>
                                             <select id="cancelReasonSelect"
@@ -184,7 +228,7 @@
                                             <button type="button" onclick="closeCancelModal()"
                                                 class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md hover:bg-gray-300">닫기</button>
                                             <button type="button" onclick="submitCancel()"
-                                                class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md hover:bg-red-700"><%= isReturn ? '반품 신청' : '취소 확정' %></button>
+                                                class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md hover:bg-red-700"><%= isReturn ? '신청하기' : '취소 확정' %></button>
                                         </div>
                                     </form>
                                 </div>
@@ -228,6 +272,13 @@
             }
             document.getElementById('reasonType').value = type;
             finalInput.value = reason;
+
+            // 상품 수량을 전부 0으로 두고 보내면 아무것도 신청되지 않는다. 보내기 전에 막는다.
+            const qtySelects = document.querySelectorAll('#cancelForm select[name^="item_qty"]');
+            if (qtySelects.length) {
+                const total = Array.from(qtySelects).reduce((s, el) => s + Number(el.value || 0), 0);
+                if (total === 0) { alert('신청할 상품의 수량을 1개 이상 선택해주세요.'); return; }
+            }
             document.getElementById('cancelForm').submit();
         }
 
