@@ -440,6 +440,8 @@ exports.getStaging = async (req, res) => {
             status: ['DETAILED', 'LISTED', 'FAILED'].includes(req.query.status) ? req.query.status : '',
             q: (req.query.q || '').trim(),
             published: ['Y', 'N'].includes(req.query.published) ? req.query.published : '',
+            // 재판매 여부 — OK=금지 제외, BLOCKED=금지만
+            resale: ['OK', 'BLOCKED'].includes(req.query.resale) ? req.query.resale : '',
             page: req.query.page,
             size: req.query.size,
         };
@@ -603,6 +605,8 @@ exports.postPublishStagingToNaver = async (req, res) => {
         }
 
         let msg = `${r.success}건을 스마트스토어에 등록했습니다.`;
+        // 재판매 금지는 서버가 잘라 낸다 — 몇 건이 빠졌는지 반드시 알린다(조용히 빠지면 사고다).
+        if (r.resaleBlocked) msg += ` · 재판매 금지 ${r.resaleBlocked}건은 전송 대상에서 제외했습니다.`;
         msg += ` (우리 몰 등록 ${r.mall.success}건`;
         if (r.mall.skipped) msg += ` · 이미 등록 ${r.mall.skipped}건 건너뜀`;
         if (r.mall.failed) msg += ` · 우리 몰 등록 실패 ${r.mall.failed}건`;

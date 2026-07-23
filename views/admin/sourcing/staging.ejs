@@ -7,7 +7,7 @@
   const qs = (over) => {
     const p = new URLSearchParams({
       supplier: f.supplier || '', status: f.status || '', q: f.q || '',
-      published: f.published || '',
+      published: f.published || '', resale: f.resale || '',
       page: String(L.page), size: String(L.size || 20),
     });
     Object.entries(over || {}).forEach(([k, v]) => p.set(k, String(v)));
@@ -113,16 +113,29 @@
         </select>
       </div>
       <div class="sm:col-span-3">
+        <label class="block text-sm text-gray-600 mb-1">재판매 여부</label>
+        <select name="resale" class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
+          <option value="">전체</option>
+          <option value="OK" <%= f.resale === 'OK' ? 'selected' : '' %>>재판매 금지 제외</option>
+          <option value="BLOCKED" <%= f.resale === 'BLOCKED' ? 'selected' : '' %>>재판매 금지만</option>
+        </select>
+      </div>
+      <div class="sm:col-span-9">
         <label class="block text-sm text-gray-600 mb-1">상품명 / 상품번호</label>
         <input type="text" name="q" value="<%= f.q || '' %>"
                class="w-full rounded-md border border-gray-300 text-sm px-3 py-2">
       </div>
-      <div class="sm:col-span-12 flex items-center gap-2">
+      <div class="sm:col-span-12 flex flex-wrap items-center gap-2">
         <button type="submit"
           class="rounded-md bg-gray-800 px-5 py-2 text-sm font-medium text-white hover:bg-black">검색</button>
         <a href="/admin/sourcing/staging?published=N"
            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
           미등록만 빠르게 보기
+        </a>
+        <%# 스마트스토어로 보낼 대상만 추리는 지름길 — 금지 상품은 전송 자체가 막히므로 미리 걸러 준다. %>
+        <a href="/admin/sourcing/staging?published=N&resale=OK"
+           class="rounded-md border border-sky-300 bg-sky-50 px-4 py-2 text-sm text-sky-700 hover:bg-sky-100">
+          전송 가능 상품만 보기
         </a>
       </div>
     </form>
@@ -366,14 +379,27 @@
                 + '\n스마트스토어에 실제로 등록되는 작업입니다.'
                 + (nvPicked && nvPicked.value ? '' : '\n네이버 카테고리를 고르지 않아 우리 카테고리에 연결된 값을 씁니다.');
 
-            /* 재판매 금지 상품을 오픈마켓에 올리면 제재 대상이다.
-               화면 위쪽 배너만으로는 전송 순간에 눈에 들어오지 않아 여기서 한 번 더 막는다. */
+            /*
+             * 재판매 금지 상품은 **보내지 않는다.** 공급처가 오픈마켓 재판매를 막은 상품이라
+             * 스마트스토어에 올리면 제재 대상이다. 경고만 하고 통과시키면 실수로 눌린다.
+             * 사용자가 하나씩 찾아 해제하게 두지 말고 **선택에서 자동으로 빼 주고** 다시 누르게 한다.
+             */
             var blocked = checked.filter(function (c) {
               return c.dataset.resaleBlocked === '1' && c.dataset.published !== '1';
             });
             if (blocked.length) {
-              msg += '\n\n⚠ 이 중 ' + blocked.length + '건은 공급처가 오픈마켓 재판매를 금지한 상품입니다.'
-                   + '\n스마트스토어에 등록하면 제재 대상이 될 수 있습니다. 그래도 보내시겠습니까?';
+              e.preventDefault();
+              blocked.forEach(function (c) { c.checked = false; });
+              var left = fresh - blocked.length;
+              alert(
+                '재판매 금지 상품 ' + blocked.length + '건은 스마트스토어에 전송할 수 없습니다.\n'
+                + '공급처가 오픈마켓 재판매를 막은 상품이라 등록하면 제재 대상이 됩니다.\n\n'
+                + '해당 상품을 선택에서 제외했습니다.'
+                + (left > 0
+                    ? '\n남은 ' + left + '건을 보내려면 [스마트스토어로 바로 전송]을 다시 눌러 주세요.'
+                    : '\n전송할 수 있는 상품이 남아 있지 않습니다. 필터의 [재판매 금지 제외]로 대상을 골라 보세요.')
+              );
+              return;
             }
           } else {
             msg = fresh + '건을 [' + label + '] 카테고리로 우리 몰 상품에 등록할까요?\n판매중지(OFF) 상태로 만들어집니다.';

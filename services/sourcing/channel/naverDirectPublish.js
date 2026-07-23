@@ -98,8 +98,32 @@ async function publishStagingToNaver(mallId, supplierProductIds, opts = {}) {
         }
     }
 
+    /*
+     * 재판매 금지 상품은 **여기서 잘라 낸다.** 공급처가 오픈마켓 재판매를 막은 상품이라
+     * 스마트스토어에 올리면 제재 대상이다.
+     *
+     * ⚠ 화면 가드만으로는 부족하다 — 폼 값은 조작될 수 있고, 이 경로는 외부몰에 실제로
+     *   등록하는 쓰기 작업이다. ① 을 돌리기 **전에** 빼야 "우리 몰에는 만들어졌는데
+     *   네이버엔 못 보낸" 어정쩡한 상태도 생기지 않는다.
+     *   resale_allowed 는 0=금지 / 1=가능 / NULL=미확인 이므로 **0만** 뺀다.
+     */
+    const [blockedRows] = await pool.query(
+        `SELECT id, title FROM supplier_product
+          WHERE mall_id = ? AND id IN (?) AND resale_allowed = 0`,
+        [mallId, targets]
+    );
+    const blockedIds = new Set(blockedRows.map((r) => Number(r.id)));
+    const sendable = targets.filter((id) => !blockedIds.has(id));
+
+    if (!sendable.length) {
+        throw new Error(
+            `선택한 ${targets.length}건이 모두 재판매 금지 상품입니다 — 스마트스토어로 보낼 수 없습니다. `
+            + '목록 필터의 [재판매 금지 제외]로 대상을 고르세요.'
+        );
+    }
+
     // ① 우리 몰 상품으로 등록
-    const mall = await publishService.publishMany(mallId, targets, {
+    const mall = await publishService.publishMany(mallId, sendable, {
         categoryId: opts.categoryId,
         marginRate: opts.marginRate,
         status: opts.status,
@@ -112,7 +136,9 @@ async function publishStagingToNaver(mallId, supplierProductIds, opts = {}) {
 
     if (!productIds.length) {
         return {
-            requested: list.length, processed: targets.length, overLimit, limit: DIRECT_LIMIT,
+            requested: list.length, processed: sendable.length,
+            resaleBlocked: blockedRows.length,
+            overLimit, limit: DIRECT_LIMIT,
             mall, naver: null,
             success: 0, failed: mall.failed, skipped: mall.skipped,
         };
@@ -149,7 +175,8 @@ async function publishStagingToNaver(mallId, supplierProductIds, opts = {}) {
 
     return {
         requested: list.length,
-        processed: targets.length,
+        processed: sendable.length,
+        resaleBlocked: blockedRows.length,
         overLimit, limit: DIRECT_LIMIT,
         mall,
         naver,

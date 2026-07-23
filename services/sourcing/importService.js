@@ -293,7 +293,7 @@ async function logImport(mallId, { supplier, action, keyword, categoryCode, requ
 // 조회 (가져온 상품 = 중간 테이블)
 // ---------------------------------------------------------------------------
 
-async function listStaging(mallId, { supplier, q, status, published, page = 1, size = 20 } = {}) {
+async function listStaging(mallId, { supplier, q, status, published, resale, page = 1, size = 20 } = {}) {
     const where = ['sp.mall_id = ?'];
     const params = [mallId];
 
@@ -302,6 +302,13 @@ async function listStaging(mallId, { supplier, q, status, published, page = 1, s
     // 우리 몰 등록 여부 — Y=등록됨, N=미등록
     if (published === 'Y') where.push('sp.mall_product_id IS NOT NULL');
     else if (published === 'N') where.push('sp.mall_product_id IS NULL');
+    /*
+     * 재판매 여부 — 스마트스토어에 보낼 대상을 고를 때 금지 상품을 미리 걸러 내기 위한 필터.
+     * resale_allowed 는 0=금지 / 1=가능 / NULL=미확인 이므로 "제외"는 0만 뺀다
+     * (미확인을 함께 빼면 대부분의 상품이 목록에서 사라진다).
+     */
+    if (resale === 'OK') where.push('(sp.resale_allowed IS NULL OR sp.resale_allowed <> 0)');
+    else if (resale === 'BLOCKED') where.push('sp.resale_allowed = 0');
     if (q) {
         where.push('(sp.title LIKE ? OR sp.supplier_item_no = ?)');
         params.push(`%${q}%`, String(q).trim());
