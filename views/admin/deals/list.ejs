@@ -38,10 +38,16 @@
         특가는 <strong>실제 결제 금액에 반영</strong>됩니다. 기간·시간창·요일 조건을 모두 만족하는 순간부터 자동으로 적용됩니다.
       </p>
     </div>
-    <a href="/admin/deals/new"
-       class="inline-flex items-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline">
-      <i class="bi bi-plus-lg mr-1.5"></i> 특가 등록
-    </a>
+    <div class="flex items-center gap-2">
+      <a href="/admin/deal-categories"
+         class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md transition-colors border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 no-underline whitespace-nowrap">
+        <i class="bi bi-gear mr-1.5"></i> 카테고리 관리
+      </a>
+      <a href="/admin/deals/new"
+         class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline whitespace-nowrap">
+        <i class="bi bi-plus-lg mr-1.5"></i> 특가 등록
+      </a>
+    </div>
   </div>
 
   <% if (saved) { %>
@@ -65,9 +71,6 @@
         <%= c.name %><% if (!c.is_active) { %> <span class="opacity-60">(OFF)</span><% } %>
       </a>
     <% }); %>
-    <a href="/admin/deal-categories" class="ml-auto text-xs text-gray-400 hover:text-gray-700 no-underline">
-      <i class="bi bi-gear"></i> 카테고리 관리
-    </a>
   </div>
 
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
