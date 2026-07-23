@@ -24,7 +24,11 @@
 | 디자인 스타일 | `develop_guide/admin/settings.md` |
 | 페이지 빌더 (섹션 18종 · 발행/롤백 · 섹션 카탈로그 · 랜딩 페이지 편집) | `develop_guide/admin/page_builder.md`, `manual/admin/page_builder.md` |
 | 쿠폰 | `develop_guide/admin/coupons.md`, `manual/admin/coupons.md` |
-| 멤버십 등급 관리 (1차 MVP — 등급·혜택·평가·결제연동·배치·스토어프론트) | `develop_guide/admin/membership.md`, `manual/admin/membership.md` (설계: `사이트개선/membership_grade_admin_design.md`) |
+| 멤버십 등급 관리 (1차 MVP + 2차 대부분 — 등급·혜택·평가·쿠폰팩·결제연동·배치·스토어프론트) | `develop_guide/admin/membership.md`, `manual/admin/membership.md` |
+| 상품 옵션·SKU·복합상품·카테고리 옵션 (Phase 0~9) | `develop_guide/admin/products.md`, `manual/admin/products.md`, `manual/admin/derived-products.md` |
+| 카테고리·브랜드 글로벌화 + 네이버 표준 L1~L3 재구성 | `develop_guide/admin/categories.md`, `manual/admin/categories.md` |
+| B2B 사업자몰 1~3단계 (회원·전용가·주문·견적) | `develop_guide/admin/b2b_orders.md`, `manual/admin/b2b.md`, `manual/user/b2b.md` |
+| 네이버 카테고리 참조 리소스 수집 (`naver_category` 5,815건) | `manual/admin/sourcing.md` |
 | 기획전 · 전문관 | `develop_guide/admin/exhibitions.md`, `manual/admin/exhibitions.md` |
 | 이벤트 (APPLY형) | `develop_guide/admin/events.md` |
 | 공동구매 | `develop_guide/admin/group_buys.md`, `manual/admin/group_buys.md` |
@@ -64,13 +68,40 @@
 
 ### 상품
 
-- **옵션/SKU 관리** — 단일 variant 전제.
-- **재고 이력 · 알림** — `products.stock` 단일 필드뿐.
+- **재고 이력 · 재입고 알림** — 재고 변동 로그가 없다.
 - **상품 CSV 일괄 업로드**.
+- **외부몰 전송 재고가 판매가능재고 정의를 안 쓴다** — `services/sourcing/channel/naverMapper.js` 의 `opt.totalStock`/`product.stock`. 외부 채널로 보내는 수량이라 기준이 다를 수 있어 분리해 뒀다. 네이버 연동 작업 시 함께 정한다. (정의 → [`develop_guide/admin/products.md`](../develop_guide/admin/products.md) §18)
+- **상품 등록 편의 5~8단계** — `assist`(후보 확인 UI) 모드 · Quick Add · AI 채움 · CSV 대량등록 · 정리 도구(자동생성 뱃지·카테고리 병합). 정본 → [`product_easy_registration_design_and_development.md`](./product_easy_registration_design_and_development.md)
+
+> 옵션·SKU·복합상품·카테고리 옵션은 **구현 완료**다(`product_sku` 등 8테이블). 정본은 [`develop_guide/admin/products.md`](../develop_guide/admin/products.md) · [`derived-products.md`](../manual/admin/derived-products.md).
+
+### B2B (사업자몰)
+
+1~3단계(사업자 회원·전용가 · B2B 주문 절차 · 견적/협상) 구현 완료. 정본은 [`develop_guide/admin/b2b_orders.md`](../develop_guide/admin/b2b_orders.md) · [`manual/admin/b2b.md`](../manual/admin/b2b.md) · [`manual/user/b2b.md`](../manual/user/b2b.md).
+
+- **4단계 기업 구매 고도화** — 회사-다중사용자(`company`/`company_user`) · 내부 승인 · 구매한도 · 후불/여신 · 미수금 · 분할출고 · 월별 정산 · 세금계산서 API(팝빌·바로빌) · ERP 연동. 전부 미착수.
+- **기한초과 주문 자동 취소** — 지금은 관리자 화면에서 수동 일괄 회수다. 승인 시 재고를 **실차감**하므로 방치하면 재고가 묶인다.
+- **견적 첨부파일 업로드 UI** — `quote_attachment` 테이블·스키마는 준비됐고 화면만 없다.
+- **`products.tax_type` 매핑** — `supplier_product.tax_type`(도매꾹이 '과세상품'으로 준다) → `products.tax_type` 연결이 없어 `naverMapper.js:234` 가 `taxType` 을 `'TAX'` 로 하드코딩한다. B2B 세액은 거래처(`business_profile.tax_type`) 기준이라 무관하지만, 외부 채널 전송은 이 컬럼을 쓴다.
+
+> ⚠️ 2026-07-21 **단순화 결정**으로 등급가·계약가·수량구간가(`b2b_tier`·`b2b_price_policy`·`b2b_volume_price`)는 **제거**됐다. 남은 가격 규칙은 `전용가 = 판매가 × (1 − (상품 할인율 + 거래처 추가 할인율)/100)` 두 층뿐이고, 세밀한 조정은 전부 견적에서 한다. 되살리지 말 것.
+
+### 카테고리 · 브랜드 체계
+
+글로벌화(`categories.mall_id = 0` 단일 카탈로그)와 네이버 표준 L1~L3 재구성은 **완료**다 — 현재 `NORMAL` 2,348 · `BRAND` 1,401 전량이 `mall_id=0`, `origin='naver'` 2,347건. 정본은 [`develop_guide/admin/categories.md`](../develop_guide/admin/categories.md) · [`manual/admin/categories.md`](../manual/admin/categories.md).
+
+- **THEME · OUTLET 축은 글로벌화 대상에서 빠졌다** — NORMAL·BRAND 만 이관했다. 두 축을 되살릴지 결정이 필요하다.
+- **`origin='user'` 1,402건 재조정** — 사용자 생성분이 네이버 표준 노드와 중복되는지 검증·병합하는 로직이 없다. 재구성 시점엔 `origin` 태깅까지만 했다.
+- **BRAND 재구성 미착수** — `naver_brand` 0행. 네이버 브랜드/카탈로그 API 실응답을 확인한 뒤 어댑터를 확정해야 한다.
+- **레거시 몰 스코프 읽기 경로 drift** — `navigationService`·홈 섹션 리졸버 등이 아직 `mall_id = ?` 로 조회해 글로벌 NORMAL/BRAND 에 대해 stale 하다.
+- **`mall_category_visibility` 문서/구현 drift** — 설계는 `is_visible`, 구현은 `hidden` 이다. `tables.sql` 에도 미반영(현재 0행이라 증상은 없다).
 
 ### 회원 / 프로모션
 
-- **회원 등급 · 멤버십 혜택 — 2차** — 1차 MVP + 2차 대부분(쿠폰팩 3종=진입·생일·정기, 혜택별 사용여부 토글, 대시보드 비용 분석) 완료·이관됨(위 표 · [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) 부록 B.5). 남은 2차: 상품/브랜드별 등급 혜택·고객 세그먼트. (강등 사전 알림·설정형 할인 우선순위 완료)
+- **회원 등급 · 멤버십 혜택 — 2차** — 1차 MVP + 2차 대부분(쿠폰팩 3종=진입·생일·정기, 혜택별 사용여부 토글, 대시보드 비용 분석, 강등 사전 알림, 설정형 할인 우선순위) 완료·이관됨(위 표). 정본 → [`develop_guide/admin/membership.md`](../develop_guide/admin/membership.md) · [`manual/admin/membership.md`](../manual/admin/membership.md). 남은 것:
+  - **상품/브랜드별 등급 혜택** · **고객 세그먼트** — 2차 잔여.
+  - **혜택 모델 단순화의 되돌림** — benefit_policy 재사용·채널/결제수단 제한·혜택 중복 그룹은 도입하지 않았다. 등급당 혜택 1행(정률할인·적립·무료배송)이다.
+  - **실적 확정 시점이 결제확정(`PAID`)** 이다(배송완료·구매확정 아님). 취소·환불은 상태 전이 + 원장 역분개로 맞추지만, **부분 반품 비율 차감은 반품 모듈 도입 시**로 미뤘다.
 - **리뷰 관리** — `reviews` 테이블은 있으나 관리자 화면이 없다.
 - **이벤트 유형 확장** — 현재 APPLY(응모)형만 참여 가능. `COUPON_PACK` · `ATTENDANCE` · `PURCHASE` 미착수.
 
@@ -109,41 +140,28 @@
 
 | 문서 | 상태 · 내용 |
 |---|---|
-| [`쇼핑몰_상품_옵션_세트_묶음_관리구조_정리.md`](./쇼핑몰_상품_옵션_세트_묶음_관리구조_정리.md) | **설계 정본.** 단일/옵션상품·SKU·복합상품·카테고리 옵션의 목표 스키마(§24~32). 아래 개발계획서의 짝 문서 |
-| [`상품_SKU_옵션_세트_개발계획서.md`](./상품_SKU_옵션_세트_개발계획서.md) | 위 설계의 실행 계획. **Phase 0~7·9 완료, Phase 8(재고 읽기 정합 `eff_stock`)만 잔여** — 옵션상품 주문서 진입·수량변경이 실제로 막히는 상태 |
-| [`product_easy_registration_design_and_development.md`](./product_easy_registration_design_and_development.md) | 상품 등록 시 카테고리·브랜드 자동 생성. **1~4단계 완료 / 5~8 잔여.** ⚠️ 대전제는 아래 네이버 재구성 설계가 뒤집었다 |
-| [`카테고리_브랜드_상품필터_설계.md`](./카테고리_브랜드_상품필터_설계.md) | 카테고리별 facet 필터. **Phase 0~9 완료** — 공통 필터(가격·브랜드·할인·태그·재고·혜택·판매구분)가 목록·브랜드관에서 동작하고, 관리자가 화면만으로 필터 부여·속성 입력·자동 추출/검수까지 한다. ⚠️ `product_attribute` **0행**이라 속성 필터(색상·사이즈)는 아직 안 보인다 — `/admin/products/facet-extract` 에서 승인하면 코드 수정 없이 나타난다. 잔여: AI 속성 추출·고시값 재활용·생활/건강 속성 프로필 |
-
-### 카테고리 · 브랜드 체계
-
-| 문서 | 상태 · 내용 |
-|---|---|
-| [`카테고리_브랜드_글로벌화_설계.md`](./카테고리_브랜드_글로벌화_설계.md) | 몰별 `categories` → **전 몰 공통 글로벌 한 벌** + 몰별 표시 override. 마이그레이션 비가역 구간 있음 |
-| [`네이버_기반_글로벌_카테고리_재구성_설계.md`](./네이버_기반_글로벌_카테고리_재구성_설계.md) | 글로벌 카테고리 뼈대를 **네이버 표준 L1~L3 로 재구성**. §0 이 "상품이 분류를 만든다" 원칙을 의도적으로 전환한다 — 위 `product_easy_registration` 과 함께 읽을 것 |
+| [`product_easy_registration_design_and_development.md`](./product_easy_registration_design_and_development.md) | 상품 등록 시 카테고리·브랜드 자동 생성. **1~4단계 완료 / 5~8 잔여.** ⚠️ 대전제는 네이버 표준 카테고리 재구성이 뒤집었다(문서 말미 참고) |
+| [`카테고리_브랜드_상품필터_설계.md`](./카테고리_브랜드_상품필터_설계.md) | 카테고리별 facet 필터. **Phase 0~9 완료.** ⚠️ `product_attribute` **0행**이라 속성 필터(색상·사이즈)는 아직 안 보인다 — `/admin/products/facet-extract` 에서 승인하면 코드 수정 없이 나타난다. 잔여: AI 속성 추출·고시값 재활용·생활/건강 속성 프로필 |
 
 ### 회원 · 커머스 백본 · 프로모션
 
 | 문서 | 상태 · 내용 |
 |---|---|
-| [`membership_grade_admin_design.md`](./membership_grade_admin_design.md) | 멤버십 등급·혜택 **설계 정본**. 1차 MVP + 2차 대부분 완료(부록 B). 잔여: 상품/브랜드별 등급 혜택 · 고객 세그먼트 |
 | [`commerce_backbone.md`](./commerce_backbone.md) | 쿠폰 · 주문/배송/클레임 · 배송비 통합본. 잔여 다수 + **🔴 결제 확정 시 `payment_status` 미갱신** 결함 |
 | [`sales_promotions.md`](./sales_promotions.md) | 공동구매 · 쇼핑라이브 · 쇼핑특가. 셋 다 잔여 + **1인 구매 제한 미작동** 공통 결함 |
-
-### B2B (사업자몰)
-
-| 문서 | 상태 · 내용 |
-|---|---|
-| [`b2b_사업자몰_구현설계.md`](./b2b_사업자몰_구현설계.md) | **구현 정본.** 1~3단계 완료(정본 → [`develop_guide/admin/b2b_orders.md`](../develop_guide/admin/b2b_orders.md)), 4단계 미착수. §16 단순화 결정이 §4.2 우선순위 표를 대체함에 유의 |
-| [`b2b 몰설계안.md`](./b2b%20몰설계안.md) | 원문 제안서(Shopify B2B · Adobe Commerce 일반론). **참고자료** — 개발 근거는 위 구현설계서 |
 
 ### 외부 연동 (네이버 · 소싱)
 
 | 문서 | 상태 · 내용 |
 |---|---|
 | [`네이버_스마트스토어_연동.md`](./네이버_스마트스토어_연동.md) | **네이버 단일 관리 문서.** 인증·상품등록·호출제한·고시·매핑·운영. 상품 등록(아웃바운드) 구현 완료 · 실호출 검증 대기. ⚠️ `CLAUDE.md` 규칙 — 네이버 관련 신규 내용은 **새 파일을 만들지 말고 반드시 여기에 누적** |
-| [`네이버_카테고리_리소스_설계.md`](./네이버_카테고리_리소스_설계.md) | `naver_category` 참조 리소스 수집. 골격 완료, **Go-live 체크리스트 5건 미적용**(마이그레이션 실행·자격증명·크론 등록) |
-| [`네이버_마스터데이터_수신_설계.md`](./네이버_마스터데이터_수신_설계.md) | 브랜드·제조사·원산지·속성·고시 등 마스터 수신. `naver_*` 참조 테이블 설계 |
+| [`네이버_마스터데이터_수신_설계.md`](./네이버_마스터데이터_수신_설계.md) | 브랜드 검색 위젯 · 카테고리별 속성 프리필. **Phase 0(프로브) 완료, Phase 1~3 미착수** |
 | [`도매꾹_온채널_스마트스토어_연동_상세설계.md`](./도매꾹_온채널_스마트스토어_연동_상세설계.md) | 무재고 위탁판매 소싱 파이프라인 통합 설계(v3.0). **네이버 부분은 위 단일 문서가 우선** |
-| [`도매꾹_온채널_스마트스토어_연동_개발계획서.md`](./도매꾹_온채널_스마트스토어_연동_개발계획서.md) | 위 설계의 Phase 0~7 차수 계획 |
+| [`도매꾹_온채널_스마트스토어_연동_개발계획서.md`](./도매꾹_온채널_스마트스토어_연동_개발계획서.md) | 위 설계의 차수 계획. **1차(Phase 0~3, 도매꾹 기준) 완료 / 2차(Phase 4~7) 미착수** |
 
 > **참고 자산** — `capture/`(화면 캡처), `data/`(2026-07-14 수집 카테고리·브랜드 JSON)는 위 설계 작업의 근거 자료다.
+
+> **삭제된 설계서** (구현 완료 — 정본은 `develop_guide/`·`manual/`, 원문은 git 이력):
+> `b2b 몰설계안.md` · `b2b_사업자몰_구현설계.md` · `membership_grade_admin_design.md` ·
+> `상품_SKU_옵션_세트_개발계획서.md` · `쇼핑몰_상품_옵션_세트_묶음_관리구조_정리.md` ·
+> `카테고리_브랜드_글로벌화_설계.md` · `네이버_기반_글로벌_카테고리_재구성_설계.md` · `네이버_카테고리_리소스_설계.md`

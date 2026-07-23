@@ -309,14 +309,52 @@ const [filterCategories, filterBrands] = await Promise.all([
 
 ---
 
-## 18. 미구현 (알고 있어야 할 것)
+## 18. 재고를 읽는 기준 — `services/catalog/sellableStock.js`
+
+**`products.stock` 을 직접 읽지 마세요.** 이 컬럼은 단일상품의 대표 SKU 와만 미러되고 옵션상품에서는 갱신되지 않아 stale 합니다. 실제로 "팔 수 있는가" 판정이 세 갈래로 갈려 있던 것을 한 곳으로 모았습니다.
+
+```
+판매가능재고 = SUM(sku.stock) WHERE sku.status = 'ON' AND sku.stock_managed = 1
+```
+
+`stock_managed = 0` 은 재고를 자기가 들고 있지 않은 SKU(복합상품 대표 SKU 등)라 합에서 뺍니다. 복합상품의 가용수량은 구성에서 파생하므로 `compositeService.getAvailableQty()` 가 따로 냅니다.
+
+**어느 테이블에도 write 하지 않는 read-time 리졸버**입니다(`dealService`·`b2bPricingService` 와 같은 방식).
+
+| 헬퍼 | 용도 |
+|---|---|
+| `sellableStockSql(alias)` | SELECT 절 스칼라 서브쿼리. `AS stock` 별칭을 주면 뷰가 그대로 판매가능재고를 읽습니다 |
+| `inStockSql(alias)` | WHERE 절 EXISTS. 부정은 `NOT ${inStockSql('p')}` |
+| `decorate(rows, opts)` | SELECT 절을 못 고치는 쿼리용 후처리. `stock` 을 덮고 원본은 `raw_stock` 에 남깁니다 |
+| `sellableCond(alias)` | 위 셋이 공유하는 조건식. 정의는 이 한 줄뿐입니다 |
+
+> ⚠️ **`decorate` 의 집계는 `WHERE` 가 아니라 `SUM(CASE WHEN ... THEN stock ELSE 0 END)` 로 겁니다.** `WHERE` 로 거르면 전 SKU 가 OFF 인 상품은 그룹 자체가 안 생겨 결과에서 빠지고, `decorate` 가 이를 "SKU 없는 상품" 으로 오해해 stale 한 `products.stock` 을 그대로 남깁니다(= 못 파는 상품이 판매중으로 보임). 이 형태라야 `sellableStockSql()` 과 값이 정확히 같아지고, 폴백은 SKU 행이 진짜 0개인 상품에만 걸립니다.
+
+**적용 범위** — 프론트 읽기 경로 전부(목록·상세·검색·카테고리 베스트·홈 섹션 리졸버 6종·브랜드·기획전·아울렛·공동구매·라이브·추천·최근 본·찜·히어로), 재고 패싯 필터, 상품그룹 `in_stock` 조건, 장바구니 수량 검증, 관리자 상품 목록의 재고 필터·재고 표시와 상품 선택 모달 3종.
+
+**결제 경로(`checkoutController`)는 예외**입니다. 이미 선택 SKU 를 `FOR UPDATE` 로 잠그고 검증하는 권위 있는 경로라 건드리지 않았습니다.
+
+### 18.1 "재고는 있는데 SOLD OUT" 일 때
+
+정의상 **SKU 가 OFF 면 재고가 있어도 판매 불가**입니다. 상품 목록의 재고 칸은 판매가능재고를 보여 주고, 총재고와 다르면 `총 N` 을 함께 띄웁니다(OFF 인 SKU 에 잠긴 재고가 있다는 신호).
+
+살리는 방법은 관리자 화면에서 끝납니다.
+
+1. 상품 목록에서 대상 선택 → **[판매중 처리]** — `skuService.syncSkuStatusForProducts()` 가 재고 있는 옵션 SKU 를 ON 으로 올립니다.
+2. 개별 옵션만 켜려면 **옵션·SKU 화면**에서 해당 SKU 를 ON 으로.
+
+> ⚠️ 특정 옵션을 의도적으로 꺼 뒀다면 1번 일괄 처리로 다시 켜집니다. 계속 꺼 두려면 2번을 쓰세요.
+
+---
+
+## 19. 미구현 (알고 있어야 할 것)
 
 | 항목 | 현재 상태 |
 |------|-----------|
-| 옵션 / SKU | **없음.** 상품 1행 = 판매 단위 1개. 색상·용량 같은 변형을 만들 수 없습니다 |
-| 재고 이력 · 재입고 알림 | 없음. `products.stock` 숫자 하나뿐 |
+| 재고 이력 · 재입고 알림 | 없음. 재고 변동 로그를 남기지 않습니다 |
 | CSV 일괄 업로드 | 없음 (URL 가져오기는 1건씩 — §4.2) |
 | 리뷰 관리 | 없음 |
+| 외부몰 전송 재고 | `services/sourcing/channel/naverMapper.js` 의 전송 재고(`opt.totalStock`/`product.stock`)는 §18 정의를 아직 안 씁니다. 외부 채널로 보내는 수량이라 판단 기준이 다를 수 있어 분리해 뒀습니다 |
 
 ---
 

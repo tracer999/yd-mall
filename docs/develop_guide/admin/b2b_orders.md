@@ -10,7 +10,7 @@
 - **라우트:** `routes/admin/b2b.js` (`/admin/b2b` 마운트 시 `requireMenuAccess('/admin/b2b/members')` 로 한 번 검사)
 
 > 이 문서는 **기업 주문의 처리 흐름**만 다룹니다. 기업회원 승인·가격 정책·견적은
-> [B2B 사업자몰 구현설계](../../사이트개선/b2b_사업자몰_구현설계.md) 와 [B2B 관리 매뉴얼](../../manual/admin/b2b.md) 을 보세요.
+> [B2B 관리 매뉴얼](../../manual/admin/b2b.md) 을 보세요.
 
 관련 문서: [주문 및 매출 관리](./sales.md) · [배송 관리](./shipping.md) · [클레임 관리](./claims.md)
 
@@ -140,10 +140,23 @@ refund.pending  → refund_status='REQUESTED', payment_status='CANCELLED'   ← 
 
 ---
 
-## 6. 알려진 한계 · 후속 과제
+## 6. 구현 중 발견해 고친 것 (재발 방지 — 계속 유효)
+
+| 문제 | 영향 | 조치 |
+|---|---|---|
+| mysql2 가 DATE 를 `Date` 객체로 준다 | `String(d).slice(0,10)` → `'Wed Jan 01'` → **만료된 계약이 유효로 통과** | `toDateStr()` 로 로컬 연·월·일 조립 (`middleware/b2bContext.js`) |
+| `getComplete` 가 테스트 모드에서 `PENDING` 을 자동 결제 처리 | B2B 주문이 그리로 가면 **승인 없이 재고 차감 + 결제완료** | 전용 `/checkout/b2b-received` 로 분리 |
+| 견적 전환 잠금에 `converted_order_id = 0` 사용 | 이 컬럼은 `orders(id)` FK — **제약 위반으로 전환 자체가 실패** | 트랜잭션 내 `SELECT … FOR UPDATE` 로 직렬화 |
+| pdfmake 0.3 은 `PdfPrinter` 를 export 하지 않는다 | 견적서 PDF 생성 불가 | 0.2.x 로 고정 |
+
+> 재고 복원 판정을 `status` 가 아니라 `orders.stock_deducted_at` 이라는 **사실**로 하는 이유는 §2-1 참고.
+
+---
+
+## 7. 알려진 한계 · 후속 과제
 
 - **교환(`EXCHANGE`)** 은 `claimService` 가 아직 막아 두었습니다(반품 후 재주문 안내).
 - **부분 취소·부분 반품** 은 미지원입니다. 클레임은 주문 단위입니다.
 - `refundOrder` 가 트랜잭션 안에서 PG `fetch` 를 호출하는 구조 이슈는 그대로입니다([claims.md](./claims.md) 참고). B2B 경로는 외부 호출이 없어 무관합니다.
-- 기한초과 자동 취소 스케줄러가 없습니다(설계 §14.2 결정 대기).
 - **대시보드 매출 집계는 B2C·B2B 합산**입니다. 의도된 동작이며 분리하지 않았습니다.
+- B2B 전반의 잔여 과제(4단계 기업 구매 고도화 · 기한초과 자동 취소 · 견적 첨부 UI)는 [`사이트개선/admin_dev_plan.md`](../../사이트개선/admin_dev_plan.md) 의 **B2B** 절에 있습니다.
