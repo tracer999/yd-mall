@@ -76,18 +76,11 @@
   })();
 %>
 
-<!-- 관리자 브랜드 배너 (배너 관리 > 브랜드 배너) — 상세관 최상단 -->
-<% if (typeof brandBanner !== 'undefined' && brandBanner) { %>
-  <a href="<%= brandBanner.link_url || '#' %>" class="yd-banner-fig w-full">
-    <img src="<%= brandBanner.image_url %>" alt="<%= brandBanner.title || b.name %>"
-         class="w-full h-auto object-cover">
-    <%# 배너 문구가 있을 때만 이미지 위에 얹는다 — 이미지 전용 배너의 기존 모습은 그대로 둔다. %>
-    <% if (brandBanner.overlay_subtitle) { %>
-      <div class="yd-banner-fig__copy">
-        <%- include('../../partials/banner_copy', { copy: brandBanner.overlay_subtitle, heading: brandBanner.title, variant: 'overlay' }) %>
-      </div>
-    <% } %>
-  </a>
+<!-- 관리자 브랜드 배너 (배너 관리 > 브랜드 배너) — 상세관 최상단. 2건 이상이면 슬라이드쇼 -->
+<%# 마크업은 카테고리 배너와 한 벌을 쓴다(_category_banner.ejs). 다만 여기는 화면 폭을 통째로 쓰는
+    자리라 variant='full' 로 둥근 모서리·그림자를 뺀다. %>
+<% if (typeof brandBanners !== 'undefined' && brandBanners && brandBanners.length) { %>
+  <%- include('../products/_category_banner', { banners: brandBanners, variant: 'full' }) %>
 <% } %>
 
 <!-- 히어로 (공식 브랜드관만) -->

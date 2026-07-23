@@ -19,6 +19,12 @@
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
+  <%# 전체 공통 브랜드 배너 (배너 관리 > 브랜드 배너 > 전체 공통) — 등록이 없으면 아무것도 그리지 않는다.
+      개별 브랜드 배너는 대상이 정해져야 하므로 이 화면에는 걸리지 않는다(상세관 전용). %>
+  <% if (typeof brandBanners !== 'undefined' && brandBanners && brandBanners.length) { %>
+    <%- include('../products/_category_banner', { banners: brandBanners }) %>
+  <% } %>
+
   <!-- ① 브랜드 검색 -->
   <section class="mb-10">
     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">브랜드</h1>
