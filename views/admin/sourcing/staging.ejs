@@ -195,6 +195,8 @@
             </div>
             <p class="mt-2 text-xs text-gray-500">
               <b>우리 몰 등록 + 네이버 등록을 한 번에</b> 수행합니다(우리 몰 상품은 그대로 만들어집니다).
+              그래서 <b class="text-gray-700">위의 [우리 몰 카테고리]를 먼저 골라야 합니다</b> — 비워 두면
+              "우리 몰 카테고리를 선택하세요" 안내가 뜹니다.
               건당 2~4초가 걸려 <b>한 번에 최대 <%= directLimit %>건</b>까지만 처리합니다.
               네이버 등록 기본값과 자격증명이 먼저 설정돼 있어야 하며,
               상태를 <b>판매중지</b>로 두면 네이버에서도 <b>전시중지</b>로 올라갑니다.
@@ -234,6 +236,8 @@
                         재등록 방지는 '등록' 제출 시 published 항목을 빼는 방식으로 처리한다. %>
                     <input type="checkbox" name="id" value="<%= row.id %>" class="chk-item h-4 w-4"
                            data-published="<%= row.mall_product_id ? '1' : '' %>"
+                           <%# 재판매 금지는 스마트스토어 전송 직전에 다시 경고해야 한다 — 제재 대상이다. %>
+                           data-resale-blocked="<%= row.resale_allowed === 0 ? '1' : '' %>"
                            <%= row.mall_product_id ? 'title="이미 우리 몰에 등록됨 — 등록 대상에서 제외됩니다"' : '' %>>
                   </td>
                   <td class="px-4 py-3 align-top">
@@ -361,6 +365,16 @@
             msg = fresh + '건을 [' + label + '] 카테고리로 우리 몰에 등록한 뒤 스마트스토어로 전송할까요?'
                 + '\n스마트스토어에 실제로 등록되는 작업입니다.'
                 + (nvPicked && nvPicked.value ? '' : '\n네이버 카테고리를 고르지 않아 우리 카테고리에 연결된 값을 씁니다.');
+
+            /* 재판매 금지 상품을 오픈마켓에 올리면 제재 대상이다.
+               화면 위쪽 배너만으로는 전송 순간에 눈에 들어오지 않아 여기서 한 번 더 막는다. */
+            var blocked = checked.filter(function (c) {
+              return c.dataset.resaleBlocked === '1' && c.dataset.published !== '1';
+            });
+            if (blocked.length) {
+              msg += '\n\n⚠ 이 중 ' + blocked.length + '건은 공급처가 오픈마켓 재판매를 금지한 상품입니다.'
+                   + '\n스마트스토어에 등록하면 제재 대상이 될 수 있습니다. 그래도 보내시겠습니까?';
+            }
           } else {
             msg = fresh + '건을 [' + label + '] 카테고리로 우리 몰 상품에 등록할까요?\n판매중지(OFF) 상태로 만들어집니다.';
           }
