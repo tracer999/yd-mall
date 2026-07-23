@@ -110,6 +110,7 @@ router.use('/policies', requireMenuAccess('/admin/policies'), require('./admin/p
 router.use('/email-templates', requireMenuAccess('/admin/email-templates'), require('./admin/email-templates'));
 router.use('/notices', requireMenuAccess('/admin/notices'), require('./admin/notices'));
 router.use('/inquiries', requireMenuAccess('/admin/inquiries'), require('./admin/inquiries'));
+router.use('/reviews', requireMenuAccess('/admin/reviews'), require('./admin/reviews'));
 router.use('/coupons', requireMenuAccess('/admin/coupons'), require('./admin/coupons'));
 router.use('/points', requireMenuAccess('/admin/points'), require('./admin/points'));
 // 멤버십 관리 — 등급·평가정책·혜택·회원등급현황·이력 (설계: docs/사이트개선/membership_grade_admin_design.md)

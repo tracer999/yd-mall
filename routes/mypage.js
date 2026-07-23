@@ -19,6 +19,16 @@ router.get('/orders/:id', mypageController.getOrderDetail);
 // 취소·반품·교환 신청은 전용 화면에서 한다(팝업 아님).
 router.get('/orders/:id/claim', mypageController.getClaimRequest);
 router.post('/orders/:id/confirm', mypageController.confirmPurchase);
+
+/*
+ * 리뷰 — 산 사람만, 배송완료 주문 대상.
+ * 사진 리뷰 1장(`review_image`)까지 받는다. 저장 경로는 middleware/upload 가 가른다.
+ */
+const upload = require('../middleware/upload');
+router.get('/reviews', mypageController.getReviews);
+router.get('/reviews/write/:orderItemId', mypageController.getReviewWrite);
+router.post('/reviews/write/:orderItemId', upload.single('review_image'), mypageController.postReview);
+router.post('/reviews/:id/delete', mypageController.deleteReview);
 router.post('/orders/:id/cancel', mypageController.cancelOrder);
 
 // 취소·반품 내역

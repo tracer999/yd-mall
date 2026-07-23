@@ -890,3 +890,110 @@ exports.postWithdraw = async (req, res, next) => {
         next(err);
     }
 };
+
+/* ------------------------------------------------------------------
+ * 리뷰 (구매자만 · 배송완료 주문 대상)
+ * 자격 판정과 적립은 services/review/reviewService 가 소유한다.
+ * ------------------------------------------------------------------ */
+
+const reviewService = require('../services/review/reviewService');
+
+/** 내가 쓸 수 있는 리뷰 + 내가 쓴 리뷰 */
+exports.getReviews = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        const writable = await reviewService.getWritableItems(userId);
+
+        const [mine] = await pool.query(`
+            SELECT r.*, p.name AS product_name, p.slug, p.thumbnail_image
+              FROM reviews r
+              LEFT JOIN products p ON p.id = r.product_id
+             WHERE r.user_id = ?
+             ORDER BY r.created_at DESC
+             LIMIT 100
+        `, [userId]);
+
+        // 각 항목이 받게 될 적립액을 미리 계산해 보여 준다(쓸 동기가 된다).
+        for (const w of writable) {
+            const pv = await reviewService.previewReward(w.mall_id || req.mallId || 1, w.total_amount);
+            w.reward_text = pv.text;
+            w.reward_photo = pv.photo;
+        }
+
+        res.render('user/mypage/reviews', {
+            title: '리뷰 관리',
+            writable,
+            mine,
+            message: req.query.message || null,
+            error: req.query.error || null,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/** 리뷰 작성 화면 */
+exports.getReviewWrite = async (req, res, next) => {
+    try {
+        const orderItemId = Number(req.params.orderItemId);
+        const verdict = await reviewService.canWrite(req.user.id, orderItemId);
+        if (!verdict.ok) {
+            return res.redirect('/mypage/reviews?error=' + encodeURIComponent(verdict.reason));
+        }
+        const [[extra]] = await pool.query(`
+            SELECT oi.option_snapshot, oi.quantity, oi.total_price, o.order_number,
+                   p.thumbnail_image, p.slug
+              FROM order_items oi
+              JOIN orders o ON o.id = oi.order_id
+              LEFT JOIN products p ON p.id = oi.product_id
+             WHERE oi.id = ?`, [orderItemId]);
+
+        const preview = await reviewService.previewReward(
+            verdict.item.mall_id || req.mallId || 1, verdict.item.total_amount);
+
+        res.render('user/mypage/review_write', {
+            title: '리뷰 작성',
+            item: Object.assign({}, verdict.item, extra || {}),
+            preview,
+            error: req.query.error || null,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+exports.postReview = async (req, res, next) => {
+    try {
+        const orderItemId = Number(req.params.orderItemId);
+        const imageUrl = req.file ? '/uploads/reviews/' + req.file.filename : null;
+        const result = await reviewService.createReview({
+            userId: req.user.id,
+            orderItemId,
+            rating: req.body.rating,
+            content: req.body.content,
+            imageUrl,
+            mallId: req.mallId || 1,
+        });
+        if (!result.ok) {
+            return res.redirect(`/mypage/reviews/write/${orderItemId}?error=` + encodeURIComponent(result.reason));
+        }
+        const msg = result.reward > 0
+            ? `리뷰를 등록했습니다. ${Number(result.reward).toLocaleString()}P 를 적립해 드렸습니다.`
+            : '리뷰를 등록했습니다. 감사합니다.';
+        res.redirect('/mypage/reviews?message=' + encodeURIComponent(msg));
+    } catch (err) {
+        next(err);
+    }
+};
+
+exports.deleteReview = async (req, res, next) => {
+    try {
+        const result = await reviewService.deleteMyReview(req.user.id, Number(req.params.id));
+        const q = result.ok
+            ? 'message=' + encodeURIComponent('리뷰를 삭제했습니다. 지급된 적립금은 회수되지 않습니다.')
+            : 'error=' + encodeURIComponent(result.reason);
+        res.redirect('/mypage/reviews?' + q);
+    } catch (err) {
+        next(err);
+    }
+};

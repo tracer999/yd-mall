@@ -1,0 +1,132 @@
+<%- include('./_shell_start') %>
+
+<% const won = (n) => Number(n || 0).toLocaleString('ko-KR'); %>
+
+<div class="bg-white rounded-lg shadow border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-lg font-bold text-gray-800">리뷰 작성</h3>
+        <a href="/mypage/reviews" class="text-sm text-gray-500 hover:text-gray-800">리뷰 관리로 돌아가기</a>
+    </div>
+
+    <% if (error) { %>
+        <div class="mx-6 mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><%= error %></div>
+    <% } %>
+
+    <!-- 대상 상품 -->
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-4">
+        <div class="w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
+            <% if (item.thumbnail_image) { %>
+                <img src="<%= item.thumbnail_image %>" alt="" class="w-full h-full object-cover">
+            <% } %>
+        </div>
+        <div>
+            <p class="font-medium text-gray-900"><%= item.product_name %></p>
+            <% if (item.option_snapshot) { %>
+                <p class="text-xs text-gray-500"><%= item.option_snapshot %></p>
+            <% } %>
+            <p class="text-xs text-gray-400 mt-0.5">주문번호 <%= item.order_number %></p>
+        </div>
+    </div>
+
+    <% if (preview.text > 0 || preview.photo > 0) { %>
+        <div class="mx-6 mt-4 rounded-md border border-[var(--gh-primary)]/30 bg-[var(--gh-primary)]/5 px-4 py-3 text-sm">
+            <p class="font-semibold text-gray-800">이 리뷰를 쓰면 적립금을 드립니다</p>
+            <p class="mt-1 text-gray-600 text-[13px]">
+                글 리뷰 <b><%= won(preview.text) %>P</b>
+                <% if (preview.photo > preview.text) { %>
+                    · <b class="text-[var(--gh-primary)]">사진을 올리면 <%= won(preview.photo) %>P</b>
+                <% } %>
+                <br><span class="text-gray-400">구매 금액 구간에 따라 정해집니다. 리뷰 등록 즉시 지급됩니다.</span>
+            </p>
+        </div>
+    <% } %>
+
+    <form action="/mypage/reviews/write/<%= item.order_item_id %>" method="POST" enctype="multipart/form-data"
+          class="p-6 space-y-5" onsubmit="return validateReview();">
+
+        <!-- 별점 -->
+        <div>
+            <label class="block text-sm font-bold text-gray-900 mb-2">상품은 어떠셨나요?</label>
+            <div class="flex items-center gap-1" id="stars">
+                <% for (let i = 1; i <= 5; i++) { %>
+                    <button type="button" data-star="<%= i %>" onclick="setStar(<%= i %>)"
+                            class="star-btn text-3xl leading-none text-gray-300 hover:text-amber-400 transition">★</button>
+                <% } %>
+                <span id="starLabel" class="ml-2 text-sm text-gray-500">별점을 선택해 주세요</span>
+            </div>
+            <input type="hidden" name="rating" id="rating" value="">
+        </div>
+
+        <!-- 내용 -->
+        <div>
+            <label class="block text-sm font-bold text-gray-900 mb-2">어떤 점이 좋았나요?</label>
+            <textarea name="content" id="content" rows="6" maxlength="5000"
+                      placeholder="상품의 품질, 배송, 사용 후기를 적어 주세요. (5자 이상)"
+                      class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"></textarea>
+            <p class="mt-1 text-xs text-gray-400"><span id="len">0</span>자 · 최소 5자</p>
+        </div>
+
+        <!-- 사진 -->
+        <div>
+            <label class="block text-sm font-bold text-gray-900 mb-2">
+                사진 첨부
+                <% if (preview.photo > preview.text) { %>
+                    <span class="ml-1 text-xs font-medium text-[var(--gh-primary)]">사진을 올리면 <%= won(preview.photo) %>P</span>
+                <% } else { %>
+                    <span class="ml-1 text-xs font-normal text-gray-400">(선택)</span>
+                <% } %>
+            </label>
+            <input type="file" name="review_image" accept="image/*" id="reviewImage" onchange="previewImage(this)"
+                   class="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-800 file:text-white file:text-sm hover:file:bg-gray-700">
+            <div id="imgPreview" class="mt-2 hidden">
+                <img src="" alt="미리보기" class="h-32 rounded-lg border border-gray-200 object-cover">
+            </div>
+            <p class="mt-1 text-xs text-gray-400">사진 1장까지 올릴 수 있습니다.</p>
+        </div>
+
+        <div class="pt-1">
+            <button type="submit" class="w-full rounded-lg gh-btn-primary px-4 py-3 text-sm font-bold">
+                리뷰 등록
+            </button>
+            <p class="mt-2 text-xs text-gray-500 text-center">
+                작성한 리뷰는 상품 상세에 공개됩니다. 부적절한 내용은 판매자가 비공개 처리할 수 있습니다.
+            </p>
+        </div>
+    </form>
+</div>
+
+<script>
+    const LABELS = { 1: '별로예요', 2: '그저 그래요', 3: '보통이에요', 4: '좋아요', 5: '최고예요' };
+
+    function setStar(n) {
+        document.getElementById('rating').value = n;
+        document.querySelectorAll('.star-btn').forEach((b) => {
+            b.classList.toggle('text-amber-400', Number(b.dataset.star) <= n);
+            b.classList.toggle('text-gray-300', Number(b.dataset.star) > n);
+        });
+        document.getElementById('starLabel').textContent = LABELS[n] || '';
+    }
+
+    document.getElementById('content').addEventListener('input', function () {
+        document.getElementById('len').textContent = this.value.trim().length;
+    });
+
+    function previewImage(input) {
+        const box = document.getElementById('imgPreview');
+        const file = input.files && input.files[0];
+        if (!file) { box.classList.add('hidden'); return; }
+        box.querySelector('img').src = URL.createObjectURL(file);
+        box.classList.remove('hidden');
+    }
+
+    // 서버도 같은 조건으로 다시 검사한다. 여기서는 빈 폼을 보내 헛걸음하는 것만 막는다.
+    function validateReview() {
+        if (!document.getElementById('rating').value) { alert('별점을 선택해 주세요.'); return false; }
+        if (document.getElementById('content').value.trim().length < 5) {
+            alert('리뷰 내용을 5자 이상 적어 주세요.'); return false;
+        }
+        return true;
+    }
+</script>
+
+<%- include('./_shell_end') %>

@@ -1,0 +1,179 @@
+<%
+  const won = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const dt = (v) => (v ? new Date(v).toLocaleString('ko-KR', { hour12: false }) : '-');
+  const qs = (over) => {
+    const f = Object.assign({}, filters, over || {});
+    const p = [];
+    if (f.q) p.push('q=' + encodeURIComponent(f.q));
+    if (f.visible !== '') p.push('visible=' + f.visible);
+    if (f.rating) p.push('rating=' + f.rating);
+    if (f.photo) p.push('photo=1');
+    if (over && over.page) p.push('page=' + over.page);
+    return p.length ? '?' + p.join('&') : '';
+  };
+%>
+
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+    <p class="text-sm text-gray-500">고객이 남긴 상품 리뷰를 확인하고, 부적절한 글을 숨기거나 삭제합니다.</p>
+    <form method="get" action="/admin/reviews" class="flex flex-wrap items-center gap-2">
+        <input type="search" name="q" value="<%= filters.q %>" placeholder="내용 · 상품명 · 회원"
+               class="w-full sm:w-56 rounded-md border-gray-300 text-sm">
+        <select name="visible" class="rounded-md border-gray-300 text-sm">
+            <option value="" <%= filters.visible === '' ? 'selected' : '' %>>전체</option>
+            <option value="1" <%= filters.visible === '1' ? 'selected' : '' %>>노출중</option>
+            <option value="0" <%= filters.visible === '0' ? 'selected' : '' %>>숨김</option>
+        </select>
+        <select name="rating" class="rounded-md border-gray-300 text-sm">
+            <option value="">별점 전체</option>
+            <% for (let i = 5; i >= 1; i--) { %>
+                <option value="<%= i %>" <%= filters.rating === String(i) ? 'selected' : '' %>><%= i %>점</option>
+            <% } %>
+        </select>
+        <label class="inline-flex items-center gap-1.5 text-sm text-gray-600">
+            <input type="checkbox" name="photo" value="1" <%= filters.photo ? 'checked' : '' %> class="w-4 h-4 rounded border-gray-300">
+            사진만
+        </label>
+        <button type="submit" class="px-3 py-2 rounded-md bg-gray-800 text-white text-sm hover:bg-gray-700">검색</button>
+    </form>
+</div>
+
+<% if (message) { %>
+    <div class="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"><%= message %></div>
+<% } %>
+
+<!-- 요약 -->
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <p class="text-xs text-gray-500">전체 리뷰</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900"><%= won(summary.total) %></p>
+    </div>
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <p class="text-xs text-gray-500">평균 별점</p>
+        <p class="mt-1 text-2xl font-bold text-amber-500"><%= summary.avg_rating %></p>
+    </div>
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <p class="text-xs text-gray-500">사진 리뷰</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900"><%= won(summary.photo) %></p>
+    </div>
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <p class="text-xs text-gray-500">숨김 처리</p>
+        <p class="mt-1 text-2xl font-bold <%= summary.hidden > 0 ? 'text-gray-900' : 'text-gray-300' %>"><%= won(summary.hidden) %></p>
+    </div>
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <p class="text-xs text-gray-500">리뷰 적립 누계</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900"><%= won(summary.point_total) %><span class="text-sm font-medium text-gray-400">P</span></p>
+    </div>
+</div>
+
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+                <tr>
+                    <th class="px-4 py-3 text-left w-20">사진</th>
+                    <th class="px-4 py-3 text-left">상품 / 내용</th>
+                    <th class="px-4 py-3 text-left w-40">작성자</th>
+                    <th class="px-4 py-3 text-center w-24">별점</th>
+                    <th class="px-4 py-3 text-center w-24">적립</th>
+                    <th class="px-4 py-3 text-center w-24">상태</th>
+                    <th class="px-4 py-3 text-center w-32">관리</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <% reviews.forEach(function (r) { %>
+                    <tr class="<%= r.is_visible ? '' : 'bg-gray-50' %>">
+                        <td class="px-4 py-3">
+                            <% if (r.image_url) { %>
+                                <a href="<%= r.image_url %>" target="_blank" rel="noopener">
+                                    <img src="<%= r.image_url %>" alt="리뷰 사진" class="h-14 w-14 rounded object-cover border border-gray-200">
+                                </a>
+                            <% } else if (r.thumbnail_image) { %>
+                                <img src="<%= r.thumbnail_image %>" alt="" class="h-14 w-14 rounded object-cover border border-gray-100 opacity-40">
+                            <% } else { %>
+                                <div class="h-14 w-14 rounded bg-gray-100"></div>
+                            <% } %>
+                        </td>
+                        <td class="px-4 py-3">
+                            <% if (r.slug) { %>
+                                <a href="/products/<%= r.slug %>#review" target="_blank" class="font-medium text-blue-600 hover:text-blue-800"><%= r.product_name || '(삭제된 상품)' %></a>
+                            <% } else { %>
+                                <span class="font-medium text-gray-700"><%= r.product_name || '(삭제된 상품)' %></span>
+                            <% } %>
+                            <p class="mt-1 text-gray-700 whitespace-pre-line line-clamp-3"><%= r.content %></p>
+                            <p class="mt-1 text-xs text-gray-400">
+                                <%= dt(r.created_at) %>
+                                <% if (r.order_number) { %> · 주문 <%= r.order_number %><% } %>
+                            </p>
+                        </td>
+                        <td class="px-4 py-3">
+                            <% if (r.user_id) { %>
+                                <a href="/admin/users/<%= r.user_id %>" class="text-gray-800 hover:text-blue-700"><%= r.user_name || '이름 없음' %></a>
+                            <% } else { %>
+                                <span class="text-gray-500">탈퇴 회원</span>
+                            <% } %>
+                            <div class="text-xs text-gray-400"><%= r.user_email || '' %></div>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="text-amber-500"><% for (let i = 0; i < r.rating; i++) { %>★<% } %></span>
+                            <div class="text-xs text-gray-400"><%= r.rating %>점</div>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <%= r.point_awarded > 0 ? won(r.point_awarded) + 'P' : '-' %>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <% if (r.is_visible) { %>
+                                <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">노출중</span>
+                            <% } else { %>
+                                <span class="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold">숨김</span>
+                            <% } %>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex flex-col gap-1 items-center">
+                                <form action="/admin/reviews/<%= r.id %>/toggle" method="POST">
+                                    <input type="hidden" name="q" value="<%= filters.q %>">
+                                    <input type="hidden" name="visible" value="<%= filters.visible %>">
+                                    <input type="hidden" name="rating" value="<%= filters.rating %>">
+                                    <input type="hidden" name="photo" value="<%= filters.photo %>">
+                                    <input type="hidden" name="page" value="<%= page %>">
+                                    <button type="submit" class="w-20 px-2 py-1 rounded border border-gray-300 text-xs text-gray-700 hover:bg-gray-50">
+                                        <%= r.is_visible ? '숨기기' : '노출' %>
+                                    </button>
+                                </form>
+                                <form action="/admin/reviews/<%= r.id %>/delete" method="POST"
+                                      onsubmit="return confirm('이 리뷰를 삭제할까요?\n\n지급된 적립금은 회수되지 않습니다.\n숨기기만 해도 고객 화면에서는 보이지 않습니다.');">
+                                    <input type="hidden" name="q" value="<%= filters.q %>">
+                                    <input type="hidden" name="page" value="<%= page %>">
+                                    <button type="submit" class="w-20 px-2 py-1 rounded border border-red-200 bg-red-50 text-xs text-red-700 hover:bg-red-100">삭제</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                <% }); %>
+                <% if (!reviews.length) { %>
+                    <tr><td colspan="7" class="px-4 py-12 text-center text-gray-500">
+                        <%= filters.q ? `'${filters.q}' 로 찾은 리뷰가 없습니다.` : '등록된 리뷰가 없습니다.' %>
+                    </td></tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+
+    <% if (totalPages > 1) { %>
+        <div class="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+            <p class="text-sm text-gray-500">전체 <b><%= totalCount %></b>건 · <%= page %>/<%= totalPages %> 쪽</p>
+            <div class="flex items-center gap-1">
+                <% for (let p = Math.max(1, page - 2); p <= Math.min(totalPages, page + 2); p++) { %>
+                    <a href="/admin/reviews<%= qs({ page: p }) %>"
+                       class="px-3 py-1 text-sm rounded-md <%= p === page ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-100' %>"><%= p %></a>
+                <% } %>
+            </div>
+        </div>
+    <% } %>
+</div>
+
+<div class="mt-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+    <b>부적절한 리뷰는 삭제보다 [숨기기]를 권합니다.</b>
+    삭제하면 그 주문 상품으로 <b>다시 리뷰를 쓸 수 있게 되어 적립금이 한 번 더 나갈 수 있습니다.</b>
+    숨기면 기록이 남아 그런 일이 없고, 고객 화면에서는 똑같이 보이지 않습니다.
+    <br>리뷰 적립 금액은 <a href="/admin/settings" class="underline">사이트 설정 &gt; 리뷰 적립 구간</a>에서 정합니다.
+</div>

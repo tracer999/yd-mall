@@ -149,6 +149,7 @@
 | 메뉴 | 설명 | 문서 |
 |------|------|------|
 | 문의 관리 | 고객 1:1 문의 답변 | [inquiries.md](/manual/admin/inquiries) |
+| 리뷰 관리 | 고객 리뷰 확인 · 숨기기 · 삭제 | [reviews.md](/manual/admin/reviews) |
 | 고객센터 관리 | 자주 묻는 질문(FAQ) 관리 | [inquiries.md](/manual/admin/inquiries) |
 | 공지사항 관리 | 공지 등록·수정 (몰마다 따로) | [notices.md](/manual/admin/notices) |
 

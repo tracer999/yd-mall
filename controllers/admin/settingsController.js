@@ -47,6 +47,19 @@ function buildBrandPalette({ main, dark, light }) {
     };
 }
 
+/*
+ * 리뷰 적립 구간.
+ *
+ * 적립을 비율이 아니라 **금액**으로 준다 — 리뷰는 상품값에 비례해 수고가 커지지 않기 때문이다.
+ * 대신 "얼마짜리를 샀는가"로 구간을 나눈다. 구간은 운영자가 자유롭게 추가·삭제한다.
+ * 행이 하나도 없으면 리뷰 적립은 없다(기본 시드를 넣지 않는 이유 — 몰마다 정책이 다르다).
+ */
+async function loadReviewTiers(mallId) {
+    const [rows] = await pool.query(
+        'SELECT * FROM review_point_policy WHERE mall_id = ? ORDER BY min_amount ASC', [mallId]);
+    return rows;
+}
+
 async function loadSettingsData(mallId = 1) {
     // P5: 편집 중인 몰의 브랜딩. 없으면 기본몰 행을 보여준다(새 몰 초기값).
     let [rows] = await pool.query('SELECT * FROM site_settings WHERE mall_id = ? LIMIT 1', [mallId]);
@@ -62,16 +75,18 @@ async function loadSettingsData(mallId = 1) {
         systemSettings[row.setting_key] = row.setting_value;
     }
 
-    return { settings, systemSettings };
+    const reviewTiers = await loadReviewTiers(mallId);
+    return { settings, systemSettings, reviewTiers };
 }
 
-function renderSettingsPage(res, { pageTitle, activeTab, basePath, showTabs, settings, systemSettings }) {
+function renderSettingsPage(res, { pageTitle, activeTab, basePath, showTabs, settings, systemSettings, reviewTiers }) {
     return res.render('admin/settings/form', {
         layout: 'layouts/admin_layout',
         title: pageTitle,
         pageTitle,
         settings,
         systemSettings,
+        reviewTiers: reviewTiers || [],
         activeTab,
         basePath,
         showTabs
@@ -81,14 +96,15 @@ function renderSettingsPage(res, { pageTitle, activeTab, basePath, showTabs, set
 exports.getSettings = async (req, res) => {
     const activeTab = req.query.tab === 'system' ? 'system' : 'company';
     try {
-        const { settings, systemSettings } = await loadSettingsData(req.adminMallId || 1);
+        const { settings, systemSettings, reviewTiers } = await loadSettingsData(req.adminMallId || 1);
         return renderSettingsPage(res, {
             pageTitle: '환경 설정',
             activeTab,
             basePath: '/admin/settings',
             showTabs: true,
             settings,
-            systemSettings
+            systemSettings,
+            reviewTiers
         });
     } catch (err) {
         console.error(err);
@@ -98,14 +114,15 @@ exports.getSettings = async (req, res) => {
 
 exports.getSiteSettings = async (req, res) => {
     try {
-        const { settings, systemSettings } = await loadSettingsData(req.adminMallId || 1);
+        const { settings, systemSettings, reviewTiers } = await loadSettingsData(req.adminMallId || 1);
         return renderSettingsPage(res, {
             pageTitle: '사이트 설정',
             activeTab: 'company',
             basePath: '/admin/site-settings',
             showTabs: false,
             settings,
-            systemSettings
+            systemSettings,
+            reviewTiers
         });
     } catch (err) {
         console.error(err);
@@ -115,14 +132,15 @@ exports.getSiteSettings = async (req, res) => {
 
 exports.getSysSettings = async (req, res) => {
     try {
-        const { settings, systemSettings } = await loadSettingsData(req.adminMallId || 1);
+        const { settings, systemSettings, reviewTiers } = await loadSettingsData(req.adminMallId || 1);
         return renderSettingsPage(res, {
             pageTitle: '시스템 설정',
             activeTab: 'system',
             basePath: '/admin/sys-settings',
             showTabs: false,
             settings,
-            systemSettings
+            systemSettings,
+            reviewTiers
         });
     } catch (err) {
         console.error(err);
@@ -388,5 +406,58 @@ exports.sendTestEmail = async (req, res) => {
             success: false,
             error: err.message || '이메일 발송 중 오류가 발생했습니다.'
         });
+    }
+};
+
+/*
+ * 리뷰 적립 구간 저장 (사이트 설정 안의 별도 폼)
+ *
+ * 구간 전체를 통째로 다시 쓴다(지운 행을 따로 추적하지 않기 위해).
+ * 화면에서 행을 지우고 저장하면 그 구간이 사라진다.
+ */
+exports.updateReviewTiers = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const back = (msg, isError) =>
+        res.redirect('/admin/settings?' + (isError ? 'tier_error=' : 'tier_saved=') + encodeURIComponent(msg));
+
+    // 폼은 min_amount[] / text_point[] / photo_point[] 세 배열로 온다.
+    const toArr = (v) => (v === undefined ? [] : (Array.isArray(v) ? v : [v]));
+    const mins = toArr(req.body.min_amount);
+    const texts = toArr(req.body.text_point);
+    const photos = toArr(req.body.photo_point);
+
+    const rows = [];
+    const seen = new Set();
+    for (let i = 0; i < mins.length; i++) {
+        const raw = String(mins[i] == null ? '' : mins[i]).replace(/[,\s원]/g, '');
+        if (raw === '') continue;                       // 빈 줄은 건너뛴다(화면에서 지운 행)
+        const min = Number.parseInt(raw, 10);
+        if (!Number.isFinite(min) || min < 0) return back('구매금액은 0 이상의 숫자여야 합니다.', true);
+        if (seen.has(min)) return back(`구매금액 ${min.toLocaleString()}원 구간이 중복됩니다.`, true);
+        seen.add(min);
+
+        const tp = Math.max(0, Number.parseInt(String(texts[i] || '0').replace(/[,\s원P]/g, ''), 10) || 0);
+        const pp = Math.max(0, Number.parseInt(String(photos[i] || '0').replace(/[,\s원P]/g, ''), 10) || 0);
+        rows.push([mallId, min, tp, pp]);
+    }
+
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        await conn.query('DELETE FROM review_point_policy WHERE mall_id = ?', [mallId]);
+        if (rows.length) {
+            await conn.query(
+                'INSERT INTO review_point_policy (mall_id, min_amount, text_point, photo_point) VALUES ?',
+                [rows]
+            );
+        }
+        await conn.commit();
+        back(rows.length ? `리뷰 적립 구간 ${rows.length}개를 저장했습니다.` : '리뷰 적립 구간을 모두 지웠습니다. 리뷰 적립이 지급되지 않습니다.');
+    } catch (err) {
+        await conn.rollback();
+        console.error('[settings] updateReviewTiers:', err.message);
+        back('저장 중 오류가 발생했습니다: ' + err.message, true);
+    } finally {
+        conn.release();
     }
 };

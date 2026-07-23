@@ -1,0 +1,116 @@
+<%- include('./_shell_start') %>
+
+<% const won = (n) => Number(n || 0).toLocaleString('ko-KR'); %>
+
+<% if (message) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800"><%= message %></div>
+<% } %>
+<% if (error) { %>
+    <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"><%= error %></div>
+<% } %>
+
+<!-- 쓸 수 있는 리뷰 -->
+<div class="bg-white rounded-lg shadow border border-gray-100 mb-6">
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+        <h3 class="text-lg font-bold text-gray-800">작성할 수 있는 리뷰 <span class="text-sm font-normal text-gray-500">(<%= writable.length %>)</span></h3>
+        <p class="mt-0.5 text-xs text-gray-500">배송이 완료된 상품에 리뷰를 쓸 수 있습니다. 취소·반품한 상품은 나오지 않습니다.</p>
+    </div>
+
+    <% if (!writable.length) { %>
+        <div class="p-12 text-center text-gray-500">
+            <i class="bi bi-pencil-square text-3xl text-gray-300 block mb-3"></i>
+            지금 쓸 수 있는 리뷰가 없습니다.
+        </div>
+    <% } else { %>
+        <ul class="divide-y divide-gray-100">
+            <% writable.forEach(function (w) { %>
+                <li class="p-5 flex flex-wrap items-center gap-4">
+                    <div class="w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
+                        <% if (w.thumbnail_image) { %>
+                            <img src="<%= w.thumbnail_image %>" alt="" class="w-full h-full object-cover">
+                        <% } %>
+                    </div>
+                    <div class="flex-1 min-w-[180px]">
+                        <p class="font-medium text-gray-900"><%= w.product_name %></p>
+                        <% if (w.option_snapshot) { %>
+                            <p class="text-xs text-gray-500"><%= w.option_snapshot %></p>
+                        <% } %>
+                        <p class="text-xs text-gray-400 mt-0.5">주문번호 <%= w.order_number %></p>
+                        <% if (w.reward_text > 0 || w.reward_photo > 0) { %>
+                            <p class="mt-1 text-xs">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[var(--gh-primary)]/10 text-[var(--gh-primary)] font-semibold">
+                                    리뷰 <%= won(w.reward_text) %>P
+                                    <% if (w.reward_photo > w.reward_text) { %> · 사진 <%= won(w.reward_photo) %>P<% } %>
+                                </span>
+                            </p>
+                        <% } %>
+                    </div>
+                    <a href="/mypage/reviews/write/<%= w.order_item_id %>"
+                       class="ml-auto px-4 py-2 rounded-lg gh-btn-primary text-sm font-semibold no-underline">리뷰 쓰기</a>
+                </li>
+            <% }); %>
+        </ul>
+    <% } %>
+</div>
+
+<!-- 내가 쓴 리뷰 -->
+<div class="bg-white rounded-lg shadow border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+        <h3 class="text-lg font-bold text-gray-800">내가 쓴 리뷰 <span class="text-sm font-normal text-gray-500">(<%= mine.length %>)</span></h3>
+    </div>
+
+    <% if (!mine.length) { %>
+        <div class="p-12 text-center text-gray-500">아직 작성한 리뷰가 없습니다.</div>
+    <% } else { %>
+        <ul class="divide-y divide-gray-100">
+            <% mine.forEach(function (r) { %>
+                <li class="p-5">
+                    <div class="flex flex-wrap items-start gap-4">
+                        <div class="w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
+                            <% if (r.image_url) { %>
+                                <img src="<%= r.image_url %>" alt="리뷰 사진" class="w-full h-full object-cover">
+                            <% } else if (r.thumbnail_image) { %>
+                                <img src="<%= r.thumbnail_image %>" alt="" class="w-full h-full object-cover opacity-60">
+                            <% } %>
+                        </div>
+                        <div class="flex-1 min-w-[200px]">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <% if (r.slug) { %>
+                                    <a href="/products/<%= r.slug %>#review" class="font-medium text-gray-900 hover:text-[var(--gh-primary)]"><%= r.product_name || '상품' %></a>
+                                <% } else { %>
+                                    <span class="font-medium text-gray-900"><%= r.product_name || '(삭제된 상품)' %></span>
+                                <% } %>
+                                <span class="text-amber-500 text-sm">
+                                    <% for (let i = 0; i < r.rating; i++) { %>★<% } %><% for (let i = r.rating; i < 5; i++) { %><span class="text-gray-300">★</span><% } %>
+                                </span>
+                                <% if (r.image_url) { %>
+                                    <span class="px-1.5 py-0.5 rounded bg-gray-100 text-[11px] text-gray-600">사진</span>
+                                <% } %>
+                                <% if (!r.is_visible) { %>
+                                    <span class="px-1.5 py-0.5 rounded bg-gray-200 text-[11px] text-gray-600">비공개 처리됨</span>
+                                <% } %>
+                            </div>
+                            <p class="mt-1.5 text-sm text-gray-700 whitespace-pre-line"><%= r.content %></p>
+                            <p class="mt-1.5 text-xs text-gray-400">
+                                <%= new Date(r.created_at).toLocaleDateString('ko-KR') %>
+                                <% if (r.point_awarded > 0) { %> · <span class="text-[var(--gh-primary)] font-medium"><%= won(r.point_awarded) %>P 적립</span><% } %>
+                            </p>
+                        </div>
+                        <form action="/mypage/reviews/<%= r.id %>/delete" method="POST" class="ml-auto"
+                              onsubmit="return confirm('이 리뷰를 삭제할까요?\n\n지급된 적립금은 회수되지 않습니다.');">
+                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">삭제</button>
+                        </form>
+                    </div>
+                </li>
+            <% }); %>
+        </ul>
+    <% } %>
+</div>
+
+<% if (!writable.length && !mine.length) { %>
+    <p class="mt-4 text-center text-xs text-gray-400">
+        상품을 구매하고 배송이 완료되면 이곳에서 리뷰를 쓸 수 있습니다.
+    </p>
+<% } %>
+
+<%- include('./_shell_end') %>

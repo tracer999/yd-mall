@@ -85,6 +85,9 @@ const storage = multer.diskStorage({
         } else if (HERO_SLIDE_IMAGE_FIELDS.has(file.fieldname)
             || HERO_SLIDE_VIDEO_FIELDS.has(file.fieldname)) {
             uploadPath = 'public/uploads/hero';
+        } else if (file.fieldname === 'review_image') {
+            // 고객이 올리는 사진 리뷰. 상품 이미지와 섞이면 관리가 어려워 따로 둔다.
+            uploadPath = 'public/uploads/reviews';
         }
 
         if (!fs.existsSync(uploadPath)) {
