@@ -1797,3 +1797,18 @@ CREATE TABLE IF NOT EXISTS `product_b2b_setting` (
   KEY `idx_pbs_sale` (`is_b2b_sale`),
   CONSTRAINT `fk_pbs_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='상품별 B2B 판매 설정 (상품 등록/수정 화면에서 입력)';
+
+CREATE TABLE IF NOT EXISTS `email_template` (
+  `id`           int NOT NULL AUTO_INCREMENT COMMENT 'PK',
+  `mall_id`      bigint NOT NULL DEFAULT '1' COMMENT '몰 ID (몰마다 다른 문구를 쓸 수 있다)',
+  `template_key` varchar(60) COLLATE utf8mb4_general_ci NOT NULL COMMENT '템플릿 키 (services/email/emailTemplateRegistry.js)',
+  `subject`      varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '제목 오버라이드. NULL = 코드 기본값 사용',
+  `body`         text COLLATE utf8mb4_general_ci COMMENT '본문(HTML) 오버라이드. NULL = 코드 기본값 사용',
+  `is_enabled`   tinyint(1) NOT NULL DEFAULT '1' COMMENT '0 이면 이 메일을 보내지 않는다',
+  `updated_by`   int DEFAULT NULL COMMENT '마지막 수정 관리자 admins.id',
+  `created_at`   timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_email_template_mall_key` (`mall_id`,`template_key`),
+  KEY `idx_email_template_mall` (`mall_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='주문·배송 안내 메일 템플릿 (기본값은 코드, 여기엔 몰별 오버라이드만)';

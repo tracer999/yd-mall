@@ -13,6 +13,7 @@
 const pool = require('../../config/db');
 const claimService = require('../../services/order/claimService');
 const { markRefundManual } = require('../../services/order/refundService');
+const orderMailer = require('../../services/email/orderMailer');
 
 const CLAIM_STATUS = ['REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'WITHDRAWN'];
 
@@ -119,6 +120,14 @@ exports.postApprove = async (req, res, next) => {
         if (!result.ok) {
             return res.redirect(`/admin/claims/${req.params.id}?error=` + encodeURIComponent(result.reason));
         }
+        // 처리 결과 안내 메일 — 문구는 관리자 > 이메일 템플릿 관리에서 정한다.
+        orderMailer.notifyClaimProcessed({
+            claimId: Number(req.params.id),
+            approved: true,
+            memo,
+            refundAmount: result.refund && result.refund.amount != null ? result.refund.amount : null,
+        }).catch((e) => console.error('[mail] 클레임 승인 안내 실패:', e.message));
+
         // PG 환불이 실패했으면 상세에서 수동 처리하도록 안내
         const flag = result.refund && !result.refund.ok ? '?refund_failed=1' : '';
         res.redirect(`/admin/claims/${req.params.id}${flag}`);
@@ -133,6 +142,10 @@ exports.postReject = async (req, res, next) => {
         const adminId = req.session.admin ? req.session.admin.id : null;
         const result = await claimService.rejectClaim({ claimId: Number(req.params.id), adminId, memo: req.body.memo });
         if (!result.ok) return res.redirect(`/admin/claims/${req.params.id}?error=` + encodeURIComponent(result.reason));
+
+        orderMailer.notifyClaimProcessed({ claimId: Number(req.params.id), approved: false, memo: req.body.memo })
+            .catch((e) => console.error('[mail] 클레임 반려 안내 실패:', e.message));
+
         res.redirect(`/admin/claims/${req.params.id}`);
     } catch (err) {
         next(err);

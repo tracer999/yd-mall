@@ -97,6 +97,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 | | `/admin/theme-settings` | 디자인 스타일 — 테마 토큰(CSS 변수) | [settings.md](./settings.md) |
 | | `/admin/malls` | 몰 정의 CRUD + 프리셋 프로비저닝 (실효 권한: super_admin) | [malls.md](./malls.md) |
 | | `/admin/policies` | 이용약관·개인정보 버전 관리 | [policies.md](./policies.md) |
+| | `/admin/email-templates` | 주문·배송 안내 메일 템플릿 (코드 기본값 + 몰별 오버라이드) | [email_templates.md](./email_templates.md) |
 | **통계** | `/admin/visitors` | 방문자 통계 | [visitors.md](./visitors.md) |
 | **내부** | `/admin/uploads` | TinyMCE 등 에디터 이미지 업로드 | — |
 
@@ -150,6 +151,7 @@ adminMenu (사이드바 메뉴 트리) → adminAuth (세션) → adminMallConte
 27. [스토어프론트 메뉴](./storefront_menus.md) — feature_menu × mall_feature_menu, custom_menu, navigation_config, 콘텐츠 게이트
 28. [사이트 설정](./settings.md) — .env ↔ system_settings 2층 구조, 테마 토큰
 29. [약관 및 정책 관리](./policies.md) — 버전 관리, site_settings 동기화
+29-1. [이메일 템플릿 관리](./email_templates.md) — 주문·배송 안내 메일, registry 기본값 + email_template 오버라이드
 
 ### 통계
 30. [대시보드](./dashboard.md) — 운영 현황, 트래픽, 유입 매체, 인기 상품

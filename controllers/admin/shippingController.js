@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { transition, log } = require('../../services/order/orderStatusService');
+const orderMailer = require('../../services/email/orderMailer');
 
 /*
  * 배송 관리 — **일반(B2C) 주문 전용**이다.
@@ -74,6 +75,11 @@ exports.postTracking = async (req, res) => {
             { actorType: 'ADMIN', actorId: adminId, memo: `송장 등록 (${courier_company} ${tracking_number})` });
 
         await conn.commit();
+
+        // 출고 안내 메일 — 실패해도 송장 등록을 되돌리지 않는다.
+        orderMailer.notifyOrderShipped(Number(order_id))
+            .catch((e) => console.error('[mail] 출고 안내 실패 (order ' + order_id + '):', e.message));
+
         res.redirect('/admin/shipping');
     } catch (err) {
         await conn.rollback();
@@ -105,6 +111,10 @@ exports.postDelivered = async (req, res) => {
         await transition(conn, Number(order_id), { status: 'DELIVERED' },
             { actorType: 'ADMIN', actorId: adminId, memo: '배송완료 처리' });
         await conn.commit();
+
+        orderMailer.notifyOrderDelivered(Number(order_id))
+            .catch((e) => console.error('[mail] 배송완료 안내 실패 (order ' + order_id + '):', e.message));
+
         res.redirect('/admin/shipping');
     } catch (err) {
         await conn.rollback();

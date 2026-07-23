@@ -12,6 +12,7 @@
 const pool = require('../../config/db');
 const claimService = require('../../services/order/claimService');
 const { markRefundManual, calcReturnShippingFee } = require('../../services/order/refundService');
+const orderMailer = require('../../services/email/orderMailer');
 
 const LAYOUT = 'layouts/admin_layout';
 const CLAIM_STATUS = ['REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'WITHDRAWN'];
@@ -130,6 +131,10 @@ exports.postApprove = async (req, res, next) => {
         if (!result.ok) {
             return res.redirect(`/admin/b2b/claims/${req.params.id}?error=` + encodeURIComponent(result.reason));
         }
+        // 처리 결과 안내 — 문구는 관리자 > 이메일 템플릿 관리에서 정한다.
+        orderMailer.notifyB2bClaim({ claimId: Number(req.params.id), kind: 'APPROVED', memo })
+            .catch((e) => console.error('[mail] B2B 클레임 승인 안내 실패:', e.message));
+
         const msg = result.refund && result.refund.pending
             ? '승인했습니다. 환불액을 거래처 계좌로 이체한 뒤 [계좌 환불 완료] 를 눌러 주세요.'
             : '승인 처리했습니다.';
@@ -144,6 +149,10 @@ exports.postReject = async (req, res, next) => {
         const adminId = req.session.admin ? req.session.admin.id : null;
         const result = await claimService.rejectClaim({ claimId: Number(req.params.id), adminId, memo: req.body.memo });
         if (!result.ok) return res.redirect(`/admin/b2b/claims/${req.params.id}?error=` + encodeURIComponent(result.reason));
+
+        orderMailer.notifyB2bClaim({ claimId: Number(req.params.id), kind: 'REJECTED', memo: req.body.memo })
+            .catch((e) => console.error('[mail] B2B 클레임 반려 안내 실패:', e.message));
+
         return res.redirect(`/admin/b2b/claims/${req.params.id}?message=` + encodeURIComponent('거절 처리했습니다.'));
     } catch (err) {
         next(err);
@@ -176,6 +185,11 @@ exports.postRefundComplete = async (req, res, next) => {
             "UPDATE orders SET refund_status = 'COMPLETED', payment_status = 'REFUNDED' WHERE id = ?",
             [orderId]
         );
+        if (req.body.claim_id) {
+            orderMailer.notifyB2bClaim({ claimId: Number(req.body.claim_id), kind: 'REFUNDED', memo: req.body.memo })
+                .catch((e) => console.error('[mail] B2B 환불 완료 안내 실패:', e.message));
+        }
+
         return res.redirect(`${backTo}?message=` + encodeURIComponent('계좌 환불 완료로 기록했습니다.'));
     } catch (err) {
         next(err);

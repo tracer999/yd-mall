@@ -21,6 +21,7 @@ const b2bOrderService = require('../services/b2b/b2bOrderService');
 const b2bContextMw = require('../middleware/b2bContext');
 const optionService = require('../services/catalog/optionService');
 const { getNumberSetting } = require('../config/systemSettings');
+const orderMailer = require('../services/email/orderMailer');
 
 // 구매 적립률(%)이 system_settings 에 아예 없을 때만 쓰는 기본값.
 // 관리자가 0 을 저장했다면 그건 "적립 없음"이라는 뜻이므로 이 값으로 덮지 않는다.
@@ -258,6 +259,14 @@ async function completeOrderWithStockAndPaid(orderId, opts = {}) {
                 console.error('[membership] post-paid ledger/eval failed (order ' + orderId + '):', e.message);
             }
         }
+
+        /*
+         * 주문 완료 안내 메일. 커밋 뒤에 보낸다 — 메일 때문에 결제 트랜잭션을 붙잡지 않는다.
+         * 문구는 관리자 > 쇼핑몰 관리 > 이메일 템플릿 관리에서 바꾼다(끄면 안 나간다).
+         */
+        orderMailer.notifyOrderPaid(orderId)
+            .catch((e) => console.error('[mail] 주문완료 안내 실패 (order ' + orderId + '):', e.message));
+
         return { ok: true };
     } catch (err) {
         await conn.rollback();

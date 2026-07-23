@@ -100,6 +100,8 @@ router.use('/malls', requireMenuAccess('/admin/malls'), require('./admin/malls')
 // (구 '/resources' — 몰 관리 하위 리소스 관리는 '외부몰 연동 → 네이버 리소스 관리'
 //  (/admin/sourcing/naver-taxonomy)로 통합되어 제거됨)
 router.use('/policies', requireMenuAccess('/admin/policies'), require('./admin/policies'));
+// 주문·배송 안내 메일 템플릿 (기본값은 코드, DB 에는 몰별 오버라이드만)
+router.use('/email-templates', requireMenuAccess('/admin/email-templates'), require('./admin/email-templates'));
 router.use('/notices', requireMenuAccess('/admin/notices'), require('./admin/notices'));
 router.use('/inquiries', requireMenuAccess('/admin/inquiries'), require('./admin/inquiries'));
 router.use('/coupons', requireMenuAccess('/admin/coupons'), require('./admin/coupons'));

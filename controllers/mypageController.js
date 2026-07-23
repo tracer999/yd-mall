@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
-const emailService = require('../services/emailService');
+const orderMailer = require('../services/email/orderMailer');
 const { benefitLabel } = require('../services/coupon/discountCalculator');
 const claimService = require('../services/order/claimService');
 const dealSvc = require('../services/deal/dealService');
@@ -548,28 +548,17 @@ exports.cancelOrder = async (req, res, next) => {
             return res.redirect(`/mypage/orders/${orderId}?claim_error=` + encodeURIComponent(result.reason));
         }
 
-        // 알림 이메일 — 실패해도 취소 흐름을 막지 않는다.
-        const [[emailRow]] = await pool.query('SELECT buyer_email FROM orders WHERE id = ?', [orderId]);
-        const order2 = { buyer_email: emailRow && emailRow.buyer_email };
-        const adminEmail = process.env.ADMIN_EMAIL;
-        if (adminEmail) {
-            emailService.sendEmail({
-                to: adminEmail,
-                subject: `[주문취소] 주문번호 ${orderId} 취소 알림`,
-                text: `주문번호: ${orderId}\n취소사유: ${reason}\n사용자ID: ${userId}\n일시: ${new Date().toLocaleString()}`
-            }).catch(err => console.error('관리자 알림 이메일 발송 실패:', err));
-        }
-
-        // 사용자에게 취소/반품 접수 알림
-        const userEmail = order2.buyer_email || req.user.email;
-        const label = claimType === 'RETURN' ? '반품 신청이 접수' : (result.autoApproved ? '취소가 완료' : '취소 신청이 접수');
-        if (userEmail) {
-            emailService.sendEmail({
-                to: userEmail,
-                subject: `[와이디몰] 주문번호 ${orderId} ${label}되었습니다.`,
-                text: `안녕하세요.\n주문번호 ${orderId}의 ${label}되었습니다.\n\n사유: ${reason || ''}\n\n이용해 주셔서 감사합니다.`
-            }).catch(err => console.error('사용자 알림 이메일 발송 실패:', err));
-        }
+        /*
+         * 접수 안내 메일(고객 + 운영자). 문구·발송여부는 관리자 > 이메일 템플릿 관리에서 정한다.
+         * 실패해도 취소 흐름을 막지 않는다.
+         */
+        orderMailer.notifyClaimRequested({
+            orderId: Number(orderId),
+            claimType,
+            reasonType: reasonType || 'CHANGE_OF_MIND',
+            reasonDetail: reason,
+            autoApproved: Boolean(result.autoApproved),
+        }).catch((err) => console.error('[mail] 클레임 접수 안내 실패:', err.message));
 
         const msg = result.autoApproved ? 'cancel_done' : (claimType === 'RETURN' ? 'return_requested' : 'cancel_requested');
         res.redirect(`/mypage/orders/${orderId}?claim=${msg}`);

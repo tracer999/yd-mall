@@ -63,6 +63,7 @@
 | Header 설정 | 헤더 레이아웃, 상단 메뉴 개수 | [header.md](/manual/admin/header) |
 | 디자인 스타일 | **모서리·글꼴·간격** (색상 아님) | [theme.md](/manual/admin/theme) |
 | 대시보드 | 회원 수·상품 수·문의·방문자 요약 | [dashboard.md](/manual/admin/dashboard) |
+| 이메일 템플릿 관리 | 주문·배송 안내 메일 문구·발송 여부 | [email_templates.md](/manual/admin/email_templates) |
 
 ### 2. 외부몰 연동
 | 메뉴 | 설명 | 문서 |

@@ -36,6 +36,7 @@ const adminTitles = {
     header: 'Header 설정',
     theme: '디자인 스타일',
     dashboard: '대시보드',
+    email_templates: '이메일 템플릿 관리',
     // 외부몰 연동
     sourcing: '외부몰 연동',
     // 메뉴/카테고리 관리
@@ -91,6 +92,7 @@ const adminDescriptions = {
     header: '헤더 레이아웃(기본형·드로어형·에디토리얼형)과 GNB 최대 노출 수 등 메뉴 슬롯 정책',
     theme: '모서리·글꼴·간격 같은 디자인 토큰 조정 (색상·로고는 사이트 설정 소관)',
     dashboard: '회원 수·상품 수·문의·방문자 요약을 한눈에 보는 첫 화면',
+    email_templates: '주문·배송 안내 메일(개인·기업회원)의 제목·내용을 고치고 발송 여부를 정하는 방법',
     sourcing: '외부 공급처에서 상품을 가져오고 네이버 스마트스토어에 등록·동기화하는 연동 기능',
     categories: '상품 분류(최대 3단계) 추가·수정·삭제와 계층 규칙',
     menus: '고객 화면 상단 메뉴(일반·시스템·커스텀) 켜기/끄기·이름·순서, 메뉴 미리보기, 관리자 사이드바 메뉴 관리',
@@ -131,7 +133,7 @@ const adminOrder = [
     'index',
     'login',
     // 쇼핑몰 관리
-    'malls', 'settings', 'policies', 'header', 'theme', 'dashboard',
+    'malls', 'settings', 'policies', 'header', 'theme', 'dashboard', 'email_templates',
     // 외부몰 연동
     'sourcing',
     // 메뉴/카테고리 관리

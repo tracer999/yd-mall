@@ -1,0 +1,120 @@
+<%
+  /* 이메일 템플릿 관리 — 주문·배송 안내 메일의 제목·본문을 몰별로 관리 */
+%>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">이메일 템플릿 관리</h1>
+    <p class="mt-1 text-sm text-gray-500">
+      주문·배송 과정에서 고객과 거래처에 나가는 안내 메일의 제목과 내용을 직접 고칠 수 있습니다.
+      한 번도 저장하지 않은 템플릿은 <strong>기본 문구</strong>로 발송됩니다.
+      메일 발송 계정(SMTP)은 <a href="/admin/settings?tab=system" class="text-indigo-600 underline">환경 설정</a>에서 지정합니다.
+    </p>
+  </div>
+
+  <% if (message) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i> <%= message %>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill mt-0.5"></i><span><%= error %></span>
+    </div>
+  <% } %>
+
+  <!-- 몰 선택 + 운영자 알림 주소 -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
+    <div class="flex flex-wrap items-end gap-6">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">몰 선택</label>
+        <select onchange="location.href='/admin/email-templates?mall=' + this.value"
+                class="text-sm border-gray-300 rounded-md min-w-[200px]">
+          <% malls.forEach(function (m) { %>
+            <option value="<%= m.id %>" <%= Number(m.id) === Number(mallId) ? 'selected' : '' %>>
+              <%= m.name %><%= Number(m.is_default) === 1 ? ' (기본몰)' : '' %>
+            </option>
+          <% }); %>
+        </select>
+        <p class="mt-1 text-[11px] text-gray-400">몰마다 다른 문구를 쓸 수 있습니다.</p>
+      </div>
+
+      <form method="POST" action="/admin/email-templates/admin-email" class="flex items-end gap-2 flex-1 min-w-[320px]">
+        <input type="hidden" name="mall_id" value="<%= mallId %>">
+        <div class="flex-1">
+          <label class="block text-xs font-medium text-gray-600 mb-1">운영자 알림 수신 주소</label>
+          <input type="email" name="admin_email" value="<%= adminEmail.source === 'system' ? adminEmail.value : '' %>"
+                 placeholder="<%= adminEmail.value || 'admin@example.co.kr' %>"
+                 class="block w-full text-sm border-gray-300 rounded-md">
+          <p class="mt-1 text-[11px] text-gray-400">
+            취소·반품 접수 같은 운영자 알림이 이 주소로 갑니다.
+            <% if (adminEmail.source === 'site') { %>
+              비워 두면 사이트 설정의 대표 메일(<%= adminEmail.value %>)로 보냅니다.
+            <% } else if (adminEmail.source === 'none') { %>
+              지금은 지정된 주소가 없어 운영자 알림이 나가지 않습니다.
+            <% } %>
+          </p>
+        </div>
+        <button type="submit" class="h-[38px] px-4 text-sm font-semibold rounded-md bg-gray-800 text-white hover:bg-gray-900">
+          저장
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 그룹별 템플릿 -->
+  <% groups.forEach(function (g) { %>
+    <div class="mb-8">
+      <h2 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <span class="inline-block w-1.5 h-4 rounded bg-indigo-500"></span><%= g.label %>
+      </h2>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 divide-y divide-gray-100">
+        <% g.templates.forEach(function (t) { %>
+          <div class="px-5 py-4 flex flex-wrap items-start gap-4">
+            <div class="flex-1 min-w-[260px]">
+              <div class="flex items-center gap-2 flex-wrap">
+                <a href="/admin/email-templates/<%= encodeURIComponent(t.key) %>?mall=<%= mallId %>"
+                   class="text-sm font-semibold text-gray-900 hover:text-indigo-600"><%= t.def.label %></a>
+                <% if (t.isCustomized) { %>
+                  <span class="px-1.5 py-0.5 rounded text-[11px] bg-indigo-50 text-indigo-700">직접 수정함</span>
+                <% } else { %>
+                  <span class="px-1.5 py-0.5 rounded text-[11px] bg-gray-100 text-gray-500">기본 문구</span>
+                <% } %>
+                <% if (!t.isEnabled) { %>
+                  <span class="px-1.5 py-0.5 rounded text-[11px] bg-red-50 text-red-700">발송 안 함</span>
+                <% } %>
+              </div>
+              <p class="mt-1 text-xs text-gray-500"><%= t.def.description %></p>
+              <p class="mt-1 text-[11px] text-gray-400">
+                발송 시점: <%= t.def.when %><%= t.def.recipient ? ' · 받는 사람: ' + t.def.recipient : '' %>
+              </p>
+              <% if (t.subject) { %>
+                <p class="mt-2 text-xs text-gray-600 font-mono truncate">제목: <%= t.subject %></p>
+              <% } %>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <form method="POST" action="/admin/email-templates/<%= encodeURIComponent(t.key) %>/toggle">
+                <input type="hidden" name="mall_id" value="<%= mallId %>">
+                <button type="submit"
+                        class="h-[34px] px-3 text-xs font-medium rounded-md border <%= t.isEnabled ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' : 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100' %>">
+                  <%= t.isEnabled ? '발송 중지' : '발송 켜기' %>
+                </button>
+              </form>
+              <a href="/admin/email-templates/<%= encodeURIComponent(t.key) %>?mall=<%= mallId %>"
+                 class="h-[34px] px-4 inline-flex items-center text-xs font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 no-underline">
+                내용 수정
+              </a>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  <% }); %>
+
+  <div class="text-xs text-gray-400">
+    메일이 전혀 나가지 않는다면 환경 설정의 SMTP 계정과 전역 발송 스위치(<code>email_enabled</code>)를 확인하세요.
+  </div>
+</div>

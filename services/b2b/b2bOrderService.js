@@ -30,7 +30,7 @@ const skuService = require('../catalog/skuService');
 const { restoreOrderResources } = require('../order/orderCancelService');
 const { transition } = require('../order/orderStatusService');
 const b2bContext = require('../../middleware/b2bContext');
-const { sendEmail } = require('../emailService');
+const orderMailer = require('../email/orderMailer');
 
 /** B2B 주문번호. B2C(ORD-)와 눈으로 구분된다(설계 §7.5). */
 function generateB2bOrderNumber() {
@@ -274,6 +274,8 @@ async function markDelivered(orderId, { adminId = null } = {}) {
             { actorType: 'ADMIN', actorId: adminId, memo: '배송완료 처리' });
 
         await conn.commit();
+
+        await notify(orderId, 'DELIVERED').catch((e) => console.warn('[b2b] 배송완료 안내 실패:', e.message));
         return { ok: true };
     } catch (err) {
         await conn.rollback();
@@ -385,43 +387,14 @@ async function updateTaxInvoice(orderId, { status, invoiceNo = null }) {
     return { ok: true };
 }
 
-/** 거래처에 보내는 단계별 안내. 실패해도 주문 처리는 되돌리지 않는다. */
+/**
+ * 거래처에 보내는 단계별 안내. 실패해도 주문 처리는 되돌리지 않는다.
+ *
+ * 문구는 관리자 > 쇼핑몰 관리 > 이메일 템플릿 관리에서 고친다(`b2b_order_*` 템플릿).
+ * 여기서는 어느 단계인지만 넘긴다.
+ */
 async function notify(orderId, kind) {
-    const o = await findOrder(orderId);
-    if (!o || !o.user_email) return;
-    const settings = b2bContext.getSettings();
-    const won = (n) => Number(n || 0).toLocaleString('ko-KR');
-    const due = o.payment_due_at ? new Date(o.payment_due_at).toLocaleDateString('ko-KR') : '-';
-
-    const map = {
-        REQUESTED: {
-            subject: `[주문 접수] ${o.order_number}`,
-            text: `${o.company_name} 님, 주문이 접수되었습니다.\n주문번호: ${o.order_number}\n금액: ${won(o.total_amount)}원\n\n담당자 확인 후 입금 안내를 드립니다.`,
-        },
-        APPROVED: {
-            subject: `[주문 승인 · 입금 안내] ${o.order_number}`,
-            text: `${o.company_name} 님, 주문이 승인되었습니다.\n주문번호: ${o.order_number}\n결제 금액: ${won(o.total_amount)}원`
-                + `\n  공급가액 ${won(o.supply_amount)}원 / 부가세 ${won(o.vat_amount)}원`
-                + `\n입금 기한: ${due}\n${settings.bankAccountInfo ? '입금 계좌: ' + settings.bankAccountInfo : ''}`
-                + `\n\n기한 내 입금이 확인되지 않으면 주문이 자동 취소될 수 있습니다.`,
-        },
-        PAID: {
-            subject: `[입금 확인] ${o.order_number}`,
-            text: `${o.company_name} 님, 입금이 확인되었습니다.\n주문번호: ${o.order_number}\n상품 준비 후 출고해 드립니다.`,
-        },
-        SHIPPED: {
-            subject: `[출고 안내] ${o.order_number}`,
-            text: `${o.company_name} 님, 주문 상품이 출고되었습니다.\n주문번호: ${o.order_number}`
-                + `\n택배사: ${o.courier_company || '-'}\n송장번호: ${o.tracking_number || '-'}`,
-        },
-        REJECTED: {
-            subject: `[주문 반려] ${o.order_number}`,
-            text: `${o.company_name} 님, 주문이 반려되었습니다.\n주문번호: ${o.order_number}\n사유: ${o.reject_reason || '-'}`,
-        },
-    };
-    const msg = map[kind];
-    if (!msg) return;
-    await sendEmail({ to: o.user_email, subject: msg.subject, text: msg.text });
+    return orderMailer.notifyB2bOrder(orderId, kind);
 }
 
 module.exports = {
