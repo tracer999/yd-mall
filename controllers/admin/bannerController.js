@@ -1,5 +1,7 @@
+const fs = require('fs');
 const pool = require('../../config/db');
 const upload = require('../../middleware/upload');
+const { isVideoUrl } = require('../../shared/mediaType');
 const menuShowcaseService = require('../../services/menu/menuShowcaseService');
 const topbarService = require('../../services/display/topbarService');
 const headerSkins = require('../../services/menu/headerSkins');
@@ -378,7 +380,9 @@ exports.getAdd = async (req, res) => {
             currentPromoKey,
             preselectTarget,
             preselectCommon,
-            maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
+            maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB,
+            // 배너에 영상도 올릴 수 있어 상한이 두 개다(이미지 / 동영상). 폼이 파일 종류에 따라 나눠 검사한다.
+            maxVideoUploadMb: upload.MAX_VIDEO_UPLOAD_MB
         });
     } catch (err) {
         console.error(err);
@@ -438,6 +442,32 @@ function readOverlay(body, formType) {
     };
 }
 
+/*
+ * 배너 미디어(이미지/영상) 검사.
+ *
+ * 영상을 <video> 로 그릴 수 있는 배너는 **메인 슬라이더(MAIN)** 뿐이다(hero_media.ejs).
+ * 다른 타입은 렌더러가 <img> 하나뿐이라 영상이 들어오면 화면이 깨진다 — 저장 전에 막는다.
+ * multer 의 fileFilter 가 아니라 여기서 보는 이유: 멀티파트 필드 순서에 따라 파일이
+ * banner_type 보다 먼저 도착할 수 있어 필터 시점의 req.body 는 신뢰할 수 없다.
+ *
+ * 막을 때는 이미 디스크에 떨어진 업로드본을 지운다(저장되지 않을 파일이 남으면 쓰레기가 쌓인다).
+ *
+ * 새로 올린 파일이 아니라 **저장될 최종 경로**를 본다 — 영상이 걸린 MAIN 배너의 타입만
+ * 바꾸는 경우(파일 업로드 없음)도 같은 이유로 막아야 한다.
+ */
+function assertBannerMedia({ files, bannerType, imageUrl, mobileImageUrl }) {
+    if (bannerType === 'MAIN') return;
+    if (!isVideoUrl(imageUrl) && !isVideoUrl(mobileImageUrl)) return;
+
+    const uploaded = [files?.banner_image?.[0], files?.mobile_banner_image?.[0]].filter(Boolean);
+    for (const f of uploaded) {
+        try { fs.unlinkSync(f.path); } catch { /* 이미 없으면 그만 */ }
+    }
+    const err = new Error('동영상은 메인 슬라이더(이미지 배너)에만 등록할 수 있습니다. 다른 배너 타입에는 이미지 파일을 올려주세요.');
+    err.statusCode = 400;
+    throw err;
+}
+
 exports.postAdd = async (req, res) => {
     const { title, link_url, display_order, is_active, banner_type, category_id, start_date, end_date } = req.body;
     const bannerImage = req.files?.banner_image?.[0];
@@ -446,6 +476,7 @@ exports.postAdd = async (req, res) => {
     const mobile_image_url = mobileBannerImage ? '/uploads/banners/' + mobileBannerImage.filename : null;
 
     try {
+        assertBannerMedia({ files: req.files, bannerType: banner_type, imageUrl: image_url, mobileImageUrl: mobile_image_url });
         // 신규 등록 — 보존할 기존 group_key 없음(null).
         const mallId = req.adminMallId || 1;
         const menuKeys = (await getBannerMenuTargets(mallId)).map(t => t.key);
@@ -617,7 +648,9 @@ exports.getEdit = async (req, res) => {
             currentPromoKey: promoBanner ? banner.group_key : '',
             preselectTarget: null,
             preselectCommon: false,
-            maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB
+            maxUploadFileMb: upload.MAX_UPLOAD_FILE_MB,
+            // 배너에 영상도 올릴 수 있어 상한이 두 개다(이미지 / 동영상). 폼이 파일 종류에 따라 나눠 검사한다.
+            maxVideoUploadMb: upload.MAX_VIDEO_UPLOAD_MB
         });
     } catch (err) {
         console.error(err);
@@ -636,11 +669,19 @@ exports.postEdit = async (req, res) => {
     if (bannerImage) {
         image_url = '/uploads/banners/' + bannerImage.filename;
     }
+    /*
+     * 모바일 이미지 — 우선순위는 톱바·히어로 슬라이드와 같다: 새 파일 > 비우기 > 기존.
+     * '삭제' 체크는 기존 이미지를 지우겠다는 뜻이지만, 같은 저장에 새 파일이 올라왔다면
+     * 교체가 의도이므로 새 파일이 이긴다. (PC 이미지는 banners.image_url 이 NOT NULL 이라 교체만 가능)
+     */
     if (mobileBannerImage) {
         mobile_image_url = '/uploads/banners/' + mobileBannerImage.filename;
+    } else if (req.body.clear_mobile_image === '1') {
+        mobile_image_url = null;
     }
 
     try {
+        assertBannerMedia({ files: req.files, bannerType: banner_type, imageUrl: image_url, mobileImageUrl: mobile_image_url });
         // 편집 — 기존 group_key(existing_group_key)를 넘겨 이 화면과 무관한 group_key 를 보존한다.
         const mallId = req.adminMallId || 1;
         const menuKeys = (await getBannerMenuTargets(mallId)).map(t => t.key);

@@ -372,11 +372,20 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <% mainBanners.forEach(function (banner, i) { %>
                 <div class="bg-white overflow-hidden shadow-sm rounded-lg flex flex-col h-full border border-gray-100">
-                    <img src="<%= banner.image_url %>" class="w-full h-40 object-cover" alt="<%= banner.title || '' %>">
+                    <%# 배너에는 동영상도 올릴 수 있다 — 영상이면 <img> 로 못 그리므로 첫 프레임이 보이는 <video> 로 낸다. %>
+                    <% if (isVideoUrl(banner.image_url)) { %>
+                        <video src="<%= banner.image_url %>" class="w-full h-40 object-cover bg-black"
+                               muted loop playsinline preload="metadata" aria-label="<%= banner.title || '' %>"></video>
+                    <% } else { %>
+                        <img src="<%= banner.image_url %>" class="w-full h-40 object-cover" alt="<%= banner.title || '' %>">
+                    <% } %>
                     <div class="p-5 flex-1 flex flex-col">
                         <input type="hidden" name="id" value="<%= banner.id %>">
                         <div class="flex items-center justify-between mb-2 gap-2">
                             <h5 class="text-base font-bold text-gray-900 truncate"><%= banner.title || '(제목 없음)' %></h5>
+                            <% if (isVideoUrl(banner.image_url)) { %>
+                                <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full bg-indigo-100 text-indigo-700 shrink-0">동영상</span>
+                            <% } %>
                             <% if (i >= 6) { %>
                                 <span class="px-2 py-0.5 text-[11px] leading-4 font-semibold rounded-full bg-gray-100 text-gray-600 shrink-0">노출 제외</span>
                             <% } %>

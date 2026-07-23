@@ -12,7 +12,13 @@
    *
    * 왜 media 가 없어도 되나:
    *   이 파트를 include 하는 hero_banner 는 전역 banners 테이블(영상 컬럼 없음)도 그린다.
-   *   media 가 비면 예전과 똑같이 <img> 만 낸다 — 기존 화면이 바뀌지 않는다.
+   *   media 가 비면 img 경로 하나만 보고 그린다.
+   *
+   * 배너(media 없음)에 올린 영상:
+   *   banners 에는 미디어 종류 컬럼이 없어 영상도 image_url/mobile_image_url 에 경로로 담긴다.
+   *   그래서 img 가 영상 확장자면 <video> 로 그린다(isVideoUrl — shared/mediaType.js).
+   *   hero_slide 의 영상 분기와 섞지 않는 이유: 그쪽은 poster 를 이미지 컬럼에서 가져오는데,
+   *   배너는 그 이미지 자리가 곧 영상이라 poster 로 쓰면 깨진다.
    *
    * 모바일 폴백 순서 (migrate_hero_slide_media.sql 원칙 4 — 데이터·배터리):
    *   모바일 전용 영상 → 모바일 이미지 → 데스크톱 영상 → 이미지
@@ -45,6 +51,10 @@
   var _poster = _isMobile
     ? ((_m && (_m.mobile_image_url || _m.poster_url || _m.image_url)) || img)
     : ((_m && (_m.poster_url || _m.image_url)) || img);
+
+  // 이미지로 그릴 때 실제로 쓸 경로. 이 경로가 영상이면(배너에 영상을 올린 경우) <video> 로 낸다.
+  var _imgSrc = (_isMobile && _m && _m.mobile_image_url) ? _m.mobile_image_url : img;
+  var _srcIsVideo = !_useVideo && typeof isVideoUrl === 'function' && isVideoUrl(_imgSrc);
 %>
 <% if (_useVideo) { %>
   <%#
@@ -67,13 +77,22 @@
     <%# <video> 자체를 못 그리는 환경의 최후 폴백 %>
     <img src="<%= _poster || img %>" alt="<%= _alt %>" class="<%= _cls %>">
   </video>
+<% } else if (_srcIsVideo) { %>
+  <%#
+    배너에 올린 영상. poster 로 쓸 이미지가 따로 없으므로(그 칸이 곧 영상이다) poster 는 생략한다.
+    소리 없이 자동 반복 — 배너 자리라 재생 컨트롤을 두지 않는다(슬라이드 전체가 링크다).
+    data-hero-video 는 '모션 최소화' 사용자에게 자동재생을 끄는 스크립트가 잡는 표식이다.
+  %>
+  <video class="<%= _cls %>" autoplay muted loop playsinline
+         preload="metadata" data-hero-video aria-label="<%= _alt %>"
+         src="<%= _imgSrc %>"></video>
 <% } else { %>
   <%#
     히어로는 화면 최상단이라 lazy 를 걸지 않는다. 캐러셀의 2·3번째 슬라이드는 가로로 밀려 있을 뿐
     화면 안이라, lazy 를 걸면 넘겼을 때 아직 안 받아온 빈 칸이 보일 수 있다.
     첫 슬라이드만 LCP 대상이므로 우선순위를 높인다.
   %>
-  <img src="<%= (_isMobile && _m && _m.mobile_image_url) ? _m.mobile_image_url : img %>"
+  <img src="<%= _imgSrc %>"
        alt="<%= _alt %>"
        class="<%= _cls %>"
        <% if (_eager) { %>fetchpriority="high"<% } %>>

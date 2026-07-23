@@ -216,6 +216,9 @@ async function startServer() {
         // (services/catalog/newArrival). 뷰마다 product_badge 를 직접 파싱하지 않게 한다.
         res.locals.isNewProduct = newArrival.isNewProduct;
         res.locals.isNewBrand = newArrival.isNewBrand;
+        // 배너 미디어가 영상인지 판별하는 헬퍼 — 배너에는 종류 컬럼이 없어 확장자로 가른다.
+        // 파티셜(include)까지 그대로 전달되므로 hero_media 같은 조각에서도 바로 쓸 수 있다.
+        res.locals.isVideoUrl = require('./shared/mediaType').isVideoUrl;
         next();
     });
 

@@ -98,12 +98,27 @@ const storage = multer.diskStorage({
     }
 });
 
+/*
+ * 배너 미디어 — 이미지·영상을 모두 받는 필드.
+ *
+ * 메인 슬라이더(이미지 배너)에 영상을 걸 수 있어야 해서 이 두 칸만 MIME 을 열어 뒀다.
+ * 저장 컬럼(banners.image_url / mobile_image_url)은 그대로 쓰고, 렌더 시점에 확장자로
+ * <img>/<video> 를 가른다(shared/mediaType.js).
+ *
+ * ⚠️ 영상을 실제로 렌더할 수 있는 배너는 MAIN 뿐이다. 다른 타입에 영상이 올라오면
+ *    <img src=영상> 이 되어 깨지므로 **컨트롤러(bannerController)가 타입을 보고 막는다**.
+ *    multer 의 fileFilter 에서는 못 막는다 — 멀티파트 필드 순서에 따라 req.body.banner_type 이
+ *    아직 안 채워져 있을 수 있어 신뢰할 수 없다.
+ */
+const BANNER_MEDIA_FIELDS = new Set([
+    'banner_image',
+    'mobile_banner_image',
+]);
+
 const imageOnlyFields = new Set([
     'main_image',
     'thumbnail_image',
     'sub_images',
-    'banner_image',
-    'mobile_banner_image',
     'logo',
     'logo_image',
     'kakao_share_image',
@@ -122,6 +137,13 @@ const videoOnlyFields = new Set([
 ]);
 
 const fileFilter = (req, file, cb) => {
+    if (BANNER_MEDIA_FIELDS.has(file.fieldname)) {
+        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+            return cb(null, true);
+        }
+        return cb(new Error('Invalid banner media type.'), false);
+    }
+
     if (videoOnlyFields.has(file.fieldname)) {
         if (file.mimetype.startsWith('video/')) {
             return cb(null, true);
@@ -148,7 +170,7 @@ const upload = multer({
 /*
  * 동영상 전용 상한 — 이미지 기준(기본 20MB)으로는 히어로 영상이 거의 안 올라간다.
  * multer 의 limits.fileSize 는 인스턴스 단위라 필드별로 다르게 줄 수 없다. 그래서
- * 영상을 받는 폼(메인 슬라이드)만 상한이 큰 **별도 인스턴스**를 쓴다.
+ * 영상을 받는 폼(메인 슬라이드 · 배너)만 상한이 큰 **별도 인스턴스**를 쓴다.
  *
  * ⚠️ 상한을 올릴 때는 Nginx 의 client_max_body_size(현재 100M)도 함께 봐야 한다.
  *    그보다 크게 잡으면 multer 에 닿기도 전에 Nginx 가 413 을 준다.
@@ -205,5 +227,7 @@ upload.BUSINESS_LICENSE_DIR = BUSINESS_LICENSE_DIR;
 upload.MAX_UPLOAD_FILE_MB = MAX_UPLOAD_FILE_MB;
 upload.MAX_VIDEO_UPLOAD_MB = MAX_VIDEO_UPLOAD_MB;
 upload.heroSlide = heroSlideUploader;
+// 배너 폼도 영상을 받으므로 같은(상한이 큰) 인스턴스를 쓴다 — 이름만 용도에 맞게 노출한다.
+upload.media = heroSlideUploader;
 upload.HERO_SLIDE_WEB_DIR = HERO_SLIDE_WEB_DIR;
 module.exports = upload;

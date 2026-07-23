@@ -8,6 +8,7 @@
 - **라우트:** `routes/admin/banners.js` (`routes/admin.js` 에서 `requireMenuAccess('/admin/banners')` 로 마운트)  
 - **뷰:** `views/admin/banners/list.ejs`, `views/admin/banners/form.ejs`, `views/admin/banners/hero-slides/list.ejs`, `views/admin/banners/hero-slides/form.ejs`  
 - **이미지 업로드:** Multer 필드명 `banner_image` / `mobile_banner_image` (배너), `slide_image` (슬라이드). 저장 경로 `public/uploads/banners/`, DB 에는 `/uploads/banners/파일명`
+- **미디어 업로드(이미지 + 동영상):** 배너 두 필드는 `image/*` 와 `video/*` 를 **모두** 받습니다(`middleware/upload.js` 의 `BANNER_MEDIA_FIELDS`). 아래 §1-4 참고.
 
 이 화면은 **두 종류의 데이터**를 관리합니다.
 
@@ -66,7 +67,7 @@
 |---|---|---|
 | 저장 | `bannerController.postTopbar` | `image_url` 과 `message` 가 **둘 다** 비어야 행을 지운다. 하나라도 있으면 upsert |
 | 조회 | `topbarService.getTopbar` | `kind='BANNER' && (image_url \|\| message)` 를 배너로 본다 |
-| 렌더 | `_topbar.ejs` | 이미지가 있으면 `<img>`, 없으면 텍스트 배너 카드 |
+| 렌더 | `_topbar.ejs` | 이미지가 있으면 `<img>`, 없으면 텍스트 배너(아래 **두 가지 렌더 모드**에 따라 알약 또는 카드) |
 
 **로드 실패 폴백은 클라이언트 몫입니다.** 서버는 이미지가 열리는지 알 수 없으므로, 이미지와 텍스트가 모두 있는 슬롯은 텍스트 배너를 `style="display:none"` 으로 **같이 내려보내고** `img.onerror` 가 바꿔 끼웁니다(`window.ydTopbarImageFailed`).
 
@@ -76,6 +77,49 @@
 - 텍스트에 거는 `line-clamp-2` 는 `display` 를 바꾸므로 바깥 `inline-flex` 컨테이너가 아니라 **안쪽 텍스트 `span`** 에만 겁니다.
 
 관리자 폼(`views/admin/banners/topbar.ejs`)은 같은 우선순위를 미리보기로 재현합니다. `[data-tb-*]` 속성으로 (이미지 미리보기 / 텍스트 배너 미리보기 / 파일 / 삭제 체크 / 대체 텍스트)를 묶고, 새로 고른 파일 → 저장된 이미지(삭제 체크 시 제외) → 텍스트 순으로 판정합니다. **'이미지 삭제' 체크는 기존 이미지만 지웁니다** — 같은 저장에 새 파일이 올라오면 교체가 의도이므로 새 파일이 이깁니다.
+
+#### 두 가지 렌더 모드 — 이미지가 있느냐로 갈린다
+
+`_topbar.ejs` 는 `_hasImage = banners.some(b => b.image_url)` 하나로 레이아웃을 가릅니다.
+
+| 모드 | 조건 | 레이아웃 |
+|---|---|---|
+| **스트립** | 배너가 전부 텍스트 | 밴드 `py-1.5`(상하 6px) + 알약 가로 나열. 높이는 글자 한 줄, 폭은 글자 길이가 정한다 |
+| **카드** | 이미지 배너가 하나라도 있음 | 기존 그대로 — `grid-cols-{n}` + 개수별 고정 높이(`h-20 md:h-28` …) |
+
+이미지에 6px 밴드를 강제하면 이미지가 실처럼 눌리므로 **카드 모드는 건드리지 않습니다.** 이미지 로드 실패 폴백(위)도 카드 모드에서만 의미가 있습니다 — 스트립 모드에는 애초에 `<img>` 가 없습니다.
+
+**알약 등급은 글자 수가 정합니다**(공백 제외). `_tierOf()` 가 `punch`(≤12) / `base`(≤28) / `long`(그 외)을 돌려주고 `_pill` 맵이 클래스를 줍니다. 길이에 상관없이 한 스타일을 쓰면 짧은 문구는 초라하고 긴 문구는 시끄러워집니다.
+
+> ⚠️ **이 등급 규칙은 두 벌입니다** — 서버 렌더(`_topbar.ejs` 의 `_tierOf`/`_pill`)와 관리자 미리보기(`views/admin/banners/topbar.ejs` 의 `tierOf`/`PILL`). 한쪽만 고치면 미리보기가 거짓말을 합니다. 색만 다릅니다(관리자에는 스토어 테마 변수 `--gh-primary-dark` 가 없어 `slate` 로 대체).
+
+**좁은 화면에서는 줄바꿈 대신 순환**입니다. 알약 폭의 합이 스트립의 콘텐츠 폭(= `clientWidth − 좌우 padding`, `pr-8` 은 닫기 버튼 자리라 빼야 함)을 넘으면 4초 주기로 하나씩 보여 줍니다. 넘침 판정은 **알약 폭 합**으로 합니다 — `flex-wrap: nowrap` 으로 바꿔 `scrollWidth` 를 보는 방법은 자식이 `flex-shrink` 로 쪼그라들어 항상 "들어간다"고 답합니다. 웹폰트가 늦게 오면 폭이 달라지므로 `document.fonts.ready` 후 한 번 더 판정합니다.
+
+### 1-4. 배너 미디어 — 이미지 또는 동영상 (메인 슬라이더 전용)
+
+`banners` 에는 미디어 종류 컬럼이 없습니다. 동영상도 이미지와 **같은 컬럼**(`image_url` / `mobile_image_url`)에
+경로 하나로 담고, 렌더 시점에 **확장자로** `<img>` / `<video>` 를 가릅니다 (`shared/mediaType.js` 의 `isVideoUrl`,
+확장자 `.mp4 .webm .mov .m4v .ogv`). 컬럼을 늘리면 마이그레이션 + 기존 행 백필이 따라오는데 그럴 이유가 없습니다.
+
+| 층 | 무엇을 하나 | 어디 |
+|---|---|---|
+| 업로드 필터 | `banner_image` / `mobile_banner_image` 는 `image/*` + `video/*` 허용 | `middleware/upload.js` — `BANNER_MEDIA_FIELDS` |
+| 용량 상한 | 배너 폼도 **동영상 상한**(`MAX_VIDEO_UPLOAD_MB`, 기본 80MB) 인스턴스를 쓴다 (`upload.media`) | `routes/admin/banners.js` |
+| 타입 가드 | `banner_type !== 'MAIN'` 인데 저장될 경로가 영상이면 **400 + 업로드본 삭제** | `bannerController.assertBannerMedia()` |
+| 스토어프론트 | `img` 경로가 영상이면 `<video autoplay muted loop playsinline data-hero-video>` | `views/partials/sections/hero_media.ejs` |
+| 관리자 목록 | 썸네일을 `<video preload="metadata">` 로 + `동영상` 뱃지 | `views/admin/banners/hero-slides/list.ejs` |
+| 관리자 폼 | 타입에 따라 `accept` 토글 · 종류별 용량 검사 · objectURL 미리보기 | `views/admin/banners/form.ejs` |
+
+**왜 MAIN 만 되나.** 영상을 그릴 수 있는 렌더러가 `hero_media.ejs` 하나뿐입니다. 카테고리·브랜드·팝업·메뉴별·프로모션
+배너의 뷰는 `<img>` 만 있어서 영상 경로가 들어가면 깨집니다. 그래서 폼에서 `accept` 를 좁히고 **서버에서 한 번 더** 막습니다.
+
+**왜 multer 의 `fileFilter` 가 아니라 컨트롤러인가.** 멀티파트는 필드 순서대로 스트리밍되므로 파일이
+`banner_type` 보다 먼저 도착할 수 있습니다. 필터 시점의 `req.body.banner_type` 은 신뢰할 수 없습니다.
+
+**왜 `poster` 를 안 거나.** `hero_slide` 의 영상 분기는 poster 를 이미지 컬럼에서 가져오는데, 배너는 그 이미지 자리가
+곧 영상이라 poster 로 쓰면 깨집니다. 그래서 hero_media 안에서 **별도 분기**로 그립니다.
+
+`data-hero-video` 표식은 `hero_banner.ejs` · `theme_hero.ejs` 의 기존 스크립트가 잡아, `prefers-reduced-motion` 사용자에게 자동재생을 끕니다.
 
 ---
 
@@ -92,9 +136,9 @@
 | POST | `/admin/banners/hero-slides/delete` | heroSlide.postDelete | 슬라이드 삭제 |
 | GET | `/admin/banners` | getList | 배너 목록 (type 쿼리: MAIN/CATEGORY/POPUP/BRAND/MENU) |
 | GET | `/admin/banners/add` | getAdd | 배너 등록 폼 (`?type=` 로 기본 타입 선택) |
-| POST | `/admin/banners/add` | postAdd | 배너 등록 처리 (multipart, `upload.fields`) |
+| POST | `/admin/banners/add` | postAdd | 배너 등록 처리 (multipart, `upload.media.fields`) |
 | GET | `/admin/banners/edit/:id` | getEdit | 배너 수정 폼 |
-| POST | `/admin/banners/edit/:id` | postEdit | 배너 수정 처리 (multipart, `upload.fields`) |
+| POST | `/admin/banners/edit/:id` | postEdit | 배너 수정 처리 (multipart, `upload.media.fields`) |
 | POST | `/admin/banners/delete` | postDelete | 배너 삭제 |
 
 > `hero-slides/*` 는 `/add`·`/edit/:id` 보다 **먼저** 마운트해 경로 충돌을 피합니다(`routes/admin/banners.js`).  
@@ -175,8 +219,8 @@
 | title | text | - | 배너 제목. CATEGORY·BRAND·MENU·PROMO 에서는 `overlay_subtitle` 위에 **작은 글씨**로 함께 노출 |
 | overlay_subtitle | textarea | - | **배너 문구**. MAIN 최대 2줄 / CATEGORY·BRAND·MENU·PROMO 최대 **3줄** — 초과분은 저장 시 버린다. POPUP 은 폼에서 숨기고 저장도 안 한다. 입력칸은 **하나만** 둔다: 타입별로 두 벌 두면 숨긴 칸도 함께 전송돼 값이 배열로 들어온다 |
 | overlay_title / overlay_button_text / overlay_button_color / overlay_align | - | - | **MAIN 전용**. 다른 타입에서는 폼에서 숨기고 `readOverlay()` 가 null 로 저장 |
-| banner_image | file | 신규 등록 시 O | 배너 이미지 (PC). 수정 시엔 선택 |
-| mobile_banner_image | file | - | 모바일용 배너 이미지 (없으면 PC 이미지 사용). 폼 스크립트가 PC 필드 뒤에 주입 |
+| banner_image | file | 신규 등록 시 O | 배너 이미지 (PC). 수정 시엔 선택. **MAIN 이면 동영상도 허용**(§1-4) |
+| mobile_banner_image | file | - | 모바일용 배너 이미지/동영상 (없으면 PC 것을 사용). 폼 스크립트가 PC 필드 뒤에 주입 |
 | existing_image / existing_mobile_image | hidden | - | 수정 시 기존 이미지 경로 유지용 |
 | existing_group_key | hidden | - | 이 화면과 무관한 `group_key` 보존용 (3.2 참고) |
 | link_url | text | - | 클릭 시 이동 URL (내부 경로 또는 외부 URL) |
@@ -195,13 +239,14 @@
 > - **모바일 배너:** 390×422px, 2배 780×844px
 >
 > 해상도는 배율(1배/2배 등)에 따라 키워도 되지만, **각 배너의 가로:세로 비율은 유지**해서 제작해 주세요.  
-> 클라이언트 스크립트가 `maxUploadFileMb`(기본 20MB) 초과 파일을 업로드 전에 alert 으로 차단합니다.
+> 클라이언트 스크립트가 상한 초과 파일을 업로드 전에 alert 으로 차단합니다. 상한은 파일 종류에 따라 갈립니다 —
+> 이미지 `maxUploadFileMb`(기본 20MB) / 동영상 `maxVideoUploadMb`(기본 80MB). 메인 슬라이더는 동영상도 등록할 수 있습니다(§1-4).
 
 ---
 
 ## 6. 배너 등록 처리 (POST /admin/banners/add)
 
-- **enctype:** `multipart/form-data`, `upload.fields([banner_image, mobile_banner_image])`  
+- **enctype:** `multipart/form-data`, `upload.media.fields([banner_image, mobile_banner_image])` — 동영상 상한이 걸린 인스턴스(§1-4)  
 - **로직:**  
   - `resolveBannerTarget(banner_type, category_id, menu_target, null)` 로 `storedType` / `categoryId` / `groupKey` / `redirectType` 결정  
   - `banner_type='MENU'` → `storedType='CATEGORY'`, `categoryId=null`, `groupKey='menu:{key}'`  

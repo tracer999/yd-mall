@@ -125,21 +125,30 @@
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">이미지 업로드</label>
+            <%#
+              메인 슬라이더(MAIN)만 영상을 재생할 수 있다(hero_media.ejs). 다른 타입은 <img> 로만
+              그려서 영상이 들어가면 깨지므로 accept 를 타입에 따라 바꾼다(서버도 같은 규칙으로 막는다).
+            %>
             <input type="file" name="banner_image" id="bannerImageInput" accept="image/*"
               class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-gray-300"
               <%=banner ? '' : 'required' %> />
             <p id="bannerSizeGuide" class="mt-1 text-xs text-gray-500 leading-relaxed"></p>
-            <p class="mt-1 text-xs text-blue-700 leading-relaxed">최대 업로드 용량: <%= maxUploadFileMb || 20 %>MB</p>
+            <p id="bannerUploadLimit" class="mt-1 text-xs text-blue-700 leading-relaxed">최대 업로드 용량: <%= maxUploadFileMb || 20 %>MB</p>
             <% if(banner && banner.image_url) { %>
               <input type="hidden" name="existing_image" value="<%= banner.image_url %>">
+              <p class="mt-1 text-[11px] text-gray-400">PC 이미지는 배너의 본체라 지울 수 없습니다. 새 파일을 올리면 교체되고, 배너 자체가 필요 없으면 목록에서 배너를 삭제하세요.</p>
               <% } %>
 
                 <!-- Image Preview -->
+                <%# 이미지/영상 미리보기는 한 칸을 나눠 쓴다 — 고른 파일 종류에 따라 스크립트가 바꿔 낸다. %>
+                <% var _pcIsVideo = banner && banner.image_url && isVideoUrl(banner.image_url); %>
                 <div id="previewContainer" class="mt-4 <%= banner && banner.image_url ? '' : 'hidden' %>">
                   <p class="text-sm text-gray-700 mb-2 font-medium">✨ 미리보기</p>
                   <div class="border rounded-lg overflow-hidden bg-gray-50">
-                    <img id="previewImage" src="<%= banner ? banner.image_url : '' %>" alt="Banner Preview"
-                      class="max-w-full h-auto mx-auto object-contain" style="max-height: 300px;">
+                    <img id="previewImage" src="<%= banner && !_pcIsVideo ? banner.image_url : '' %>" alt="Banner Preview"
+                      class="max-w-full h-auto mx-auto object-contain <%= _pcIsVideo ? 'hidden' : '' %>" style="max-height: 300px;">
+                    <video id="previewVideo" src="<%= _pcIsVideo ? banner.image_url : '' %>" muted loop playsinline autoplay
+                      class="max-w-full h-auto mx-auto object-contain <%= _pcIsVideo ? '' : 'hidden' %>" style="max-height: 300px;"></video>
                   </div>
                 </div>
           </div>
@@ -256,7 +265,17 @@
 <script>
   (function () {
     const maxUploadMb = Number('<%= maxUploadFileMb || 20 %>');
-    const maxUploadBytes = maxUploadMb * 1024 * 1024;
+    // 영상은 상한이 따로다(서버도 인스턴스가 다르다) — 파일 종류에 따라 나눠 검사한다.
+    const maxVideoMb = Number('<%= typeof maxVideoUploadMb !== "undefined" && maxVideoUploadMb ? maxVideoUploadMb : 80 %>');
+    const isVideoFile = (file) => !!file && (String(file.type || '').indexOf('video/') === 0
+      || /\.(mp4|webm|mov|m4v|ogv)$/i.test(file.name || ''));
+    /** 이 파일이 상한을 넘겼는가 — 넘겼으면 안내 문구, 아니면 null. */
+    function overLimit(file) {
+      const video = isVideoFile(file);
+      const limitMb = video ? maxVideoMb : maxUploadMb;
+      if (file.size <= limitMb * 1024 * 1024) return null;
+      return (video ? '동영상' : '이미지') + ' 파일 크기는 ' + limitMb + 'MB를 초과할 수 없습니다.';
+    }
     const typeRadios = document.querySelectorAll('input[name="banner_type"]');
     const categoryField = document.getElementById('categoryField');
     const menuTargetField = document.getElementById('menuTargetField');
@@ -401,6 +420,35 @@
       }
     }
 
+    /*
+     * 파일 선택 칸 — 영상은 메인 슬라이더(MAIN)만 재생할 수 있다(hero_media.ejs).
+     * 다른 타입은 <img> 로만 그려 영상이 들어가면 깨지므로 accept 를 좁히고,
+     * 이미 골라 둔 영상이 있으면 비운다(그대로 두면 저장 때 서버가 400 으로 막는다).
+     */
+    function updateMediaAccept() {
+      const selected = document.querySelector('input[name="banner_type"]:checked');
+      const allowVideo = !!(selected && selected.value === 'MAIN');
+      const accept = allowVideo ? 'image/*,video/*' : 'image/*';
+
+      ['bannerImageInput', 'mobileBannerImageInput'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.setAttribute('accept', accept);
+        if (!allowVideo && isVideoFile(el.files && el.files[0])) {
+          el.value = '';
+          el.dispatchEvent(new Event('change'));
+        }
+      });
+
+      const limitText = allowVideo
+        ? '최대 업로드 용량: 이미지 ' + maxUploadMb + 'MB · 동영상 ' + maxVideoMb + 'MB (동영상 파일도 등록할 수 있습니다)'
+        : '최대 업로드 용량: ' + maxUploadMb + 'MB';
+      ['bannerUploadLimit', 'mobileUploadLimit'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = limitText;
+      });
+    }
+
     function updateSizeGuide() {
       if (!sizeGuide) return;
       const selected = document.querySelector('input[name="banner_type"]:checked');
@@ -414,7 +462,9 @@
           <span class="font-medium text-gray-700">메인 배너 권장 사이즈</span><br>
           기본: <span class="font-mono">1920 × 600px</span> (가로:세로 <span class="font-mono">3.2 : 1</span>)<br>
           2배 해상도 작업 시: <span class="font-mono">3840 × 1200px</span><br>
-          <span class="text-[11px] text-gray-400">브라우저 전체 폭에 맞춰 노출되므로, 위 비율(3.2:1)을 유지해서 제작해 주세요.</span>
+          <span class="text-[11px] text-gray-400">브라우저 전체 폭에 맞춰 노출되므로, 위 비율(3.2:1)을 유지해서 제작해 주세요.</span><br>
+          <span class="font-medium text-gray-700">동영상도 등록할 수 있습니다</span>
+          <span class="text-[11px] text-gray-400">(mp4 · webm 권장 / 같은 3.2:1 비율 · 소리 없이 자동 반복 재생되므로 자막이 필요하면 영상에 넣어 주세요)</span>
         `;
       } else if (selected.value === 'CATEGORY') {
         sizeGuide.innerHTML = `
@@ -470,12 +520,14 @@
 
     typeRadios.forEach(r => r.addEventListener('change', updateCategoryVisibility));
     typeRadios.forEach(r => r.addEventListener('change', updateSizeGuide));
+    typeRadios.forEach(r => r.addEventListener('change', updateMediaAccept));
     if (menuTargetSelect) menuTargetSelect.addEventListener('change', updateMenuPoolNotice);
     if (isCommonCheckbox) isCommonCheckbox.addEventListener('change', updateCommonToggle);
     updateCategoryVisibility();
     updateSizeGuide();
     updateMenuPoolNotice();
 
+    <% var _mobileIsVideo = banner && banner.mobile_image_url && isVideoUrl(banner.mobile_image_url); %>
     // Inject mobile image upload field right after PC banner field.
     const pcImageInput = document.getElementById('bannerImageInput');
     if (pcImageInput && pcImageInput.parentElement) {
@@ -484,14 +536,21 @@
         <div class="mt-6">
           <label class="block text-sm font-medium text-gray-700 mb-2">모바일용 이미지 업로드</label>
           <input type="file" name="mobile_banner_image" id="mobileBannerImageInput" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 border-gray-300" />
-          <p class="mt-1 text-xs text-gray-500 leading-relaxed">미등록 시 PC 이미지를 모바일에서도 사용합니다.</p>
+          <p class="mt-1 text-xs text-gray-500 leading-relaxed">미등록 시 PC 이미지(또는 동영상)를 모바일에서도 사용합니다.</p>
           <p class="mt-1 text-xs text-emerald-700 leading-relaxed">권장 사이즈: 390 × 422px, 2배 해상도 작업 시 780 × 844px</p>
-          <p class="mt-1 text-xs text-emerald-700 leading-relaxed">최대 업로드 용량: <%= maxUploadFileMb || 20 %>MB</p>
+          <p id="mobileUploadLimit" class="mt-1 text-xs text-emerald-700 leading-relaxed">최대 업로드 용량: <%= maxUploadFileMb || 20 %>MB</p>
           <input type="hidden" name="existing_mobile_image" value="<%= banner && banner.mobile_image_url ? banner.mobile_image_url : '' %>">
+          <% if (banner && banner.mobile_image_url) { %>
+          <label class="mt-2 inline-flex items-center gap-1.5 text-xs text-red-600">
+            <input type="checkbox" name="clear_mobile_image" id="clearMobileImage" value="1" class="w-4 h-4 rounded border-gray-300"> 등록된 모바일 이미지 삭제
+          </label>
+          <p class="mt-1 text-[11px] text-gray-400">삭제하면 모바일에서도 PC 이미지를 사용합니다. 새 파일을 함께 올리면 교체가 우선입니다.</p>
+          <% } %>
           <div id="mobilePreviewContainer" class="mt-4 <%= banner && banner.mobile_image_url ? '' : 'hidden' %>">
             <p class="text-sm text-gray-700 mb-2 font-medium">모바일 이미지 미리보기</p>
             <div class="border rounded-lg overflow-hidden bg-gray-50">
-                <img id="mobilePreviewImage" src="<%= banner && banner.mobile_image_url ? banner.mobile_image_url : '' %>" alt="Mobile Banner Preview" class="max-w-full h-auto mx-auto object-contain" style="max-height: 300px;">
+                <img id="mobilePreviewImage" src="<%= banner && banner.mobile_image_url && !_mobileIsVideo ? banner.mobile_image_url : '' %>" alt="Mobile Banner Preview" class="max-w-full h-auto mx-auto object-contain <%= _mobileIsVideo ? 'hidden' : '' %>" style="max-height: 300px;">
+                <video id="mobilePreviewVideo" src="<%= _mobileIsVideo ? banner.mobile_image_url : '' %>" muted loop playsinline autoplay class="max-w-full h-auto mx-auto object-contain <%= _mobileIsVideo ? '' : 'hidden' %>" style="max-height: 300px;"></video>
             </div>
           </div>
         </div>
@@ -499,59 +558,92 @@
       parent.insertAdjacentHTML('beforeend', mobileFieldHtml);
     }
 
-    // Image Preview Logic
+    // 파일 칸의 accept·안내 문구를 지금 선택된 배너 타입에 맞춘다(모바일 칸 주입 뒤에 호출해야 한다).
+    updateMediaAccept();
+
+    /*
+     * 미리보기 — 고른 파일이 이미지면 <img>, 동영상이면 <video> 로 낸다.
+     *
+     * 영상은 FileReader 의 dataURL 로 만들면 수십 MB 짜리 문자열이 되어 브라우저가 멈춘다.
+     * objectURL 을 쓰고, 새로 고를 때마다 이전 것을 revoke 한다(안 하면 페이지를 떠날 때까지 물고 있다).
+     */
     const imageInput = document.getElementById('bannerImageInput');
-    const previewContainer = document.getElementById('previewContainer');
-    const previewImage = document.getElementById('previewImage');
     const mobileImageInput = document.getElementById('mobileBannerImageInput');
-    const mobilePreviewContainer = document.getElementById('mobilePreviewContainer');
-    const mobilePreviewImage = document.getElementById('mobilePreviewImage');
+    const pcSlot = {
+      box: document.getElementById('previewContainer'),
+      img: document.getElementById('previewImage'),
+      video: document.getElementById('previewVideo'),
+    };
+    const mobileSlot = {
+      box: document.getElementById('mobilePreviewContainer'),
+      img: document.getElementById('mobilePreviewImage'),
+      video: document.getElementById('mobilePreviewVideo'),
+    };
+
+    function showPreview(slot, src, asVideo) {
+      if (!slot.box || !slot.img || !slot.video) return;
+      slot.img.src = (src && !asVideo) ? src : '';
+      slot.video.src = (src && asVideo) ? src : '';
+      slot.img.classList.toggle('hidden', !!asVideo);
+      slot.video.classList.toggle('hidden', !asVideo);
+      slot.box.classList.toggle('hidden', !src);
+      // 자동재생이 막히는 브라우저가 있어도 미리보기는 첫 프레임이 보이면 충분하다.
+      if (src && asVideo) { const p = slot.video.play(); if (p && p.catch) p.catch(function () {}); }
+    }
+
+    // 저장돼 있던 미디어 — 새로 고른 파일을 취소하면 여기로 되돌아간다.
+    const savedPcSrc = '<%= banner && banner.image_url ? banner.image_url : "" %>';
+    const savedPcIsVideo = <%= _pcIsVideo ? 'true' : 'false' %>;
+    const savedMobileSrc = '<%= banner && banner.mobile_image_url ? banner.mobile_image_url : "" %>';
+    const savedMobileIsVideo = <%= _mobileIsVideo ? 'true' : 'false' %>;
+
+    let pcObjectUrl = '';
+    let mobileObjectUrl = '';
 
     if (imageInput) {
       imageInput.addEventListener('change', function (e) {
         const file = e.target.files[0];
-        if (file) {
-          if (file.size > maxUploadBytes) {
-            alert(`파일 크기는 ${maxUploadMb}MB를 초과할 수 없습니다.`);
-            imageInput.value = '';
-            previewImage.src = '';
-            previewContainer.classList.add('hidden');
-            return;
-          }
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            previewImage.src = e.target.result;
-            previewContainer.classList.remove('hidden');
-          };
-          reader.readAsDataURL(file);
-        } else {
-          previewImage.src = '';
-          previewContainer.classList.add('hidden');
+        if (pcObjectUrl) { URL.revokeObjectURL(pcObjectUrl); pcObjectUrl = ''; }
+        if (!file) return showPreview(pcSlot, savedPcSrc, savedPcIsVideo);
+
+        const over = overLimit(file);
+        if (over) {
+          alert(over);
+          imageInput.value = '';
+          return showPreview(pcSlot, savedPcSrc, savedPcIsVideo);
         }
+        pcObjectUrl = URL.createObjectURL(file);
+        showPreview(pcSlot, pcObjectUrl, isVideoFile(file));
       });
     }
+
+    // 모바일 이미지 삭제 — 저장된 이미지를 비운다. 새 파일을 고르면 교체가 이기므로 체크를 푼다
+    // (서버 postEdit 의 우선순위: 새 파일 > 비우기 > 기존).
+    const clearMobileImage = document.getElementById('clearMobileImage');
+
+    function syncMobilePreview() {
+      if (mobileObjectUrl) return; // 새로 고른 파일이 있으면 그게 우선
+      const cleared = clearMobileImage && clearMobileImage.checked;
+      showPreview(mobileSlot, cleared ? '' : savedMobileSrc, savedMobileIsVideo);
+    }
+
+    if (clearMobileImage) clearMobileImage.addEventListener('change', syncMobilePreview);
 
     if (mobileImageInput) {
       mobileImageInput.addEventListener('change', function (e) {
         const file = e.target.files[0];
-        if (file) {
-          if (file.size > maxUploadBytes) {
-            alert(`파일 크기는 ${maxUploadMb}MB를 초과할 수 없습니다.`);
-            mobileImageInput.value = '';
-            mobilePreviewImage.src = '';
-            mobilePreviewContainer.classList.add('hidden');
-            return;
-          }
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            mobilePreviewImage.src = e.target.result;
-            mobilePreviewContainer.classList.remove('hidden');
-          };
-          reader.readAsDataURL(file);
-        } else {
-          mobilePreviewImage.src = '';
-          mobilePreviewContainer.classList.add('hidden');
+        if (mobileObjectUrl) { URL.revokeObjectURL(mobileObjectUrl); mobileObjectUrl = ''; }
+        if (!file) return syncMobilePreview();
+
+        const over = overLimit(file);
+        if (over) {
+          alert(over);
+          mobileImageInput.value = '';
+          return syncMobilePreview();
         }
+        if (clearMobileImage) clearMobileImage.checked = false;
+        mobileObjectUrl = URL.createObjectURL(file);
+        showPreview(mobileSlot, mobileObjectUrl, isVideoFile(file));
       });
     }
   })();

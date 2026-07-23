@@ -4,7 +4,12 @@ const bannerController = require('../../controllers/admin/bannerController');
 const heroSlideController = require('../../controllers/admin/heroSlideController');
 const upload = require('../../middleware/upload');
 
-const bannerUpload = upload.fields([
+/*
+ * 배너 이미지·영상. 메인 슬라이더(이미지 배너)에는 영상도 올릴 수 있어서
+ * 상한이 큰 인스턴스(upload.media = 동영상 상한)를 쓴다. 기본 인스턴스(20MB)로는
+ * 영상이 사실상 안 올라간다. 영상 허용 타입 검사는 bannerController 가 한다.
+ */
+const bannerUpload = upload.media.fields([
     { name: 'banner_image', maxCount: 1 },
     { name: 'mobile_banner_image', maxCount: 1 }
 ]);
@@ -59,6 +64,9 @@ function makeUploadHandler(uploadFn) {
             }
             if (err.message === 'Invalid image file type.') {
                 return res.status(400).send('이미지 칸에는 이미지 파일만 올릴 수 있습니다.');
+            }
+            if (err.message === 'Invalid banner media type.') {
+                return res.status(400).send('배너에는 이미지 또는 동영상 파일만 올릴 수 있습니다.');
             }
             console.error('[banners] 업로드 오류:', err.message);
 
