@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql } = require('../catalog/sellableStock');
 const dealSvc = require('../deal/dealService');
 
 /*
@@ -28,7 +29,7 @@ const dealSvc = require('../deal/dealService');
 /** product_card.ejs 가 요구하는 컬럼 계약. 다른 서비스와 같은 집합을 쓴다. */
 const CARD_COLS = `
     p.id, p.name, p.provider, p.main_image, p.price, p.original_price,
-    p.discount_rate, p.status, p.stock, p.slug, p.product_badge, p.distribution_badge
+    p.discount_rate, p.status, ${sellableStockSql('p')} AS stock, p.slug, p.product_badge, p.distribution_badge
 `;
 
 /** 고객에게 보여도 되는 상품인가. 전 섹션 공통. */

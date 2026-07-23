@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const dealSvc = require('../deal/dealService');
 const newArrival = require('./newArrival');
+const { sellableStockSql } = require('./sellableStock');
 const { GLOBAL_CATEGORY_MALL_ID, visibleCategoryIdSet } = require('./categoryScope');
 
 /*
@@ -28,7 +29,7 @@ const P_STATUS = "p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')";
 /** 카드에 필요한 컬럼. created_at 은 NEW 뱃지 판정(newArrival.isNewProduct)이 쓴다 */
 const CARD_FIELDS = `
     p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
-    p.discount_rate, p.status, p.stock, p.provider,
+    p.discount_rate, p.status, ${sellableStockSql('p')} AS stock, p.provider,
     p.product_badge, p.distribution_badge, p.view_count,
     p.sale_start_date, p.created_at`;
 

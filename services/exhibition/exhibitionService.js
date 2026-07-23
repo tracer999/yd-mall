@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const dealSvc = require('../deal/dealService');
+const { sellableStockSql, inStockSql } = require('../catalog/sellableStock');
 
 /*
  * 기획전 서비스 — 관리자·고객 공용 읽기 경로
@@ -312,14 +313,14 @@ const RECOMMEND_LIMIT = 8;
 async function getProducts(exhibitionId, { hideSoldOut = false } = {}) {
     const [rows] = await pool.query(`
         SELECT p.id, p.name, p.provider, p.main_image, p.price, p.original_price,
-               p.discount_rate, p.status, p.stock, p.slug, p.product_badge, p.distribution_badge,
+               p.discount_rate, p.status, ${sellableStockSql('p')} AS stock, p.slug, p.product_badge, p.distribution_badge,
                ep.id AS mapping_id, ep.section_id, ep.sort_order, ep.is_fixed, ep.is_recommended,
                ep.display_badge, ep.display_comment, ep.purchase_enabled
           FROM exhibition_product ep
           JOIN products p ON p.id = ep.product_id
          WHERE ep.exhibition_id = ? AND ep.visible = 1
            AND p.visibility = 'PUBLIC' AND p.status <> 'OFF'
-           ${hideSoldOut ? "AND p.status <> 'SOLD_OUT' AND p.stock > 0" : ''}
+           ${hideSoldOut ? `AND p.status <> 'SOLD_OUT' AND ${inStockSql('p')}` : ''}
          ORDER BY ep.is_fixed DESC, ep.sort_order ASC, ep.id ASC
     `, [exhibitionId]);
     // 기획전 카드도 활성 특가가로 표시한다.

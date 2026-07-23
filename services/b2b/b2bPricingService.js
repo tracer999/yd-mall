@@ -132,6 +132,24 @@ async function decorateProducts(b2b, rows) {
 }
 
 /**
+ * 목록 행에 "B2B 판매 가능" 플래그(is_b2b_product)만 얹는다.
+ *
+ * decorateProducts 와 달리 **컨텍스트를 보지 않는다.** 전용가는 승인 사업자만 볼 수 있지만,
+ * "이 상품은 사업자 구매가 된다"는 사실 자체는 비로그인·일반회원에게도 보여야
+ * 목록 상단의 'B2B 상품' 필터와 카드 뱃지가 같은 집합을 가리킨다.
+ * 금액은 붙이지 않으므로 전용가 유출은 없다.
+ */
+async function markB2bProducts(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return rows;
+    const settings = await loadSettings(rows.map((r) => Number(r.id || r.product_id)));
+    if (settings.size === 0) return rows;
+    for (const row of rows) {
+        if (settings.has(Number(row.id || row.product_id))) row.is_b2b_product = true;
+    }
+    return rows;
+}
+
+/**
  * 주문 라인에 전용가를 적용한다. dealService.applyToScopeItems 와 같은 시그니처다.
  *
  * ⚠️ **dealSvc.applyToScopeItems 보다 먼저** 호출해야 한다. 여기서 찍는 source_type='B2B' 를
@@ -187,6 +205,7 @@ module.exports = {
     resolveForProducts,
     resolveForProduct,
     decorateProducts,
+    markB2bProducts,
     applyToScopeItems,
     validateOrderItems,
 };

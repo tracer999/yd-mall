@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql } = require('../../services/catalog/sellableStock');
 const upload = require('../../middleware/upload');
 const displayService = require('../../services/display/displayService');
 const bestRankingService = require('../../services/best/bestRankingService');
@@ -202,7 +203,7 @@ exports.getProductSearch = async (req, res) => {
         params.push(mallId);
 
         const [products] = await pool.query(`
-            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price, ${sellableStockSql('p')} AS stock, p.status
               FROM products p
              WHERE ${where.join(' AND ')}
              ORDER BY p.created_at DESC

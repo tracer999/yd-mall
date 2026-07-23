@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const orderMailer = require('../services/email/orderMailer');
 const { benefitLabel } = require('../services/coupon/discountCalculator');
 const claimService = require('../services/order/claimService');
+const { sellableStockSql } = require('../services/catalog/sellableStock');
 const dealSvc = require('../services/deal/dealService');
 const membershipEval = require('../services/membership/evaluationService');
 
@@ -408,7 +409,7 @@ exports.getLikes = async (req, res, next) => {
         const [likedProducts] = await pool.query(
             `SELECT
                 p.id, p.name, p.slug, p.price, p.original_price,
-                p.main_image, p.stock, p.status, p.provider,
+                p.main_image, ${sellableStockSql('p')} AS stock, p.status, p.provider,
                 p.discount_rate, p.product_badge, p.distribution_badge
              FROM likes l
              JOIN products p ON l.product_id = p.id
@@ -467,7 +468,7 @@ exports.getRecentViews = async (req, res, next) => {
 
         const [recentProducts] = await pool.query(
             `SELECT p.id, p.name, p.slug, p.price, p.original_price,
-                    p.main_image, p.stock, p.status, p.provider,
+                    p.main_image, ${sellableStockSql('p')} AS stock, p.status, p.provider,
                     p.discount_rate, p.product_badge, p.distribution_badge,
                     rv.viewed_at
              FROM recent_views rv

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { syncProductById, syncProductsByIds, deleteProductById, isShopifySyncEnabled } = require('../../services/shopify/syncService');
 const newArrival = require('../../services/catalog/newArrival');
+const { sellableCond, inStockSql } = require('../../services/catalog/sellableStock');
 const productImporter = require('../../services/catalog/productImporter');
 const taxonomyResolver = require('../../services/catalog/taxonomyResolver');
 const taxonomyMapper = require('../../services/catalog/taxonomyMapper');
@@ -1091,9 +1092,10 @@ exports.getList = async (req, res) => {
             whereClause += ' AND p.visibility = ?';
             queryParams.push(visibility);
         }
-        // 재고 필터는 SKU 기준(옵션상품은 products.stock 이 stale). 재고 있는 SKU 가 하나라도 있으면 '재고 있음'.
-        if (stock === 'in') whereClause += ' AND EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
-        else if (stock === 'out') whereClause += ' AND NOT EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
+        // 재고 필터는 판매 가능 기준 — 프론트 품절 표시·결제 검증과 같은 정의를 쓴다(sellableStock).
+        // 예전엔 SKU 의 status 를 안 봐서, 전 옵션이 OFF 라 실제로는 못 파는 상품도 '재고 있음' 으로 잡혔다.
+        if (stock === 'in') whereClause += ` AND ${inStockSql('p')}`;
+        else if (stock === 'out') whereClause += ` AND NOT ${inStockSql('p')}`;
 
         // 사업자(B2B) 상품 여부 — COUNT 쿼리에는 bs JOIN 이 없으므로 EXISTS 로 건다.
         // 해제는 행을 DELETE 하므로 is_b2b_sale=0 행은 없지만, 표현이 갈리지 않도록 조건을 명시한다.
@@ -1142,14 +1144,17 @@ exports.getList = async (req, res) => {
         /*
          * 목록 표기용 SKU 집계(현재 페이지 상품만 1쿼리). 옵션상품은 products.stock/price 가
          * 부정확하므로 SKU 기준으로 재고합·판매가 범위를 뽑아 뷰가 정확히 그린다(설계 §31.4).
-         *  - eff_stock: 판매 가능 재고 = 해당 상품 전 SKU 재고합(단일=대표 SKU, 옵션=옵션 SKU 합)
+         *  - eff_stock: 판매 가능 재고. 재고 필터·프론트 품절 표시와 같은 정의(sellableStock)를 쓴다.
+         *  - total_stock: 전 SKU 재고합. eff_stock 과 다르면 "팔 수 없게 잠긴 재고" 가 있다는 뜻이라
+         *    (예: 옵션이 전부 OFF) 뷰가 함께 보여 준다. 안 그러면 "재고가 있는데 0 으로 보인다" 가 된다.
          *  - price_min/max: SKU 판매가 범위(옵션상품이면 "min~max" 로 표기)
          */
         if (products.length) {
             const ids = products.map((p) => p.id);
             const [aggs] = await pool.query(
                 `SELECT product_id,
-                        COALESCE(SUM(stock), 0) AS eff_stock,
+                        COALESCE(SUM(CASE WHEN ${sellableCond()} THEN stock ELSE 0 END), 0) AS eff_stock,
+                        COALESCE(SUM(stock), 0) AS total_stock,
                         MIN(price) AS price_min, MAX(price) AS price_max,
                         COUNT(*) AS sku_count
                    FROM product_sku WHERE product_id IN (?) GROUP BY product_id`,
@@ -1159,6 +1164,7 @@ exports.getList = async (req, res) => {
             for (const p of products) {
                 const a = aggMap.get(p.id);
                 p.eff_stock = a ? Number(a.eff_stock) : (p.stock || 0);
+                p.total_stock = a ? Number(a.total_stock) : (p.stock || 0);
                 p.price_min = a && a.price_min != null ? Number(a.price_min) : (p.price || 0);
                 p.price_max = a && a.price_max != null ? Number(a.price_max) : (p.price || 0);
                 p.sku_count = a ? Number(a.sku_count) : 0;

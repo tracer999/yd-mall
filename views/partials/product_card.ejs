@@ -50,6 +50,9 @@
   const _topBadges = _opts.showTopBadge ? _topBadgeKeys : [];
   const _priceBadges = _opts.showPriceBadge ? _allBadges.filter(b => _priceBadgeMap[b]) : [];
   const _showDist = _opts.showDistBadge && _distBadge;
+  /* B2B 판매 상품 표시. b2bPricingService.markB2bProducts 가 얹은 플래그가 있을 때만 그린다
+     — 안 얹힌 화면에서는 필드가 아예 없으므로 카드 모양은 예전과 동일하다. */
+  const _isB2bProduct = !!product.is_b2b_product;
   const _price = product.price;
   const _listPrice = (product.original_price && product.original_price > _price) ? product.original_price : null;
   /*
@@ -70,8 +73,9 @@
            alt="<%= product.name %>"
            class="w-full h-full object-contain object-center px-3 pt-3 pb-1 sm:pb-3 <%= (_isSoldOut && !_isStopped && !_isComingSoon) ? 'opacity-60 grayscale-[0.5]' : '' %>">
 
-      <% if (_showDist || _topBadges.length > 0) { %>
+      <% if (_showDist || _topBadges.length > 0 || _isB2bProduct) { %>
         <div class="absolute top-2 left-2 z-20 flex flex-wrap gap-1.5">
+          <% if (_isB2bProduct) { %><span class="product-pill-badge bg-blue-600 text-white">B2B</span><% } %>
           <% if (_showDist) { %><span class="product-pill-badge badge-channel"><%= _distBadge %></span><% } %>
           <% _topBadges.forEach(b => { const info = _topBadgeMap[b]; if (info) { %>
             <span class="product-pill-badge <%= info.cls %>"><%= info.text %></span>

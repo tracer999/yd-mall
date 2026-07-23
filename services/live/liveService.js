@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql } = require('../catalog/sellableStock');
 
 /*
  * 쇼핑라이브 서비스 — 관리자·고객·주문 공용
@@ -271,7 +272,7 @@ const MAIN_PRODUCT_COLS = `
     p.main_image         AS main_product_image,
     p.price              AS main_product_price,
     p.slug               AS main_product_slug,
-    p.stock              AS main_product_stock,
+    ${sellableStockSql('p')} AS main_product_stock,
     p.status             AS main_product_status
 `;
 
@@ -359,7 +360,7 @@ async function getProducts(liveShowId, { publicOnly = true } = {}) {
     const [rows] = await pool.query(`
         SELECT lsp.*,
                p.name, p.provider, p.main_image, p.price AS product_price, p.original_price,
-               p.stock, p.status AS product_status, p.slug AS product_slug
+               ${sellableStockSql('p')} AS stock, p.status AS product_status, p.slug AS product_slug
           FROM live_show_product lsp
           JOIN products p ON p.id = lsp.product_id
          WHERE lsp.live_show_id = ?
@@ -484,7 +485,7 @@ async function resolveLine(mallId, liveShowId, productId, rawQuantity) {
     if (!liveShow.purchasable) return fail('closed', slug);
 
     const [[row]] = await pool.query(`
-        SELECT lsp.*, p.name, p.price AS product_price, p.stock,
+        SELECT lsp.*, p.name, p.price AS product_price, ${sellableStockSql('p')} AS stock,
                p.status AS product_status, p.slug AS product_slug
           FROM live_show_product lsp
           JOIN products p ON p.id = lsp.product_id

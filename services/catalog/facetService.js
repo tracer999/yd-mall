@@ -13,6 +13,7 @@
  */
 
 const pool = require('../../config/db');
+const { inStockSql } = require('./sellableStock');
 
 // 필터 키로 쓸 수 없는 쿼리스트링 이름. facet_code 소문자와 충돌하면 안 된다.
 const RESERVED_KEYS = new Set([
@@ -265,7 +266,8 @@ function buildPredicates(facets, q, opts) {
         else if (facet.facet_code === 'DISCOUNT') piece = discountPredicate(facet, raw, alias);
         else if (facet.facet_code === 'BENEFIT') piece = benefitPredicate(raw, alias);
         else if (facet.facet_code === 'STOCK') {
-            piece = { sql: `(${alias}.stock > 0 AND ${alias}.status <> 'SOLD_OUT')`, params: [] };
+            // 재고 있음 = 살 수 있는 SKU 가 하나라도 있는 것. products.stock 은 옵션상품에서 stale.
+            piece = { sql: `(${inStockSql(alias)} AND ${alias}.status <> 'SOLD_OUT')`, params: [] };
         } else if (facet.facet_code === 'BRAND') {
             const ids = splitValues(raw).map(Number).filter(Boolean);
             if (ids.length) piece = { sql: `${alias}.brand_category_id IN (${ids.map(() => '?').join(',')})`, params: ids };

@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const newArrival = require('../catalog/newArrival');
 const dealSvc = require('../deal/dealService');
+const sellableStock = require('../catalog/sellableStock');
 
 /*
  * 상품 그룹 해석 서비스 (P1 렌더 엔진)
@@ -55,7 +56,9 @@ async function resolve(group, { hasUser = false, limit = 8 } = {}) {
       [group.id, mallId, lim]
     );
     // 이 그룹을 쓰는 모든 섹션(product_grid·carousel·bento)이 특가가를 보게 한다.
-    return await dealSvc.applyDeals(rows);
+    await dealSvc.applyDeals(rows);
+    // SELECT p.* 라 SELECT 절에 컬럼을 못 붙인다 → 판매가능재고는 후처리로 덮는다.
+    return await sellableStock.decorate(rows);
   }
 
   // condition (화이트리스트 필터만 허용)
@@ -67,7 +70,8 @@ async function resolve(group, { hasUser = false, limit = 8 } = {}) {
   if (cond.isNew) { const np = newArrival.newProductPredicate('p'); where.push(np.sql); params.push(...np.params); }
   if (cond.category_id) { where.push('p.category_id = ?'); params.push(Number(cond.category_id)); }
   if (cond.min_discount) { where.push('p.discount_rate >= ?'); params.push(Number(cond.min_discount)); }
-  if (cond.in_stock) { where.push('p.stock > 0'); }
+  // 재고 조건은 SKU 기준 — products.stock 은 옵션상품에서 stale 하다.
+  if (cond.in_stock) { where.push(sellableStock.inStockSql('p')); }
   const order = ORDER_MAP[group.sort_type] || ORDER_MAP.newest;
 
   const [rows] = await pool.query(
@@ -75,7 +79,8 @@ async function resolve(group, { hasUser = false, limit = 8 } = {}) {
     [...params, lim]
   );
   // manual 분기와 동일 — condition 그룹도 특가가로 표시한다.
-  return await dealSvc.applyDeals(rows);
+  await dealSvc.applyDeals(rows);
+  return await sellableStock.decorate(rows);
 }
 
 module.exports = { getById, resolve };

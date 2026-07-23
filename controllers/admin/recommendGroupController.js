@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql, inStockSql } = require('../../services/catalog/sellableStock');
 const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
 
 /*
@@ -60,7 +61,7 @@ async function renderForm(res, group, mallId, extra = {}) {
          */
         const [rows] = await pool.query(`
             SELECT i.id AS item_id, i.sort_order,
-                   p.id, p.name, p.main_image, p.price, p.status, p.stock, p.visibility
+                   p.id, p.name, p.main_image, p.price, p.status, ${sellableStockSql('p')} AS stock, p.visibility
               FROM recommend_group_item i
               JOIN products p ON p.id = i.product_id
              WHERE i.recommend_group_id = ?
@@ -269,8 +270,9 @@ exports.getProductSearch = async (req, res) => {
         if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
         if (Number.isFinite(categoryId) && categoryId > 0) { where.push('p.category_id = ?'); params.push(categoryId); }
         if (Number.isFinite(brandId) && brandId > 0) { where.push('p.brand_category_id = ?'); params.push(brandId); }
-        if (inStock === 'y') where.push('p.stock > 0');
-        else if (inStock === 'n') where.push('p.stock <= 0');
+        // 재고 판정은 상품 목록·프론트와 같은 정의(판매 가능한 SKU 기준).
+        if (inStock === 'y') where.push(inStockSql('p'));
+        else if (inStock === 'n') where.push(`NOT ${inStockSql('p')}`);
         if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
 
         // 이미 이 그룹에 담긴 상품은 후보에서 뺀다.
@@ -278,7 +280,7 @@ exports.getProductSearch = async (req, res) => {
         params.push(req.params.id);
 
         const [products] = await pool.query(`
-            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status, p.visibility, p.product_badge
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price, ${sellableStockSql('p')} AS stock, p.status, p.visibility, p.product_badge
               FROM products p
              WHERE ${where.join(' AND ')}
              ORDER BY p.created_at DESC

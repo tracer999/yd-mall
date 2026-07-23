@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const dealSvc = require('../deal/dealService');
+const { sellableStockSql } = require('../catalog/sellableStock');
 
 /*
  * 베스트/랭킹 엔진
@@ -274,7 +275,7 @@ async function getGroups(mallId) {
 
 const PRODUCT_FIELDS = `
     p.id, p.name, p.slug, p.price, p.original_price, p.discount_rate,
-    p.main_image, p.stock, p.status, p.provider,
+    p.main_image, ${sellableStockSql('p')} AS stock, p.status, p.provider,
     p.product_badge, p.distribution_badge, p.view_count`;
 
 /**

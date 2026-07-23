@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const dealSvc = require('../deal/dealService');
+const { sellableStockSql } = require('../catalog/sellableStock');
 const bestRanking = require('../best/bestRankingService');
 const { INITIAL_BUCKETS, toChosung } = require('../../shared/hangul');
 
@@ -14,7 +15,7 @@ const P_LIVE = "p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')";
 const vis = (hasUser) => hasUser ? "p.visibility IN ('PUBLIC','MEMBER_ONLY')" : "p.visibility = 'PUBLIC'";
 
 const PRODUCT_CARD = `p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
-                      p.discount_rate, p.status, p.stock, p.provider,
+                      p.discount_rate, p.status, ${sellableStockSql('p')} AS stock, p.provider,
                       p.product_badge, p.distribution_badge`;
 
 const PAGE_SIZE = 60;

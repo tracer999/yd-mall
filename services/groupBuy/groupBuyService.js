@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql } = require('../catalog/sellableStock');
 
 /*
  * 공동구매 서비스 — 관리자·고객·주문 공용
@@ -204,7 +205,7 @@ const MAIN_PRODUCT_COLS = `
     p.main_image        AS main_product_image,
     p.price             AS main_product_price,
     p.slug              AS main_product_slug,
-    p.stock             AS main_product_stock,
+    ${sellableStockSql('p')} AS main_product_stock,
     p.status            AS main_product_status
 `;
 
@@ -271,7 +272,7 @@ async function getProducts(groupBuyId, { publicOnly = true } = {}) {
     const [rows] = await pool.query(`
         SELECT gbp.*,
                p.name, p.provider, p.main_image, p.price AS product_price, p.original_price,
-               p.stock, p.status AS product_status, p.slug AS product_slug,
+               ${sellableStockSql('p')} AS stock, p.status AS product_status, p.slug AS product_slug,
                p.description AS product_description
           FROM group_buy_product gbp
           JOIN products p ON p.id = gbp.product_id
@@ -345,7 +346,7 @@ async function resolveLine(mallId, groupBuyId, productId, rawQuantity) {
     if (!groupBuy.purchasable) return fail('closed', slug);
 
     const [[row]] = await pool.query(`
-        SELECT gbp.*, p.name, p.stock, p.status AS product_status, p.slug AS product_slug
+        SELECT gbp.*, p.name, ${sellableStockSql('p')} AS stock, p.status AS product_status, p.slug AS product_slug
           FROM group_buy_product gbp
           JOIN products p ON p.id = gbp.product_id
          WHERE gbp.group_buy_id = ? AND gbp.product_id = ?

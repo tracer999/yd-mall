@@ -271,8 +271,16 @@
                                 <% } %>
                             </td>
                             <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <%# 재고는 SKU 기준(옵션=옵션 SKU 재고합). products.stock 은 stale 할 수 있어 안 쓴다. %>
-                                <%= (typeof p.eff_stock === 'number' ? p.eff_stock : p.stock).toLocaleString() %>
+                                <%# 재고는 "판매 가능" 기준(SKU status=ON). products.stock 은 stale 할 수 있어 안 쓴다.
+                                    총재고와 다르면 OFF 인 SKU 에 잠긴 재고가 있다는 뜻이라 함께 보여 준다. %>
+                                <% const _eff = (typeof p.eff_stock === 'number' ? p.eff_stock : (p.stock || 0));
+                                   const _tot = (typeof p.total_stock === 'number' ? p.total_stock : _eff); %>
+                                <%= _eff.toLocaleString() %>
+                                <% if (_tot > _eff) { %>
+                                    <span class="block text-xs text-amber-600" title="판매 중지된 옵션(SKU)에 잠긴 재고입니다. [판매중 처리] 하거나 옵션·SKU 화면에서 켜면 팔립니다.">
+                                        총 <%= _tot.toLocaleString() %>
+                                    </span>
+                                <% } %>
                             </td>
                             <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-400 text-right">
                                 <% if (p.original_price && p.original_price > p.price) { %>

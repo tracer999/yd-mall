@@ -1,5 +1,12 @@
 const pool = require('../../../config/db');
 const dealSvc = require('../../deal/dealService');
+const { sellableStockSql } = require('../../catalog/sellableStock');
+
+/**
+ * 카드 SELECT 절에 그대로 넣는 판매가능재고 컬럼(products 별칭이 `p` 인 쿼리용).
+ * products.stock 은 옵션상품에서 stale 해 카드가 SOLD OUT 으로 잘못 뜬다 — 섹션 리졸버는 전부 이걸 쓴다.
+ */
+const STOCK_COL = `${sellableStockSql('p')} AS stock`;
 const { GLOBAL_CATEGORY_MALL_ID, visibleCategoryIdSet } = require('../../catalog/categoryScope');
 
 /*
@@ -113,7 +120,7 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
         const placeholders = ids.map(() => '?').join(',');
         const [products] = await pool.query(`
             SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
-                   p.discount_rate, p.status, p.stock, p.provider,
+                   p.discount_rate, p.status, ${STOCK_COL}, p.provider,
                    p.product_badge, p.distribution_badge
             FROM products p
             WHERE p.mall_id = ? AND p.category_id IN (${placeholders}) AND ${P_STATUS} AND ${vis}
@@ -128,4 +135,4 @@ async function loadHomeCategoryBests(hasUser, mallId = 1, opts = {}) {
     return result;
 }
 
-module.exports = { P_STATUS, visibilityClause, loadHomeCategories, loadHomeCategoryBests };
+module.exports = { P_STATUS, STOCK_COL, visibilityClause, loadHomeCategories, loadHomeCategoryBests };

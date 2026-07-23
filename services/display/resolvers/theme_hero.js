@@ -1,6 +1,7 @@
 const pool = require('../../../config/db');
 const dealSvc = require('../../deal/dealService');
 const bestRankingService = require('../../best/bestRankingService');
+const { STOCK_COL } = require('./_shared');
 
 /*
  * theme_hero — 홈 최상단 히어로.
@@ -96,7 +97,7 @@ async function loadProductSlides(mallId, hasUser) {
                hs.mobile_video_webm_url, hs.mobile_video_mp4_url,
                hs.embed_id, hs.poster_url, hs.autoplay, hs.muted, hs.loop_play, hs.preload,
                p.id AS product_id, p.name AS product_name, p.slug, p.main_image,
-               p.price, p.original_price, p.discount_rate, p.status, p.stock, p.provider
+               p.price, p.original_price, p.discount_rate, p.status, ${STOCK_COL}, p.provider
           FROM hero_slide hs
           LEFT JOIN products p ON p.id = hs.product_id
          WHERE hs.is_active = 1 AND hs.mall_id = ? AND hs.slot = 'MAIN'
@@ -136,7 +137,7 @@ async function resolveFeatureSlide(mallId, hasUser) {
     const [rows] = await pool.query(`
         SELECT hs.id, hs.slot, hs.label, hs.headline, hs.image_url, hs.link_url,
                p.id AS product_id, p.name AS product_name, p.slug, p.main_image,
-               p.price, p.original_price, p.discount_rate, p.status, p.stock, p.provider
+               p.price, p.original_price, p.discount_rate, p.status, ${STOCK_COL}, p.provider
           FROM hero_slide hs
           LEFT JOIN products p ON p.id = hs.product_id
          WHERE hs.is_active = 1 AND hs.mall_id = ? AND hs.slot = 'FEATURE'

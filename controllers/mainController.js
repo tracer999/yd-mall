@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const displayService = require('../services/display/displayService');
 const dealSvc = require('../services/deal/dealService');
+const { sellableStockSql } = require('../services/catalog/sellableStock');
 const menuShowcaseService = require('../services/menu/menuShowcaseService');
 
 // 카카오채널 URL 정규화 (siteSettings 기반)
@@ -47,7 +48,8 @@ async function buildHomeContext(req, res) {
         const [slides] = await pool.query(`
             SELECT hs.id, hs.slot, hs.label, hs.headline, hs.image_url, hs.link_url, hs.sort_order,
                    p.id AS product_id, p.name AS product_name, p.slug, p.main_image,
-                   p.price, p.original_price, p.discount_rate, p.status, p.stock, p.provider
+                   p.price, p.original_price, p.discount_rate, p.status,
+                   ${sellableStockSql('p')} AS stock, p.provider
             FROM hero_slide hs
             LEFT JOIN products p ON p.id = hs.product_id
             WHERE hs.is_active = 1 AND hs.mall_id = ?

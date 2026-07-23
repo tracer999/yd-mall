@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { calcShippingFee } = require('../services/shipping/shippingCalculator');
+const { sellableStockSql } = require('../services/catalog/sellableStock');
 const dealSvc = require('../services/deal/dealService');
 const skuService = require('../services/catalog/skuService');
 // B2B — 전용가·수량규칙·장바구니 유형(설계 §6.3)
@@ -210,12 +211,21 @@ exports.updateQuantity = async (req, res) => {
         if (!qty || qty <= 0) {
             await pool.query('DELETE FROM carts WHERE id = ? AND user_id = ?', [cartId, userId]);
         } else {
+            // 옵션을 고른 줄은 그 SKU 재고가 상한이고, 아니면 상품의 판매가능재고가 상한이다.
+            // 예전엔 products.stock 만 봐서, 옵션상품은 재고가 있어도 수량을 못 늘렸다(그 값이 stale 이라 0).
+            // 판정 기준은 checkoutController 의 재고 검증과 같다.
             const [[cartItem]] = await pool.query(
-                'SELECT c.product_id, p.stock FROM carts c JOIN products p ON c.product_id = p.id WHERE c.id = ? AND c.user_id = ?',
+                `SELECT c.product_id, c.sku_id, s.stock AS sku_stock,
+                        ${sellableStockSql('p')} AS stock
+                   FROM carts c
+                   JOIN products p ON c.product_id = p.id
+                   LEFT JOIN product_sku s ON s.id = c.sku_id
+                  WHERE c.id = ? AND c.user_id = ?`,
                 [cartId, userId]
             );
             if (cartItem) {
-                const stock = (cartItem.stock != null && cartItem.stock >= 0) ? cartItem.stock : 0;
+                const raw = cartItem.sku_id ? cartItem.sku_stock : cartItem.stock;
+                const stock = (raw != null && raw >= 0) ? raw : 0;
                 if (qty > stock) {
                     return res.redirect(`/cart?error=stock&max=${stock}`);
                 }

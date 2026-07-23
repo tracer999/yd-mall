@@ -64,6 +64,7 @@
 
 <%
 const _cpBadge = typeof currentProductBadge !== 'undefined' ? currentProductBadge : '';
+const _b2bOnly = (typeof currentB2bOnly !== 'undefined') && currentB2bOnly;
 const _facets = (typeof facets !== 'undefined' && Array.isArray(facets)) ? facets : [];
 const _q = (typeof currentQuery !== 'undefined' && currentQuery) ? currentQuery : {};
 
@@ -246,7 +247,8 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                             <%- include('./_category_best', { products: categoryBest }) %>
                         <% } %>
 
-                        <div class="flex flex-col mb-6 gap-3 lg:sticky lg:top-0 lg:bg-gray-50 lg:z-10 lg:pt-2 lg:pb-2" id="products-filter-bar">
+                        <%# 필터 바는 스크롤을 따라다니지 않는다(고정 해제 — 목록 상단에 그대로 머문다). %>
+                        <div class="flex flex-col mb-6 gap-3" id="products-filter-bar">
                             <div class="flex justify-between items-center">
                                 <% if (_hasCatNav) { %>
                                     <span class="text-sm text-gray-500">총 <strong class="text-gray-900"><%= _pg.total %></strong>개</span>
@@ -321,19 +323,19 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
 
                             <div class="flex flex-wrap gap-2 text-sm mt-1">
                                 <%
-                                  const _noFilter = !currentDistributionBadge && !_cpBadge;
+                                  const _noFilter = !currentDistributionBadge && !_cpBadge && !_b2bOnly;
                                   const _activeStyle = 'bg-[var(--gh-primary)] text-white border-[var(--gh-primary)] font-semibold shadow-sm';
                                   const _inactiveStyle = 'bg-white text-gray-600 border-gray-200 hover:border-gray-300';
                                 %>
-                                <a href="<%= _url({ badge: null, distributionBadge: null, page: null }) %>"
+                                <a href="<%= _url({ badge: null, distributionBadge: null, b2b: null, page: null }) %>"
                                    class="px-3 py-1.5 rounded-full border transition-colors <%= _noFilter ? _activeStyle : _inactiveStyle %>">
                                     전체
                                 </a>
-                                <a href="<%= _url({ badge: 'GREENHUB_SPECIAL', distributionBadge: null, page: null }) %>"
+                                <a href="<%= _url({ badge: 'GREENHUB_SPECIAL', distributionBadge: null, b2b: null, page: null }) %>"
                                    class="px-3 py-1.5 rounded-full border transition-colors <%= _cpBadge === 'GREENHUB_SPECIAL' ? _activeStyle : _inactiveStyle %>">
                                     와이디몰특가
                                 </a>
-                                <a href="<%= _url({ badge: 'DEADLINE_SALE', distributionBadge: null, page: null }) %>"
+                                <a href="<%= _url({ badge: 'DEADLINE_SALE', distributionBadge: null, b2b: null, page: null }) %>"
                                    class="px-3 py-1.5 rounded-full border transition-colors <%= _cpBadge === 'DEADLINE_SALE' ? 'bg-red-500 text-white border-red-500 font-semibold shadow-sm' : _inactiveStyle %>">
                                     기간임박할인
                                 </a>
@@ -343,9 +345,14 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                                     오프라인판매전용
                                 </a>
                                 -->
-                                <a href="<%= _url({ distributionBadge: 'ONLINE_ONLY', badge: null, page: null }) %>"
+                                <a href="<%= _url({ distributionBadge: 'ONLINE_ONLY', badge: null, b2b: null, page: null }) %>"
                                    class="px-3 py-1.5 rounded-full border transition-colors <%= currentDistributionBadge === 'ONLINE_ONLY' ? _activeStyle : _inactiveStyle %>">
                                     온라인판매가능
+                                </a>
+                                <%# B2B(사업자 판매) 상품만. 전용가는 승인 사업자만 보지만 필터·뱃지는 모두에게 보인다. %>
+                                <a href="<%= _url({ b2b: '1', badge: null, distributionBadge: null, page: null }) %>"
+                                   class="px-3 py-1.5 rounded-full border transition-colors <%= _b2bOnly ? 'bg-blue-600 text-white border-blue-600 font-semibold shadow-sm' : _inactiveStyle %>">
+                                    B2B 상품
                                 </a>
                             </div>
 
@@ -402,8 +409,13 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                                                     onclick="event.preventDefault();event.stopPropagation();toggleListLike(this, '<%= product.id %>')">
                                                     <i class="bi <%= _isLikedMobile ? 'bi-heart-fill' : 'bi-heart' %> text-base"></i>
                                                 </button>
-                                                <% if(distributionBadgeText || _lTopBadges.length > 0) { %>
+                                                <%# B2B 판매 상품 표시. 플래그는 b2bPricingService.markB2bProducts 가 얹는다. %>
+                                                <% const _lIsB2b = !!product.is_b2b_product; %>
+                                                <% if(distributionBadgeText || _lTopBadges.length > 0 || _lIsB2b) { %>
                                                     <div class="absolute top-3 left-3 z-20 flex flex-wrap gap-1.5">
+                                                        <% if(_lIsB2b) { %>
+                                                            <span class="product-pill-badge bg-blue-600 text-white">B2B</span>
+                                                        <% } %>
                                                         <% if(distributionBadgeText) { %>
                                                             <span class="product-pill-badge badge-channel">
                                                                 <%= distributionBadgeText %>

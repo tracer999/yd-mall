@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql } = require('../catalog/sellableStock');
 
 /*
  * 아울렛(Outlet) — 몰 안의 몰.
@@ -47,7 +48,7 @@ const LIST_SORTS = {
     price_asc: 'p.price ASC, p.id DESC',
     price_desc: 'p.price DESC, p.id DESC',
     latest: 'op.created_at DESC, op.id DESC',
-    stock_low: 'p.stock ASC, p.id DESC',   // 마지막 수량
+    stock_low: `${sellableStockSql('p')} ASC, p.id DESC`,   // 마지막 수량
 };
 const DEFAULT_SORT = 'discount';
 
@@ -209,7 +210,7 @@ async function getProducts(mallId, opts = {}) {
         `SELECT op.id AS outlet_id, op.outlet_type, op.outlet_reason, op.condition_grade,
                 op.defect_description, op.expiry_at, op.outlet_category_id,
                 p.id, p.name, p.slug, p.main_image, p.thumbnail_image,
-                p.original_price, p.price, p.discount_rate, p.stock, p.status
+                p.original_price, p.price, p.discount_rate, ${sellableStockSql('p')} AS stock, p.status
          FROM outlet_product op
          JOIN products p ON p.id = op.product_id
          WHERE ${whereSql}
@@ -295,7 +296,7 @@ async function getAdminList(mallId, opts = {}) {
 
     const [rows] = await pool.query(
         `SELECT op.*, p.name, p.product_code, p.main_image, p.original_price, p.price,
-                p.discount_rate, p.stock, p.status, c.name AS category_name
+                p.discount_rate, ${sellableStockSql('p')} AS stock, p.status, c.name AS category_name
          FROM outlet_product op
          JOIN products p ON p.id = op.product_id
          LEFT JOIN categories c ON c.id = op.outlet_category_id
@@ -317,7 +318,7 @@ async function getAdminList(mallId, opts = {}) {
 async function getAdminItem(mallId, id) {
     const [rows] = await pool.query(
         `SELECT op.*, p.name, p.product_code, p.main_image, p.original_price, p.price,
-                p.discount_rate, p.stock, p.status
+                p.discount_rate, ${sellableStockSql('p')} AS stock, p.status
          FROM outlet_product op
          JOIN products p ON p.id = op.product_id
          WHERE op.mall_id = ? AND op.id = ?`,

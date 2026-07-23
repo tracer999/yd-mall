@@ -1,5 +1,5 @@
 const pool = require('../../../config/db');
-const { P_STATUS, visibilityClause } = require('./_shared');
+const { P_STATUS, STOCK_COL, visibilityClause } = require('./_shared');
 const newArrival = require('../../catalog/newArrival');
 
 /**
@@ -44,7 +44,7 @@ async function resolve({ shared, config, locals }) {
         const np = newArrival.newProductPredicate('p');
         const [products] = await pool.query(`
             SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
-                   p.discount_rate, p.status, p.stock, p.provider,
+                   p.discount_rate, p.status, ${STOCK_COL}, p.provider,
                    p.product_badge, p.distribution_badge, p.sale_start_date
             FROM products p
             WHERE p.mall_id = ? AND p.brand_category_id = ?

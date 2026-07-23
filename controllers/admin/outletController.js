@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql } = require('../../services/catalog/sellableStock');
 const svc = require('../../services/outlet/outletService');
 const navigationService = require('../../services/menu/navigationService');
 const { sanitize } = require('../../services/display/htmlSanitizer');
@@ -236,7 +237,7 @@ exports.getProductSearch = async (req, res) => {
     const setting = await svc.getSetting(mallId);
     const [rows] = await pool.query(
         `SELECT p.id, p.name, p.product_code, p.main_image, p.original_price, p.price,
-                p.discount_rate, p.stock, p.status,
+                p.discount_rate, ${sellableStockSql('p')} AS stock, p.status,
                 (op.id IS NOT NULL) AS already_in_outlet
          FROM products p
          LEFT JOIN outlet_product op ON op.product_id = p.id AND op.mall_id = ?

@@ -7,6 +7,7 @@ const optionService = require('../services/catalog/optionService');
 const compositeService = require('../services/catalog/compositeService');
 const categoryScope = require('../services/catalog/categoryScope');
 const facetService = require('../services/catalog/facetService');
+const sellableStock = require('../services/catalog/sellableStock');
 // B2B 전용가·수량규칙 (설계 §4). 컨텍스트가 비활성이면 전부 null 이라 화면이 바뀌지 않는다.
 const b2bPricingService = require('../services/b2b/b2bPricingService');
 const b2bTaxService = require('../services/b2b/b2bTaxService');
@@ -95,6 +96,9 @@ exports.getList = async (req, res) => {
     const queryBrandId = q.brandId;
     const distributionBadge = q.distributionBadge || '';
     const productBadge = q.badge || '';
+    // 'B2B 상품' 필터 — 사업자 판매를 켠 상품만. 승인 사업자가 아니어도 걸 수 있다
+    // (전용가는 안 보이지만 "사업자 구매가 되는 상품"을 고르는 것 자체는 공개 정보다).
+    const b2bOnly = String(q.b2b || '') === '1';
     // 신상품 필터. 판매 시작일 기준 자동 판정 + NEW 뱃지 강제 노출(services/catalog/newArrival).
     // 옛 ?badge=NEW 는 '뱃지가 걸린 상품'만 보는 별개 필터로 남겨둔다(관리자·쿠폰이 뱃지 단위를 쓴다).
     const isNewFilter = String(q.filter || '') === 'new';
@@ -197,6 +201,7 @@ exports.getList = async (req, res) => {
                 const [bestRows] = await pool.query(bestQuery, bestParams);
                 // 카드 가격도 활성 특가가로 표시한다(목록/추천과 동일).
                 await dealSvc.applyDeals(bestRows);
+                await sellableStock.decorate(bestRows); // 품절 판정도 목록과 동일하게 SKU 기준
                 categoryBest = bestRows;
             }
         }
@@ -232,6 +237,16 @@ exports.getList = async (req, res) => {
         if (distributionBadge === 'ONLINE_ONLY') {
             query += " AND distribution_badge = 'ONLINE_ONLY'";
         }
+
+        /*
+         * B2B 상품만. 상관 서브쿼리로 붙인다 — FROM 에 JOIN 을 더하면 아래 카운트·파셋 쿼리의
+         * 'SELECT *' 문자열 치환이 깨진다(§facet 주석 참고).
+         * 해제는 행을 DELETE 하지만 표현이 갈리지 않도록 is_b2b_sale = 1 을 명시한다.
+         */
+        if (b2bOnly) {
+            query += ' AND EXISTS (SELECT 1 FROM product_b2b_setting b'
+                + ' WHERE b.product_id = products.id AND b.is_b2b_sale = 1)';
+        }
         /* 오프라인판매전용 필터 — 기능 미사용으로 주석처리
         else if (distributionBadge === 'OFFLINE_ONLY') {
             query += " AND distribution_badge = 'OFFLINE_ONLY'";
@@ -264,6 +279,9 @@ exports.getList = async (req, res) => {
             params.push(...np.params); // sql 조각과 params 는 같은 지점에서 함께 넣는다
             if (pageTitle === '전체상품') pageTitle = '신상품';
         }
+
+        // 뱃지·신상품이 이미 제목을 정했으면 그쪽을 존중한다(B2B 는 축이 다른 필터라 뒤로 밀린다).
+        if (b2bOnly && pageTitle === '전체상품') pageTitle = 'B2B 상품';
 
         // 상품그룹 소스: 관리자가 수동 매핑한 상품만. (오늘특가·베스트 등 manual 그룹)
         if (groupId > 0) {
@@ -369,6 +387,8 @@ exports.getList = async (req, res) => {
         const [products] = await pool.query(query, params);
         // 활성 특가를 read-time 으로 덮어쓴다. SELECT 절을 못 건드려서(카운트 쿼리가 문자열 치환) 후처리다.
         await dealSvc.applyDeals(products);
+        // 재고도 같은 이유로 후처리 — products.stock 은 옵션상품에서 stale 해 카드가 SOLD OUT 으로 잘못 뜬다.
+        await sellableStock.decorate(products);
         // 카테고리/브랜드는 글로벌 한 벌. 스토어프론트는 "이 몰에 상품이 있는(유효)" 것에서
         // 몰별 숨김(mall_category_visibility)을 뺀 것만 노출한다. 사이드바는 평면 목록이라 최상위(depth 1)만.
         const _validCat = await categoryScope.visibleCategoryIdSet(mallId);
@@ -415,6 +435,11 @@ exports.getList = async (req, res) => {
         if (Array.isArray(categoryBest) && categoryBest.length) {
             await b2bPricingService.decorateProducts(req.b2b, categoryBest);
         }
+        // 'B2B 상품' 뱃지용 플래그. 가격과 달리 컨텍스트와 무관하게 모두에게 붙인다.
+        await b2bPricingService.markB2bProducts(products);
+        if (Array.isArray(categoryBest) && categoryBest.length) {
+            await b2bPricingService.markB2bProducts(categoryBest);
+        }
 
         res.render('user/products/list', {
             title: pageTitle,
@@ -426,6 +451,7 @@ exports.getList = async (req, res) => {
             currentSort: sort,
             currentDistributionBadge: distributionBadge,
             currentProductBadge: productBadge,
+            currentB2bOnly: b2bOnly,
             currentFilter: isNewFilter ? 'new' : '',
             currentUser: req.user,
             likedProductIds,
@@ -501,6 +527,11 @@ exports.getDetail = async (req, res) => {
         const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [id]);
         product.images = images;
 
+        // 재고는 SKU 가 원천이다. products.stock 은 옵션상품에서 stale 하므로 판매가능재고로 덮는다
+        // (품절 오버레이·수량 상한·JSON-LD availability 가 모두 이 값을 읽는다).
+        // 아래 복합상품 분기는 구성 파생 가용수량으로 이 값을 다시 덮는다 — 순서가 중요하다.
+        await sellableStock.decorate([product]);
+
         // 옵션상품이면 옵션·SKU 를 실어 상세페이지 옵션 선택 UI 를 그린다(설계 §26.5·26.6).
         let productOptions = [];
         let productSkus = [];
@@ -540,7 +571,7 @@ exports.getDetail = async (req, res) => {
         // 1) 수동 등록분 (판매중 상태만)
         const [manualRecs] = await pool.query(`
             SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
-                   p.discount_rate, p.status, p.stock,
+                   p.discount_rate, p.status, ${sellableStock.sellableStockSql('p')} AS stock,
                    p.provider, p.product_badge, p.distribution_badge
             FROM product_recommendations pr
             JOIN products p ON p.id = pr.related_id
@@ -743,7 +774,8 @@ exports.searchPage = async (req, res) => {
             const [rows] = await pool.query(`
                 SELECT p.id, p.name, COALESCE(bc.name, p.provider) AS provider, p.price, p.original_price,
                        p.discount_rate,
-                       p.main_image, p.thumbnail_image, p.slug, p.short_description, p.status, p.stock,
+                       p.main_image, p.thumbnail_image, p.slug, p.short_description, p.status,
+                       ${sellableStock.sellableStockSql('p')} AS stock,
                        c.name AS category_name, c.type AS category_type,
                        (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count
                 FROM products p
