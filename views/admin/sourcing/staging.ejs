@@ -323,12 +323,18 @@
     if (form) {
       form.addEventListener('submit', function (e) {
         var n = document.querySelectorAll('.chk-item:checked').length;
-        // 삭제 폼과 등록 버튼이 체크박스를 공유하므로 누른 버튼으로 분기한다.
-        var isPublish = e.submitter && e.submitter.id === 'publish-btn';
+        /*
+         * 이 폼 하나에 버튼이 셋 달려 있고(삭제 / 우리 몰 등록 / 스마트스토어 바로 전송)
+         * 체크박스를 공유한다. **누른 버튼으로 분기하되, 모르는 버튼을 삭제로 흘리면 안 된다.**
+         * (실제로 바로 전송 버튼이 삭제 확인창을 띄우는 사고가 있었다.)
+         */
+        var who = (e.submitter && e.submitter.id) || '';
+        var isNaver = who === 'publish-naver-btn';
+        var isPublish = who === 'publish-btn' || isNaver;
 
         if (n === 0) {
           e.preventDefault();
-          alert(isPublish ? '등록할 상품을 선택하세요.' : '삭제할 상품을 선택하세요.');
+          alert(isPublish ? (isNaver ? '전송할 상품을 선택하세요.' : '등록할 상품을 선택하세요.') : '삭제할 상품을 선택하세요.');
           return;
         }
 
@@ -349,7 +355,15 @@
           }
 
           var label = (catPath && catPath.textContent.replace('선택: ', '')) || '선택한 카테고리';
-          var msg = fresh + '건을 [' + label + '] 카테고리로 우리 몰 상품에 등록할까요?\n판매중지(OFF) 상태로 만들어집니다.';
+          var msg;
+          if (isNaver) {
+            var nvPicked = document.getElementById('nv-cat-id');
+            msg = fresh + '건을 [' + label + '] 카테고리로 우리 몰에 등록한 뒤 스마트스토어로 전송할까요?'
+                + '\n스마트스토어에 실제로 등록되는 작업입니다.'
+                + (nvPicked && nvPicked.value ? '' : '\n네이버 카테고리를 고르지 않아 우리 카테고리에 연결된 값을 씁니다.');
+          } else {
+            msg = fresh + '건을 [' + label + '] 카테고리로 우리 몰 상품에 등록할까요?\n판매중지(OFF) 상태로 만들어집니다.';
+          }
           if (already.length) msg += '\n\n※ 이미 등록된 ' + already.length + '건은 제외됩니다.';
 
           if (!confirm(msg)) { e.preventDefault(); return; }
@@ -359,6 +373,7 @@
           return;
         }
 
+        // 여기까지 온 것은 삭제 버튼(폼 기본 action)뿐이다.
         if (!confirm(n + '건을 중간 테이블에서 삭제할까요? (공급처 원본에는 영향 없음)')) e.preventDefault();
       });
     }
@@ -434,21 +449,7 @@
       if (e.target !== input && !box.contains(e.target)) close();
     });
 
-    /* 외부몰에 실제로 등록하는 작업이라 한 번 확인받는다.
-       이미 우리 몰에 등록된 건은 ① 단계에서 건너뛰므로 대상 수에서 빼고 센다. */
-    btn.addEventListener('click', function (e) {
-      var n = 0;
-      document.querySelectorAll('.chk-item:checked').forEach(function (c) {
-        if (!c.dataset.published) n++;
-      });
-      if (!n) {
-        e.preventDefault();
-        alert('전송할 상품을 선택하세요. (이미 우리 몰에 등록된 상품은 대상이 아닙니다)');
-        return;
-      }
-      if (!confirm(n + '건을 우리 몰에 등록한 뒤 스마트스토어로 전송합니다. 계속할까요?')) {
-        e.preventDefault();
-      }
-    });
+    /* 선택 개수 확인·확인창은 **폼 제출 핸들러 한 곳**에서 처리한다(위쪽 staging-form).
+       여기서 또 confirm 을 걸면 확인창이 두 번 뜬다. 이 블록은 카테고리 검색만 담당한다. */
   })();
 </script>
