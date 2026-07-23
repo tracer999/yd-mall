@@ -1,0 +1,172 @@
+<%
+  /*
+   * 카테고리·브랜드 상단 배너 — 1건이면 그대로 한 장, 2건 이상이면 자동 회전 슬라이드쇼.
+   *
+   * 어떤 묶음이 오는지는 productController.getList 가 정한다(개별 대상 배너가 있으면 그것들만,
+   * 없으면 전체 공통 묶음). 슬라이드 순서는 관리자가 정한 정렬 순서(display_order)다.
+   *
+   * _category_best 와 마크업 계약이 비슷하지만 그쪽은 상품 카드를 여러 장 굴리는 캐러셀이고
+   * 이건 한 장이 폭을 통째로 채우는 배너 슬라이더다. 전역 init 가드 이름도 서로 다르게 둔다
+   * (같은 페이지에 둘 다 뜨므로 이름이 겹치면 한쪽이 초기화되지 않는다).
+   *
+   * locals: banners = 배너 배열
+   */
+  const _bn = (typeof banners !== 'undefined' && banners) ? banners : [];
+  const _multi = _bn.length > 1;
+%>
+<% if (_bn.length) { %>
+<style>
+  /* 한 장이 폭을 다 쓰는 트랙. 스크롤 스냅이라 터치 스와이프가 그대로 동작한다. */
+  .yd-catbanner__track {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    align-items: start;
+  }
+  .yd-catbanner__track::-webkit-scrollbar { display: none; }
+  .yd-catbanner__track > * { scroll-snap-align: start; }
+
+  .yd-catbanner__nav {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+    width: 36px; height: 36px; border-radius: 9999px;
+    background: rgba(255,255,255,.9); border: 1px solid var(--gh-border, #e5e7eb);
+    box-shadow: 0 2px 10px rgba(0,0,0,.12);
+    display: none; align-items: center; justify-content: center;
+    color: #4b5563; transition: color .15s, border-color .15s, opacity .15s;
+  }
+  .yd-catbanner:hover .yd-catbanner__nav { opacity: 1; }
+  .yd-catbanner__nav:hover { color: var(--gh-primary); border-color: var(--gh-primary); }
+  .yd-catbanner__nav--prev { left: .5rem; }
+  .yd-catbanner__nav--next { right: .5rem; }
+  @media (min-width: 768px) { .yd-catbanner__nav { display: inline-flex; opacity: .6; } }
+
+  /* 도트 — 배너 위에 얹으면 이미지 문구와 겹칠 수 있어 아래에 둔다. */
+  .yd-catbanner__dot {
+    width: 7px; height: 7px; border-radius: 9999px; background: #d1d5db;
+    transition: width .2s, background-color .2s;
+  }
+  .yd-catbanner__dot[aria-current="true"] { width: 18px; background: var(--gh-primary, #111827); }
+</style>
+
+<div class="yd-catbanner mb-6" data-yd-catbanner>
+  <%# 화살표는 배너(트랙) 기준으로 세로 가운데에 얹는다 — 도트까지 포함한 높이를 기준 삼으면 아래로 치우친다. %>
+  <div class="relative">
+    <% if (_multi) { %>
+      <button type="button" class="yd-catbanner__nav yd-catbanner__nav--prev" data-yd-cb-prev aria-label="이전 배너">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <button type="button" class="yd-catbanner__nav yd-catbanner__nav--next" data-yd-cb-next aria-label="다음 배너">
+        <i class="bi bi-chevron-right"></i>
+      </button>
+    <% } %>
+
+    <div class="yd-catbanner__track" data-yd-cb-track>
+      <% _bn.forEach(function (b, i) { %>
+        <a href="<%= b.link_url || '#' %>" class="yd-banner-fig rounded-xl overflow-hidden shadow-sm">
+          <img src="<%= b.image_url %>" alt="<%= b.title || '' %>"
+               class="w-full h-auto object-cover" <%= i > 0 ? 'loading="lazy"' : '' %>>
+          <%# 배너 문구가 있을 때만 이미지 위에 얹는다 — 이미지 전용 배너의 기존 모습은 그대로 둔다. %>
+          <% if (b.overlay_subtitle) { %>
+            <div class="yd-banner-fig__copy">
+              <%- include('../../partials/banner_copy', { copy: b.overlay_subtitle, heading: b.title, variant: 'overlay' }) %>
+            </div>
+          <% } %>
+        </a>
+      <% }); %>
+    </div>
+  </div>
+
+  <% if (_multi) { %>
+    <div class="mt-2 flex items-center justify-center gap-1.5" data-yd-cb-dots>
+      <% _bn.forEach(function (b, i) { %>
+        <button type="button" class="yd-catbanner__dot" data-yd-cb-dot="<%= i %>"
+                aria-current="<%= i === 0 ? 'true' : 'false' %>" aria-label="<%= i + 1 %>번 배너 보기"></button>
+      <% }); %>
+    </div>
+  <% } %>
+</div>
+
+<% if (_multi) { %>
+<script>
+/* 카테고리·브랜드 상단 배너 슬라이드쇼 — 한 장씩 넘기고 자동 재생한다.
+   _category_best · menu_showcase 와 전역 init 가드 이름을 분리해 서로를 막지 않게 한다. */
+(function () {
+  if (window.__ydCatBannerInit) return;
+  window.__ydCatBannerInit = true;
+
+  var AUTOPLAY_MS = 5000;
+
+  function init(root) {
+    var track = root.querySelector('[data-yd-cb-track]');
+    if (!track) return;
+    var total = track.children.length;
+    if (total <= 1) return;
+
+    var prev = root.querySelector('[data-yd-cb-prev]');
+    var next = root.querySelector('[data-yd-cb-next]');
+    var dots = Array.prototype.slice.call(root.querySelectorAll('[data-yd-cb-dot]'));
+    var timer = null;
+    var playing = false;
+
+    function current() {
+      var w = track.clientWidth || 1;
+      return Math.min(total - 1, Math.round(track.scrollLeft / w));
+    }
+
+    function sync() {
+      var idx = current();
+      dots.forEach(function (d, i) { d.setAttribute('aria-current', i === idx ? 'true' : 'false'); });
+    }
+
+    function goTo(idx) {
+      /* 끝에서 다음 → 처음으로 되감는다(자동재생이 멈추지 않도록) */
+      var target = ((idx % total) + total) % total;
+      track.scrollTo({ left: target * track.clientWidth, behavior: 'smooth' });
+    }
+
+    function play() {
+      if (playing) return;
+      playing = true;
+      timer = setInterval(function () { goTo(current() + 1); }, AUTOPLAY_MS);
+    }
+
+    function pause() {
+      playing = false;
+      clearInterval(timer);
+      timer = null;
+    }
+
+    if (prev) prev.addEventListener('click', function () { pause(); goTo(current() - 1); });
+    if (next) next.addEventListener('click', function () { pause(); goTo(current() + 1); });
+    dots.forEach(function (d, i) {
+      d.addEventListener('click', function () { pause(); goTo(i); });
+    });
+    track.addEventListener('scroll', sync, { passive: true });
+    /* 폭이 바뀌면 스크롤 위치가 슬라이드 경계에서 어긋난다 — 현재 장으로 다시 맞춘다. */
+    window.addEventListener('resize', function () { goTo(current()); });
+
+    /* 마우스가 올라가 있는 동안은 자동으로 넘기지 않는다 */
+    root.addEventListener('mouseenter', function () { if (playing) { clearInterval(timer); timer = null; } });
+    root.addEventListener('mouseleave', function () {
+      if (playing && !timer) timer = setInterval(function () { goTo(current() + 1); }, AUTOPLAY_MS);
+    });
+
+    sync();
+    /* 접근성 — 모션 최소화 설정이면 자동재생하지 않는다 */
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) play();
+  }
+
+  function initAll() {
+    document.querySelectorAll('[data-yd-catbanner]').forEach(init);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAll);
+  else initAll();
+})();
+</script>
+<% } %>
+<% } %>

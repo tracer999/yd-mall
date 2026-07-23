@@ -107,8 +107,10 @@
   - ⚠️ **`categoryId` 5·6 은 폐기된 THEME 축**입니다. `RETIRED_THEME_REDIRECTS = { 5: '/best', 6: '/new' }` 로 **리다이렉트**됩니다(더 이상 뱃지 매칭을 하지 않음). 베스트·신상품은 이제 전용 화면입니다.
   - type이 THEME이면 `theme_category_id = ?` 또는 `product_themes` N:M 조건으로 필터.
   - NORMAL이면 `navigationService.getCategoryContext()` 로 서브트리(descendantIds)를 구해 `category_id IN (...)` 로 필터 — 부모 카테고리를 눌러도 자식 카테고리 상품까지 나옵니다.
-  - 해당 카테고리의 CATEGORY 타입 배너 1건을 `categoryBanner`로 조회.
-- **브랜드:** 같은 몰의 `categories`(type='BRAND')에서 확인 후 `brand_category_id = ?` 필터. 카테고리 배너가 없으면 `BRAND` 타입 배너를 `categoryBanner` 로 사용.
+  - 해당 카테고리의 CATEGORY 타입 배너를 **묶음(`categoryBanners` 배열)** 으로 조회합니다. `ORDER BY display_order ASC, id ASC`.
+- **브랜드:** 같은 몰의 `categories`(type='BRAND')에서 확인 후 `brand_category_id = ?` 필터. 카테고리 배너가 하나도 없을 때만 `BRAND` 타입 배너를 같은 방식으로 조회해 `categoryBanners` 에 담습니다.
+- **상단 배너 묶음 규칙:** 개별 대상 배너(`category_id` 가 찍힌 것)가 **하나라도 있으면 그것들만**, 없으면 전체 공통(`group_key='common:{TYPE}:{mallId}'`) 묶음을 씁니다(`pickBannerTier`). 두 tier 를 섞지 않아야 "이 카테고리에만 다른 배너" 라는 개별 지정이 의미를 갖습니다.
+  - 뷰(`views/user/products/_category_banner.ejs`)는 **1건이면 기존과 같은 한 장**, **2건 이상이면 자동 회전 슬라이드쇼**(스크롤 스냅 트랙 + 화살표 + 도트, 5초 간격)로 그립니다. 전역 init 가드는 `window.__ydCatBannerInit` 로 `_category_best`·`menu_showcase` 와 분리돼 있습니다.
 - **뱃지 필터:** `FIND_IN_SET(뱃지, product_badge)`. `DEADLINE_SALE` 은 `badge_expire_date IS NULL OR badge_expire_date >= CURDATE()` 가 함께 걸려 만료된 특가는 노출되지 않습니다.
 - **상품그룹:** 프리셋의 `groupId` 가 있으면 `product_group_item` 에 수동 매핑된 상품만 노출하고, 정렬도 `product_group_item.sort_order` 를 따릅니다.
 - **정렬:** 1차 키는 항상 `FIELD(status,'ON','COMING_SOON','RESTOCK','SOLD_OUT','OFF')`, 그다음 sort 별 정렬(best=view_count DESC / price_asc / price_desc / sales=판매수량 상관 서브쿼리 / review=평점·리뷰수 상관 서브쿼리 / new=created_at DESC / sale_start=판매시작일 최신순).

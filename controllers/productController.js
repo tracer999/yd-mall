@@ -48,6 +48,18 @@ const SORT_TABS = [
     { value: 'review', label: '상품평' },
 ];
 
+/**
+ * 상단 배너 묶음 고르기 — 개별 대상(category_id 가 찍힌) 배너가 하나라도 있으면 그것들만,
+ * 없으면 전체 공통(group_key='common:…') 묶음을 쓴다.
+ *
+ * 둘을 섞으면 "이 카테고리에만 다른 배너를 걸겠다"는 개별 지정의 의미가 사라지므로,
+ * 다건 슬라이드쇼가 된 뒤에도 tier 선택 규칙은 그대로 유지한다.
+ */
+function pickBannerTier(rows) {
+    const individual = rows.filter(r => r.category_id != null);
+    return individual.length ? individual : rows;
+}
+
 function buildKakaoChannelUrl(rawValue) {
     if (!rawValue) return '';
     const raw = String(rawValue).trim();
@@ -117,7 +129,8 @@ exports.getList = async (req, res) => {
     }
 
     let pageTitle = '전체상품';
-    let categoryBanner = null;
+    // 상단 배너 묶음(개별 우선 · 다건이면 슬라이드쇼). 뷰는 이 배열 하나만 본다.
+    let categoryBanners = [];
     let categoryNav = null;
     // 카테고리 리스트 상단 베스트 슬라이드쇼용 상위 상품(최대 5개). 카테고리 진입 시에만 채운다.
     let categoryBest = [];
@@ -147,20 +160,17 @@ exports.getList = async (req, res) => {
                 params.push(...ids);
 
                 // 개별 카테고리 배너가 있으면 그것을, 없으면 전체 공통 배너를 노출한다.
-                // (category_id IS NULL) ASC 로 개별을 항상 우선한다.
+                // 여러 건이면 뷰가 슬라이드쇼로 그린다(순서는 관리자의 정렬 순서).
                 const [bannerRows] = await pool.query(
                     `SELECT * FROM banners
                      WHERE is_active = 1
                        AND banner_type = 'CATEGORY'
                        AND mall_id = ?
                        AND (category_id = ? OR group_key = ?)
-                     ORDER BY (category_id IS NULL) ASC, created_at DESC, id DESC
-                     LIMIT 1`,
+                     ORDER BY display_order ASC, id ASC`,
                     [mallId, selectedCategoryId, `common:CATEGORY:${mallId}`]
                 );
-                if (bannerRows.length > 0) {
-                    categoryBanner = bannerRows[0];
-                }
+                categoryBanners = pickBannerTier(bannerRows);
 
                 /*
                  * 카테고리 베스트 슬라이드쇼 — 이 카테고리(하위 트리 포함) 인기 상품 상위 5개.
@@ -203,21 +213,18 @@ exports.getList = async (req, res) => {
                 query += ' AND brand_category_id = ?';
                 params.push(selectedBrandId);
 
-                if (!categoryBanner) {
-                    // 개별 브랜드 배너 우선, 없으면 전체 공통 브랜드 배너.
+                if (!categoryBanners.length) {
+                    // 개별 브랜드 배너 우선, 없으면 전체 공통 브랜드 배너. 다건이면 슬라이드쇼.
                     const [brandBannerRows] = await pool.query(
                         `SELECT * FROM banners
                          WHERE is_active = 1
                            AND banner_type = 'BRAND'
                            AND mall_id = ?
                            AND (category_id = ? OR group_key = ?)
-                         ORDER BY (category_id IS NULL) ASC, created_at DESC, id DESC
-                         LIMIT 1`,
+                         ORDER BY display_order ASC, id ASC`,
                         [mallId, selectedBrandId, `common:BRAND:${mallId}`]
                     );
-                    if (brandBannerRows.length > 0) {
-                        categoryBanner = brandBannerRows[0];
-                    }
+                    categoryBanners = pickBannerTier(brandBannerRows);
                 }
             }
         }
@@ -422,7 +429,7 @@ exports.getList = async (req, res) => {
             currentFilter: isNewFilter ? 'new' : '',
             currentUser: req.user,
             likedProductIds,
-            categoryBanner,
+            categoryBanners,
             categoryNav,
             categoryBest,
             sortTabs: SORT_TABS,
