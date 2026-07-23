@@ -20,7 +20,11 @@
 - **고객 화면:** `/brands`(허브), `/brands/:brandId`(상세관) — `routes/brands.js`, `controllers/brandController.js`
 - **권한:** `admin_menus` id=57, parent_id=30(메뉴/카테고리 관리), `visible_roles = super_admin,admin,content_admin`
 
-> **`/admin/categories` 와의 분업:** 카테고리 트리 화면은 계층·활성만 다룹니다. 영문명·별칭·공식여부·스토리 같은 브랜드 확장 속성은 **여기서만** 편집합니다(`brandController.js:10-12`).
+> **`/admin/categories` 와의 분업 (2026-07-23 이관):** 카테고리 관리에 있던 **[브랜드 카테고리] 탭을 이 화면으로 흡수**했습니다. 브랜드 생성·삭제·순서·로고·입점일·사용여부·몰별 표시가 전부 여기로 왔고, `/admin/categories` 는 `type='NORMAL'` 전용이 됐습니다.
+>
+> 이관 이유: 브랜드 1,401건이 카테고리 트리 화면에 얹히면 부모 후보 JSON·DOM 이 함께 터졌고(18MB/70초 전례), 브랜드는 전부 1뎁스라 트리 편집 UI 가 애초에 불필요했습니다.
+>
+> 단 **`delete` · `visibility` · `mall-visibility` 엔드포인트는 `/admin/categories` 것을 그대로 재사용**합니다(좁은 컬럼만 만지거나 별도 테이블이라 브랜드에도 안전). 폼이 `return_url` 을 실어 보내 이 화면으로 복귀합니다.
 
 ---
 
@@ -28,13 +32,23 @@
 
 | 메서드 | URL | 핸들러 | 설명 |
 |--------|-----|--------|------|
-| GET | `/admin/brands` | getList | 목록 (검색 `q`, 공식여부 `official`, 정렬 `sort`, 페이지 30건) |
+| GET | `/admin/brands` | getList | 목록 (범위 `scope=used\|all`, 검색 `q`, 공식여부 `official`, 정렬 `sort`, 페이지 30건) |
 | GET | `/admin/brands/search.json` | searchJson | 브랜드 자동완성 (JSON, 최대 15건) |
 | POST | `/admin/brands/recalc` | postRecalc | **집계 재계산** (이 몰 전건) |
+| POST | `/admin/brands/add` | postAdd | **브랜드 등록** (multipart, `upload.single('logo_image')`) |
 | GET | `/admin/brands/:id` | getEdit | 브랜드 편집 폼 |
-| POST | `/admin/brands/:id` | postUpdate | 저장 (`categories` + `brand_profile` 트랜잭션) |
+| POST | `/admin/brands/:id` | postUpdate | 상세 저장 (`categories` + `brand_profile` 트랜잭션) |
+| POST | `/admin/brands/:id/inline` | postInlineEdit | **목록 행 저장** (multipart — 이름·순서·입점일·사용여부·로고) |
 
-고정 경로(`/search.json`, `/recalc`)를 `/:id` 보다 먼저 선언하고 숫자 검증은 `requireNumericId` 가 합니다(Express 5 는 `:id(\d+)` 미지원).
+목록 화면이 함께 쓰는 카테고리 엔드포인트 (모두 `return_url=/admin/brands…` 를 실어 보냄):
+
+| 메서드 | URL | 용도 |
+|--------|-----|------|
+| POST | `/admin/categories/delete` | 브랜드 삭제 (`brand_profile` 은 FK CASCADE 로 함께 삭제) |
+| POST | `/admin/categories/visibility` | `is_active` 일괄 저장 |
+| POST | `/admin/categories/mall-visibility` | 몰별 표시 override 토글 |
+
+고정 경로(`/search.json`, `/recalc`, `/add`)를 `/:id` 보다 먼저 선언하고 숫자 검증은 `requireNumericId` 가 합니다(Express 5 는 `:id(\d+)` 미지원).
 
 > **`search.json` 이 필요한 이유:** 브랜드가 1,390개라 `<select>` 드롭다운으로 못 씁니다. 기획전의 '브랜드 귀속' 선택 등 다른 관리자 화면이 이 API 를 호출합니다.
 
@@ -44,10 +58,36 @@
 
 ### 3.1 목록 (`GET /admin/brands`)
 
-- **쿼리:** `categories c LEFT JOIN brand_profile bp LEFT JOIN brand_stat s LEFT JOIN categories tc`(대표 카테고리명)
+- **쿼리:** `categories c LEFT JOIN brand_profile bp LEFT JOIN (products 집계) pc LEFT JOIN brand_stat s LEFT JOIN categories tc`(대표 카테고리명)
+- **범위 `scope`:** `used`(기본) = `EXISTS (SELECT 1 FROM products p WHERE p.brand_category_id = c.id AND p.mall_id = ?)`, `all` = 전체. 탭 배지용 건수는 `SUM(EXISTS …)` 로 한 쿼리에서 함께 셉니다.
+
+> ⚠️ **`used` 필터와 화면의 [상품] 칸은 반드시 같은 소스여야 합니다.** 상품 수를 `brand_stat.product_count`(캐시)로 두고 필터만 라이브로 걸면, 재계산 전에는 "used 탭에 떴는데 상품수 0" 인 모순이 납니다. 그래서 목록의 상품 수는 `brand_stat` 이 아니라 **`products` 라이브 집계(`pc.n`)** 입니다. 인기 점수·혜택 수는 여전히 `brand_stat` 캐시입니다.
+
 - **검색 `q`:** `c.name` / `bp.name_en` / `bp.alias` / `bp.initial_chosung` LIKE. 검색어는 `toChosung(q)` 로도 변환해 **초성 검색**이 됩니다(`나이키` ↔ `ㄴㅇㅋ`).
 - **필터 `official`:** `COALESCE(bp.official_yn, 0)` 기준 0/1
-- **정렬 `sort`:** `count`(기본, 상품많은순) / `name` / `popular`(popularity_score) / `new`(onboarded_at DESC)
+- **정렬 `sort`:** `count`(기본, 상품많은순 — `pc.n` 기준) / `name` / `popular`(popularity_score) / `new`(onboarded_at DESC) / `order`(display_order ASC)
+
+### 3.1.1 목록 인라인 편집 (`POST /admin/brands/:id/inline`)
+
+카테고리 관리 브랜드 탭에서 이관한 편집 UI 입니다. 행마다 `form="brand-form-<id>"` 로 셀 전반의 input 을 묶습니다.
+
+| 컬럼 | 갱신 방식 |
+|------|-----------|
+| `name` | 그대로. 변경 시 `brand_profile.initial` / `initial_chosung` 도 재파생(검색 인덱스) |
+| `display_order` | `COALESCE(?, display_order)` — **`scope=all` 탭에서는 input 을 렌더하지 않으므로** 값이 안 오고 기존 순서가 유지됨 |
+| `onboarded_at` | 그대로 |
+| `is_active` | `toBool()` (hidden 0 + checkbox 1 쌍) |
+| `logo_image_path` | `COALESCE(?, logo_image_path)` — 새 파일이 없으면 **기존 로고 유지** |
+
+> **`categoryController.postEdit` 을 재사용하지 않는 이유:** 그쪽 UPDATE 는 전(全)컬럼 계약이라 폼이 `existing_logo`·`description`·`pc_visible`·`mobile_visible` 을 빠뜨리면 조용히 비워집니다. 브랜드는 전부 1뎁스라 그 핸들러의 뎁스·순환·서브트리 재계산도 전혀 쓰지 않습니다. → 좁은 전용 핸들러가 안전합니다.
+
+> **순서 편집은 `used` 탭 한정입니다**(사용자 요구). 다만 **`categories.display_order` 는 브랜드 허브 정렬에 거의 쓰이지 않습니다** — `services/brand/brandService.js` 의 `SORTS` 는 `product_count` / `popularity_score` / `name` / `onboarded_at` 기준이고, `display_order` 는 `services/display/resolvers/new_by_brand.js` 의 2차 tie-break 로만 소비됩니다.
+
+### 3.1.2 브랜드 등록 (`POST /admin/brands/add`)
+
+- `categories` 에 `type='BRAND'`, `mall_id=GLOBAL_CATEGORY_MALL_ID(0)`, `parent_id=NULL`, `depth=1` 로 INSERT (브랜드는 계층을 쓰지 않습니다 — 전 1,401건이 depth 1).
+- 이어서 `brand_profile` 에 `initial` / `initial_chosung` 을 심습니다. 이게 없으면 **등록 직후 초성 검색에 걸리지 않습니다.**
+- `display_order` 를 비우면 `MAX(display_order) + 1`.
 - **집계 시각 표시:** `MAX(brand_stat.calculated_at)` 을 함께 내려줍니다. 상품 수가 실제와 어긋나 보일 때 운영자가 "언제 집계했는지"를 확인할 근거입니다.
 
 ### 3.2 편집 (`GET/POST /admin/brands/:id`)
@@ -63,7 +103,7 @@
 - **최초 백필:** 기존 브랜드의 `brand_profile` 행·`initial_chosung`·`name_en`(+ 셀러명, `onboarded_at` 추정)은 `scripts/backfill_brand_profile.js` 가 일회성으로 채웠습니다(멱등 — 이미 채워진 값은 건드리지 않음). `onboarded_at` 은 전 몰 0건이라 **"브랜드 최초 상품의 `created_at`"** 으로 추정한 값이므로 관리자가 덮어쓸 수 있습니다.
 - **`INITIAL_BUCKETS`**: ㄱ~ㅎ / A~Z / # (`shared/hangul.js`)
 - 화면 하단에 `brand_category_stat` 기준 "이 브랜드가 취급하는 카테고리" 상위 20건을 **읽기 전용**으로 보여줍니다.
-- **입점일 `categories.onboarded_at`** 은 여기와 `/admin/categories` 브랜드 탭에서 입력합니다. 신규 브랜드 판정의 유일한 앵커입니다.
+- **입점일 `categories.onboarded_at`** 은 여기와 **목록 행**에서 입력합니다. 신규 브랜드 판정의 유일한 앵커입니다.
 
 ### 3.3 집계 재계산 (`POST /admin/brands/recalc`)
 
@@ -224,8 +264,8 @@ score = wSales × sales_count
 - **브랜드 찜에 몰 검증이 없습니다.** `controllers/likeController.js:52-55` 의 `toggleBrandLike` 는 `SELECT id FROM categories WHERE id = ? AND type = 'BRAND'` 만 확인하고 **`mall_id` 를 보지 않습니다.** 다른 몰의 브랜드도 찜할 수 있습니다.
 - **브랜드 베스트는 수동 시드에 의존합니다.** `best_group(group_type='BRAND')` 자동 생성 배치가 없습니다(`scripts/seed_best_brand_groups.sql` 로 10건만 시드). 그룹이 없는 브랜드는 **조회수 순 폴백**이라 "베스트"라기엔 약합니다.
 - **`brand_stat.new_count` 의 30일은 `system_settings.new_brand_days`(기본 180)와 무관합니다.** 전자는 `brandStatService.NEW_DAYS` 상수(브랜드의 최근 신상품 수), 후자는 `services/catalog/newArrival.js` 가 읽는 **신규 입점 브랜드** 판정 기간입니다. 또한 브랜드 홈의 `getNewBrands(mallId, 6)` 은 서비스 기본값 **180일 하드코딩**을 쓰고 `new_brand_days` 를 읽지 않습니다 — 설정을 바꿔도 `/brands` 홈의 신규 입점 섹션은 반응하지 않습니다(SDUI `new_brand_list` 섹션만 반응).
-- **미구현:** `/admin/brands/merge`(중복 브랜드 병합, 2차), `/admin/categories` → `/admin/brands` 간 이동 링크.
+- **미구현:** `/admin/brands/merge`(중복 브랜드 병합, 2차), 브랜드 엑셀 일괄 등록.
 
 ---
 
-*Last Updated: 2026-07-15*
+*Last Updated: 2026-07-23*

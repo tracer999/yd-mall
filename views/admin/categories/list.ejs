@@ -1,17 +1,22 @@
 <%
-/* B1 — 카테고리 트리 관리
-   탭(상품/테마/브랜드)은 뎁스가 아니라 병렬 분류축이다. 각 탭 안에서 최대 maxDepth 단계까지 계층을 만든다.
-   행은 서버에서 이미 부모→자식 순으로 평탄화되어 오고, _depth 로 들여쓰기 한다. */
-/* THEME 탭은 폐기했다 — 테마 5(베스트)·6(신규)은 기능 메뉴(/best, /new)와 다른 결과를 내던
-   잔재였고, 신상품은 판매시작일 기준 자동 판정으로 바뀌었다. */
-const TABS = [
-    // 상품(NORMAL) 카테고리는 GNB 메가메뉴에 이미지+설명이 노출되므로 편집 가능하게 한다.
-    { key: 'product', type: 'NORMAL', label: '상품 카테고리', nameLabel: '카테고리명', rows: productCategories || [], hasLogo: true,  hasDesc: true,  hasOnboarded: false },
-    // 브랜드는 입점일을 관리한다 — 신규 입점 브랜드 판정 기준(services/catalog/newArrival).
-    { key: 'brand',   type: 'BRAND',  label: '브랜드 카테고리', nameLabel: '브랜드명',  rows: brandCategories   || [], hasLogo: true,  hasDesc: false, hasOnboarded: true  },
-];
-const colCount = (tab) => 7 + (tab.hasLogo ? 1 : 0) + (tab.hasDesc ? 1 : 0) + (tab.hasOnboarded ? 1 : 0);
-const toDateInput = (v) => v ? new Date(v).toISOString().slice(0, 10) : '';
+/* B1 — 상품 카테고리 관리 (최대 maxDepth 단계 트리)
+
+   브랜드(type='BRAND')는 이 화면에서 빠졌다 → 브랜드 관리(/admin/brands).
+   탭은 분류축이 아니라 **범위**다.
+     used = 이 몰에 상품이 있는 카테고리 — 트리 + 아코디언(기존 화면 그대로)
+     all  = 빈 카테고리 포함 전체       — 평면 목록 + 행 페이징(2,348행을 한 번에 그리지 않기 위해)
+
+   all 탭에는 이미지·설명·상위 위젯이 없다. 대신 그 값들을 hidden 으로 함께 보낸다 —
+   postEdit 의 UPDATE 는 "보내지 않은 컬럼은 지운다" 계약이라, 빠뜨리면 수정할 때마다
+   로고·설명·상위·노출플래그가 조용히 비워진다. */
+const isUsed = viewScope === 'used';
+const listUrl = (params) => {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') sp.set(k, v); });
+    const s = sp.toString();
+    return `/admin/categories${s ? '?' + s : ''}`;
+};
+const returnUrl = listUrl({ scope: viewScope, page: pageInfo.page > 1 ? pageInfo.page : null });
 
 /* JSON 을 <script> 안에 안전하게 심는다. 카테고리명은 사용자 입력이다. */
 const toJs = (v) => JSON.stringify(v)
@@ -22,10 +27,11 @@ const toJs = (v) => JSON.stringify(v)
 
 <div class="mb-6 flex justify-between items-center">
     <div>
-        <p class="text-sm text-gray-500">상품, 테마, 브랜드 카테고리를 관리합니다. 각 분류 안에서 최대 <%= maxDepth %>단계까지 계층을 만들 수 있습니다.</p>
+        <p class="text-sm text-gray-500">상품 카테고리를 관리합니다. 최대 <%= maxDepth %>단계까지 계층을 만들 수 있습니다.</p>
         <p class="mt-0.5 text-xs text-gray-400">
             상품 배정·기본정보 관리는 행마다 <strong>[관리]</strong>(상세 화면). 사용 여부만 여러 건 바꿀 때는 <strong>[사용여부 저장]</strong> 을 쓰세요. 메뉴(GNB) 노출·순서는 <a href="/admin/menu-preview" class="text-indigo-600 hover:underline">메뉴 미리보기</a>에서 관리합니다.<br>
-            카테고리·브랜드는 전 몰 공통(글로벌)입니다. <strong>[사용 여부]</strong> 는 모든 몰에 적용되는 스위치, <strong>[이 몰 표시]</strong> 는 현재 몰(<%= currentMallName %>) 스토어프론트에서만 숨기고 여는 토글입니다(상품이 있는 항목만 가능, 즉시 저장).
+            브랜드는 <a href="/admin/brands" class="text-indigo-600 hover:underline">브랜드 관리</a>로 옮겼습니다.
+            카테고리는 전 몰 공통(글로벌)입니다. <strong>[사용 여부]</strong> 는 모든 몰에 적용되는 스위치, <strong>[이 몰 표시]</strong> 는 현재 몰(<%= currentMallName %>) 스토어프론트에서만 숨기고 여는 토글입니다(상품이 있는 항목만 가능, 즉시 저장).
         </p>
     </div>
     <div class="flex items-center gap-2">
@@ -33,8 +39,8 @@ const toJs = (v) => JSON.stringify(v)
         <span class="text-xs text-emerald-600 mr-1">저장되었습니다.</span>
     <% } %>
     <%#
-      노출 일괄 저장 — 체크박스는 행별 수정 폼(form 속성)에 묶여 있어 다른 폼으로 함께 보낼 수 없다.
-      그래서 지금 열려 있는 탭의 행들을 훑어 히든 폼을 만들어 보낸다(제출되는 값 = 화면에 보이는 상태).
+      사용여부 일괄 저장 — 체크박스는 행별 수정 폼(form 속성)에 묶여 있어 다른 폼으로 함께 보낼 수 없다.
+      그래서 지금 페이지의 행들을 훑어 히든 폼을 만들어 보낸다(제출되는 값 = 화면에 보이는 상태).
     %>
     <button type="button" onclick="saveVisibility()"
         class="inline-flex items-center justify-center h-[38px] px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 whitespace-nowrap">
@@ -58,102 +64,112 @@ const toJs = (v) => JSON.stringify(v)
     </div>
 <% } %>
 
-<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6 flex items-center justify-between">
+<%# 범위 탭 — 서버 왕복(각 탭이 독립 페이징을 쓴다) %>
+<div class="bg-gray-50 border-b border-gray-200 px-1 mb-6">
     <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-        <% TABS.forEach(tab => { %>
-            <button onclick="switchTab('<%= tab.key %>')" id="tab-<%= tab.key %>" type="button"
-                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500">
-                <%= tab.label %>
-            </button>
+        <%
+            const TABS = [
+                { key: 'used', label: '사용중 카테고리', count: scopeCounts.used, hint: '이 몰에 상품이 있는 카테고리' },
+                { key: 'all',  label: '미사용 포함 전체', count: scopeCounts.all, hint: '빈 카테고리까지 전부 (페이지당 ' + pageInfo.perPage + '건)' },
+            ];
+        %>
+        <% TABS.forEach(t => { const on = t.key === viewScope; %>
+            <a href="<%= listUrl({ scope: t.key }) %>" title="<%= t.hint %>"
+               class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm no-underline transition-colors <%= on ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %>">
+                <%= t.label %>
+                <span class="ml-1 text-xs <%= on ? 'text-blue-500' : 'text-gray-400' %>">(<%= Number(t.count).toLocaleString() %>)</span>
+            </a>
         <% }) %>
     </nav>
-    <%# 상품 있는 카테고리/브랜드만 노출(기본). 빈 항목 관리 시 토글 (설계 §10-3) %>
-    <% const _te = (typeof showEmpty !== 'undefined' && showEmpty); %>
-    <a href="?tab=<%= activeTab %><%= _te ? '' : '&showEmpty=1' %>"
-       class="text-xs px-3 py-1.5 rounded-lg border <%= _te ? 'border-gray-300 bg-white text-gray-600' : 'border-indigo-200 bg-indigo-50 text-indigo-700' %> hover:bg-gray-50 no-underline self-center">
-        <%= _te ? '상품 있는 것만 보기' : '빈 항목 포함 보기' %>
-    </a>
 </div>
 
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-    <% TABS.forEach(tab => { %>
-        <div id="content-<%= tab.key %>" class="p-6 hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full lg:min-w-[1480px] divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">순서</th>
-                            <% if (tab.hasLogo) { %>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48"><%= tab.type === 'BRAND' ? '로고' : '이미지' %></th>
-                            <% } %>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[240px]"><%= tab.nameLabel %></th>
-                            <% if (tab.hasDesc) { %>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">간략 설명</th>
-                            <% } %>
-                            <% if (tab.hasOnboarded) { %>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">입점일</th>
-                            <% } %>
+    <div class="p-6">
+        <% if (!isUsed) { %>
+            <p class="mb-4 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                전체 목록은 계층을 펼치지 않고 <strong>평면 + 경로</strong>로 보여줍니다(<%= Number(pageInfo.total).toLocaleString() %>건을 한 화면에 그리면 느려집니다).
+                이미지·설명·상위 카테고리 편집은 <strong>사용중</strong> 탭이나 행별 <strong>[관리]</strong> 화면에서 하세요.
+            </p>
+        <% } %>
+        <div class="overflow-x-auto">
+            <table class="min-w-full <%= isUsed ? 'lg:min-w-[1480px]' : '' %> divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">순서</th>
+                        <% if (isUsed) { %>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">이미지</th>
+                        <% } %>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[240px]">카테고리명</th>
+                        <% if (isUsed) { %>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">간략 설명</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">상위 카테고리</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32" title="모든 몰 공통(글로벌 카탈로그) 사용 여부 스위치">사용 여부</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32" title="이 몰(<%= currentMallName %>) 스토어프론트에서만 표시 여부">이 몰 표시<br><span class="text-[10px] normal-case text-gray-400"><%= currentMallName %></span></th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">상품수</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">관리</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <% tab.rows.forEach(category => { %>
-                            <%
-                                const formId = `cat-form-${category.id}`;
-                                const indent = (category._depth - 1) * 22;
-                                // NORMAL 의 이미지·간략 설명은 메가메뉴 프로모션 영역 전용 → 1뎁스만.
-                                // BRAND 로고는 브랜드관/캐러셀용이라 뎁스 제한 없음(어차피 전부 1뎁스).
-                                const rowHasLogo = tab.hasLogo && (tab.type !== 'NORMAL' || category._depth === 1);
-                                const rowHasDesc = tab.hasDesc && category._depth === 1;
-                            %>
-                            <tr class="cat-row align-middle <%= category.is_active ? '' : 'bg-gray-50/60' %> <%= category._depth > 1 ? 'hidden' : '' %>"
-                                data-cat-id="<%= category.id %>"
-                                data-parent-id="<%= category.parent_id || '' %>"
-                                data-depth="<%= category._depth %>">
-                                <td class="px-4 py-4 whitespace-nowrap">
-                                    <form id="<%= formId %>" action="/admin/categories/edit" method="POST"
-                                        enctype="multipart/form-data">
-                                        <input type="hidden" name="id" value="<%= category.id %>">
-                                        <input type="hidden" name="type" value="<%= tab.type %>">
-                                        <input type="hidden" name="active_tab" value="<%= tab.key %>">
-                                        <% if (tab.hasLogo) { %>
-                                            <%# 업로드 필드를 숨긴 행에서도 보낸다. 빠지면 postEdit 가 기존 이미지를 NULL 로 덮는다. %>
-                                            <input type="hidden" name="existing_logo" value="<%= category.logo_image_path || '' %>">
-                                        <% } %>
-                                    </form>
-                                    <input form="<%= formId %>" type="number" name="display_order" class="w-20"
-                                        value="<%= category.display_order %>">
-                                </td>
+                        <% } else { %>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[220px]">경로</th>
+                        <% } %>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32" title="모든 몰 공통(글로벌 카탈로그) 사용 여부 스위치">사용 여부</th>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32" title="이 몰(<%= currentMallName %>) 스토어프론트에서만 표시 여부">이 몰 표시<br><span class="text-[10px] normal-case text-gray-400"><%= currentMallName %></span></th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">상품수</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">관리</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <% rows.forEach(category => { %>
+                        <%
+                            const formId = `cat-form-${category.id}`;
+                            const indent = isUsed ? (category._depth - 1) * 22 : 0;
+                            // 이미지·간략 설명은 GNB 메가메뉴 프로모션 영역 전용 → 1뎁스만.
+                            const rowHasLogo = isUsed && category._depth === 1;
+                            const rowHasDesc = isUsed && category._depth === 1;
+                        %>
+                        <tr class="cat-row align-middle <%= category.is_active ? '' : 'bg-gray-50/60' %> <%= (isUsed && category._depth > 1) ? 'hidden' : '' %>"
+                            data-cat-id="<%= category.id %>"
+                            data-parent-id="<%= category.parent_id || '' %>"
+                            data-depth="<%= category._depth %>">
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <form id="<%= formId %>" action="/admin/categories/edit" method="POST"
+                                    enctype="multipart/form-data">
+                                    <input type="hidden" name="id" value="<%= category.id %>">
+                                    <input type="hidden" name="type" value="NORMAL">
+                                    <input type="hidden" name="scope" value="<%= viewScope %>">
+                                    <input type="hidden" name="return_url" value="<%= returnUrl %>">
+                                    <%# 업로드 필드를 숨긴 행에서도 보낸다. 빠지면 postEdit 가 기존 이미지를 NULL 로 덮는다. %>
+                                    <input type="hidden" name="existing_logo" value="<%= category.logo_image_path || '' %>">
+                                    <% if (!isUsed) { %>
+                                        <%# 전체 탭에는 설명·상위 위젯이 없다 → 현재 값을 그대로 되돌려 보내 보존한다. %>
+                                        <input type="hidden" name="description" value="<%= category.description || '' %>">
+                                        <input type="hidden" name="parent_id" value="<%= category.parent_id || '' %>">
+                                    <% } %>
+                                </form>
+                                <input form="<%= formId %>" type="number" name="display_order" class="w-20"
+                                    value="<%= category.display_order %>">
+                            </td>
 
-                                <% if (tab.hasLogo) { %>
-                                    <td class="px-4 py-4 whitespace-nowrap">
-                                        <% if (!rowHasLogo) { %>
-                                            <span class="text-xs text-gray-300">—</span>
-                                        <% } else { %>
-                                        <div class="flex items-center gap-2">
-                                            <div id="preview-container-<%= category.id %>"
-                                                class="h-10 w-20 flex-shrink-0 relative overflow-hidden rounded border bg-gray-50 flex items-center justify-center">
-                                                <% if (category.logo_image_path) { %>
-                                                    <img src="<%= category.logo_image_path %>" alt="Logo" class="max-h-full max-w-full object-contain">
-                                                <% } else { %>
-                                                    <div class="text-gray-400 text-[10px] bg-gray-100 text-center w-full h-full flex items-center justify-center border-dashed border border-gray-300">NO LOGO</div>
-                                                <% } %>
-                                            </div>
-                                            <input form="<%= formId %>" type="file" name="logo_image"
-                                                accept="image/jpeg, image/png, image/webp"
-                                                class="brand-logo-upload-btn block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-                                                data-id="<%= category.id %>">
+                            <% if (isUsed) { %>
+                                <td class="px-4 py-4 whitespace-nowrap">
+                                    <% if (!rowHasLogo) { %>
+                                        <span class="text-xs text-gray-300">—</span>
+                                    <% } else { %>
+                                    <div class="flex items-center gap-2">
+                                        <div id="preview-container-<%= category.id %>"
+                                            class="h-10 w-20 flex-shrink-0 relative overflow-hidden rounded border bg-gray-50 flex items-center justify-center">
+                                            <% if (category.logo_image_path) { %>
+                                                <img src="<%= category.logo_image_path %>" alt="Logo" class="max-h-full max-w-full object-contain">
+                                            <% } else { %>
+                                                <div class="text-gray-400 text-[10px] bg-gray-100 text-center w-full h-full flex items-center justify-center border-dashed border border-gray-300">NO IMAGE</div>
+                                            <% } %>
                                         </div>
-                                        <% } %>
-                                    </td>
-                                <% } %>
+                                        <input form="<%= formId %>" type="file" name="logo_image"
+                                            accept="image/jpeg, image/png, image/webp"
+                                            class="cat-logo-upload-btn block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                                            data-id="<%= category.id %>">
+                                    </div>
+                                    <% } %>
+                                </td>
+                            <% } %>
 
-                                <td class="px-4 py-4 whitespace-nowrap">
-                                    <div class="flex items-center" style="padding-left: <%= indent %>px">
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <div class="flex items-center" style="padding-left: <%= indent %>px">
+                                    <% if (isUsed) { %>
                                         <%# 화살표는 현재 몰에 실제로 보이는 하위가 있을 때만 (visibleChildCount) %>
                                         <% if (category.visibleChildCount > 0) { %>
                                             <button type="button" class="cat-toggle flex-shrink-0 mr-1 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700"
@@ -167,45 +183,33 @@ const toJs = (v) => JSON.stringify(v)
                                         <% } else { %>
                                             <span class="flex-shrink-0 mr-1 w-5 h-5" aria-hidden="true"></span>
                                         <% } %>
-                                        <input form="<%= formId %>" type="text" name="name" value="<%= category.name %>" class="flex-1 min-w-[120px]">
-                                        <span class="ml-2 text-[11px] text-gray-400 whitespace-nowrap">D<%= category._depth %></span>
-                                        <% if (category.visibleChildCount > 0) { %>
-                                            <span class="ml-1 text-[11px] text-gray-400 whitespace-nowrap">하위 <%= category.visibleChildCount %></span>
-                                        <% } %>
-                                    </div>
+                                    <% } %>
+                                    <input form="<%= formId %>" type="text" name="name" value="<%= category.name %>" class="flex-1 min-w-[120px]">
+                                    <span class="ml-2 text-[11px] text-gray-400 whitespace-nowrap">D<%= category._depth %></span>
+                                    <% if (isUsed && category.visibleChildCount > 0) { %>
+                                        <span class="ml-1 text-[11px] text-gray-400 whitespace-nowrap">하위 <%= category.visibleChildCount %></span>
+                                    <% } %>
+                                </div>
+                            </td>
+
+                            <% if (isUsed) { %>
+                                <td class="px-4 py-4">
+                                    <% if (rowHasDesc) { %>
+                                        <input form="<%= formId %>" type="text" name="description" maxlength="255"
+                                            value="<%= category.description || '' %>" placeholder="메가메뉴 우측 영역에 표시될 한 줄 설명"
+                                            class="w-full text-sm">
+                                    <% } else { %>
+                                        <span class="text-xs text-gray-300">—</span>
+                                        <%# 값 보존 — 빠지면 postEdit 가 description 을 NULL 로 덮는다. %>
+                                        <input form="<%= formId %>" type="hidden" name="description" value="<%= category.description || '' %>">
+                                    <% } %>
                                 </td>
 
-                                <% if (tab.hasDesc) { %>
-                                    <td class="px-4 py-4">
-                                        <% if (rowHasDesc) { %>
-                                            <input form="<%= formId %>" type="text" name="description" maxlength="255"
-                                                value="<%= category.description || '' %>" placeholder="메가메뉴 우측 영역에 표시될 한 줄 설명"
-                                                class="w-full text-sm">
-                                        <% } else { %>
-                                            <span class="text-xs text-gray-300">—</span>
-                                            <%# 값 보존 — 빠지면 postEdit 가 description 을 NULL 로 덮는다. %>
-                                            <input form="<%= formId %>" type="hidden" name="description" value="<%= category.description || '' %>">
-                                        <% } %>
-                                    </td>
-                                <% } %>
-
-                                <%# 브랜드 입점일 — 이 날짜로부터 설정 기간 내면 '신규 입점 브랜드'로 노출된다. %>
-                                <% if (tab.hasOnboarded) { %>
-                                    <td class="px-4 py-4 whitespace-nowrap">
-                                        <input form="<%= formId %>" type="date" name="onboarded_at"
-                                            value="<%= toDateInput(category.onboarded_at) %>"
-                                            class="w-full text-sm">
-                                        <% if (typeof isNewBrand === 'function' && isNewBrand(category)) { %>
-                                            <span class="mt-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 text-emerald-800">신규 입점</span>
-                                        <% } %>
-                                    </td>
-                                <% } %>
-
                                 <td class="px-4 py-4 whitespace-nowrap">
-                                    <%# 부모 후보를 행마다 전부 찍으면 브랜드 1354개에서 option 이 백만 단위로 터진다.
+                                    <%# 부모 후보를 행마다 전부 찍으면 option 이 폭발한다.
                                         현재 값만 렌더하고 나머지는 select 를 열 때 채운다(fillParentSelect). %>
                                     <select form="<%= formId %>" name="parent_id" class="parent-select w-full text-sm"
-                                        data-type="<%= tab.type %>" data-cat-id="<%= category.id %>"
+                                        data-cat-id="<%= category.id %>"
                                         data-parent-id="<%= category.parent_id || '' %>">
                                         <option value="">— 최상위 —</option>
                                         <% if (category.parent_id) { %>
@@ -213,110 +217,117 @@ const toJs = (v) => JSON.stringify(v)
                                         <% } %>
                                     </select>
                                 </td>
+                            <% } else { %>
+                                <td class="px-4 py-4 text-sm text-gray-500">
+                                    <%= category.parentPath || '— 최상위 —' %>
+                                </td>
+                            <% } %>
 
-                                <td class="px-4 py-4 whitespace-nowrap">
-                                    <div class="flex items-center justify-center gap-3 text-xs text-gray-600">
-                                        <label class="inline-flex items-center gap-1" title="사용 여부(전역)">
-                                            <input form="<%= formId %>" type="hidden" name="is_active" value="0">
-                                            <input form="<%= formId %>" type="checkbox" name="is_active" value="1" <%= category.is_active ? 'checked' : '' %>>
-                                            <span>사용</span>
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <div class="flex items-center justify-center gap-3 text-xs text-gray-600">
+                                    <label class="inline-flex items-center gap-1" title="사용 여부(전역)">
+                                        <input form="<%= formId %>" type="hidden" name="is_active" value="0">
+                                        <input form="<%= formId %>" type="checkbox" name="is_active" value="1" <%= category.is_active ? 'checked' : '' %>>
+                                        <span>사용</span>
+                                    </label>
+                                    <%# 메뉴(PC/모바일) 노출은 메뉴 미리보기에서 관리한다. 여기서는 값만 보존한다. %>
+                                    <input form="<%= formId %>" type="hidden" name="pc_visible" value="<%= category.pc_visible ? 1 : 0 %>">
+                                    <input form="<%= formId %>" type="hidden" name="mobile_visible" value="<%= category.mobile_visible ? 1 : 0 %>">
+                                </div>
+                            </td>
+
+                            <td class="px-4 py-4 whitespace-nowrap text-center text-sm">
+                                <% if (category.validForMall) { %>
+                                    <%# 이 몰에 상품이 있어 노출되는 항목만 몰별 표시 override 가능. onchange 즉시 저장. %>
+                                    <form action="/admin/categories/mall-visibility" method="POST" class="inline-flex items-center">
+                                        <input type="hidden" name="scope" value="<%= viewScope %>">
+                                        <input type="hidden" name="return_url" value="<%= returnUrl %>">
+                                        <input type="hidden" name="category_id" value="<%= category.id %>">
+                                        <input type="hidden" name="visible" value="0">
+                                        <label class="inline-flex items-center gap-1 cursor-pointer" title="이 몰에서 표시">
+                                            <input type="checkbox" name="visible" value="1"
+                                                onchange="this.form.submit()"
+                                                <%= category.hiddenForMall ? '' : 'checked' %>>
+                                            <span class="text-xs <%= category.hiddenForMall ? 'text-gray-400' : 'text-gray-700' %>"><%= category.hiddenForMall ? '숨김' : '표시' %></span>
                                         </label>
-                                        <%# 메뉴(PC/모바일) 노출은 메뉴 미리보기에서 관리한다. 여기서는 값만 보존한다. %>
-                                        <input form="<%= formId %>" type="hidden" name="pc_visible" value="<%= category.pc_visible ? 1 : 0 %>">
-                                        <input form="<%= formId %>" type="hidden" name="mobile_visible" value="<%= category.mobile_visible ? 1 : 0 %>">
-                                    </div>
-                                </td>
+                                    </form>
+                                <% } else { %>
+                                    <span class="text-xs text-gray-300" title="이 몰에 상품이 없어 스토어프론트에 노출되지 않습니다">—</span>
+                                <% } %>
+                            </td>
 
-                                <td class="px-4 py-4 whitespace-nowrap text-center text-sm">
-                                    <% if (category.validForMall) { %>
-                                        <%# 이 몰에 상품이 있어 노출되는 항목만 몰별 표시 override 가능. onchange 즉시 저장. %>
-                                        <form action="/admin/categories/mall-visibility" method="POST" class="inline-flex items-center">
-                                            <input type="hidden" name="active_tab" value="<%= tab.key %>">
-                                            <input type="hidden" name="category_id" value="<%= category.id %>">
-                                            <input type="hidden" name="visible" value="0">
-                                            <label class="inline-flex items-center gap-1 cursor-pointer" title="이 몰에서 표시">
-                                                <input type="checkbox" name="visible" value="1"
-                                                    onchange="this.form.submit()"
-                                                    <%= category.hiddenForMall ? '' : 'checked' %>>
-                                                <span class="text-xs <%= category.hiddenForMall ? 'text-gray-400' : 'text-gray-700' %>"><%= category.hiddenForMall ? '숨김' : '표시' %></span>
-                                            </label>
-                                        </form>
+                            <td class="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-600">
+                                <%= category.productCount %>
+                            </td>
+
+                            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex justify-end gap-2">
+                                    <%# 상세 화면 — 기본정보 + 상품 배정/제거 %>
+                                    <a href="/admin/categories/<%= category.id %>"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline"><i class="bi bi-box-arrow-up-right mr-1"></i>관리</a>
+                                    <button form="<%= formId %>" type="submit"
+                                        class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</button>
+                                    <% if (category.childCount > 0) { %>
+                                        <button type="button" disabled
+                                            title="하위 카테고리 <%= category.childCount %>개가 있어 삭제할 수 없습니다."
+                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed">삭제</button>
                                     <% } else { %>
-                                        <span class="text-xs text-gray-300" title="이 몰에 상품이 없어 스토어프론트에 노출되지 않습니다">—</span>
+                                        <button type="button"
+                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                                            onclick="deleteCategory('<%= category.id %>', <%= category.productCount %>)">삭제</button>
                                     <% } %>
-                                </td>
-
-                                <td class="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-600">
-                                    <%= category.productCount %>
-                                </td>
-
-                                <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <div class="flex justify-end gap-2">
-                                        <%# 상세 화면 — 기본정보 + 상품 배정/제거. 브랜드는 브랜드 관리 상세로. %>
-                                        <a href="<%= tab.type === 'BRAND' ? '/admin/brands/' + category.id : '/admin/categories/' + category.id %>"
-                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline"><i class="bi bi-box-arrow-up-right mr-1"></i>관리</a>
-                                        <button form="<%= formId %>" type="submit"
-                                            class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 no-underline">수정</button>
-                                        <% if (category.childCount > 0) { %>
-                                            <button type="button" disabled
-                                                title="하위 카테고리 <%= category.childCount %>개가 있어 삭제할 수 없습니다."
-                                                class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed">삭제</button>
-                                        <% } else { %>
-                                            <button type="button"
-                                                class="inline-flex items-center justify-center h-[33px] px-3 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                                                onclick="deleteCategory('<%= category.id %>', <%= category.productCount %>)">삭제</button>
-                                        <% } %>
-                                    </div>
-                                </td>
-                            </tr>
-                        <% }) %>
-                        <% if (tab.rows.length === 0) { %>
-                            <tr>
-                                <td colspan="<%= colCount(tab) %>" class="px-6 py-10 text-center text-gray-500">등록된 <%= tab.label %>가 없습니다.</td>
-                            </tr>
-                        <% } %>
-                    </tbody>
-                </table>
-            </div>
-
-            <%
-                const pi = (pageInfo && pageInfo[tab.type]) || { page: 1, totalPages: 1, total: tab.rows.length, perPage: tab.rows.length };
-                const first = pi.total === 0 ? 0 : (pi.page - 1) * pi.perPage + 1;
-                const last = Math.min(pi.page * pi.perPage, pi.total);
-            %>
-            <div class="mt-4 flex items-center justify-between text-sm text-gray-600">
-                <div>전체 <%= pi.total %>개 중 <%= first %>–<%= last %>번째</div>
-                <% if (pi.totalPages > 1) { %>
-                    <%
-                        // 현재 페이지 주변 5개만 노출(브랜드는 14페이지까지 간다).
-                        const from = Math.max(1, pi.page - 2);
-                        const to = Math.min(pi.totalPages, from + 4);
-                        const href = (n) => `/admin/categories?tab=${tab.key}&page=${n}`;
-                    %>
-                    <nav class="flex items-center gap-1" aria-label="페이지">
-                        <% if (pi.page > 1) { %>
-                            <a href="<%= href(pi.page - 1) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">이전</a>
-                        <% } %>
-                        <% if (from > 1) { %>
-                            <a href="<%= href(1) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">1</a>
-                            <% if (from > 2) { %><span class="px-1 text-gray-400">…</span><% } %>
-                        <% } %>
-                        <% for (let n = from; n <= to; n++) { %>
-                            <a href="<%= href(n) %>"
-                               class="px-2 py-1 rounded border <%= n === pi.page ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 hover:bg-gray-50' %>"><%= n %></a>
-                        <% } %>
-                        <% if (to < pi.totalPages) { %>
-                            <% if (to < pi.totalPages - 1) { %><span class="px-1 text-gray-400">…</span><% } %>
-                            <a href="<%= href(pi.totalPages) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"><%= pi.totalPages %></a>
-                        <% } %>
-                        <% if (pi.page < pi.totalPages) { %>
-                            <a href="<%= href(pi.page + 1) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">다음</a>
-                        <% } %>
-                    </nav>
-                <% } %>
-            </div>
+                                </div>
+                            </td>
+                        </tr>
+                    <% }) %>
+                    <% if (rows.length === 0) { %>
+                        <tr>
+                            <td colspan="<%= isUsed ? 9 : 7 %>" class="px-6 py-10 text-center text-gray-500">
+                                <%= isUsed ? '이 몰에 상품이 있는 카테고리가 없습니다. [미사용 포함 전체] 탭에서 전체 카테고리를 볼 수 있습니다.' : '등록된 카테고리가 없습니다.' %>
+                            </td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
         </div>
-    <% }) %>
+
+        <%
+            const pi = pageInfo;
+            const first = pi.total === 0 ? 0 : (pi.page - 1) * pi.perPage + 1;
+            const last = Math.min(pi.page * pi.perPage, pi.total);
+        %>
+        <div class="mt-4 flex items-center justify-between text-sm text-gray-600">
+            <div><%= pi.unit %> 전체 <%= Number(pi.total).toLocaleString() %>개 중 <%= first %>–<%= last %>번째</div>
+            <% if (pi.totalPages > 1) { %>
+                <%
+                    // 현재 페이지 주변 5개만 노출.
+                    const from = Math.max(1, pi.page - 2);
+                    const to = Math.min(pi.totalPages, from + 4);
+                    const href = (n) => listUrl({ scope: viewScope, page: n });
+                %>
+                <nav class="flex items-center gap-1" aria-label="페이지">
+                    <% if (pi.page > 1) { %>
+                        <a href="<%= href(pi.page - 1) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">이전</a>
+                    <% } %>
+                    <% if (from > 1) { %>
+                        <a href="<%= href(1) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">1</a>
+                        <% if (from > 2) { %><span class="px-1 text-gray-400">…</span><% } %>
+                    <% } %>
+                    <% for (let n = from; n <= to; n++) { %>
+                        <a href="<%= href(n) %>"
+                           class="px-2 py-1 rounded border <%= n === pi.page ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 hover:bg-gray-50' %>"><%= n %></a>
+                    <% } %>
+                    <% if (to < pi.totalPages) { %>
+                        <% if (to < pi.totalPages - 1) { %><span class="px-1 text-gray-400">…</span><% } %>
+                        <a href="<%= href(pi.totalPages) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"><%= pi.totalPages %></a>
+                    <% } %>
+                    <% if (pi.page < pi.totalPages) { %>
+                        <a href="<%= href(pi.page + 1) %>" class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">다음</a>
+                    <% } %>
+                </nav>
+            <% } %>
+        </div>
+    </div>
 </div>
 
 <div id="addModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog"
@@ -334,25 +345,17 @@ const toJs = (v) => JSON.stringify(v)
                         <div class="mt-2">
                             <form id="addForm" action="/admin/categories/add" method="POST"
                                 enctype="multipart/form-data">
-                                <input type="hidden" name="type" id="modal-type-input" value="NORMAL">
-                                <input type="hidden" name="active_tab" id="modal-active-tab-input" value="product">
+                                <input type="hidden" name="type" value="NORMAL">
+                                <input type="hidden" name="scope" value="<%= viewScope %>">
+                                <input type="hidden" name="return_url" value="<%= returnUrl %>">
                                 <div class="mb-4">
                                     <label class="block mb-2 text-sm font-medium text-gray-900">카테고리명</label>
                                     <input type="text" name="name" required class="w-full">
                                 </div>
-                                <div class="mb-4 hidden" id="descField">
+                                <div class="mb-4" id="descField">
                                     <label class="block mb-2 text-sm font-medium text-gray-900">간략 설명</label>
                                     <input type="text" name="description" maxlength="255" class="w-full"
                                         placeholder="GNB 메가메뉴에 카테고리명 아래로 표시됩니다 (최대 255자)">
-                                </div>
-                                <div class="mb-4 hidden" id="onboardedField">
-                                    <label class="block mb-2 text-sm font-medium text-gray-900">입점일</label>
-                                    <input type="date" name="onboarded_at" class="w-full"
-                                        value="<%= new Date().toISOString().slice(0,10) %>">
-                                    <p class="mt-1 text-xs text-gray-500">
-                                        이 날짜로부터 <strong><%= typeof newBrandDays !== 'undefined' ? newBrandDays : 180 %>일간</strong>
-                                        '신규 입점 브랜드'로 노출됩니다.
-                                    </p>
                                 </div>
                                 <div class="mb-4">
                                     <label class="block mb-2 text-sm font-medium text-gray-900">상위 카테고리</label>
@@ -361,8 +364,8 @@ const toJs = (v) => JSON.stringify(v)
                                     </select>
                                     <p class="mt-1 text-xs text-gray-500">최대 <%= maxDepth %>단계까지만 만들 수 있어, 마지막 단계의 카테고리는 상위로 선택되지 않습니다.</p>
                                 </div>
-                                <div class="mb-4 hidden" id="logoUploadField">
-                                    <label class="block mb-2 text-sm font-medium text-gray-900" id="logoUploadLabel">브랜드 로고 파일 업로드</label>
+                                <div class="mb-4" id="logoUploadField">
+                                    <label class="block mb-2 text-sm font-medium text-gray-900">카테고리 이미지 업로드</label>
                                     <p class="text-xs text-gray-500 mb-2">정사각형 권장, 최대 2MB 등록 가능</p>
                                     <div id="modal-preview-container"
                                         class="h-16 w-32 mb-2 hidden overflow-hidden rounded border bg-gray-50 items-center justify-center">
@@ -376,7 +379,7 @@ const toJs = (v) => JSON.stringify(v)
                                 <div class="mb-4">
                                     <label class="block mb-2 text-sm font-medium text-gray-900">출력 순서</label>
                                     <input type="number" name="display_order" id="modal-display-order"
-                                        value="<%= nextDisplayOrder ? nextDisplayOrder.NORMAL : 0 %>" class="w-full">
+                                        value="<%= nextDisplayOrder %>" class="w-full">
                                 </div>
                                 <div class="mb-2 flex items-center gap-4 text-sm text-gray-700">
                                     <label class="inline-flex items-center gap-1">
@@ -412,7 +415,8 @@ const toJs = (v) => JSON.stringify(v)
 
 <form id="deleteForm" action="/admin/categories/delete" method="POST" style="display:none;">
     <input type="hidden" name="id" id="deleteId">
-    <input type="hidden" name="active_tab" id="deleteActiveTab">
+    <input type="hidden" name="scope" value="<%= viewScope %>">
+    <input type="hidden" name="return_url" value="<%= returnUrl %>">
 </form>
 
 <form id="visibilityForm" action="/admin/categories/visibility" method="POST" style="display:none;"></form>
@@ -423,25 +427,20 @@ const toJs = (v) => JSON.stringify(v)
 </style>
 
 <script>
-    let currentTab = '<%- activeTab || "product" %>';
     // 카테고리명이 그대로 들어가므로 스크립트 조기 종료 태그나 U+2028/2029 로 깨지지 않게 이스케이프한다.
-    const nextDisplayOrderByType = <%- toJs(nextDisplayOrder || { NORMAL: 0, THEME: 0, BRAND: 0 }) %>;
-    const parentOptionsByType = <%- toJs(addParentOptions || {}) %>;
-    const typeMap = { product: 'NORMAL', brand: 'BRAND' };
-
-    const tabActiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
-    const tabInactiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500';
+    const parentOptions = <%- toJs(parentOptions || []) %>;
+    const CURRENT_SCOPE = '<%- viewScope %>';
+    const RETURN_URL = <%- toJs(returnUrl) %>;
 
     /*
-     * 노출 일괄 저장 — 지금 열려 있는 탭의 모든 행(접혀 있는 하위 뎁스 포함)을 훑어
-     * 활성/PC/모바일 체크 상태만 서버로 보낸다. 이름·순서·상위는 보내지 않는다(행별 [수정] 소관).
+     * 사용여부 일괄 저장 — 지금 페이지의 모든 행(접혀 있는 하위 뎁스 포함)을 훑어
+     * 사용 여부 체크 상태만 서버로 보낸다. 이름·순서·상위는 보내지 않는다(행별 [수정] 소관).
      */
     function saveVisibility() {
-        const pane = document.getElementById('content-' + currentTab);
         const form = document.getElementById('visibilityForm');
-        if (!pane || !form) return;
+        if (!form) return;
 
-        const rows = pane.querySelectorAll('tr.cat-row');
+        const rows = document.querySelectorAll('tr.cat-row');
         if (!rows.length) return alert('저장할 카테고리가 없습니다.');
 
         form.innerHTML = '';
@@ -450,41 +449,30 @@ const toJs = (v) => JSON.stringify(v)
             el.type = 'hidden'; el.name = name; el.value = value;
             form.appendChild(el);
         };
-        add('active_tab', currentTab);
+        add('scope', CURRENT_SCOPE);
+        add('return_url', RETURN_URL);
 
         rows.forEach(row => {
             const id = row.getAttribute('data-cat-id');
             if (!id) return;
             add('id[]', id);
-            // 체크된 것만 보낸다. 서버는 없는 키를 0 으로 읽는다(체크 해제 = 노출 끔).
+            // 체크된 것만 보낸다. 서버는 없는 키를 0 으로 읽는다(체크 해제 = 사용 끔).
             // 키의 'c' 접두어는 필수 — 숫자 키는 qs 가 배열 인덱스로 해석해 id 매칭이 깨진다.
-            const flag = (inputName, key) => {
-                const box = row.querySelector('input[type="checkbox"][name="' + inputName + '"]');
-                if (box && box.checked) add(key + '[c' + id + ']', '1');
-            };
-            // 사용 여부만 보낸다. 메뉴 노출(pc/mobile)은 메뉴 미리보기 소관.
-            flag('is_active', 'active');
+            const box = row.querySelector('input[type="checkbox"][name="is_active"]');
+            if (box && box.checked) add('active[c' + id + ']', '1');
         });
 
         form.submit();
     }
 
-    function updateModalDisplayOrder() {
-        const displayOrderInput = document.getElementById('modal-display-order');
-        if (!displayOrderInput) return;
-        displayOrderInput.value = nextDisplayOrderByType[typeMap[currentTab] || 'NORMAL'] ?? 0;
-    }
-
-    // 상위 선택지는 탭(=분류)마다 다르다. 다른 분류의 카테고리를 부모로 고를 수 없다.
     function updateModalParentOptions() {
         const select = document.getElementById('modal-parent-select');
         if (!select) return;
-        const options = parentOptionsByType[typeMap[currentTab] || 'NORMAL'] || [];
         select.innerHTML = '<option value="">— 최상위 —</option>';
-        options.forEach(opt => {
+        parentOptions.forEach(opt => {
             const el = document.createElement('option');
             el.value = opt.id;
-            el.textContent = ' '.repeat((opt.depth - 1) * 3) + opt.name;
+            el.textContent = ' '.repeat((opt.depth - 1) * 3) + opt.name;
             select.appendChild(el);
         });
     }
@@ -498,11 +486,10 @@ const toJs = (v) => JSON.stringify(v)
         if (select.dataset.filled) return;
         select.dataset.filled = '1';
 
-        const options = parentOptionsByType[select.dataset.type] || [];
         const selfId = Number(select.dataset.catId);
         const currentParentId = select.dataset.parentId ? Number(select.dataset.parentId) : null;
 
-        const byId = new Map(options.map(o => [o.id, o]));
+        const byId = new Map(parentOptions.map(o => [o.id, o]));
         const isSelfOrDescendant = (id) => {
             let cur = id;
             for (let guard = 0; cur != null && guard < 100; guard++) {
@@ -517,11 +504,11 @@ const toJs = (v) => JSON.stringify(v)
         if (currentParentId != null && !byId.has(currentParentId)) return;
 
         const frag = document.createDocumentFragment();
-        options.forEach(opt => {
+        parentOptions.forEach(opt => {
             if (isSelfOrDescendant(opt.id)) return;
             const el = document.createElement('option');
             el.value = opt.id;
-            el.textContent = ' '.repeat((opt.depth - 1) * 3) + opt.name;
+            el.textContent = ' '.repeat((opt.depth - 1) * 3) + opt.name;
             if (opt.id === currentParentId) el.selected = true;
             frag.appendChild(el);
         });
@@ -541,22 +528,7 @@ const toJs = (v) => JSON.stringify(v)
         if (select) fillParentSelect(select);
     });
 
-    function switchTab(tab) {
-        currentTab = tab;
-        ['product', 'brand'].forEach(key => {
-            document.getElementById('tab-' + key).className = (key === tab) ? tabActiveClass : tabInactiveClass;
-            document.getElementById('content-' + key).classList.toggle('hidden', key !== tab);
-        });
-    }
-
     function openModal() {
-        document.getElementById('modal-type-input').value = typeMap[currentTab] || 'NORMAL';
-        document.getElementById('modal-active-tab-input').value = currentTab;
-
-        document.getElementById('logoUploadLabel').textContent =
-            currentTab === 'brand' ? '브랜드 로고 파일 업로드' : '카테고리 이미지 업로드';
-
-        updateModalDisplayOrder();
         updateModalParentOptions();
         updateModalMediaFields();
         document.getElementById('addModal').classList.remove('hidden');
@@ -564,21 +536,14 @@ const toJs = (v) => JSON.stringify(v)
     }
 
     /*
-     * 상품 카테고리의 이미지·간략 설명은 GNB 메가메뉴 우측 프로모션 영역 전용이라 1뎁스만 쓴다.
+     * 이미지·간략 설명은 GNB 메가메뉴 우측 프로모션 영역 전용이라 1뎁스만 쓴다.
      * → 상위 카테고리를 고르는 순간(=2뎁스 이상) 두 입력을 숨긴다.
-     * 브랜드 로고는 브랜드관/캐러셀용이라 뎁스와 무관하게 항상 표시한다.
      */
     function updateModalMediaFields() {
         const parentSelect = document.getElementById('modal-parent-select');
         const isTopLevel = !parentSelect || !parentSelect.value;
-
-        const showImage = currentTab === 'brand' || (currentTab === 'product' && isTopLevel);
-        const showDesc = currentTab === 'product' && isTopLevel;
-        const showOnboarded = currentTab === 'brand'; // 입점일은 브랜드에만 의미가 있다
-
-        document.getElementById('logoUploadField').classList.toggle('hidden', !showImage);
-        document.getElementById('descField').classList.toggle('hidden', !showDesc);
-        document.getElementById('onboardedField').classList.toggle('hidden', !showOnboarded);
+        document.getElementById('logoUploadField').classList.toggle('hidden', !isTopLevel);
+        document.getElementById('descField').classList.toggle('hidden', !isTopLevel);
     }
 
     document.addEventListener('change', (e) => {
@@ -597,13 +562,12 @@ const toJs = (v) => JSON.stringify(v)
         }
         if (confirm(message)) {
             document.getElementById('deleteId').value = id;
-            document.getElementById('deleteActiveTab').value = currentTab;
             document.getElementById('deleteForm').submit();
         }
     }
 
     /*
-     * 뎁스별 아코디언.
+     * 뎁스별 아코디언 (사용중 탭 전용 — 전체 탭은 평면이라 접힘이 없다).
      * 초기 렌더에서 depth>1 행은 .hidden 으로 접혀 있다(서버에서 부여).
      * 자식 있는 행의 셰브론을 누르면 직계 자식만 펼치고, 접으면 후손 전체를 함께 접는다.
      * 행은 부모→자식 순으로 이미 평탄화돼 있고, data-parent-id 로 부모-자식을 잇는다.
@@ -635,10 +599,8 @@ const toJs = (v) => JSON.stringify(v)
         if (toggle) { e.preventDefault(); toggleCategory(toggle); }
     });
 
-    switchTab(currentTab);
-
-    // 브랜드 로고 리스트 내 미리보기 처리
-    document.querySelectorAll('.brand-logo-upload-btn').forEach(input => {
+    // 목록 내 이미지 미리보기 처리
+    document.querySelectorAll('.cat-logo-upload-btn').forEach(input => {
         input.addEventListener('change', function (e) {
             const file = e.target.files[0];
             const categoryId = this.getAttribute('data-id');
@@ -651,7 +613,7 @@ const toJs = (v) => JSON.stringify(v)
                 };
                 reader.readAsDataURL(file);
             } else {
-                previewContainer.innerHTML = '<div class="text-gray-400 text-[10px] bg-gray-100 text-center w-full h-full flex items-center justify-center border-dashed border border-gray-300">NO LOGO</div>';
+                previewContainer.innerHTML = '<div class="text-gray-400 text-[10px] bg-gray-100 text-center w-full h-full flex items-center justify-center border-dashed border border-gray-300">NO IMAGE</div>';
             }
         });
     });

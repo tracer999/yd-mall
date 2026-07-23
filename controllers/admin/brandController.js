@@ -1,7 +1,8 @@
 const pool = require('../../config/db');
 const brandStat = require('../../services/brand/brandStatService');
 const { toInitial, toChosung, INITIAL_BUCKETS } = require('../../shared/hangul');
-const { GLOBAL_CATEGORY_MALL_ID } = require('../../services/catalog/categoryScope');
+const { inStockSql, sellableStockSql } = require('../../services/catalog/sellableStock');
+const { GLOBAL_CATEGORY_MALL_ID, validCategoryIdSet, hiddenCategoryIdSet } = require('../../services/catalog/categoryScope');
 
 /*
  * 브랜드 관리 — 브랜드 허브(/brands)의 운영 화면
@@ -19,13 +20,55 @@ const PAGE_SIZE = 30;
 const BRAND_PROD_PER_PAGE = 50;
 const VISIBILITIES = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
 
+/*
+ * 체크박스는 "hidden value=0 + checkbox value=1" 쌍으로 보낸다(JS 없이도 해제가 전달되도록).
+ * 이름이 같으므로 체크 시 qs 가 ['0','1'] 배열을 만든다 → 마지막 값이 실제 선택이다.
+ */
+function toBool(v) {
+    const last = Array.isArray(v) ? v[v.length - 1] : v;
+    return last === '1' || last === 1 || last === true || last === 'on' ? 1 : 0;
+}
+
+/** 저장 후 돌아갈 목록 URL(탭·검색·페이지 유지). 오픈 리다이렉트 방지 — /admin/brands 만 허용. */
+function listBackUrl(req) {
+    const raw = String(req.body.return_url || '');
+    return /^\/admin\/brands(\?|$)/.test(raw) ? raw : '/admin/brands';
+}
+
+function withQuery(url, extra) {
+    const [path, qs] = url.split('?');
+    const sp = new URLSearchParams(qs || '');
+    for (const [k, v] of Object.entries(extra)) {
+        if (v === null || v === undefined || v === '') sp.delete(k);
+        else sp.set(k, v);
+    }
+    const s = sp.toString();
+    return s ? `${path}?${s}` : path;
+}
+
+/*
+ * 범위 탭 — 카테고리 관리(/admin/categories)와 같은 규칙.
+ *   used = 이 몰에 상품이 있는 브랜드   /   all = 미사용(빈) 브랜드 포함 전체
+ * 브랜드는 전 몰 공통 1,401개인데 이 몰에서 실제로 쓰는 건 일부라, 운영 화면의 기본값은 used 다.
+ */
+const SCOPES = ['used', 'all'];
+const normalizeScope = (s) => (SCOPES.includes(s) ? s : 'used');
+
+/*
+ * "이 몰에 상품이 있는가" 판정 — brand_stat(집계 캐시)이 아니라 products 를 직접 본다.
+ * 캐시로 필터하면 재계산 전에는 used 탭이 통째로 비거나, 탭에는 떴는데 상품수 0 으로 보인다.
+ * 화면에 찍는 상품 수도 같은 소스(라이브 COUNT)로 맞춘다.
+ */
+const USED_EXISTS = 'EXISTS (SELECT 1 FROM products p WHERE p.brand_category_id = c.id AND p.mall_id = ?)';
+
 /** GET /admin/brands */
 exports.getList = async (req, res) => {
     const mallId = req.adminMallId || 1;
     try {
         const q = (req.query.q || '').trim();
         const official = req.query.official === '1' ? 1 : req.query.official === '0' ? 0 : null;
-        const sort = ['count', 'name', 'popular', 'new'].includes(req.query.sort) ? req.query.sort : 'count';
+        const sort = ['count', 'name', 'popular', 'new', 'order'].includes(req.query.sort) ? req.query.sort : 'count';
+        const scope = normalizeScope(req.query.scope);
         const page = Math.max(1, Number(req.query.page) || 1);
 
         // 브랜드는 글로벌 한 벌(mall 0). 잔존 몰별 브랜드도 함께 보이도록 IN.
@@ -40,58 +83,189 @@ exports.getList = async (req, res) => {
             where.push('COALESCE(bp.official_yn, 0) = ?');
             params.push(official);
         }
-        const whereSql = `WHERE ${where.join(' AND ')}`;
+        // 검색·공식여부까지 반영된 상태에서 탭별 건수를 센다(탭을 옮겨도 필터가 유지되므로).
+        const baseWhereSql = `WHERE ${where.join(' AND ')}`;
+        const scopeWhereSql = scope === 'used' ? `${baseWhereSql} AND ${USED_EXISTS}` : baseWhereSql;
+        const scopeParams = scope === 'used' ? [...params, mallId] : params;
 
         const order = {
-            count: 'COALESCE(s.product_count, 0) DESC, c.name ASC',
+            count: 'COALESCE(pc.n, 0) DESC, c.name ASC',
             name: 'c.name ASC',
-            popular: 'COALESCE(s.popularity_score, 0) DESC, COALESCE(s.product_count, 0) DESC',
-            new: 'c.onboarded_at DESC'
+            popular: 'COALESCE(s.popularity_score, 0) DESC, COALESCE(pc.n, 0) DESC',
+            new: 'c.onboarded_at DESC',
+            order: 'c.display_order ASC, c.id ASC'
         }[sort];
 
-        const [[{ total }]] = await pool.query(`
-            SELECT COUNT(*) AS total
+        // 상품 수는 라이브 집계(brand_stat 캐시가 아니라) — used 필터와 소스를 맞춘다.
+        const PROD_COUNT_JOIN = `
+            LEFT JOIN (
+                SELECT brand_category_id AS cid, COUNT(*) AS n
+                  FROM products WHERE mall_id = ? AND brand_category_id IS NOT NULL
+                 GROUP BY brand_category_id
+            ) pc ON pc.cid = c.id`;
+
+        const [[counts]] = await pool.query(`
+            SELECT COUNT(*) AS all_n,
+                   SUM(${USED_EXISTS}) AS used_n
               FROM categories c
               LEFT JOIN brand_profile bp ON bp.category_id = c.id
-             ${whereSql}
-        `, params);
+             ${baseWhereSql}
+        `, [mallId, ...params]);
+        const scopeCounts = { used: Number(counts.used_n || 0), all: Number(counts.all_n || 0) };
 
+        const total = scope === 'used' ? scopeCounts.used : scopeCounts.all;
         const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
         const cur = Math.min(page, pages);
 
         const [brands] = await pool.query(`
             SELECT c.id, c.name, c.logo_image_path, c.is_active, c.onboarded_at, c.display_order,
                    bp.name_en, bp.initial, bp.official_yn, bp.shop_enabled, bp.is_seller, bp.seller_name,
-                   s.product_count, s.popularity_score, s.benefit_count, s.top_category_id,
+                   COALESCE(pc.n, 0) AS product_count,
+                   s.popularity_score, s.benefit_count, s.top_category_id,
                    tc.name AS top_category_name
               FROM categories c
               LEFT JOIN brand_profile bp ON bp.category_id = c.id
+              ${PROD_COUNT_JOIN}
               LEFT JOIN brand_stat s ON s.category_id = c.id AND s.mall_id = ?
               LEFT JOIN categories tc ON tc.id = s.top_category_id
-             ${whereSql}
+             ${scopeWhereSql}
              ORDER BY ${order}
              LIMIT ? OFFSET ?
-        `, [mallId, ...params, PAGE_SIZE, (cur - 1) * PAGE_SIZE]);
+        `, [mallId, mallId, ...scopeParams, PAGE_SIZE, (cur - 1) * PAGE_SIZE]);
 
-        // 집계가 언제 돌았는지 — 상품 수가 실제와 어긋나 보일 때 운영자가 확인할 근거
+        // 몰별 표시 override — 이 몰에 상품이 있는 브랜드만 토글 대상(카테고리 관리와 같은 규칙).
+        const [mallValid, mallHidden] = await Promise.all([
+            validCategoryIdSet(mallId, { brand: true }),
+            hiddenCategoryIdSet(mallId),
+        ]);
+        brands.forEach(b => {
+            b.validForMall = mallValid.has(b.id);
+            b.hiddenForMall = mallHidden.has(b.id);
+        });
+
+        // 인기 점수·혜택 수는 여전히 집계 캐시다 — 언제 돌았는지 알려준다.
         const [[stat]] = await pool.query(
             'SELECT MAX(calculated_at) AS calculated_at, COUNT(*) AS n FROM brand_stat WHERE mall_id = ?',
             [mallId]
         );
+
+        const [[{ nextOrder }]] = await pool.query(
+            "SELECT COALESCE(MAX(display_order), -1) + 1 AS nextOrder FROM categories WHERE type = 'BRAND' AND mall_id = ?",
+            [GLOBAL_CATEGORY_MALL_ID]
+        );
+
+        const [[mallRow]] = await pool.query('SELECT name FROM mall WHERE id = ?', [mallId]).catch(() => [[null]]);
 
         res.render('admin/brands/list', {
             layout: 'layouts/admin_layout',
             title: '브랜드 관리',
             brands,
             filters: { q, official, sort },
-            pagination: { total, page: cur, pages },
+            viewScope: scope,
+            scopeCounts,
+            pagination: { total, page: cur, pages, pageSize: PAGE_SIZE },
             stat,
+            nextOrder,
+            currentMallName: (mallRow && mallRow.name) || `몰 ${mallId}`,
             success: req.query.success || null,
             error: req.query.error || null
         });
     } catch (err) {
         console.error('[admin/brands] 목록 실패', err);
         res.status(500).send('Server Error');
+    }
+};
+
+/* ── 목록 인라인 편집 · 등록 ─────────────────────────────────────────
+ *
+ * 카테고리 관리의 브랜드 탭에서 하던 일(순서·로고·이름·입점일·사용여부)을 여기로 옮겼다.
+ * categoryController.postEdit 을 재사용하지 않는 이유:
+ *   - 그쪽 UPDATE 는 "보내지 않은 컬럼은 지운다" 계약이라 브랜드 폼이 로고·설명·노출플래그를
+ *     빠뜨리면 조용히 비워진다.
+ *   - 브랜드는 전부 1뎁스라 postEdit 의 뎁스·순환·서브트리 재계산을 하나도 쓰지 않는다.
+ * 삭제·사용여부 일괄·몰별 표시는 좁은 컬럼만 만지므로 /admin/categories 엔드포인트를 그대로 쓴다.
+ * ────────────────────────────────────────────────────────────────── */
+
+/** POST /admin/brands/:id/inline — 목록 행 저장(이름·순서·입점일·사용여부·로고) */
+exports.postInlineEdit = async (req, res) => {
+    const mallId = req.adminMallId || 1;
+    const id = Number(req.params.id);
+    const back = listBackUrl(req);
+    try {
+        const [[owned]] = await pool.query(
+            "SELECT name FROM categories WHERE id = ? AND type = 'BRAND' AND mall_id IN (0, ?)", [id, mallId]
+        );
+        if (!owned) return res.redirect(withQuery(back, { error: '브랜드를 찾을 수 없습니다.' }));
+
+        const name = (req.body.name || owned.name).trim();
+        const displayOrder = Number.parseInt(req.body.display_order, 10);
+        // 로고는 새로 올렸을 때만 바꾼다. 파일이 없으면 기존 값을 그대로 둔다(NULL 덮어쓰기 방지).
+        const logoPath = req.file ? '/uploads/brands/' + req.file.filename : null;
+
+        await pool.query(
+            `UPDATE categories
+                SET name = ?,
+                    display_order = COALESCE(?, display_order),
+                    onboarded_at = ?,
+                    is_active = ?,
+                    logo_image_path = COALESCE(?, logo_image_path)
+              WHERE id = ? AND type = 'BRAND' AND mall_id IN (0, ?)`,
+            [name, Number.isNaN(displayOrder) ? null : displayOrder,
+             req.body.onboarded_at || null, toBool(req.body.is_active), logoPath, id, mallId]
+        );
+
+        // 검색 인덱스(초성)는 이름에서 파생한다 — 이름을 바꿨으면 함께 갱신해야 검색에 걸린다.
+        await pool.query(
+            `INSERT INTO brand_profile (category_id, mall_id, initial, initial_chosung)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE initial = VALUES(initial), initial_chosung = VALUES(initial_chosung)`,
+            [id, GLOBAL_CATEGORY_MALL_ID, toInitial(name), toChosung(name)]
+        );
+
+        res.redirect(withQuery(back, { success: '저장했습니다.' }));
+    } catch (err) {
+        console.error('[admin/brands] postInlineEdit:', err.message);
+        res.redirect(withQuery(back, { error: '저장에 실패했습니다.' }));
+    }
+};
+
+/** POST /admin/brands/add — 브랜드 등록 */
+exports.postAdd = async (req, res) => {
+    const back = listBackUrl(req);
+    try {
+        const name = (req.body.name || '').trim();
+        if (!name) return res.redirect(withQuery(back, { error: '브랜드명을 입력하세요.' }));
+
+        const logoPath = req.file ? '/uploads/brands/' + req.file.filename : null;
+        let displayOrder = Number.parseInt(req.body.display_order, 10);
+        if (Number.isNaN(displayOrder)) {
+            const [[row]] = await pool.query(
+                "SELECT COALESCE(MAX(display_order), -1) + 1 AS n FROM categories WHERE type = 'BRAND' AND mall_id = ?",
+                [GLOBAL_CATEGORY_MALL_ID]
+            );
+            displayOrder = row.n;
+        }
+
+        // 브랜드는 계층을 쓰지 않는다 — 항상 1뎁스 최상위(글로벌 카탈로그).
+        const [r] = await pool.query(
+            `INSERT INTO categories
+                (mall_id, name, display_order, type, logo_image_path, onboarded_at, parent_id, depth, is_active, pc_visible, mobile_visible)
+             VALUES (?, ?, ?, 'BRAND', ?, ?, NULL, 1, ?, 1, 1)`,
+            [GLOBAL_CATEGORY_MALL_ID, name, displayOrder, logoPath,
+             req.body.onboarded_at || null, toBool(req.body.is_active ?? '1')]
+        );
+
+        await pool.query(
+            `INSERT INTO brand_profile (category_id, mall_id, initial, initial_chosung)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE initial = VALUES(initial), initial_chosung = VALUES(initial_chosung)`,
+            [r.insertId, GLOBAL_CATEGORY_MALL_ID, toInitial(name), toChosung(name)]
+        );
+
+        res.redirect(withQuery(back, { success: `'${name}' 브랜드를 등록했습니다. 상세 화면에서 영문명·스토리 등을 마저 채우세요.` }));
+    } catch (err) {
+        console.error('[admin/brands] postAdd:', err.message);
+        res.redirect(withQuery(back, { error: '등록에 실패했습니다.' }));
     }
 };
 
@@ -302,12 +476,13 @@ exports.getProductSearch = async (req, res) => {
         const where = ['p.mall_id = ?', 'p.brand_category_id IS NULL'];
         const params = [mallId];
         if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
-        if (inStock === 'y') where.push('p.stock > 0');
-        else if (inStock === 'n') where.push('p.stock <= 0');
+        if (inStock === 'y') where.push(inStockSql('p'));
+        else if (inStock === 'n') where.push(`NOT ${inStockSql('p')}`);
         if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
 
         const [products] = await pool.query(`
-            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status, p.visibility
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price,
+                   ${sellableStockSql('p')} AS stock, p.status, p.visibility
             FROM products p WHERE ${where.join(' AND ')}
             ORDER BY p.created_at DESC LIMIT 100
         `, params);

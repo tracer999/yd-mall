@@ -11,6 +11,9 @@ const sellableStock = require('../services/catalog/sellableStock');
 // B2B 전용가·수량규칙 (설계 §4). 컨텍스트가 비활성이면 전부 null 이라 화면이 바뀌지 않는다.
 const b2bPricingService = require('../services/b2b/b2bPricingService');
 const b2bTaxService = require('../services/b2b/b2bTaxService');
+// 상세의 [배송·반품] 탭은 **결제가 실제로 청구하는 정책**을 그대로 보여준다.
+// 같은 계산기를 쓰지 않으면 안내와 청구액이 언젠가 갈라진다.
+const shippingCalculator = require('../services/shipping/shippingCalculator');
 
 /**
  * 폐기된 THEME 카테고리 → 대체 기능 메뉴.
@@ -32,8 +35,10 @@ const SORT_ORDERS = {
     price_asc: 'price ASC, created_at DESC',
     price_desc: 'price DESC, created_at DESC',
     sales: '(SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi WHERE oi.product_id = products.id) DESC, created_at DESC',
-    review: '(SELECT COALESCE(AVG(r.rating),0) FROM reviews r WHERE r.product_id = products.id) DESC, '
-        + '(SELECT COUNT(*) FROM reviews r WHERE r.product_id = products.id) DESC, created_at DESC',
+    // 숨긴 리뷰(is_visible=0)는 집계에서 뺀다. 안 그러면 목록의 상품평 순위·건수와
+    // 상세 리뷰 탭에 실제로 보이는 건수가 어긋난다.
+    review: '(SELECT COALESCE(AVG(r.rating),0) FROM reviews r WHERE r.product_id = products.id AND r.is_visible = 1) DESC, '
+        + '(SELECT COUNT(*) FROM reviews r WHERE r.product_id = products.id AND r.is_visible = 1) DESC, created_at DESC',
     new: 'created_at DESC',
     // 신상품 페이지 기본 정렬. 'new'(최근등록=적재순)와 다르다 — 이쪽은 판매 시작일 기준.
     sale_start: newArrival.NEW_PRODUCT_ORDER,
@@ -554,14 +559,23 @@ exports.getDetail = async (req, res) => {
             if (likeRows.length > 0) isLiked = true;
         }
 
-        // Get Reviews (Simple)
+        // Get Reviews
+        // is_visible = 0 은 관리자가 숨긴 리뷰다. 숨김이 화면에 그대로 나오면 관리 기능이 무의미해진다.
         const [reviews] = await pool.query(`
-            SELECT r.*, u.name as user_name 
-            FROM reviews r 
-            JOIN users u ON r.user_id = u.id 
-            WHERE r.product_id = ? 
+            SELECT r.*, u.name as user_name
+            FROM reviews r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.product_id = ? AND r.is_visible = 1
             ORDER BY r.created_at DESC
         `, [id]);
+
+        // 평점 요약 — 리뷰 탭 머리말. 리뷰가 없으면 0건이라 화면이 평균을 그리지 않는다.
+        const reviewAvg = reviews.length
+            ? reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length
+            : 0;
+
+        // 배송비 정책(몰 스코프). 행이 없으면 계산기의 고지된 기본값이 온다.
+        const shippingPolicy = await shippingCalculator.getPolicy(req.mallId || 1);
 
         // 함께 보면 좋은 상품 (수동 + 자동 하이브리드)
         const vFilterRec = req.user
@@ -693,6 +707,8 @@ exports.getDetail = async (req, res) => {
             product,
             isLiked,
             reviews,
+            reviewAvg,
+            shippingPolicy,
             currentUser: req.user,
             visitorIp,
             seo,
@@ -779,7 +795,7 @@ exports.searchPage = async (req, res) => {
                        p.main_image, p.thumbnail_image, p.slug, p.short_description, p.status,
                        ${sellableStock.sellableStockSql('p')} AS stock,
                        c.name AS category_name, c.type AS category_type,
-                       (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count
+                       (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id AND r.is_visible = 1) AS review_count
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 LEFT JOIN categories bc ON p.brand_category_id = bc.id

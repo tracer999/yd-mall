@@ -17,7 +17,10 @@ exports.getList = async (req, res) => {
 
 exports.getForm = (req, res) => {
     if (!req.user) return res.redirect('/auth/login');
-    res.render('user/inquiries/form', { title: '문의 작성' });
+    // 상품 상세의 [문의하기] 에서 넘어오면 제목이 채워져 있다. 손님이 상품명을 다시 적지 않게 한다.
+    // 값은 그대로 폼에 들어가므로 길이만 자른다(inquiries.title 은 varchar(100)).
+    const subject = String(req.query.subject || '').slice(0, 100);
+    res.render('user/inquiries/form', { title: '문의 작성', subject });
 };
 
 exports.postInquiry = async (req, res) => {

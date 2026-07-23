@@ -3,15 +3,24 @@
    * 브랜드 관리 — 목록
    *
    * 브랜드는 categories(type='BRAND') 이고 확장 속성은 brand_profile 에 있다.
-   * 상품 수·인기 점수·혜택 수는 brand_stat 집계 캐시에서 읽는다(실시간 집계 아님).
+   * 카테고리 관리(/admin/categories)에 있던 '브랜드 카테고리' 탭을 이 화면으로 이관했다
+   * — 순서·로고·이름·입점일·사용여부·이 몰 표시·삭제·등록 전부 여기서 한다.
+   *
+   * 탭은 범위(viewScope)다. used = 이 몰에 상품이 있는 브랜드 / all = 미사용 포함 전체.
+   * 순서(display_order)는 **사용중 브랜드만** 편집한다 — 빈 브랜드의 순서는 화면에 드러나지 않는다.
    */
-  const q = (obj) => {
+  const f = filters;
+  const isUsed = viewScope === 'used';
+  const listUrl = (params) => {
     const p = new URLSearchParams();
-    Object.entries(obj).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') p.set(k, v); });
+    Object.entries({ ...f, scope: viewScope, ...params }).forEach(([k, v]) => {
+      if (v !== null && v !== undefined && v !== '') p.set(k, v);
+    });
     const s = p.toString();
     return `/admin/brands${s ? '?' + s : ''}`;
   };
-  const f = filters;
+  const returnUrl = listUrl({ page: pagination.page > 1 ? pagination.page : null });
+  const toDateInput = (v) => v ? new Date(v).toISOString().slice(0, 10) : '';
 %>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -21,14 +30,28 @@
       <h1 class="text-2xl font-bold text-gray-900">브랜드 관리</h1>
       <p class="mt-1 text-sm text-gray-500">
         <a href="/brands" target="_blank" class="text-indigo-600 hover:underline">브랜드 허브</a>에 노출되는 브랜드입니다.
-        계층·활성은 <a href="/admin/categories" class="text-indigo-600 hover:underline">카테고리 관리</a>에서, 브랜드 전용 속성은 여기서 편집합니다.
+        목록에서 순서·로고·이름·입점일·사용 여부를 바로 고치고, 영문명·스토리 등 확장 속성은 행별 <strong>[관리]</strong>에서 편집합니다.
+      </p>
+      <p class="mt-0.5 text-xs text-gray-400">
+        브랜드는 전 몰 공통(글로벌)입니다. <strong>[사용 여부]</strong> 는 모든 몰에 적용되는 스위치,
+        <strong>[이 몰 표시]</strong> 는 현재 몰(<%= currentMallName %>) 스토어프론트에서만 숨기고 여는 토글입니다(상품이 있는 브랜드만 가능, 즉시 저장).
       </p>
     </div>
-    <form method="post" action="/admin/brands/recalc">
-      <button type="submit" class="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">
-        <i class="bi bi-arrow-clockwise"></i> 집계 재계산
+    <div class="flex items-center gap-2">
+      <button type="button" onclick="saveVisibility()"
+              class="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+        사용여부 저장
       </button>
-    </form>
+      <form method="post" action="/admin/brands/recalc">
+        <button type="submit" class="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <i class="bi bi-arrow-clockwise"></i> 집계 재계산
+        </button>
+      </form>
+      <button type="button" onclick="openBrandModal()"
+              class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+        <i class="bi bi-plus-lg"></i> 브랜드 등록
+      </button>
+    </div>
   </div>
 
   <% if (success) { %>
@@ -38,8 +61,27 @@
     <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"><%= error %></div>
   <% } %>
 
+  <%# 범위 탭 — 검색·정렬 조건은 유지한 채 범위만 바꾼다 %>
+  <div class="bg-gray-50 border-b border-gray-200 px-1 mb-5">
+    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+      <%
+        const TABS = [
+          { key: 'used', label: '사용중 브랜드', count: scopeCounts.used, hint: '이 몰에 상품이 있는 브랜드 (순서 편집 가능)' },
+          { key: 'all',  label: '미사용 포함 전체', count: scopeCounts.all, hint: '상품이 없는 브랜드까지 전부' },
+        ];
+      %>
+      <% TABS.forEach(t => { const on = t.key === viewScope; %>
+        <a href="<%= listUrl({ scope: t.key, page: null }) %>" title="<%= t.hint %>"
+           class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm no-underline transition-colors <%= on ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' %>">
+          <%= t.label %>
+          <span class="ml-1 text-xs <%= on ? 'text-indigo-500' : 'text-gray-400' %>">(<%= Number(t.count).toLocaleString() %>)</span>
+        </a>
+      <% }) %>
+    </nav>
+  </div>
+
   <div class="mb-4 px-4 py-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800">
-    상품 수·인기 점수·혜택 수는 집계 캐시입니다.
+    상품 수는 이 몰(<%= currentMallName %>) 기준 실시간 집계입니다. 인기 점수·혜택 수는 집계 캐시입니다 —
     <% if (stat && stat.calculated_at) { %>
       마지막 집계: <strong><%= new Date(stat.calculated_at).toLocaleString('ko-KR') %></strong> (브랜드 <%= stat.n %>건)
     <% } else { %>
@@ -49,6 +91,7 @@
 
   <!-- 검색·필터 -->
   <form method="get" action="/admin/brands" class="flex flex-wrap gap-2 mb-5">
+    <input type="hidden" name="scope" value="<%= viewScope %>">
     <input type="text" name="q" value="<%= f.q %>" placeholder="브랜드명·영문명·초성(ㄴㅇㅋ)"
            class="flex-1 min-w-60 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-indigo-500">
     <select name="official" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
@@ -61,89 +104,156 @@
       <option value="popular" <%= f.sort === 'popular' ? 'selected' : '' %>>인기순</option>
       <option value="name" <%= f.sort === 'name' ? 'selected' : '' %>>가나다순</option>
       <option value="new" <%= f.sort === 'new' ? 'selected' : '' %>>입점 최신순</option>
+      <option value="order" <%= f.sort === 'order' ? 'selected' : '' %>>출력 순서</option>
     </select>
     <button type="submit" class="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">검색</button>
   </form>
 
   <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-    <table class="w-full text-sm">
+    <div class="overflow-x-auto">
+    <table class="w-full min-w-[1180px] text-sm">
       <thead class="bg-gray-50 text-gray-500 text-xs">
         <tr>
-          <th class="px-4 py-3 text-left font-medium">브랜드</th>
-          <th class="px-4 py-3 text-left font-medium">대표 카테고리</th>
-          <th class="px-4 py-3 text-right font-medium">상품</th>
-          <th class="px-4 py-3 text-right font-medium">인기 점수</th>
-          <th class="px-4 py-3 text-right font-medium">혜택</th>
-          <th class="px-4 py-3 text-center font-medium">입점일</th>
-          <th class="px-4 py-3 text-center font-medium">구분</th>
-          <th class="px-4 py-3 text-center font-medium">노출</th>
+          <th class="px-3 py-3 text-left font-medium w-20" title="<%= isUsed ? '출력 순서 (사용중 브랜드만 편집)' : '순서 편집은 사용중 탭에서' %>">순서</th>
+          <th class="px-3 py-3 text-left font-medium w-24">로고</th>
+          <th class="px-3 py-3 text-left font-medium min-w-[220px]">브랜드명</th>
+          <th class="px-3 py-3 text-left font-medium w-36">입점일</th>
+          <th class="px-3 py-3 text-left font-medium">대표 카테고리</th>
+          <th class="px-3 py-3 text-right font-medium w-20">상품</th>
+          <th class="px-3 py-3 text-right font-medium w-24">인기 점수</th>
+          <th class="px-3 py-3 text-right font-medium w-16">혜택</th>
+          <th class="px-3 py-3 text-center font-medium w-20">구분</th>
+          <th class="px-3 py-3 text-center font-medium w-24">사용 여부</th>
+          <th class="px-3 py-3 text-center font-medium w-24" title="이 몰(<%= currentMallName %>) 스토어프론트 표시">이 몰 표시</th>
+          <th class="px-3 py-3 text-right font-medium w-40">관리</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">
         <% if (!brands.length) { %>
-          <tr><td colspan="8" class="px-4 py-16 text-center text-gray-500">브랜드가 없습니다.</td></tr>
+          <tr><td colspan="12" class="px-4 py-16 text-center text-gray-500">
+            <%= isUsed ? '이 몰에 상품이 있는 브랜드가 없습니다. [미사용 포함 전체] 탭에서 전체 브랜드를 볼 수 있습니다.' : '브랜드가 없습니다.' %>
+          </td></tr>
         <% } %>
-        <% brands.forEach(function (b) { %>
-          <tr class="hover:bg-gray-50">
-            <td class="px-4 py-3">
-              <a href="/admin/brands/<%= b.id %>" class="flex items-center gap-3 group">
-                <span class="shrink-0 w-10 h-10 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden">
-                  <% if (b.logo_image_path) { %>
-                    <img src="<%= b.logo_image_path %>" alt="" class="max-w-full max-h-full object-contain p-1">
-                  <% } else { %>
-                    <span class="text-xs font-bold text-gray-300"><%= b.name.slice(0, 2) %></span>
-                  <% } %>
-                </span>
-                <span class="min-w-0">
-                  <span class="flex items-center gap-1.5">
-                    <span class="font-semibold text-gray-900 group-hover:text-indigo-600 truncate"><%= b.name %></span>
-                    <% if (b.official_yn) { %>
-                      <span class="shrink-0 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[10px] font-semibold">공식</span>
-                    <% } %>
-                    <% if (b.initial) { %>
-                      <span class="shrink-0 text-[10px] text-gray-400"><%= b.initial %></span>
-                    <% } %>
-                  </span>
-                  <% if (b.name_en) { %>
-                    <span class="block text-xs text-gray-400 truncate"><%= b.name_en %></span>
-                  <% } %>
-                </span>
-              </a>
+        <% brands.forEach(function (b) { const formId = 'brand-form-' + b.id; %>
+          <tr class="brand-row hover:bg-gray-50 <%= b.is_active ? '' : 'bg-gray-50/60' %>" data-brand-id="<%= b.id %>">
+            <td class="px-3 py-3">
+              <form id="<%= formId %>" action="/admin/brands/<%= b.id %>/inline" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="return_url" value="<%= returnUrl %>">
+              </form>
+              <% if (isUsed) { %>
+                <input form="<%= formId %>" type="number" name="display_order" value="<%= b.display_order %>"
+                       class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
+              <% } else { %>
+                <%# 순서는 사용중 브랜드만 관리한다. 값은 보내지 않으므로 서버가 기존 값을 유지한다(COALESCE). %>
+                <span class="text-gray-400 tabular-nums" title="순서 편집은 [사용중 브랜드] 탭에서"><%= b.display_order %></span>
+              <% } %>
             </td>
-            <td class="px-4 py-3 text-gray-600"><%= b.top_category_name || '-' %></td>
-            <td class="px-4 py-3 text-right tabular-nums <%= (b.product_count || 0) === 0 ? 'text-gray-300' : 'text-gray-900' %>">
+
+            <td class="px-3 py-3">
+              <div class="flex flex-col gap-1">
+                <span id="brand-logo-<%= b.id %>" class="w-14 h-10 rounded border border-gray-100 bg-gray-50 flex items-center justify-center overflow-hidden">
+                  <% if (b.logo_image_path) { %>
+                    <img src="<%= b.logo_image_path %>" alt="" class="max-w-full max-h-full object-contain p-0.5">
+                  <% } else { %>
+                    <span class="text-[10px] text-gray-300">NO LOGO</span>
+                  <% } %>
+                </span>
+                <input form="<%= formId %>" type="file" name="logo_image" accept="image/jpeg, image/png, image/webp"
+                       class="brand-logo-input w-24 text-[10px] text-gray-500 file:mr-1 file:py-0.5 file:px-1 file:rounded file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                       data-id="<%= b.id %>">
+              </div>
+            </td>
+
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <input form="<%= formId %>" type="text" name="name" value="<%= b.name %>" required
+                       class="flex-1 min-w-[140px] px-2 py-1 border border-gray-300 rounded text-sm font-medium">
+                <% if (b.official_yn) { %>
+                  <span class="shrink-0 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[10px] font-semibold">공식</span>
+                <% } %>
+              </div>
+              <% if (b.name_en) { %>
+                <span class="block mt-0.5 text-xs text-gray-400 truncate"><%= b.name_en %></span>
+              <% } %>
+            </td>
+
+            <td class="px-3 py-3">
+              <input form="<%= formId %>" type="date" name="onboarded_at" value="<%= toDateInput(b.onboarded_at) %>"
+                     class="w-32 px-2 py-1 border border-gray-300 rounded text-sm">
+            </td>
+
+            <td class="px-3 py-3 text-gray-600"><%= b.top_category_name || '-' %></td>
+
+            <td class="px-3 py-3 text-right tabular-nums <%= (b.product_count || 0) === 0 ? 'text-gray-300' : 'text-gray-900' %>">
               <%= Number(b.product_count || 0).toLocaleString() %>
             </td>
-            <td class="px-4 py-3 text-right tabular-nums text-gray-500"><%= Number(b.popularity_score || 0).toLocaleString() %></td>
-            <td class="px-4 py-3 text-right tabular-nums">
+
+            <td class="px-3 py-3 text-right tabular-nums text-gray-500"><%= Number(b.popularity_score || 0).toLocaleString() %></td>
+
+            <td class="px-3 py-3 text-right tabular-nums">
               <% if (b.benefit_count > 0) { %>
                 <span class="text-indigo-600 font-semibold"><%= b.benefit_count %></span>
               <% } else { %><span class="text-gray-300">0</span><% } %>
             </td>
-            <td class="px-4 py-3 text-center text-xs text-gray-500">
-              <%= b.onboarded_at ? new Date(b.onboarded_at).toISOString().slice(0, 10) : '-' %>
-            </td>
-            <td class="px-4 py-3 text-center">
+
+            <td class="px-3 py-3 text-center">
               <% if (b.is_seller) { %>
                 <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs">입점몰</span>
               <% } else { %>
                 <span class="text-xs text-gray-400">브랜드</span>
               <% } %>
             </td>
-            <td class="px-4 py-3 text-center">
-              <% if (b.is_active) { %>
-                <span class="px-2 py-0.5 rounded bg-green-50 text-green-700 text-xs">노출</span>
+
+            <td class="px-3 py-3 text-center">
+              <label class="inline-flex items-center gap-1 text-xs text-gray-600" title="사용 여부(전역)">
+                <input form="<%= formId %>" type="hidden" name="is_active" value="0">
+                <input form="<%= formId %>" type="checkbox" name="is_active" value="1" <%= b.is_active ? 'checked' : '' %>>
+                <span>사용</span>
+              </label>
+            </td>
+
+            <td class="px-3 py-3 text-center">
+              <% if (b.validForMall) { %>
+                <%# 이 몰에 상품이 있는 브랜드만 override 가능. onchange 즉시 저장(카테고리 엔드포인트 공유). %>
+                <form action="/admin/categories/mall-visibility" method="POST" class="inline-flex items-center">
+                  <input type="hidden" name="return_url" value="<%= returnUrl %>">
+                  <input type="hidden" name="category_id" value="<%= b.id %>">
+                  <input type="hidden" name="visible" value="0">
+                  <label class="inline-flex items-center gap-1 cursor-pointer" title="이 몰에서 표시">
+                    <input type="checkbox" name="visible" value="1" onchange="this.form.submit()"
+                           <%= b.hiddenForMall ? '' : 'checked' %>>
+                    <span class="text-xs <%= b.hiddenForMall ? 'text-gray-400' : 'text-gray-700' %>"><%= b.hiddenForMall ? '숨김' : '표시' %></span>
+                  </label>
+                </form>
               <% } else { %>
-                <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-xs">숨김</span>
+                <span class="text-xs text-gray-300" title="이 몰에 상품이 없어 스토어프론트에 노출되지 않습니다">—</span>
               <% } %>
+            </td>
+
+            <td class="px-3 py-3 text-right">
+              <div class="flex justify-end gap-1.5">
+                <a href="/admin/brands/<%= b.id %>"
+                   class="inline-flex items-center h-[30px] px-2.5 text-xs font-medium rounded-md border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 no-underline">관리</a>
+                <button form="<%= formId %>" type="submit"
+                        class="inline-flex items-center h-[30px] px-2.5 text-xs font-medium rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">저장</button>
+                <button type="button" onclick="deleteBrand('<%= b.id %>', <%= b.product_count || 0 %>)"
+                        class="inline-flex items-center h-[30px] px-2.5 text-xs font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">삭제</button>
+              </div>
             </td>
           </tr>
         <% }) %>
       </tbody>
     </table>
+    </div>
   </div>
 
-  <p class="mt-3 text-xs text-gray-500">전체 <%= Number(pagination.total).toLocaleString() %>건</p>
+  <%
+    const first = pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1;
+    const last = Math.min(pagination.page * pagination.pageSize, pagination.total);
+  %>
+  <p class="mt-3 text-xs text-gray-500">
+    전체 <%= Number(pagination.total).toLocaleString() %>건 중 <%= first %>–<%= last %>번째
+  </p>
 
   <% if (pagination.pages > 1) {
        const cur = pagination.page;
@@ -151,15 +261,148 @@
        const to = Math.min(pagination.pages, from + 4); %>
     <nav class="flex justify-center items-center gap-1 mt-8">
       <% if (cur > 1) { %>
-        <a href="<%= q({ ...f, page: cur - 1 }) %>" class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">‹</a>
+        <a href="<%= listUrl({ page: cur - 1 }) %>" class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">‹</a>
       <% } %>
       <% for (let i = from; i <= to; i++) { %>
-        <a href="<%= q({ ...f, page: i }) %>"
+        <a href="<%= listUrl({ page: i }) %>"
            class="px-3 py-2 rounded-lg border text-sm <%= i === cur ? 'bg-gray-900 border-gray-900 text-white font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-400' %>"><%= i %></a>
       <% } %>
       <% if (cur < pagination.pages) { %>
-        <a href="<%= q({ ...f, page: cur + 1 }) %>" class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">›</a>
+        <a href="<%= listUrl({ page: cur + 1 }) %>" class="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-400">›</a>
       <% } %>
     </nav>
   <% } %>
 </div>
+
+<!-- 브랜드 등록 모달 -->
+<div id="brandAddModal" class="fixed inset-0 z-50 overflow-y-auto hidden" role="dialog" aria-modal="true">
+  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-black/35 backdrop-blur-[1px] z-40" onclick="closeBrandModal()"></div>
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+    <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-50">
+      <div class="bg-white px-6 pt-5 pb-4">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">브랜드 등록</h3>
+        <form id="brandAddForm" action="/admin/brands/add" method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="return_url" value="<%= returnUrl %>">
+          <div class="mb-4">
+            <label class="block mb-1.5 text-sm font-medium text-gray-900">브랜드명</label>
+            <input type="text" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <p class="mt-1 text-xs text-gray-500">영문명·별칭·스토리 등은 등록 후 상세 화면에서 채웁니다. 초성 검색 인덱스는 이름에서 자동 생성됩니다.</p>
+          </div>
+          <div class="mb-4">
+            <label class="block mb-1.5 text-sm font-medium text-gray-900">입점일</label>
+            <input type="date" name="onboarded_at" value="<%= new Date().toISOString().slice(0,10) %>"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+          <div class="mb-4">
+            <label class="block mb-1.5 text-sm font-medium text-gray-900">브랜드 로고</label>
+            <div id="brandModalPreview" class="h-16 w-32 mb-2 hidden overflow-hidden rounded border bg-gray-50 items-center justify-center">
+              <img id="brandModalPreviewImg" src="" alt="" class="max-h-full max-w-full object-contain">
+            </div>
+            <input type="file" name="logo_image" id="brandModalLogo" accept="image/jpeg, image/png, image/webp"
+                   class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+          </div>
+          <div class="mb-4">
+            <label class="block mb-1.5 text-sm font-medium text-gray-900">출력 순서</label>
+            <input type="number" name="display_order" value="<%= nextOrder %>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+          <label class="inline-flex items-center gap-1.5 text-sm text-gray-700">
+            <input type="hidden" name="is_active" value="0">
+            <input type="checkbox" name="is_active" value="1" checked>
+            <span>사용</span>
+          </label>
+        </form>
+      </div>
+      <div class="bg-gray-50 px-6 py-3 flex flex-row-reverse gap-2">
+        <button type="button" onclick="document.getElementById('brandAddForm').submit()"
+                class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">등록</button>
+        <button type="button" onclick="closeBrandModal()"
+                class="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">취소</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%# 삭제·사용여부 일괄은 카테고리 엔드포인트를 공유한다(브랜드도 categories 행이고, 좁은 컬럼만 만진다). %>
+<form id="brandDeleteForm" action="/admin/categories/delete" method="POST" style="display:none;">
+  <input type="hidden" name="id" id="brandDeleteId">
+  <input type="hidden" name="return_url" value="<%= returnUrl %>">
+</form>
+<form id="brandVisibilityForm" action="/admin/categories/visibility" method="POST" style="display:none;"></form>
+
+<script>
+  const BRAND_RETURN_URL = <%- JSON.stringify(returnUrl).replace(/</g, '\\u003c') %>;
+
+  function openBrandModal() {
+    document.getElementById('brandAddModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeBrandModal() {
+    document.getElementById('brandAddModal').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  function deleteBrand(id, productCount) {
+    if (productCount > 0) {
+      return alert('상품 ' + productCount + '개가 이 브랜드를 쓰고 있어 삭제할 수 없습니다.\n먼저 [관리] 화면에서 상품을 제거하세요.');
+    }
+    if (!confirm('정말 삭제하시겠습니까? 브랜드 확장 속성(영문명·스토리 등)도 함께 지워집니다.')) return;
+    document.getElementById('brandDeleteId').value = id;
+    document.getElementById('brandDeleteForm').submit();
+  }
+
+  /*
+   * 사용여부 일괄 저장 — 지금 페이지 행들의 체크 상태만 보낸다(이름·순서·로고는 행별 [저장] 소관).
+   * 키의 'c' 접두어는 필수 — 숫자 키는 qs 가 배열 인덱스로 해석해 id 매칭이 깨진다.
+   */
+  function saveVisibility() {
+    const form = document.getElementById('brandVisibilityForm');
+    const rows = document.querySelectorAll('tr.brand-row');
+    if (!rows.length) return alert('저장할 브랜드가 없습니다.');
+
+    form.innerHTML = '';
+    const add = (name, value) => {
+      const el = document.createElement('input');
+      el.type = 'hidden'; el.name = name; el.value = value;
+      form.appendChild(el);
+    };
+    add('return_url', BRAND_RETURN_URL);
+    rows.forEach(row => {
+      const id = row.getAttribute('data-brand-id');
+      if (!id) return;
+      add('id[]', id);
+      const box = row.querySelector('input[type="checkbox"][name="is_active"]');
+      if (box && box.checked) add('active[c' + id + ']', '1');
+    });
+    form.submit();
+  }
+
+  // 로고 선택 시 즉시 미리보기 (저장은 행별 [저장] 버튼)
+  document.querySelectorAll('.brand-logo-input').forEach(input => {
+    input.addEventListener('change', function () {
+      const file = this.files[0];
+      const box = document.getElementById('brand-logo-' + this.dataset.id);
+      if (!box) return;
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => { box.innerHTML = '<img src="' + e.target.result + '" class="max-w-full max-h-full object-contain p-0.5">'; };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  const brandModalLogo = document.getElementById('brandModalLogo');
+  if (brandModalLogo) {
+    brandModalLogo.addEventListener('change', function () {
+      const file = this.files[0];
+      const box = document.getElementById('brandModalPreview');
+      const img = document.getElementById('brandModalPreviewImg');
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; box.classList.remove('hidden'); box.classList.add('flex'); };
+        reader.readAsDataURL(file);
+      } else {
+        img.src = ''; box.classList.add('hidden'); box.classList.remove('flex');
+      }
+    });
+  }
+</script>

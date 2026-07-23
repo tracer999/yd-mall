@@ -2,7 +2,8 @@
   /* 카테고리/브랜드 상세 — 기본정보 편집 + 상품 배정/제거
      카테고리·브랜드는 글로벌, 상품은 몰별 → 상품 목록/배정은 현재 편집 몰 기준. */
   var isBrand = category.type === 'BRAND';
-  var tabKey = isBrand ? 'brand' : 'product';
+  /* 브랜드는 브랜드 관리(/admin/brands)로 이관했다 — 목록으로 돌아갈 때 각자의 화면으로. */
+  var listUrl = isBrand ? '/admin/brands' : '/admin/categories';
   var depth = Number(category.depth) || 1;
   var canLogo = isBrand || (category.type === 'NORMAL' && depth === 1);
   var canDesc = category.type === 'NORMAL' && depth === 1;
@@ -18,8 +19,8 @@
 %>
 
 <div class="mb-4 flex items-center gap-2 text-sm">
-  <a href="/admin/categories?tab=<%= tabKey %>" class="inline-flex items-center gap-1 text-gray-500 hover:text-gray-800 no-underline">
-    <i class="bi bi-arrow-left"></i> 카테고리 관리
+  <a href="<%= listUrl %>" class="inline-flex items-center gap-1 text-gray-500 hover:text-gray-800 no-underline">
+    <i class="bi bi-arrow-left"></i> <%= isBrand ? '브랜드 관리' : '카테고리 관리' %>
   </a>
   <span class="text-gray-300">/</span>
   <span class="font-semibold text-gray-900"><%= category.name %></span>
@@ -53,7 +54,6 @@
       <form action="/admin/categories/edit" method="POST" enctype="multipart/form-data" class="p-5 space-y-4">
         <input type="hidden" name="id" value="<%= category.id %>">
         <input type="hidden" name="type" value="<%= category.type %>">
-        <input type="hidden" name="active_tab" value="<%= tabKey %>">
         <input type="hidden" name="return_to" value="detail">
         <%# 메뉴 노출(pc/mobile)은 여기서 관리하지 않고 값만 보존한다 → 메뉴 미리보기에서 관리. %>
         <input type="hidden" name="pc_visible" value="<%= category.pc_visible ? 1 : 0 %>">

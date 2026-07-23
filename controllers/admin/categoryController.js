@@ -1,9 +1,9 @@
 const pool = require('../../config/db');
 const { syncCategoryById, deleteCategoryFromShopify } = require('../../services/shopify/categorySync');
 const depthGuard = require('../../services/tree/depthGuard');
-const newArrival = require('../../services/catalog/newArrival');
 const { GLOBAL_CATEGORY_MALL_ID, validCategoryIdSet, hiddenCategoryIdSet } = require('../../services/catalog/categoryScope');
 const naverCatInherit = require('../../services/sourcing/channel/naverCategoryInherit');
+const { inStockSql, sellableStockSql } = require('../../services/catalog/sellableStock');
 // 카테고리·브랜드는 글로벌 한 벌. 관리 화면은 몰 스코핑 없이 글로벌 카탈로그를 다룬다.
 // 상품 카운트(상품 있는 것만 노출)는 전 몰 통틀어 센다.
 
@@ -23,17 +23,36 @@ const naverCatInherit = require('../../services/sourcing/channel/naverCategoryIn
 /* THEME 축은 폐기했다(테마 5·6 → /best·/new 로 통합). 기존 THEME 행은 DB 에 남아 있으나
    관리 화면에서 만들거나 편집하지 않는다. */
 const TYPES = ['NORMAL', 'BRAND'];
-const TAB_TO_TYPE = { product: 'NORMAL', brand: 'BRAND' };
 
 /*
- * 한 페이지에 담는 최상위(1뎁스) 카테고리 수.
+ * 이 화면은 **상품 카테고리(NORMAL) 전용**이다.
+ * 브랜드(type='BRAND')는 브랜드 관리(/admin/brands)로 이관했다 — 브랜드가 1,401개라
+ * 같은 화면에 얹으면 부모 후보 JSON·DOM 이 함께 터지고, 브랜드 전용 속성(brand_profile)은
+ * 어차피 브랜드 관리에서 편집해야 했다.
+ *
+ * 탭은 분류축이 아니라 **범위(scope)** 다.
+ *   used = 이 몰에 상품이 있는 카테고리(+ 경로 유지를 위한 조상)  — 트리 + 아코디언
+ *   all  = 빈 카테고리 포함 전체                                  — 평면 목록 + 행 페이징
+ */
+const SCOPES = ['used', 'all'];
+
+/*
+ * used 탭: 한 페이지에 담는 최상위(1뎁스) 카테고리 수.
  * 뎁스별 아코디언이라 부모-자식이 한 페이지에 온전히 있어야 한다 → 행이 아니라
  * "최상위 + 그 서브트리 전체"를 한 단위로 잘라 서브트리가 페이지 경계에서 쪼개지지 않게 한다.
  */
 const TOP_PER_PAGE = 100;
 
-function normalizeTab(tab) {
-    return ['product', 'theme', 'brand'].includes(tab) ? tab : 'product';
+/*
+ * all 탭: 행 단위 페이징.
+ * 최상위가 12개뿐인데 3뎁스가 2,094개라(몰2) 서브트리 단위로는 전량이 1페이지에 들어와
+ * 2,348행을 한 번에 그리게 된다 — 이게 "빈 카테고리 모두 보기"가 느렸던 원인이다.
+ * 그래서 all 탭은 트리를 포기하고 평면 + 경로 표기로 간다.
+ */
+const FLAT_PER_PAGE = 100;
+
+function normalizeScope(scope) {
+    return SCOPES.includes(scope) ? scope : 'used';
 }
 
 function normalizeType(type) {
@@ -64,169 +83,144 @@ function flattenTree(rows, parentId = null, depth = 1, out = []) {
 exports.getList = async (req, res) => {
     const MALL_ID = req.adminMallId || 1; // P5: 편집 중인 몰의 카테고리만
     try {
-        // 글로벌 카탈로그(NORMAL·BRAND=mall 0). THEME 등 잔존 몰별 타입도 함께 보이도록 IN.
+        // 예전 링크(?showEmpty=1) 는 전체 탭으로 흡수한다.
+        const scope = normalizeScope(req.query.scope || (req.query.showEmpty === '1' ? 'all' : 'used'));
+
+        // 상품 카테고리(NORMAL)만. 글로벌 카탈로그(mall 0) + 잔존 몰별 행.
         const [categories] = await pool.query(
-            'SELECT * FROM categories WHERE mall_id IN (?, ?) ORDER BY display_order ASC, id ASC',
+            "SELECT * FROM categories WHERE type = 'NORMAL' AND mall_id IN (?, ?) ORDER BY display_order ASC, id ASC",
             [GLOBAL_CATEGORY_MALL_ID, MALL_ID]
         );
-        // 카테고리·브랜드는 글로벌 한 벌이지만 **상품은 몰별**이다. 관리 화면의 상품수·"상품 있는 것만"
-        // 노출은 **편집 중인 몰(MALL_ID) 기준**으로 집계한다(전 몰 통합 아님).
+        // 카테고리는 글로벌 한 벌이지만 **상품은 몰별**이다. 관리 화면의 상품수·"사용중" 판정은
+        // **편집 중인 몰(MALL_ID) 기준**으로 집계한다(전 몰 통합 아님).
         const [counts] = await pool.query(
             'SELECT p.category_id, COUNT(*) AS n FROM products p WHERE p.mall_id = ? AND p.category_id IS NOT NULL GROUP BY p.category_id',
             [MALL_ID]
         );
         const productCountBy = new Map(counts.map(c => [c.category_id, c.n]));
-        const [brandCounts] = await pool.query(
-            'SELECT p.brand_category_id, COUNT(*) AS n FROM products p WHERE p.mall_id = ? AND p.brand_category_id IS NOT NULL GROUP BY p.brand_category_id',
-            [MALL_ID]
-        );
-        const brandCountBy = new Map(brandCounts.map(c => [c.brand_category_id, c.n]));
 
         const maxDepth = await depthGuard.getCategoryMaxDepth(MALL_ID);
         const maxParent = maxDepth - 1; // 부모가 될 수 있는 최대 depth
 
         const nameById = new Map(categories.map(c => [c.id, c.name]));
+        const parentOf = new Map(categories.map(c => [c.id, c.parent_id || null]));
 
-        // 몰별 표시 override — "이 몰(MALL_ID)에서 유효한(상품 있는) 카테고리/브랜드"만 토글 대상.
+        // 몰별 표시 override — "이 몰(MALL_ID)에서 유효한(상품 있는) 카테고리"만 토글 대상.
         // hidden(mall_category_visibility) 이면 그 몰 스토어프론트에서 숨김.
-        const [mallValidCat, mallValidBrand, mallHidden] = await Promise.all([
+        const [mallValid, mallHidden] = await Promise.all([
             validCategoryIdSet(MALL_ID),
-            validCategoryIdSet(MALL_ID, { brand: true }),
             hiddenCategoryIdSet(MALL_ID),
         ]);
         const [[mallRow]] = await pool.query('SELECT name FROM mall WHERE id = ?', [MALL_ID]).catch(() => [[null]]);
         const currentMallName = (mallRow && mallRow.name) || `몰 ${MALL_ID}`;
 
-        // 부모 후보(parentOptions)를 노드마다 만들면 O(n^3) 이다(노드별 flattenTree + descendantIds).
-        // 브랜드가 1354개인 mall 2 에서 응답이 18MB/70초로 터져 잘린 HTML 이 나갔다.
-        // → 트리는 type 당 1회만 만들고, 부모 후보는 type 당 1벌(addParentOptions)을 뷰가
-        //   select focus 시점에 클라이언트에서 걸러 쓴다. 자기/후손 제외는 UX 편의이고,
-        //   실제 순환·뎁스 방어는 postEdit 의 wouldCreateCycle/assertDepthAllowed 가 한다.
-        const byType = {};
-        const treeByType = {};
-        for (const type of TYPES) {
-            const rows = categories.filter(c => c.type === type);
-            const tree = flattenTree(rows);
-            treeByType[type] = tree;
+        const tree = flattenTree(categories); // 부모→자식 순 평탄화 (트리 1회만 만든다)
 
-            const childCountBy = new Map();
-            for (const r of rows) {
-                if (!r.parent_id) continue;
-                childCountBy.set(r.parent_id, (childCountBy.get(r.parent_id) || 0) + 1);
-            }
-
-            const mallValid = type === 'BRAND' ? mallValidBrand : mallValidCat;
-            byType[type] = tree.map(node => Object.assign({}, node, {
-                // NORMAL 은 category_id, BRAND 는 brand_category_id 기준 카운트
-                productCount: (type === 'BRAND' ? brandCountBy : productCountBy).get(node.id) || 0,
-                childCount: childCountBy.get(node.id) || 0,
-                // select 초기 렌더용 — 현재 부모 1개만 option 으로 찍는다.
-                parentName: node.parent_id ? (nameById.get(node.parent_id) || '') : '',
-                // 몰별 표시 토글용. validForMall=이 몰에 상품이 있어 애초에 노출되는가, hiddenForMall=override 로 숨김.
-                validForMall: mallValid.has(node.id),
-                hiddenForMall: mallHidden.has(node.id),
-            }));
+        const childCountBy = new Map();
+        for (const r of categories) {
+            if (!r.parent_id) continue;
+            childCountBy.set(r.parent_id, (childCountBy.get(r.parent_id) || 0) + 1);
         }
 
-        /*
-         * "상품 있는 것만 노출" (설계 §10-3·4). 빈 카테고리/브랜드는 숨긴다.
-         * 단 트리라서 **자손에 상품이 있으면 조상은 보존**(경로 유지). ?showEmpty=1 이면 전체.
-         * NORMAL·BRAND 에만 적용(THEME 은 기존대로).
-         */
-        const showEmpty = req.query.showEmpty === '1';
-        if (!showEmpty) {
-            const parentOf = new Map(categories.map(c => [c.id, c.parent_id || null]));
-            for (const type of ['NORMAL', 'BRAND']) {
-                if (!byType[type]) continue;
-                const cnt = type === 'BRAND' ? brandCountBy : productCountBy;
-                const keep = new Set();
-                for (const node of byType[type]) {
-                    if ((cnt.get(node.id) || 0) > 0) {
-                        let cur = node.id;
-                        while (cur && !keep.has(cur)) { keep.add(cur); cur = parentOf.get(cur); }
-                    }
-                }
-                byType[type] = byType[type].filter(n => keep.has(n.id));
+        /** 조상 경로("대분류 > 중분류") — 트리를 접은 전체 탭에서 계층 대신 보여준다. */
+        const pathOf = (node) => {
+            const names = [];
+            let cur = node.parent_id || null;
+            for (let guard = 0; cur && guard < 10; guard++) {
+                names.unshift(nameById.get(cur) || '');
+                cur = parentOf.get(cur) || null;
             }
-        }
+            return names.join(' > ');
+        };
+
+        const rows = tree.map(node => Object.assign({}, node, {
+            productCount: productCountBy.get(node.id) || 0,
+            childCount: childCountBy.get(node.id) || 0,
+            // select 초기 렌더용 — 현재 부모 1개만 option 으로 찍는다.
+            parentName: node.parent_id ? (nameById.get(node.parent_id) || '') : '',
+            parentPath: pathOf(node),
+            // 몰별 표시 토글용. validForMall=이 몰에 상품이 있어 애초에 노출되는가, hiddenForMall=override 로 숨김.
+            validForMall: mallValid.has(node.id),
+            hiddenForMall: mallHidden.has(node.id),
+        }));
 
         /*
-         * 아코디언 화살표(">")는 **이 화면에 실제로 남아 있는 자식** 기준이어야 한다.
-         * childCount 는 글로벌 카탈로그 기준이라, 위 필터로 자식이 전부 빠진 부모도 화살표가
-         * 남아 펼쳐도 아무것도 안 나오는 상태가 됐다. → 필터 이후 집합으로 다시 센다.
-         * (삭제 차단은 여전히 childCount 기준 — 서버 postDelete 의 실제 자식 수와 맞춰야 한다.)
+         * "사용중" = 이 몰에 상품이 있는 카테고리. 단 트리라서 **자손에 상품이 있으면 조상은 보존**한다
+         * (경로가 끊기면 아코디언으로 도달할 수 없다). 탭 배지에 쓰려고 scope 와 무관하게 항상 센다.
          */
-        for (const type of TYPES) {
-            if (!byType[type]) continue;
+        const keep = new Set();
+        for (const node of rows) {
+            if (node.productCount > 0) {
+                let cur = node.id;
+                while (cur && !keep.has(cur)) { keep.add(cur); cur = parentOf.get(cur); }
+            }
+        }
+        const counts2 = { used: keep.size, all: rows.length };
+
+        const reqPage = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+        let pageRows;
+        let pageInfo;
+
+        if (scope === 'used') {
+            let used = rows.filter(n => keep.has(n.id));
+
+            /*
+             * 아코디언 화살표(">")는 **이 화면에 실제로 남아 있는 자식** 기준이어야 한다.
+             * childCount 는 글로벌 카탈로그 기준이라, 위 필터로 자식이 전부 빠진 부모도 화살표가
+             * 남아 펼쳐도 아무것도 안 나오는 상태가 됐다. → 필터 이후 집합으로 다시 센다.
+             * (삭제 차단은 여전히 childCount 기준 — 서버 postDelete 의 실제 자식 수와 맞춰야 한다.)
+             */
             const visibleChildCountBy = new Map();
-            for (const n of byType[type]) {
+            for (const n of used) {
                 if (!n.parent_id) continue;
                 visibleChildCountBy.set(n.parent_id, (visibleChildCountBy.get(n.parent_id) || 0) + 1);
             }
-            byType[type] = byType[type].map(n => Object.assign({}, n, {
-                visibleChildCount: visibleChildCountBy.get(n.id) || 0,
-            }));
-        }
-
-        const nextDisplayOrder = {};
-        for (const type of TYPES) {
-            const rows = categories.filter(c => c.type === type);
-            nextDisplayOrder[type] = (rows.length ? Math.max(...rows.map(c => Number(c.display_order) || 0)) : -1) + 1;
-        }
-
-        // 부모 선택지 (type 별, depth <= maxParent) — 신규 추가 모달 + 행별 select 가 공유한다.
-        // parentId 는 클라이언트가 "이 후보가 편집 중인 노드의 후손인가" 를 판정하는 데 쓴다.
-        // 페이지네이션과 무관하게 **type 전체** 후보를 담으므로, 다른 페이지의 노드도 부모로 고를 수 있다.
-        const addParentOptions = {};
-        for (const type of TYPES) {
-            addParentOptions[type] = treeByType[type]
-                .filter(o => o._depth <= maxParent)
-                .map(o => ({ id: o.id, name: o.name, depth: o._depth, parentId: o.parent_id || null }));
-        }
-
-        // 한 화면에 1354개(mall 2 브랜드) 행을 그리면 DOM 이 6.8만 노드가 되어 브라우저가 37초를 쓴다.
-        // 최상위 서브트리 단위로 잘라야 한다(아코디언 정합성). 세 탭이 모두 서버 렌더되므로 활성 탭만 요청 page 를 쓰고 나머지는 1페이지.
-        const activeTab = normalizeTab(req.query.tab);
-        const activeType = TAB_TO_TYPE[activeTab];
-        const reqPage = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
-
-        const pageInfo = {};
-        const pagedByType = {};
-        for (const type of TYPES) {
-            const all = byType[type]; // 부모→자식 순 평탄화
+            used = used.map(n => Object.assign({}, n, { visibleChildCount: visibleChildCountBy.get(n.id) || 0 }));
 
             // 최상위(_depth===1)를 만날 때마다 새 블록을 시작한다. 자식은 직전 블록에 이어붙는다
             // (평탄화가 부모→자식 순이므로 한 서브트리는 연속 구간이다).
             const blocks = [];
-            for (const node of all) {
+            for (const node of used) {
                 if (node._depth === 1 || blocks.length === 0) blocks.push([node]);
                 else blocks[blocks.length - 1].push(node);
             }
-
             const totalTop = blocks.length;
             const totalPages = Math.max(1, Math.ceil(totalTop / TOP_PER_PAGE));
-            const page = Math.min(type === activeType ? reqPage : 1, totalPages);
-            const pageBlocks = blocks.slice((page - 1) * TOP_PER_PAGE, page * TOP_PER_PAGE);
-            pagedByType[type] = pageBlocks.flat();
-            // total 은 최상위(대분류) 기준. perPage 도 최상위 기준이라 '전체 N개 중 x–y' 가 대분류 수로 표시된다.
-            pageInfo[type] = { page, totalPages, total: totalTop, perPage: TOP_PER_PAGE };
+            const page = Math.min(reqPage, totalPages);
+            pageRows = blocks.slice((page - 1) * TOP_PER_PAGE, page * TOP_PER_PAGE).flat();
+            // total 은 최상위(대분류) 기준 — '전체 N개 중 x–y' 가 대분류 수로 표시된다.
+            pageInfo = { page, totalPages, total: totalTop, perPage: TOP_PER_PAGE, unit: '대분류' };
+        } else {
+            // 전체 탭은 평면이라 행 단위로 자른다(서브트리 단위로는 12개 최상위에 2,348행이 몰린다).
+            const totalPages = Math.max(1, Math.ceil(rows.length / FLAT_PER_PAGE));
+            const page = Math.min(reqPage, totalPages);
+            pageRows = rows.slice((page - 1) * FLAT_PER_PAGE, page * FLAT_PER_PAGE);
+            pageInfo = { page, totalPages, total: rows.length, perPage: FLAT_PER_PAGE, unit: '카테고리' };
         }
+
+        // 부모 선택지 (depth <= maxParent) — 신규 추가 모달 + 행별 select 가 공유한다.
+        // parentId 는 클라이언트가 "이 후보가 편집 중인 노드의 후손인가" 를 판정하는 데 쓴다.
+        // 페이지네이션과 무관하게 **전체** 후보를 담으므로, 다른 페이지의 노드도 부모로 고를 수 있다.
+        // 자기/후손 제외는 UX 편의이고, 실제 순환·뎁스 방어는 postEdit 의 wouldCreateCycle/assertDepthAllowed 가 한다.
+        const parentOptions = tree
+            .filter(o => o._depth <= maxParent)
+            .map(o => ({ id: o.id, name: o.name, depth: o._depth, parentId: o.parent_id || null }));
+
+        const nextDisplayOrder = (categories.length
+            ? Math.max(...categories.map(c => Number(c.display_order) || 0)) : -1) + 1;
 
         res.render('admin/categories/list', {
             layout: 'layouts/admin_layout',
             title: '카테고리 관리',
-            categories,
-            productCategories: pagedByType.NORMAL,
-            brandCategories: pagedByType.BRAND,
-            addParentOptions,
-            activeTab,
+            rows: pageRows,
+            parentOptions,
+            viewScope: scope,
+            scopeCounts: counts2,
             pageInfo,
             nextDisplayOrder,
             maxDepth,
-            newBrandDays: newArrival.newBrandDays(),
             error: req.query.error || '',
             saved: req.query.saved === '1',
-            showEmpty,
             currentMallName,
         });
     } catch (err) {
@@ -245,14 +239,40 @@ async function assertSameType(conn, parentId, type) {
     }
 }
 
-function redirectWithError(res, tab, message) {
-    return res.redirect(`/admin/categories?tab=${tab}&error=${encodeURIComponent(message)}`);
+/**
+ * 저장/삭제 후 돌아갈 곳.
+ *
+ * 브랜드 관리(/admin/brands)가 이 컨트롤러의 delete·visibility·mall-visibility 를 공유하므로
+ * (좁은 컬럼만 만지거나 별도 테이블이라 브랜드에도 그대로 안전하다), 어느 화면에서 왔는지를
+ * 폼이 `return_url` 로 실어 보낸다. 오픈 리다이렉트 방지 — /admin/ 내부 경로만 허용한다.
+ */
+function backUrl(req, extra = {}) {
+    const raw = String(req.body.return_url || '');
+    const safe = /^\/admin\/[A-Za-z0-9][^\\]*$/.test(raw) && !raw.startsWith('/admin//');
+    const base = safe ? raw : `/admin/categories?scope=${normalizeScope(req.body.scope)}`;
+
+    const [path, qs] = base.split('?');
+    const sp = new URLSearchParams(qs || '');
+    for (const [k, v] of Object.entries(extra)) {
+        if (v === null || v === undefined || v === '') sp.delete(k);
+        else sp.set(k, v);
+    }
+    const s = sp.toString();
+    return s ? `${path}?${s}` : path;
+}
+
+function redirectWithError(res, req, message) {
+    return res.redirect(backUrl(req, { error: message, saved: null }));
+}
+
+/** 브랜드 관리(/admin/brands)에서 넘어온 요청인가 — 안내 문구를 그 화면 말투로 낸다. */
+function fromBrandScreen(req) {
+    return /^\/admin\/brands(\?|$)/.test(String(req.body.return_url || ''));
 }
 
 exports.postAdd = async (req, res) => {
-    const { name, display_order, type, active_tab, parent_id } = req.body;
+    const { name, display_order, type, parent_id } = req.body;
     const allowedType = normalizeType(type);
-    const activeTab = normalizeTab(active_tab);
     const parentId = Number(parent_id) > 0 ? Number(parent_id) : null;
 
     const logoFile = req.file;
@@ -291,10 +311,10 @@ exports.postAdd = async (req, res) => {
                 .then(r => !r?.skipped && console.log(`[Shopify] 카테고리 컬렉션 생성: ${name}`))
                 .catch(e => console.error(`[Shopify] 카테고리 컬렉션 생성 실패: ${name}: ${e.message}`));
         }
-        res.redirect(`/admin/categories?tab=${activeTab}`);
+        res.redirect(backUrl(req, { saved: 1, error: null }));
     } catch (err) {
         if (err.name === 'DepthLimitError' || err.statusCode === 400) {
-            return redirectWithError(res, activeTab, err.message);
+            return redirectWithError(res, req, err.message);
         }
         console.error('[category] postAdd:', err.message);
         res.status(500).send('Server Error');
@@ -304,9 +324,8 @@ exports.postAdd = async (req, res) => {
 };
 
 exports.postEdit = async (req, res) => {
-    const { id, name, display_order, type, active_tab, parent_id } = req.body;
+    const { id, name, display_order, type, parent_id } = req.body;
     const allowedType = normalizeType(type);
-    const activeTab = normalizeTab(active_tab);
     const nodeId = Number(id);
     const newParentId = Number(parent_id) > 0 ? Number(parent_id) : null;
 
@@ -321,7 +340,7 @@ exports.postEdit = async (req, res) => {
     try {
         // P5: 편집 중인 몰 소유 카테고리만 수정(크로스몰 덮어쓰기 방지)
         const [[current]] = await conn.query('SELECT parent_id FROM categories WHERE id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]);
-        if (!current) return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
+        if (!current) return redirectWithError(res, req, '카테고리를 찾을 수 없습니다.');
 
         const parentChanged = (current.parent_id || null) !== newParentId;
 
@@ -330,7 +349,7 @@ exports.postEdit = async (req, res) => {
 
             // 자기 자신 / 자기 후손 밑으로 옮기면 순환 참조가 된다.
             const cycle = await depthGuard.wouldCreateCycle({ nodeId, candidateParentId: newParentId, conn });
-            if (cycle) return redirectWithError(res, activeTab, '자기 자신이나 하위 카테고리를 상위로 지정할 수 없습니다.');
+            if (cycle) return redirectWithError(res, req, '자기 자신이나 하위 카테고리를 상위로 지정할 수 없습니다.');
 
             // 옮긴 뒤 서브트리 전체가 최대 뎁스를 넘지 않아야 한다.
             await depthGuard.assertDepthAllowed({ parentId: newParentId, conn });
@@ -359,11 +378,11 @@ exports.postEdit = async (req, res) => {
         }
         // 상세 화면에서 저장했으면 상세로 되돌린다.
         if (req.body.return_to === 'detail') return res.redirect(`/admin/categories/${nodeId}?saved=1`);
-        res.redirect(`/admin/categories?tab=${activeTab}`);
+        res.redirect(backUrl(req, { saved: 1, error: null }));
     } catch (err) {
         try { await conn.rollback(); } catch (e) { /* 트랜잭션 미시작 */ }
         if (err.name === 'DepthLimitError' || err.statusCode === 400) {
-            return redirectWithError(res, activeTab, err.message);
+            return redirectWithError(res, req, err.message);
         }
         console.error('[category] postEdit:', err.message);
         res.status(500).send('Server Error');
@@ -386,7 +405,6 @@ exports.postEdit = async (req, res) => {
  */
 exports.postVisibility = async (req, res) => {
     const mallId = req.adminMallId || 1;
-    const activeTab = normalizeTab(req.body.active_tab);
     const ids = [].concat(req.body.id || []).map(Number).filter(n => Number.isInteger(n) && n > 0);
     const on = (bag, id) => (bag && String(bag['c' + id]) === '1' ? 1 : 0);
 
@@ -401,7 +419,7 @@ exports.postVisibility = async (req, res) => {
             );
         }
         await conn.commit();
-        res.redirect(`/admin/categories?tab=${activeTab}&saved=1`);
+        res.redirect(backUrl(req, { saved: 1, error: null }));
     } catch (err) {
         await conn.rollback();
         console.error('[categories] postVisibility:', err.message);
@@ -423,12 +441,11 @@ exports.postVisibility = async (req, res) => {
  */
 exports.postMallVisibility = async (req, res) => {
     const mallId = req.adminMallId || 1;
-    const activeTab = normalizeTab(req.body.active_tab);
     const categoryId = Number(req.body.category_id);
     const visible = toBool(req.body.visible);
     try {
         if (!Number.isInteger(categoryId) || categoryId <= 0) {
-            return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
+            return redirectWithError(res, req, '카테고리를 찾을 수 없습니다.');
         }
         if (visible) {
             await pool.query('DELETE FROM mall_category_visibility WHERE mall_id = ? AND category_id = ?', [mallId, categoryId]);
@@ -439,7 +456,7 @@ exports.postMallVisibility = async (req, res) => {
                 [mallId, categoryId]
             );
         }
-        res.redirect(`/admin/categories?tab=${activeTab}&saved=1`);
+        res.redirect(backUrl(req, { saved: 1, error: null }));
     } catch (err) {
         console.error('[category] postMallVisibility:', err.message);
         res.status(500).send('Server Error');
@@ -565,12 +582,13 @@ exports.getProductSearch = async (req, res) => {
         const where = ['p.mall_id = ?', `p.${col} IS NULL`];
         const params = [MALL_ID];
         if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
-        if (inStock === 'y') where.push('p.stock > 0');
-        else if (inStock === 'n') where.push('p.stock <= 0');
+        if (inStock === 'y') where.push(inStockSql('p'));
+        else if (inStock === 'n') where.push(`NOT ${inStockSql('p')}`);
         if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
 
         const [products] = await pool.query(`
-            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status, p.visibility
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price,
+                   ${sellableStockSql('p')} AS stock, p.status, p.visibility
             FROM products p WHERE ${where.join(' AND ')}
             ORDER BY p.created_at DESC LIMIT 100
         `, params);
@@ -628,15 +646,15 @@ exports.postRemoveProduct = async (req, res) => {
 };
 
 exports.postDelete = async (req, res) => {
-    const { id, active_tab } = req.body;
-    const activeTab = normalizeTab(active_tab);
+    const { id } = req.body;
     const nodeId = Number(id);
     const MALL_ID = req.adminMallId || 1;
 
     try {
         // P5: 편집 중인 몰 소유 카테고리만 삭제(크로스몰 삭제·Shopify 오발화 방지)
+        const noun = fromBrandScreen(req) ? '브랜드' : '카테고리';
         const [[owned]] = await pool.query('SELECT id FROM categories WHERE id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]);
-        if (!owned) return redirectWithError(res, activeTab, '카테고리를 찾을 수 없습니다.');
+        if (!owned) return redirectWithError(res, req, `${noun}를 찾을 수 없습니다.`);
 
         /*
          * categories.parent_id 는 ON DELETE SET NULL 이다.
@@ -647,7 +665,7 @@ exports.postDelete = async (req, res) => {
             'SELECT COUNT(*) AS n FROM categories WHERE parent_id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]
         );
         if (childCount > 0) {
-            return redirectWithError(res, activeTab,
+            return redirectWithError(res, req,
                 `하위 카테고리 ${childCount}개가 있어 삭제할 수 없습니다. 먼저 하위 카테고리를 옮기거나 삭제하세요.`);
         }
 
@@ -660,8 +678,9 @@ exports.postDelete = async (req, res) => {
             'SELECT COUNT(*) AS n FROM products WHERE category_id = ? OR brand_category_id = ?', [nodeId, nodeId]
         );
         if (refCount > 0) {
-            return redirectWithError(res, activeTab,
-                `이 카테고리를 참조하는 상품이 (다른 몰 포함) ${refCount}개 있어 삭제할 수 없습니다. 먼저 상품의 카테고리를 옮기세요.`);
+            return redirectWithError(res, req,
+                `이 ${noun}를 참조하는 상품이 (다른 몰 포함) ${refCount}개 있어 삭제할 수 없습니다. `
+                + (noun === '브랜드' ? '먼저 [관리] 화면에서 상품을 제거하세요.' : '먼저 상품의 카테고리를 옮기세요.'));
         }
 
         // Shopify 컬렉션 삭제 — DB 삭제 전에 (shopify_collection_id 를 읽어야 하므로).
@@ -670,7 +689,7 @@ exports.postDelete = async (req, res) => {
             .catch(e => console.error(`[Shopify] 카테고리 컬렉션 삭제 실패 (id=${nodeId}): ${e.message}`));
 
         await pool.query('DELETE FROM categories WHERE id = ? AND mall_id IN (0, ?)', [nodeId, MALL_ID]);
-        res.redirect(`/admin/categories?tab=${activeTab}`);
+        res.redirect(backUrl(req, { saved: 1, error: null }));
     } catch (err) {
         console.error('[category] postDelete:', err.message);
         res.status(500).send('Server Error');

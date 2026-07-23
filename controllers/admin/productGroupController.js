@@ -4,6 +4,7 @@ const productGroupService = require('../../services/display/productGroupService'
 const menuShowcaseService = require('../../services/menu/menuShowcaseService');
 const newArrival = require('../../services/catalog/newArrival');
 const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
+const { inStockSql, sellableStockSql } = require('../../services/catalog/sellableStock');
 
 /*
  * 상품 그룹 관리 (B6)
@@ -546,8 +547,8 @@ exports.getProductSearch = async (req, res) => {
         if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
         if (Number.isFinite(categoryId) && categoryId > 0) { where.push('p.category_id = ?'); params.push(categoryId); }
         if (Number.isFinite(brandId) && brandId > 0) { where.push('p.brand_category_id = ?'); params.push(brandId); }
-        if (inStock === 'y') where.push('p.stock > 0');
-        else if (inStock === 'n') where.push('p.stock <= 0');
+        if (inStock === 'y') where.push(inStockSql('p'));
+        else if (inStock === 'n') where.push(`NOT ${inStockSql('p')}`);
         if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
 
         // 메뉴 쇼케이스 그룹이면 후보를 그 메뉴의 상품 풀로 좁힌다(특가/베스트/신상품 중 선택).
@@ -566,7 +567,8 @@ exports.getProductSearch = async (req, res) => {
         params.push(req.params.id);
 
         const [products] = await pool.query(`
-            SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.stock, p.status, p.visibility, p.product_badge
+            SELECT p.id, p.name, p.product_code, p.main_image, p.price,
+                   ${sellableStockSql('p')} AS stock, p.status, p.visibility, p.product_badge
             FROM products p
             WHERE ${where.join(' AND ')}
             ORDER BY p.created_at DESC
