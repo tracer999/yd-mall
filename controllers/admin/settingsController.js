@@ -79,8 +79,9 @@ async function loadSettingsData(mallId = 1) {
     return { settings, systemSettings, reviewTiers };
 }
 
-function renderSettingsPage(res, { pageTitle, activeTab, basePath, showTabs, settings, systemSettings, reviewTiers }) {
+function renderSettingsPage(res, { pageTitle, activeTab, basePath, showTabs, settings, systemSettings, reviewTiers, query }) {
     return res.render('admin/settings/form', {
+        query: query || {},
         layout: 'layouts/admin_layout',
         title: pageTitle,
         pageTitle,
@@ -102,6 +103,7 @@ exports.getSettings = async (req, res) => {
             activeTab,
             basePath: '/admin/settings',
             showTabs: true,
+            query: req.query,
             settings,
             systemSettings,
             reviewTiers
@@ -120,6 +122,7 @@ exports.getSiteSettings = async (req, res) => {
             activeTab: 'company',
             basePath: '/admin/site-settings',
             showTabs: false,
+            query: req.query,
             settings,
             systemSettings,
             reviewTiers
@@ -138,6 +141,7 @@ exports.getSysSettings = async (req, res) => {
             activeTab: 'system',
             basePath: '/admin/sys-settings',
             showTabs: false,
+            query: req.query,
             settings,
             systemSettings,
             reviewTiers
@@ -417,8 +421,19 @@ exports.sendTestEmail = async (req, res) => {
  */
 exports.updateReviewTiers = async (req, res) => {
     const mallId = req.adminMallId || 1;
+
+    /*
+     * 저장 후에는 **눌렀던 그 화면으로** 되돌린다.
+     * 이 폼은 환경설정·사이트설정·시스템설정 세 화면에 모두 있고, 구간 표는 시스템 탭에 있다.
+     * 예전엔 무조건 `/admin/settings` 로 보내 회사정보 탭이 열렸고, 구간이 보이지 않아
+     * "저장이 안 됐다"고 읽혔다.
+     */
+    const BASES = ['/admin/settings', '/admin/site-settings', '/admin/sys-settings'];
+    const base = BASES.includes(req.body.base_path) ? req.body.base_path : '/admin/settings';
+    // 탭이 있는 화면(/admin/settings)만 시스템 탭을 지정한다. 나머지는 탭이 없다.
+    const tab = base === '/admin/settings' ? 'tab=system&' : '';
     const back = (msg, isError) =>
-        res.redirect('/admin/settings?' + (isError ? 'tier_error=' : 'tier_saved=') + encodeURIComponent(msg));
+        res.redirect(`${base}?${tab}` + (isError ? 'tier_error=' : 'tier_saved=') + encodeURIComponent(msg) + '#reviewTiers');
 
     // 폼은 min_amount[] / text_point[] / photo_point[] 세 배열로 온다.
     const toArr = (v) => (v === undefined ? [] : (Array.isArray(v) ? v : [v]));
