@@ -1,9 +1,9 @@
 <%
   const _kw = typeof keyword !== 'undefined' ? keyword : '';
-  const _f  = typeof filters !== 'undefined' ? filters : { status:'', visibility:'', stock:'', categoryId:null, brandId:null };
+  const _f  = typeof filters !== 'undefined' ? filters : { status:'', visibility:'', stock:'', b2b:'', categoryId:null, brandId:null };
   const _cats   = typeof filterCategories !== 'undefined' ? filterCategories : [];
   const _brands = typeof filterBrands !== 'undefined' ? filterBrands : [];
-  const _hasFilter = !!(_kw || _f.status || _f.visibility || _f.stock || _f.categoryId || _f.brandId);
+  const _hasFilter = !!(_kw || _f.status || _f.visibility || _f.stock || _f.b2b || _f.categoryId || _f.brandId);
 
   /* 페이지네이션·개수변경 링크가 필터를 잃지 않도록 현재 필터를 전부 실어 나른다. */
   const _qs = (extra) => {
@@ -12,6 +12,7 @@
     if (_f.status) params.set('status', _f.status);
     if (_f.visibility) params.set('visibility', _f.visibility);
     if (_f.stock) params.set('stock', _f.stock);
+    if (_f.b2b) params.set('b2b', _f.b2b);
     if (_f.categoryId) params.set('categoryId', _f.categoryId);
     if (_f.brandId) params.set('brandId', _f.brandId);
     params.set('perPage', pagination.perPage);
@@ -66,6 +67,15 @@
                 <% Object.entries(VIS_LABELS).forEach(([v, label]) => { %>
                     <option value="<%= v %>" <%= _f.visibility === v ? 'selected' : '' %>><%= label %></option>
                 <% }) %>
+            </select>
+        </div>
+
+        <div class="w-36">
+            <label class="block mb-1 text-xs font-medium text-gray-500">사업자 상품</label>
+            <select name="b2b" class="w-full h-[38px] px-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="">전체</option>
+                <option value="b2b"    <%= _f.b2b === 'b2b'    ? 'selected' : '' %>>사업자 상품</option>
+                <option value="normal" <%= _f.b2b === 'normal' ? 'selected' : '' %>>일반 상품</option>
             </select>
         </div>
 

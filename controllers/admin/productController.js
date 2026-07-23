@@ -1062,10 +1062,12 @@ exports.getList = async (req, res) => {
         const STATUSES = ['ON', 'OFF', 'SOLD_OUT', 'COMING_SOON', 'RESTOCK'];
         const VISIBILITIES = ['PUBLIC', 'HIDDEN', 'MEMBER_ONLY'];
         const STOCKS = ['in', 'out'];
+        const B2BS = ['b2b', 'normal'];
 
         const status = STATUSES.includes(req.query.status) ? req.query.status : '';
         const visibility = VISIBILITIES.includes(req.query.visibility) ? req.query.visibility : '';
         const stock = STOCKS.includes(req.query.stock) ? req.query.stock : '';
+        const b2b = B2BS.includes(req.query.b2b) ? req.query.b2b : '';
         // 카테고리/브랜드 필터 — 숫자 id, 또는 'none'(미설정: 값이 비어 있는 상품만).
         const categoryUnset = req.query.categoryId === 'none';
         const brandUnset = req.query.brandId === 'none';
@@ -1092,6 +1094,11 @@ exports.getList = async (req, res) => {
         // 재고 필터는 SKU 기준(옵션상품은 products.stock 이 stale). 재고 있는 SKU 가 하나라도 있으면 '재고 있음'.
         if (stock === 'in') whereClause += ' AND EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
         else if (stock === 'out') whereClause += ' AND NOT EXISTS (SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.stock > 0)';
+
+        // 사업자(B2B) 상품 여부 — COUNT 쿼리에는 bs JOIN 이 없으므로 EXISTS 로 건다.
+        // 해제는 행을 DELETE 하므로 is_b2b_sale=0 행은 없지만, 표현이 갈리지 않도록 조건을 명시한다.
+        if (b2b === 'b2b') whereClause += ' AND EXISTS (SELECT 1 FROM product_b2b_setting b WHERE b.product_id = p.id AND b.is_b2b_sale = 1)';
+        else if (b2b === 'normal') whereClause += ' AND NOT EXISTS (SELECT 1 FROM product_b2b_setting b WHERE b.product_id = p.id AND b.is_b2b_sale = 1)';
 
         // 카테고리 필터 — 미설정(none)이면 category_id 가 비어 있는 상품만.
         let categoryIds = [];
@@ -1175,7 +1182,7 @@ exports.getList = async (req, res) => {
             keyword,
             // 미설정 필터는 'none' 문자열로 뷰·페이지네이션에 실어 나른다.
             filters: {
-                status, visibility, stock,
+                status, visibility, stock, b2b,
                 categoryId: categoryUnset ? 'none' : categoryId,
                 brandId: brandUnset ? 'none' : brandId,
             },
