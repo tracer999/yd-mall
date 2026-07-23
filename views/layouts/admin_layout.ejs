@@ -357,8 +357,10 @@
     <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 scroll-smooth">
       <!-- Content Container -->
       <div class="max-w-7xl mx-auto pb-10">
+        <%# transform/translate 계열 유틸은 넣지 말 것 — position:fixed 자식(모달·팝업)의
+            컨테이닝 블록이 되어 화면 기준이 아니라 이 카드 기준으로 배치된다 %>
         <div
-          class="admin-main-content bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 min-h-[calc(100vh-180px)] transition-all duration-500 ease-out transform opacity-100 translate-y-0 relative">
+          class="admin-main-content bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 min-h-[calc(100vh-180px)] relative">
           <%- body %>
         </div>
       </div>
@@ -477,20 +479,21 @@
   </script>
   <!-- Add simple fade-in animation for content -->
   <style>
+    /* transform 을 쓰지 않는다 — 이 요소에 transform 이 걸리면 position:fixed 자식(모달)의
+       컨테이닝 블록이 되어 모달이 화면이 아닌 콘텐츠 카드 기준으로 배치되고,
+       스크롤을 내린 상태에서 팝업을 열면 화면 위쪽 밖으로 벗어나 보이지 않는다. */
     @keyframes fadeIn {
       from {
         opacity: 0;
-        transform: translateY(10px);
       }
 
       to {
         opacity: 1;
-        transform: translateY(0);
       }
     }
 
     main>div {
-      animation: fadeIn 0.4s ease-out forwards;
+      animation: fadeIn 0.4s ease-out;
     }
   </style>
 </body>
