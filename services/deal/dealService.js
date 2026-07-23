@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sellableStockSql } = require('../catalog/sellableStock');
 
 /*
  * ── 쇼핑특가 (docs/사이트개선/shopping_deal_design.md) ──
@@ -262,7 +263,8 @@ async function getActiveDealsByCategory(mallId = 1, categoryCode = null) {
                 di.id AS deal_item_id, di.deal_price, di.qty_limit, di.sold_qty,
                 di.sort_order AS item_sort,
                 p.id AS product_id, p.name, p.slug, p.main_image, p.thumbnail_image,
-                p.price AS base_price, p.original_price, p.status, p.stock
+                p.price AS base_price, p.original_price, p.status,
+                ${sellableStockSql('p')} AS stock
            FROM deal_item di
            JOIN deal d ON d.id = di.deal_id
            JOIN deal_category dc ON dc.id = d.deal_category_id

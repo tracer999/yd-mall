@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { usedCategoryOptions } = require('../../services/catalog/categoryScope');
+const { inStockSql, sellableStockSql } = require('../../services/catalog/sellableStock');
 
 /*
  * 쇼핑특가 관리 (쇼핑특가 §7)
@@ -232,7 +233,7 @@ async function renderForm(res, deal, mallId, extra = {}) {
         const [rows] = await pool.query(`
             SELECT di.id AS item_id, di.deal_price, di.qty_limit, di.sold_qty, di.sort_order,
                    p.id AS product_id, p.name, p.main_image, p.price, p.original_price,
-                   p.status, p.stock
+                   p.status, ${sellableStockSql('p')} AS stock
               FROM deal_item di
               JOIN products p ON p.id = di.product_id
              WHERE di.deal_id = ?
@@ -394,8 +395,8 @@ exports.getProductSearch = async (req, res) => {
         if (q) { where.push('(p.name LIKE ? OR p.product_code LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
         if (Number.isFinite(categoryId) && categoryId > 0) { where.push('p.category_id = ?'); params.push(categoryId); }
         if (Number.isFinite(brandId) && brandId > 0) { where.push('p.brand_category_id = ?'); params.push(brandId); }
-        if (inStock === 'y') where.push('p.stock > 0');
-        else if (inStock === 'n') where.push('p.stock <= 0');
+        if (inStock === 'y') where.push(inStockSql('p'));
+        else if (inStock === 'n') where.push(`NOT ${inStockSql('p')}`);
         if (VISIBILITIES.includes(visibility)) { where.push('p.visibility = ?'); params.push(visibility); }
 
         where.push('p.id NOT IN (SELECT product_id FROM deal_item WHERE deal_id = ?)');
@@ -403,7 +404,7 @@ exports.getProductSearch = async (req, res) => {
 
         const [products] = await pool.query(`
             SELECT p.id, p.name, p.product_code, p.main_image, p.price, p.original_price,
-                   p.stock, p.status, p.visibility
+                   ${sellableStockSql('p')} AS stock, p.status, p.visibility
               FROM products p
              WHERE ${where.join(' AND ')}
              ORDER BY p.created_at DESC
