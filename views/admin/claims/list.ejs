@@ -33,6 +33,7 @@
       <option value="">전체</option>
       <option value="CANCEL" <%= filters.claim_type === 'CANCEL' ? 'selected' : '' %>>취소</option>
       <option value="RETURN" <%= filters.claim_type === 'RETURN' ? 'selected' : '' %>>반품</option>
+      <option value="EXCHANGE" <%= filters.claim_type === 'EXCHANGE' ? 'selected' : '' %>>교환</option>
     </select>
   </div>
   <button type="submit" class="h-[38px] px-4 text-sm font-medium rounded-md bg-gray-800 text-white hover:bg-gray-900">검색</button>

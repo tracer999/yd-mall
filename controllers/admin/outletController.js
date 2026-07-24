@@ -84,6 +84,7 @@ exports.getList = async (req, res) => {
     ]);
 
     res.render('admin/outlet/list', {
+        layout: 'layouts/admin_layout',
         title: '아울렛 관리',
         subtitle: '이월·리퍼브·전시·임박 등 할인 사유가 있는 상품을 아울렛에 진열합니다.',
         items: result.items,
@@ -114,6 +115,7 @@ async function renderForm(req, res, item, extra = {}) {
     ]);
 
     res.render('admin/outlet/edit', {
+        layout: 'layouts/admin_layout',
         title: item?.id ? '아울렛 상품 수정' : '아울렛 상품 등록',
         item,
         categories,
@@ -293,6 +295,7 @@ exports.getCategories = async (req, res) => {
     const maxDepth = await getCategoryMaxDepth(mallId);
 
     res.render('admin/outlet/categories', {
+        layout: 'layouts/admin_layout',
         title: '아울렛 카테고리',
         subtitle: '아울렛 안에서만 쓰는 분류입니다. 일반 상품 카테고리와 섞이지 않습니다.',
         categories,
