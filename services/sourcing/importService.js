@@ -43,9 +43,13 @@ async function resolveCredential(mallId, supplier) {
     const channel = resolveCredentialChannel(supplier);
     const c = await cred.getCredentialByChannel(mallId, channel);
     if (!c) {
-        throw new Error(
+        // "아직 설정하지 않음"은 서버 장애가 아니다. 호출부가 4xx 로 응답할 수 있게 코드를 붙인다
+        // (그냥 던지면 전부 500 이 되어 모니터링에서 진짜 장애와 섞인다).
+        const err = new Error(
             `${SUPPLIER_LABEL[supplier] || supplier} 자격증명이 없습니다 — [공급처/채널 연결]에서 Open API Key 를 등록하세요.`
         );
+        err.code = 'NO_CREDENTIAL';
+        throw err;
     }
     return c;
 }

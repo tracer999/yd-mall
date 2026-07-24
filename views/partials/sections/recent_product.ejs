@@ -3,7 +3,7 @@
    * 최근 본 상품 섹션 (CT-8)
    *
    * 로그인 사용자 : 서버가 recent_views 로 채워 SSR
-   * 비로그인      : clientOnly=true → 클라이언트가 localStorage('yd_recent_products')로 채움.
+   * 비로그인      : clientOnly=true → 클라이언트가 localStorage('yd_recent_products:<mallId>')로 채움.
    *                 이력이 없으면 JS가 섹션 전체를 숨긴다.
    *
    * locals (config_json):
@@ -75,7 +75,8 @@
 
     var list = [];
     try {
-      var raw = localStorage.getItem('yd_recent_products');
+      // 몰별 키 — detail.ejs·right_utility.ejs 와 같은 규칙이어야 한다(몰 간 이력 혼입 방지).
+      var raw = localStorage.getItem('yd_recent_products:<%= Number(mallId) || 1 %>');
       list = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(list)) list = [];
     } catch (e) { list = []; }

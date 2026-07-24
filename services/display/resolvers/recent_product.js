@@ -20,16 +20,21 @@ async function resolve({ shared, config, locals }) {
         return locals;
     }
 
+    /*
+     * recent_views 에는 mall_id 가 없다(상품 단위로만 기록). 그래서 상품의 mall_id 로 이 몰 것만 남긴다.
+     * 이 조건이 없으면 **몰 A 에서 본 상품이 몰 B 홈에 뜨고**, 클릭하면 그 몰에 없는 상품으로 이동한다.
+     * 다른 리졸버들과 같은 스코프 규칙이다(_shared.js 참고).
+     */
     const [rows] = await pool.query(`
         SELECT p.id, p.name, p.slug, p.price, p.original_price, p.discount_rate,
                p.main_image, p.provider, MAX(rv.viewed_at) AS last_viewed
         FROM recent_views rv
         JOIN products p ON p.id = rv.product_id
-        WHERE rv.user_id = ? AND ${P_STATUS} AND ${visibilityClause(true)}
+        WHERE rv.user_id = ? AND p.mall_id = ? AND ${P_STATUS} AND ${visibilityClause(true)}
         GROUP BY p.id, p.name, p.slug, p.price, p.original_price, p.discount_rate, p.main_image, p.provider
         ORDER BY last_viewed DESC
         LIMIT ?
-    `, [shared.userId, limit]);
+    `, [shared.userId, shared.mallId || 1, limit]);
 
     if (!rows || rows.length === 0) return null;
 

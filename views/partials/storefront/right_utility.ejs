@@ -239,7 +239,8 @@
 
 <script>
 (function () {
-  var STORAGE_KEY = 'yd_recent_products';
+  // 몰별로 키를 나눈다 — 상품 상세(detail.ejs)·홈 섹션(recent_product.ejs)과 같은 규칙이어야 한다.
+  var STORAGE_KEY = 'yd_recent_products:<%= Number(mallId) || 1 %>';
 
   function readRecent() {
     try {

@@ -129,9 +129,26 @@ async function applyTheme(conn, mallId, tokens, mallName, overwrite) {
  *  로고·상호를 달고 나오는 것을 막으려면 행이 반드시 있어야 한다)
  */
 async function applySiteSettings(conn, mallId, mallName) {
+    /*
+     * hero_variant(홈 히어로의 **콘텐츠** 축)를 행을 만들 때 정한다.
+     *
+     * 컬럼 기본값은 'full_banner' 라 banners(MAIN) 를 읽는데, 샘플 시더는 hero_slide 만 채운다.
+     * (시딩은 프로비저닝보다 **먼저** 돌아 이 시점엔 슬라이드가 이미 들어와 있다.)
+     * 축이 어긋나면 theme_hero 리졸버가 "보여줄 게 없다"고 판단해 **홈 최상단 히어로가 통째로 사라진다** —
+     * 슬라이드는 등록돼 있는데 화면에는 안 나와 원인을 찾기 어렵다.
+     *
+     * 그래서 MAIN 배너가 없고 MAIN 슬라이드가 있으면 슬라이드 쪽(product_showcase)으로 맞춘다.
+     * INSERT IGNORE 라 이미 행이 있는 몰(운영자 자산)은 건드리지 않는다.
+     */
+    const [[slide]] = await conn.query(
+        `SELECT id FROM hero_slide WHERE mall_id = ? AND slot = 'MAIN' AND is_active = 1 LIMIT 1`, [mallId]);
+    const [[mainBanner]] = await conn.query(
+        `SELECT id FROM banners WHERE mall_id = ? AND banner_type = 'MAIN' LIMIT 1`, [mallId]);
+    const heroVariant = (slide && !mainBanner) ? 'product_showcase' : 'full_banner';
+
     await conn.query(
-        'INSERT IGNORE INTO site_settings (mall_id, company_name) VALUES (?, ?)',
-        [mallId, String(mallName || '').slice(0, 100)]);
+        'INSERT IGNORE INTO site_settings (mall_id, company_name, hero_variant) VALUES (?, ?, ?)',
+        [mallId, String(mallName || '').slice(0, 100), heroVariant]);
 }
 
 /*

@@ -5,11 +5,12 @@
         </div>
         <h1 class="text-xl font-bold text-gray-900 mb-2">결제에 실패했습니다</h1>
         <p class="text-sm text-gray-600 mb-6">
-            <% if (reason === 'cancel') { %>결제가 취소되었습니다.<% } %>
-            <% else if (reason === 'stock') { %>재고가 부족하여 결제를 완료할 수 없습니다.<% } %>
-            <% else if (reason === 'amount') { %>결제 금액이 일치하지 않습니다.<% } %>
-            <% else if (reason === 'config') { %>결제 설정이 완료되지 않았습니다.<% } %>
-            <% else { %>오류가 발생했습니다. 잠시 후 다시 시도해 주세요.<% } %>
+            <% if (reason === 'cancel') { %>결제가 취소되었습니다.
+            <% } else if (reason === 'stock') { %>재고가 부족하여 결제를 완료할 수 없습니다.
+            <% } else if (reason === 'amount') { %>결제 금액이 일치하지 않습니다.
+            <% } else if (reason === 'config') { %>결제 설정이 완료되지 않았습니다.
+            <% } else { %>오류가 발생했습니다. 잠시 후 다시 시도해 주세요.
+            <% } %>
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
             <a href="/products" class="px-5 py-2.5 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">쇼핑 계속하기</a>

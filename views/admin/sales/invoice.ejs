@@ -7,7 +7,13 @@
   const supply = order.supply_amount != null ? Number(order.supply_amount) : Math.round(Number(order.total_amount || 0) / 1.1);
   const vat    = order.vat_amount    != null ? Number(order.vat_amount)    : Number(order.total_amount || 0) - supply;
   const addr = [order.receiver_address, order.receiver_detailed_address].filter(Boolean).join(' ') || order.shipping_address || '-';
-%>
+%><!DOCTYPE html>
+<%# layout:false 로 렌더되는 인쇄 전용 문서다. 문서 선언을 빠뜨리면 브라우저가 quirks mode 로
+    해석해 인쇄 레이아웃이 환경마다 달라진다. %>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title><%= isStatement ? '거래명세서' : '주문서' %> — <%= order.order_number %></title>
 <style>
   * { box-sizing: border-box; }
@@ -32,6 +38,8 @@
   .btn-primary { background: #111827; color: #fff; border-color: #111827; }
   @media print { body { background: #fff; padding: 0; } .toolbar { display: none; } .sheet { padding: 0; max-width: none; } }
 </style>
+</head>
+<body>
 
 <div class="toolbar">
   <a class="btn" href="/admin/sales/<%= order.id %>">주문 상세로</a>
@@ -138,3 +146,6 @@
 
   <p class="sign"><b><%= settings.company_name || '' %></b> (인)</p>
 </div>
+
+</body>
+</html>

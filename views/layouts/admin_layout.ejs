@@ -22,9 +22,12 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <%# 파비콘 미설정 몰에서 /favicon.ico 404 가 나지 않게 기본 아이콘으로 폴백한다(main_layout 과 동일 규칙). %>
   <% if (siteSettings && (siteSettings.favicon_url || siteSettings.logo_url)) { %>
     <link rel="icon" href="<%= siteSettings.favicon_url || siteSettings.logo_url %>" />
     <link rel="apple-touch-icon" href="<%= siteSettings.favicon_url || siteSettings.logo_url %>" />
+  <% } else { %>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <% } %>
   <title>YD-MALL Admin</title>
   <!-- Tailwind CSS -->

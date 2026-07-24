@@ -251,6 +251,13 @@ async function seedSampleData(mallId) {
             heroCount++;
         }
 
+        /*
+         * 여기서 심은 hero_slide 가 실제로 홈에 보이려면 site_settings.hero_variant 가
+         * 'product_showcase' 여야 한다(컬럼 기본값은 'full_banner' = banners 를 읽음).
+         * 그 결정은 **site_settings 행을 만드는 mallProvisioner.applySiteSettings()** 가 한다 —
+         * 이 시더는 프로비저닝보다 **먼저** 돌아서 아직 행이 없기 때문에 여기서 UPDATE 해 봐야 0행이다.
+         */
+
         await conn.commit();
         return {
             seeded: true,

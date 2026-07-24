@@ -1,9 +1,10 @@
-<%--
+<%#
   공통 모달 오버레이
   - 배경: 반투명 연한 회색
   - 사용: modalId, modalTitle 필요
-  - body: <%- body %> 또는 include 시 content
---%>
+  - body: 아래 typeof body 분기로 주입한다(include 시 content)
+  주석은 EJS 주석 태그로만 연다. JSP 식 대시 두 개 주석은 EJS 가 raw 출력 태그로 읽어 컴파일이 깨진다.
+%>
 <div id="<%= modalId %>" class="fixed inset-0 z-[100] hidden" aria-hidden="true">
   <div class="fixed inset-0 bg-gray-500/60 backdrop-blur-sm" data-modal-close="<%= modalId %>"></div>
   <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">

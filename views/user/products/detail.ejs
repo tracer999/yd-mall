@@ -1498,7 +1498,8 @@
 %>
 <script>
 (function () {
-  var STORAGE_KEY = 'yd_recent_products';
+  // 몰별로 키를 나눈다 — 한 브라우저로 여러 몰을 열면 이력이 섞여, 그 몰에 없는 상품이 노출된다.
+  var STORAGE_KEY = 'yd_recent_products:<%= Number(mallId) || 1 %>';
   var MAX = 10;
   var item = {
     id: <%= Number(product.id) %>,

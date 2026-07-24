@@ -424,7 +424,8 @@ exports.getDomeggookCategories = async (req, res) => {
         res.set('Cache-Control', 'private, max-age=3600');
         res.json({ success: true, tree });
     } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
+        // 자격증명 미등록은 설정이 덜 된 것이지 장애가 아니다 — 네이버 쪽(addressbooks)과 같은 400 으로 맞춘다.
+        res.status(e.code === 'NO_CREDENTIAL' ? 400 : 500).json({ success: false, error: e.message });
     }
 };
 

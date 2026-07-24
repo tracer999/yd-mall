@@ -1,6 +1,7 @@
-<%--
+<%#
   회원 검색 모달 (공통)
---%>
+  주석은 EJS 주석 태그로만 연다. JSP 식 대시 두 개 주석은 EJS 가 raw 출력 태그로 읽어 컴파일이 깨진다.
+%>
 <% 
   var mid = typeof modalId !== 'undefined' ? modalId : 'userSearchModal'; 
   var inputNameVal = typeof inputName !== 'undefined' ? inputName : 'user_id'; 
