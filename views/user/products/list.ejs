@@ -406,6 +406,9 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                                                 <button
                                                     class="like-btn md:hidden absolute top-2 right-2 z-30 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center <%= _isLikedMobile ? 'text-[color:var(--gh-primary)]' : 'text-gray-400' %> hover:text-[color:var(--gh-primary)] transition-colors shadow-sm"
                                                     data-product-id="<%= product.id %>"
+                                                    <%# 같은 상품 하트가 모바일용·PC용 두 벌로 렌더된다 — 한쪽만 바뀌면 폭을 바꿨을 때 어긋난다 %>
+                                                    data-like-product="<%= product.id %>"
+                                                    data-liked-class="text-[color:var(--gh-primary)]" data-unliked-class="text-gray-400"
                                                     onclick="event.preventDefault();event.stopPropagation();toggleListLike(this, '<%= product.id %>')">
                                                     <i class="bi <%= _isLikedMobile ? 'bi-heart-fill' : 'bi-heart' %> text-base"></i>
                                                 </button>
@@ -505,6 +508,8 @@ const _sortTabs = (typeof sortTabs !== 'undefined' && sortTabs) ? sortTabs : [
                                                                         <button
                                                                             class="like-btn hidden md:flex items-center justify-center <%= _isLiked ? 'text-[color:var(--gh-primary)]' : 'text-gray-400' %> hover:text-[color:var(--gh-primary)] transition-colors"
                                                                             data-product-id="<%= product.id %>"
+                                                                            data-like-product="<%= product.id %>"
+                                                                            data-liked-class="text-[color:var(--gh-primary)]" data-unliked-class="text-gray-400"
                                                                             onclick="toggleListLike(this, '<%= product.id %>')">
                                                                             <i class="bi <%= _isLiked ? 'bi-heart-fill' : 'bi-heart' %> text-xl"></i>
                                                                         </button>
@@ -579,17 +584,10 @@ async function toggleListLike(btn, productId) {
         }
         const data = await res.json();
         if (data.success) {
-            const icon = btn.querySelector('i');
-            if (data.liked) {
-                icon.classList.remove('bi-heart');
-                icon.classList.add('bi-heart-fill');
-                btn.classList.remove('text-gray-400');
-                btn.classList.add('text-[color:var(--gh-primary)]');
-            } else {
-                icon.classList.remove('bi-heart-fill');
-                icon.classList.add('bi-heart');
-                btn.classList.remove('text-[color:var(--gh-primary)]');
-                btn.classList.add('text-gray-400');
+            // 같은 상품의 모든 하트(모바일용·PC용)를 한 번에 맞춘다 — public/js/yd-live.js
+            if (typeof window.ydSyncLikeButtons === 'function') {
+                window.ydApplyLikeState(btn, data.liked);
+                window.ydSyncLikeButtons(productId, data.liked, btn);
             }
         }
     } catch (e) {
