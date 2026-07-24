@@ -58,9 +58,11 @@
             <% } %>
           </div>
 
-          <div class="flex gap-3 sm:gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-5 lg:gap-y-8 lg:overflow-visible">
+          <%# 모바일은 카드 1장을 풀폭으로 스냅해 넘긴다(카드가 좁게 찌그러지지 않게).
+              lg 이상은 5열 그리드라 스냅을 끈다. %>
+          <div class="flex gap-3 sm:gap-4 overflow-x-auto snap-x snap-mandatory pb-2 lg:grid lg:grid-cols-5 lg:gap-y-8 lg:overflow-visible lg:snap-none">
             <% row.products.forEach(function (product) { %>
-              <div class="w-40 shrink-0 lg:w-auto">
+              <div class="w-full shrink-0 snap-start sm:w-56 lg:w-auto">
                 <%- include('../product_card', { product: product, opts: { imageHeightClass: 'h-44', showPriceBadge: false, showDistBadge: false } }) %>
               </div>
             <% }); %>

@@ -33,11 +33,12 @@
     <% } %>
 
     <% if (_items.length) { %>
+      <%# 캐러셀은 모바일에서 카드 1장 풀폭으로 스냅한다(예전 w-44=176px 는 좁아 찌그러졌다). %>
       <div class="<%= isCarousel
-            ? 'flex gap-4 overflow-x-auto snap-x scrollbar-none pb-2'
+            ? 'flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-none pb-2'
             : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4' %>">
         <% _items.forEach(function (p) { %>
-          <div class="<%= isCarousel ? 'shrink-0 w-44 sm:w-56 snap-start' : '' %>">
+          <div class="<%= isCarousel ? 'shrink-0 w-full sm:w-56 snap-start' : '' %>">
             <div class="relative">
               <%- include('../product_card', { product: p, opts: { showBrand: true, showDiscountBadge: true } }) %>
 

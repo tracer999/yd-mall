@@ -57,14 +57,15 @@
        class="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory
               [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
     <% b.products.forEach(function (p) { %>
-      <div class="snap-start shrink-0 w-[45%] sm:w-[31%] lg:w-[23.5%]">
+      <%# 모바일은 카드 1장 풀폭(w-full)으로 스냅해 넘긴다 — 예전 45% 는 카드가 좁아 찌그러졌다. %>
+      <div class="snap-start shrink-0 w-full sm:w-[31%] lg:w-[23.5%]">
         <%- include('../product_card', { product: p, opts: { showTopBadge: false } }) %>
       </div>
     <% }) %>
 
     <%# 브랜드관으로 보내는 마지막 카드 — 캐러셀 끝에서 갈 곳을 준다 %>
     <a href="/brands/<%= b.id %>"
-       class="snap-start shrink-0 w-[45%] sm:w-[31%] lg:w-[23.5%] no-underline
+       class="snap-start shrink-0 w-full sm:w-[31%] lg:w-[23.5%] no-underline
               flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200
               text-gray-500 hover:border-[var(--gh-primary)] hover:text-[var(--gh-primary)] transition min-h-[220px]">
       <i class="bi bi-arrow-right-circle text-2xl"></i>

@@ -14,14 +14,24 @@
 %>
 <% if (_best.length >= 2) { %>
 <style>
-  /* peek — 트랙 좌우 여백만큼 이전/다음 카드가 걸쳐 보인다. scroll-padding 으로 스냅 위치를 맞춘다. */
-  .yd-bestslide { --ybs-gap: 1rem; --ybs-peek: 2rem; --ybs-per: 2; }
-  @media (min-width: 1024px) { .yd-bestslide { --ybs-per: 3; --ybs-peek: 3rem; } }
+  /*
+   * peek — 트랙 좌우 여백(padding-inline)만큼 이전/다음 카드가 걸쳐 보인다.
+   *
+   * 모바일은 카드 1장을 **풀폭**으로 본다(peek 0). 예전엔 per=2 + peek 2rem 이라
+   * 카드가 ~90px 로 찌그러져 이미지가 납작해지고 배지가 이미지를 덮고 가격이 잘렸다.
+   *
+   * ⚠️ peek 은 padding-inline 으로만 준다. calc 에서 또 빼면 폭이 이중으로 깎인다
+   *    (100% 는 padding 을 제외한 content box 기준이라 이미 peek 이 반영돼 있다).
+   *    예전 코드는 calc 에서도 빼서 카드가 실제보다 더 좁아지는 버그가 있었다.
+   */
+  .yd-bestslide { --ybs-gap: 1rem; --ybs-peek: 0rem; --ybs-per: 1; }
+  @media (min-width: 768px)  { .yd-bestslide { --ybs-per: 2; --ybs-peek: 1.5rem; } }
+  @media (min-width: 1024px) { .yd-bestslide { --ybs-per: 3; --ybs-peek: 2rem; } }
   .yd-bestslide__track {
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: calc(
-      (100% - var(--ybs-peek) * 2 - var(--ybs-gap) * (var(--ybs-per) - 1)) / var(--ybs-per)
+      (100% - var(--ybs-gap) * (var(--ybs-per) - 1)) / var(--ybs-per)
     );
     gap: var(--ybs-gap);
     overflow-x: auto;
