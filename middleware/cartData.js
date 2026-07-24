@@ -32,9 +32,13 @@ module.exports = async (req, res, next) => {
                 (SELECT COUNT(*)
                    FROM likes l
                    JOIN products p ON p.id = l.product_id
-                  WHERE l.user_id = ? AND p.status IN ('ON','SOLD_OUT','COMING_SOON')) AS wishlistCount,
+                  WHERE l.user_id = ? AND p.status IN ('ON','SOLD_OUT','COMING_SOON'))
+              + (SELECT COUNT(*)
+                   FROM brand_likes bl
+                   JOIN categories c ON c.id = bl.category_id AND c.type = 'BRAND'
+                  WHERE bl.user_id = ?) AS wishlistCount,
                 (SELECT COUNT(*) FROM orders WHERE user_id = ?) AS orderCount
-        `, [req.user.id, req.user.id, req.user.id]);
+        `, [req.user.id, req.user.id, req.user.id, req.user.id]);
 
         const cart = Number(row.cartCount) || 0;
         res.locals.cartCount = cart;
