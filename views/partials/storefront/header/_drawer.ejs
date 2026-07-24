@@ -73,18 +73,12 @@
         <% } %>
     </nav>
 
-    <%# ── 3. 쇼핑 요약 타일 ──────────────────────────────────────────── %>
-    <nav class="yd-dw__stats" aria-label="쇼핑 요약">
-        <a href="/mypage/likes" class="yd-dw__stat"><i class="bi bi-heart"></i><span>관심상품</span></a>
-        <a href="/cart" class="yd-dw__stat">
-            <span class="yd-dw__staticon">
-                <i class="bi bi-bag"></i>
-                <% if (_dwCart > 0) { %><em class="yd-dw__dot"><%= _dwCart %></em><% } %>
-            </span>
-            <span>장바구니</span>
-        </a>
-        <a href="/mypage/orders" class="yd-dw__stat"><i class="bi bi-receipt"></i><span>주문조회</span></a>
-    </nav>
+    <%# ── 3. 우측레일 바로가기 (버튼 형태 + 최근본상품 이미지 형태) ──────────────────
+        관리자 [시스템 메뉴 설정]의 우측레일 항목을 모바일 드로어에 노출한다(PC ≥1600px 전용이라
+        모바일엔 경로가 없었다). 예전의 하드코딩 쇼핑 요약 타일(관심상품/장바구니/주문조회)을 대체한다 —
+        장바구니·찜은 우측레일 버튼이 담당하고, 찜한 브랜드와 최근본상품(이미지)이 더해진다.
+        주문조회는 위 회원 메뉴의 [마이쇼핑]에서 연다. 카테고리 레이어와 같은 파셜을 써 노출이 일관된다. %>
+    <%- include('../_mobile_rail_shortcuts') %>
 
     <!-- 검색 (use_search_bar=0 이면 통째로 빠진다) -->
     <% if (_dwUseSearch) { %>

@@ -1,0 +1,100 @@
+<%#
+  모바일 우측레일 바로가기 — 카테고리 레이어(mobile_bottom_nav)와 햄버거 드로어(_drawer) 공용.
+
+  우측레일(feature_menu position='right_rail')은 PC ≥1600px 전용(right_utility.ejs)이라
+  모바일에는 노출 경로가 아예 없었다. 관리자가 [시스템 메뉴 설정]에서 켠 항목을 모바일 메뉴
+  레이어에 노출한다. 두 섹션으로 나눈다:
+    · 버튼 형태  : 장바구니 / 찜 / 찜한 브랜드 (아이콘 + 라벨 링크)
+    · 이미지 형태: 최근본상품 (localStorage 썸네일 그리드 — 서버가 모르는 클라이언트 이력)
+  TOP(맨 위로)은 스크롤 동작이라 레이어 메뉴에 의미가 없어 제외한다.
+
+  mobile_visible 이 꺼진 항목은 내지 않는다(관리자 설정 존중).
+  상위 locals(rightRailMenus · cartCount · mallId)를 상속한다.
+%>
+<%
+  const _sr = (typeof rightRailMenus !== 'undefined' && Array.isArray(rightRailMenus)) ? rightRailMenus : [];
+  // 아이콘·URL 은 코드가 고정한다(RAIL_RECENT 는 default_path 가 비어 있어 여기서 채운다).
+  const _srBtnMeta = {
+    RAIL_CART:           { icon: 'bi-bag',            href: '/cart' },
+    RAIL_WISHLIST:       { icon: 'bi-heart',          href: '/mypage/likes' },
+    RAIL_BRAND_WISHLIST: { icon: 'bi-bookmark-heart', href: '/mypage/brand-likes' },
+  };
+  const _srBtns   = _sr.filter(m => _srBtnMeta[m.featureCode] && m.mobileVisible !== 0);
+  const _srRecent = _sr.find(m => m.featureCode === 'RAIL_RECENT' && m.mobileVisible !== 0) || null;
+  const _srCart   = (typeof cartCount !== 'undefined' && Number(cartCount) > 0) ? Number(cartCount) : 0;
+  const _srMall   = (typeof mallId !== 'undefined' && mallId) ? Number(mallId) : 1;
+%>
+<% if (_srBtns.length || _srRecent) { %>
+<div class="yd-mrail border-t border-gray-100">
+
+  <% if (_srBtns.length) { %>
+  <section class="px-4 pt-4 pb-2">
+    <p class="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400">바로가기</p>
+    <nav class="grid grid-cols-3 gap-2" aria-label="바로가기">
+      <% _srBtns.forEach(function (m) {
+           const meta = _srBtnMeta[m.featureCode];
+           const href = (m.href && m.href !== '#') ? m.href : meta.href; %>
+        <a href="<%= href %>" class="flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 bg-white py-3 text-gray-600 active:bg-gray-50">
+          <span class="relative">
+            <i class="bi <%= meta.icon %> text-xl" aria-hidden="true"></i>
+            <% if (m.featureCode === 'RAIL_CART' && _srCart > 0) { %>
+              <em class="absolute -top-1.5 -right-2 min-w-[16px] rounded-full bg-[var(--gh-accent)] px-1 text-center text-[10px] not-italic font-bold leading-4 text-white"><%= _srCart %></em>
+            <% } %>
+          </span>
+          <span class="text-[11px] font-medium"><%= m.name %></span>
+        </a>
+      <% }); %>
+    </nav>
+  </section>
+  <% } %>
+
+  <%# 이미지 형태(최근본상품) — localStorage 기반이라 서버는 항목 유무를 모른다.
+      항목이 있을 때만 JS 가 이 섹션을 드러낸다(hidden 기본). %>
+  <% if (_srRecent) { %>
+  <section class="px-4 pt-2 pb-4" data-yd-mrecent hidden>
+    <p class="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400"><%= _srRecent.name %></p>
+    <div class="grid grid-cols-4 gap-1.5" data-yd-mrecent-grid></div>
+  </section>
+  <% } %>
+
+</div>
+<% } %>
+
+<% if (_srRecent) { %>
+<script>
+/* 최근본상품(이미지 형태) — 몰별 localStorage 키에서 읽어 썸네일을 채운다.
+   카테고리 레이어와 드로어가 둘 다 include 해도(같은 페이지) querySelectorAll 로 한 번에 처리하고,
+   가드로 스크립트 자체는 1회만 바인딩한다. detail.ejs 저장 구조: {id,name,image,url}. */
+(function () {
+  if (window.__ydMRecentInit) return;
+  window.__ydMRecentInit = true;
+
+  var KEY = 'yd_recent_products:<%= _srMall %>';
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function render() {
+    var secs = document.querySelectorAll('[data-yd-mrecent]');
+    if (!secs.length) return;
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(list)) list = []; }
+    catch (e) { list = []; }
+    Array.prototype.forEach.call(secs, function (sec) {
+      var grid = sec.querySelector('[data-yd-mrecent-grid]');
+      if (!grid) return;
+      if (!list.length) { sec.hidden = true; return; }
+      grid.innerHTML = list.slice(0, 8).map(function (p) {
+        return '<a href="' + esc(p.url || '#') + '" class="block overflow-hidden rounded-lg border border-gray-100 bg-white aspect-square">'
+             + '<img src="' + esc(p.image || '/images/placeholder.png') + '" alt="' + esc(p.name || '') + '" loading="lazy" class="h-full w-full object-cover">'
+             + '</a>';
+      }).join('');
+      sec.hidden = false;
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render);
+  else render();
+})();
+</script>
+<% } %>
