@@ -1,0 +1,77 @@
+<%#
+  모바일 검색 레이어 — 헤더의 [검색] 아이콘(data-yd-search-open)이 연다.
+
+  모바일 Row1 은 로고·유저 액션만으로도 꽉 차서 입력형 검색바를 둘 자리가 없다.
+  그래서 진입점만 아이콘으로 두고, 입력은 이 레이어에서 받는다.
+
+  반드시 <header> **바깥**에 둔다 — 헤더가 z-50 으로 stacking context 를 만들기 때문에
+  그 안에 두면 fixed 백드롭이 헤더까지 덮는다(카테고리 백드롭과 같은 이유).
+
+  PC 에는 헤더에 입력형 검색바가 그대로 있으므로 이 레이어는 md 미만에서만 쓴다.
+%>
+<div id="yd-search-layer" class="hidden md:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="상품 검색">
+  <div class="absolute inset-0 bg-black/40" data-yd-search-close></div>
+
+  <div class="relative bg-white shadow-lg">
+    <div class="px-4 py-3">
+      <form action="/search" method="get" role="search" class="flex items-center gap-2">
+        <div class="relative flex-1">
+          <input type="text" name="q" id="yd-search-layer-input" autocomplete="off"
+                 placeholder="검색어를 입력하세요 (2자 이상)"
+                 class="w-full h-11 rounded-full border-2 border-[var(--gh-primary)] pl-4 pr-11 text-base text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20">
+          <button type="submit" aria-label="검색"
+                  class="absolute right-1 top-1 h-9 w-9 flex items-center justify-center rounded-full text-gray-500 hover:text-[var(--gh-primary)]">
+            <i class="bi bi-search text-xl"></i>
+          </button>
+        </div>
+        <button type="button" data-yd-search-close aria-label="검색 닫기"
+                class="shrink-0 h-11 px-3 text-sm text-gray-600 hover:text-gray-900">
+          취소
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+/* 검색 레이어 — 열기/닫기 + 포커스 + 배경 스크롤 잠금. 헤더 스킨마다 한 번만 붙는다. */
+(function () {
+  if (window.__ydSearchLayerInit) return;
+  window.__ydSearchLayerInit = true;
+
+  var layer = document.getElementById('yd-search-layer');
+  if (!layer) return;
+  var input = document.getElementById('yd-search-layer-input');
+
+  function open() {
+    layer.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    /* 모바일 키보드가 바로 뜨도록 다음 프레임에 포커스한다(hidden 해제 직후엔 포커스가 먹지 않는다). */
+    requestAnimationFrame(function () { if (input) { input.focus(); input.select(); } });
+  }
+  function close() {
+    layer.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-yd-search-open]')) { e.preventDefault(); open(); return; }
+    if (e.target.closest('[data-yd-search-close]')) { e.preventDefault(); close(); }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !layer.classList.contains('hidden')) close();
+  });
+
+  /* 검색어 없이 제출하면 빈 결과 페이지로 나가버린다 — 그 자리에 두고 다시 입력받는다. */
+  var form = layer.querySelector('form');
+  if (form) form.addEventListener('submit', function (e) {
+    if (!input || input.value.trim().length < 2) { e.preventDefault(); input && input.focus(); }
+  });
+
+  /* PC 로 넓어지면(회전·창 확대) 헤더 검색바가 다시 보이므로 레이어는 닫는다. */
+  window.addEventListener('resize', function () {
+    if (window.innerWidth >= 768 && !layer.classList.contains('hidden')) close();
+  });
+})();
+</script>

@@ -50,7 +50,13 @@
 
                 <!-- Search (center) -->
                 <% if (_showSearch) { %>
-                    <form action="/search" method="get" class="flex flex-1 max-w-2xl mx-auto" role="search">
+                    <%#
+                      입력형 검색바는 **PC 전용**이다.
+                      모바일에서는 로고(상호가 길면 더욱)와 유저 액션 사이에 끼어 입력창이 글자 한 자 폭까지
+                      찌그러졌다 — 검색어가 보이지 않아 사실상 쓸 수 없었다.
+                      그래서 모바일은 아이콘만 두고(아래 유저 액션) 탭하면 검색 레이어를 띄운다.
+                    %>
+                    <form action="/search" method="get" class="hidden md:flex flex-1 max-w-2xl mx-auto" role="search">
                         <div class="relative w-full">
                             <input type="text" name="q" autocomplete="off" placeholder="검색어를 입력해주세요"
                                 class="w-full h-10 md:h-12 rounded-full border-2 border-[var(--gh-primary)] pl-4 md:pl-5 pr-11 md:pr-14 text-sm md:text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)]/20 bg-white">
@@ -60,6 +66,8 @@
                             </button>
                         </div>
                     </form>
+                    <%# 모바일: 검색바가 빠진 자리를 벌려 로고와 유저 액션을 양끝으로 민다. %>
+                    <div class="flex-1 md:hidden"></div>
                 <% } else { %>
                     <%# 검색바를 끈 몰 — 로고와 유저 액션 사이를 채워 우측 정렬을 유지한다. %>
                     <div class="flex-1"></div>
@@ -67,6 +75,17 @@
 
                 <!-- User Actions -->
                 <div class="flex items-center gap-4 sm:gap-5 flex-shrink-0">
+                    <%#
+                      모바일 검색 진입점 — 탭하면 검색 레이어가 열린다(레이어는 <header> 바깥에 있다).
+                      Row1 을 모바일에서도 쓰는 스킨(기본형)에서만 낸다. pcOnly 스킨(드로어형)은
+                      모바일에 자체 바가 따로 있고 검색은 드로어 안 폼이 담당하므로 여기서 또 내면 두 벌이 된다.
+                    %>
+                    <% if (_showSearch && !_pcOnly) { %>
+                        <button type="button" data-yd-search-open aria-label="검색 열기"
+                            class="md:hidden flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors">
+                            <i class="bi bi-search text-xl"></i>
+                        </button>
+                    <% } %>
                     <%# 마켓(국가) 선택기 — 옛 유틸바에 있던 것. Shopify 미사용이면 숨는다(res.locals.shopifyEnabled). %>
                     <% if (typeof shopifyEnabled !== 'undefined' && shopifyEnabled) { %>
                         <div class="hidden md:block"><%- include('../../shopify-market-selector') %></div>

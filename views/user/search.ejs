@@ -27,11 +27,14 @@
 
     <form action="/search" method="GET" class="mb-6">
         <div class="flex gap-2 items-center">
+            <%# flex 아이템의 기본 min-width 는 auto 라 입력창이 placeholder 폭 아래로 줄지 않는다.
+                그대로 두면 좁은 화면에서 [검색] 버튼이 밀려 '검/색' 으로 쪼개지거나 화면 밖으로 잘린다.
+                → 입력창은 min-w-0 으로 줄 수 있게, 버튼은 shrink-0 으로 줄지 않게 고정한다. %>
             <input type="text" name="q" value="<%= query || '' %>" minlength="2" autocomplete="off"
                 placeholder="검색어를 입력하세요 (2자 이상)"
-                class="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)] focus:border-[var(--gh-primary)]" />
+                class="flex-1 min-w-0 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gh-primary)] focus:border-[var(--gh-primary)]" />
             <button type="submit"
-                class="px-5 py-2.5 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
+                class="shrink-0 whitespace-nowrap px-5 py-2.5 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
                 검색
             </button>
         </div>
