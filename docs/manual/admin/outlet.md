@@ -10,7 +10,7 @@
   <a class="manual-goto is-sub" href="/admin/products" target="_blank">상품 관리(가격 조정)</a>
 </div>
 
-화면 위치: <span class="manual-path">관리자 &gt; 프로모션 관리 &gt; 아울렛 관리</span> (`/admin/outlet`)
+화면 위치: <span class="manual-path">관리자 &gt; 상품 관리 &gt; 아울렛 관리</span> (`/admin/outlet`)
 
 > **아울렛은 가격을 만들지 않습니다. 진열만 합니다.** 고객이 보는 가격·할인율은 전부 **상품 관리에 설정된 판매가**입니다. 아울렛 화면에는 가격 입력란이 아예 없습니다. 더 싸게 팔고 싶으면 **상품 관리에서 가격을 먼저 내린 뒤** 아울렛에 담으세요.
 

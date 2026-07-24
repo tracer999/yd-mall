@@ -5,7 +5,7 @@
 <div class="manual-goto-bar">
   <span class="manual-goto-label">바로 이동</span>
   <a class="manual-goto" href="/admin/dashboard" target="_blank">대시보드 열기</a>
-  <a class="manual-goto is-sub" href="/admin/visitors" target="_blank">방문자 통계</a>
+  <a class="manual-goto is-sub" href="/admin/visitors/stats" target="_blank">방문자 통계</a>
   <a class="manual-goto is-sub" href="/admin/sales" target="_blank">판매(주문) 관리</a>
   <a class="manual-goto is-sub" href="/admin/inquiries" target="_blank">문의 관리</a>
 </div>

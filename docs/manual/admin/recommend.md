@@ -12,7 +12,7 @@
   <a class="manual-goto is-sub" href="/admin/categories" target="_blank">카테고리·브랜드 관리</a>
 </div>
 
-화면 위치: <span class="manual-path">관리자 &gt; 상품/전시 관리 &gt; 상품 추천관리</span> (`/admin/recommend-groups`)
+화면 위치: <span class="manual-path">관리자 &gt; 상품 관리 &gt; 상품 추천관리</span> (`/admin/recommend-groups`)
 
 > **추천 그룹은 "사람이 고른 큐레이션"입니다.** 할인율·카테고리 같은 조건을 걸어 상품이 자동으로 들어오는 기능은 이 화면에 없습니다. 담는 방법은 **수동 선택 하나뿐**입니다. 자동으로 채워지는 줄이 필요하면 베스트/랭킹 관리나 상품 그룹을 쓰세요.
 
