@@ -74,7 +74,7 @@
             로그인하고 받기
           </a>
         <% } else if (c.buttonState === 'available') { %>
-          <form method="POST" action="/coupon/<%= c.id %>/claim">
+          <form method="POST" action="/coupon/<%= c.id %>/claim" data-coupon-claim>
             <input type="hidden" name="redirect" value="detail">
             <button type="submit" class="w-full py-3 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
               쿠폰 받기

@@ -6443,6 +6443,11 @@
       grid-column: span 2 / span 2;
     }
   }
+  .md\:ml-0 {
+    @media (width >= 48rem) {
+      margin-left: 0;
+    }
+  }
   .md\:block {
     @media (width >= 48rem) {
       display: block;

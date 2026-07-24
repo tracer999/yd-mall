@@ -141,11 +141,8 @@ function cartErrorMessage(code, opts = {}) {
     }
 }
 
-// 상세페이지의 담기 레이어는 fetch 로 호출한다. 이 경로는 어떤 분기도 302 를 내면 안 된다
-// (fetch 가 리다이렉트를 따라가 HTML 을 받아오고 .json() 이 깨진다).
-function wantsJson(req) {
-    return req.xhr || String(req.get('accept') || '').includes('application/json');
-}
+// 상세페이지의 담기 레이어·장바구니 인라인 수정은 fetch 로 호출한다(판정 규칙은 shared 한 곳).
+const wantsJson = require('../shared/wantsJson');
 
 // 장바구니 추가
 exports.addToCart = async (req, res) => {

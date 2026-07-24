@@ -101,6 +101,44 @@
         unlikedCls.forEach(function (c) { btn.classList.toggle(c, !on); });
     }
 
+    /* ---------------------------------------------------------------- 쿠폰 받기 */
+
+    /*
+     * 쿠폰존은 목록을 훑으며 여러 장을 받는 화면이다. 한 장 받을 때마다 페이지가 다시 그려지면
+     * 보던 자리를 잃는다 → 받은 폼만 '받음' 버튼으로 바꾼다.
+     * 위임으로 걸어 두어 쿠폰존·쿠폰상세·라이브 혜택탭 세 화면이 같은 코드를 쓴다.
+     */
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || !form.matches || !form.matches('[data-coupon-claim]')) return;
+        e.preventDefault();
+        if (form.dataset.busy === '1') return;
+        form.dataset.busy = '1';
+
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+
+        window.ydPostJson(form.action, new FormData(form))
+            .then(function (r) {
+                var data = r.data;
+                if (!data || !data.ok) {
+                    if (btn) btn.disabled = false;
+                    window.ydToast((data && data.message) || '쿠폰을 받지 못했습니다.', 'error');
+                    return;
+                }
+                if (btn) {
+                    btn.textContent = data.label || '받음';
+                    btn.className = 'px-5 py-2.5 rounded-lg bg-gray-100 text-gray-400 text-sm font-semibold cursor-not-allowed';
+                }
+                window.ydToast(data.message || '쿠폰을 받았습니다.');
+            })
+            .catch(function () {
+                if (btn) btn.disabled = false;
+                window.ydToast('쿠폰을 받지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+            })
+            .then(function () { delete form.dataset.busy; });
+    });
+
     /* ---------------------------------------------------------------- 토스트 */
 
     /**

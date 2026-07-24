@@ -132,7 +132,14 @@
         검색과 햄버거는 드로어를 연다: 검색은 드로어 안 검색폼에 포커스까지 준다(./_drawer 스크립트).
         입력창을 헤더에도 두면 드로어 안 폼과 두 벌이 되므로 진입점만 둔다.
       %>
-      <div class="shrink-0 flex items-center justify-end gap-4 sm:gap-5 yd-ed-actions">
+      <%#
+        ml-auto 는 모바일 전용 장치다. 가운데 nav 가 hidden md:block 이라 모바일에서는
+        바 안에 늘어나는(flex-1) 요소가 하나도 남지 않는다 → 로고와 아이콘이 나란히
+        왼쪽으로 몰린다. auto 마진이 남는 폭을 먹어 아이콘을 우측 끝으로 민다.
+        md 이상은 nav 의 flex-1 이 이미 여백을 다 가져가 auto 가 0 이 되지만,
+        의도를 분명히 하려고 md:ml-0 으로 끊는다.
+      %>
+      <div class="shrink-0 ml-auto md:ml-0 flex items-center justify-end gap-4 sm:gap-5 yd-ed-actions">
         <a href="<%= user ? '/mypage' : '/auth/login' %>" aria-label="<%= user ? '마이쇼핑' : '로그인' %>" class="yd-ed-ico"><i class="bi bi-person text-xl"></i></a>
         <%#
           로그아웃 — PC 전용. 이 스킨의 PC 헤더에는 드로어 진입점(햄버거)이 없어서(가운데 nav 가 대신한다)

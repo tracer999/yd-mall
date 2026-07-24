@@ -234,7 +234,7 @@
                   <% } else { %>
                     <%# 다운로드는 기존 쿠폰 엔진(POST /coupon/:id/claim)을 그대로 쓴다.
                         redirect 는 임의 URL 을 받지 않는다 — 'live:{slug}' 형태만 해석한다(오픈 리다이렉트 차단) %>
-                    <form action="/coupon/<%= c.id %>/claim" method="POST" class="shrink-0">
+                    <form action="/coupon/<%= c.id %>/claim" method="POST" class="shrink-0" data-coupon-claim>
                       <input type="hidden" name="redirect" value="live:<%= l.slug %>">
                       <button type="submit"
                               class="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--gh-primary)] text-[var(--gh-primary-contrast)] hover:opacity-90">

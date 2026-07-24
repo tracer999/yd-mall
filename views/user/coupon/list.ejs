@@ -119,7 +119,7 @@
                   <%= btn.label %>
                 </button>
               <% } else { %>
-                <form method="POST" action="/coupon/<%= c.id %>/claim">
+                <form method="POST" action="/coupon/<%= c.id %>/claim" data-coupon-claim>
                   <button type="submit" class="px-5 py-2.5 rounded-lg bg-[var(--gh-primary)] text-white text-sm font-semibold hover:bg-[var(--gh-primary-dark)]">
                     받기
                   </button>

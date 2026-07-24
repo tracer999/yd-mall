@@ -17,6 +17,7 @@ const pool = require('../config/db');
 const { claimDownloadCoupon, redeemCouponCode } = require('../services/coupon/couponIssueService');
 const { benefitLabel, scopeGroup, scopeIncludeIds } = require('../services/coupon/discountCalculator');
 const { COMING_SOON } = require('../routes/feature');
+const wantsJson = require('../shared/wantsJson');
 
 const CLAIM_MESSAGE = {
     already_claimed: '이미 받은 쿠폰입니다.',
@@ -221,6 +222,16 @@ function claimBackPath(body, couponId) {
 exports.postClaim = async (req, res, next) => {
     const couponId = parseInt(req.params.id, 10);
     const back = claimBackPath(req.body, couponId);
+    const asJson = wantsJson(req);
+
+    /*
+     * 쿠폰존은 목록을 훑으며 여러 장을 받는 화면이다. 한 장 받을 때마다 페이지가 새로 그려지면
+     * 보던 자리를 잃는다 → fetch 로 부르면 결과만 JSON 으로 주고 버튼만 바뀌게 한다.
+     */
+    const fail = (message) => asJson
+        ? res.status(400).json({ ok: false, message })
+        : res.redirect(back + '?err=' + encodeURIComponent(message));
+
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
@@ -228,22 +239,26 @@ exports.postClaim = async (req, res, next) => {
         const [[coupon]] = await conn.query('SELECT * FROM coupons WHERE id = ? FOR UPDATE', [couponId]);
         if (!coupon) {
             await conn.rollback();
-            return res.redirect(back + '?err=' + encodeURIComponent('존재하지 않는 쿠폰입니다.'));
+            return fail('존재하지 않는 쿠폰입니다.');
         }
         if (coupon.mall_id != null && Number(coupon.mall_id) !== Number(req.mallId || 1)) {
             await conn.rollback();
-            return res.redirect(back + '?err=' + encodeURIComponent('이 몰에서 받을 수 없는 쿠폰입니다.'));
+            return fail('이 몰에서 받을 수 없는 쿠폰입니다.');
         }
 
         const result = await claimDownloadCoupon(conn, { userId: req.user.id, coupon });
         if (!result.ok) {
             await conn.rollback();
-            return res.redirect(back + '?err=' + encodeURIComponent(CLAIM_MESSAGE[result.reason] || '쿠폰을 받지 못했습니다.'));
+            return fail(CLAIM_MESSAGE[result.reason] || '쿠폰을 받지 못했습니다.');
         }
         await conn.commit();
-        return res.redirect(back + '?msg=' + encodeURIComponent('쿠폰을 받았습니다. 내 쿠폰함에서 확인하세요.'));
+
+        const okMessage = '쿠폰을 받았습니다. 내 쿠폰함에서 확인하세요.';
+        if (asJson) return res.json({ ok: true, message: okMessage, label: '받음' });
+        return res.redirect(back + '?msg=' + encodeURIComponent(okMessage));
     } catch (err) {
         await conn.rollback();
+        if (asJson) return res.status(500).json({ ok: false, message: '쿠폰을 받지 못했습니다. 잠시 후 다시 시도해 주세요.' });
         next(err);
     } finally {
         conn.release();
