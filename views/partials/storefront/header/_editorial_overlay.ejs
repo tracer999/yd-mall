@@ -51,24 +51,35 @@
       h-20(80px) 은 GNB 와 드롭다운 사이 빈 띠를 30px 로 벌렸다. 아래 <style> 에서 4.5rem(72px) 로 낮춘다.
       Tailwind 임의값(h-[4.5rem])을 쓰면 CSS 를 다시 빌드하기 전까지 클래스가 없어 헤더가 통째로 찌그러진다.
     %>
-    <div class="flex items-center h-20 yd-ed-bar">
+    <%#
+      3영역 고정 — [로고] [메뉴] [시스템 아이콘].
+      예전에는 로고·액션이 flex-1 이라 메뉴가 늘면 양쪽이 0 까지 눌렸다. 메뉴 12개짜리 몰에서
+      로고가 한 글자씩 세로로 접히고 메뉴도 2~3줄로 뭉개졌다(사용자 리포트).
+      → 로고·액션은 shrink-0 으로 자리를 지키고, 남는 폭 전부를 메뉴 트랙이 가져간 뒤
+        넘치는 만큼만 가로로 스크롤한다. 메뉴가 적으면 트랙이 안 넘쳐 예전처럼 가운데 정렬이다
+        (.yd-ed-nav 의 margin-inline:auto — 넘치는 순간 auto 가 0 이 되어 왼쪽 잘림이 없다).
+    %>
+    <div class="flex items-center h-20 yd-ed-bar gap-3 lg:gap-6">
       <!-- Logo (left) -->
-      <div class="flex-1 min-w-0">
-        <a href="/" class="inline-flex items-center gap-2 no-underline">
+      <div class="yd-ed-brand shrink-0 min-w-0 max-w-[45vw] md:max-w-[14rem] lg:max-w-[18rem]">
+        <a href="/" class="flex items-center gap-2 no-underline min-w-0">
           <% if (siteSettings && siteSettings.logo_url) { %>
             <img src="<%= siteSettings.logo_url %>" alt="<%= _company %>" class="h-9 w-auto yd-ed-logo-img">
           <% } else { %>
-            <span class="yd-ed-logo text-2xl lg:text-[1.7rem] leading-none tracking-tight"><%= _company %></span>
+            <%# 긴 몰 이름은 줄바꿈이 아니라 말줄임으로 — 헤더 높이가 절대 늘지 않아야 한다 %>
+            <span class="yd-ed-logo block truncate text-2xl lg:text-[1.7rem] leading-none tracking-tight"><%= _company %></span>
           <% } %>
         </a>
       </div>
 
-      <!-- Center nav (PC) -->
+      <!-- Center nav (PC) — 트랙(가변) + 넘칠 때만 나타나는 좌우 이동 -->
+      <div class="yd-ed-navwrap hidden md:block relative flex-1 min-w-0 self-stretch">
+      <div class="yd-ed-track h-full">
       <%#
         self-stretch — 항목이 헤더 높이(h-20)를 꽉 채워야 드롭다운 패널(top-full)이 헤더 하단에 딱 붙는다.
         틈이 생기면 링크 → 패널로 마우스를 옮기는 사이 hover 가 끊긴다.
       %>
-      <nav class="hidden md:flex items-center self-stretch gap-7 yd-ed-nav" aria-label="주 메뉴">
+      <nav class="flex items-center h-full gap-7 yd-ed-nav" aria-label="주 메뉴">
         <% if (_catBtn) { %>
           <div class="relative" id="gnb-cat-wrap">
             <button type="button" id="gnb-cat-btn" aria-expanded="false"
@@ -99,13 +110,29 @@
           </div>
         <% }); %>
       </nav>
+      </div>
+
+      <%#
+        "메뉴가 더 있다" 를 알리는 세 겹 —
+          ① 끝에서 잘린 항목이 그대로 보인다(스크롤 컨테이너의 자연스러운 결과)
+          ② 끝단 페이드 — 굳은 헤더에서만. 투명 오버레이 상태는 뒤가 히어로라 흰 페이드를 못 쓴다.
+          ③ 얇은 화살표 — 넘칠 때만 나타나고 끝에 닿으면 흐려진다.
+        원형 버튼·굵은 그림자는 이 스킨(세리프 로고 + 얇은 라인)의 톤을 깬다 → 획만 남긴다.
+      %>
+      <button type="button" class="yd-ed-navbtn is-prev" aria-label="메뉴 왼쪽으로 이동" tabindex="-1">
+        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="yd-ed-navbtn is-next" aria-label="메뉴 오른쪽으로 이동" tabindex="-1">
+        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+      </button>
+      </div>
 
       <%#
         우측 아이콘 — 장바구니 · 사람 · 검색 · [☰] 순(참조 구조 docs/사이트개선/capture/thema2_mo.png).
         검색과 햄버거는 드로어를 연다: 검색은 드로어 안 검색폼에 포커스까지 준다(./_drawer 스크립트).
         입력창을 헤더에도 두면 드로어 안 폼과 두 벌이 되므로 진입점만 둔다.
       %>
-      <div class="flex-1 flex items-center justify-end gap-4 sm:gap-5 yd-ed-actions">
+      <div class="shrink-0 flex items-center justify-end gap-4 sm:gap-5 yd-ed-actions">
         <a href="<%= user ? '/mypage' : '/auth/login' %>" aria-label="<%= user ? '마이쇼핑' : '로그인' %>" class="yd-ed-ico"><i class="bi bi-person text-xl"></i></a>
         <%#
           로그아웃 — PC 전용. 이 스킨의 PC 헤더에는 드로어 진입점(햄버거)이 없어서(가운데 nav 가 대신한다)
@@ -117,9 +144,10 @@
         <% } %>
         <a href="/cart" aria-label="장바구니" class="yd-ed-ico relative">
           <i class="bi bi-bag text-lg"></i>
-          <% if (typeof cartCount !== 'undefined' && cartCount > 0) { %>
-            <span class="absolute -top-1.5 -right-1.5 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full"><%= cartCount %></span>
-          <% } %>
+          <%# 0 이어도 렌더 — 갱신은 ydSetCartCount 가 data-cart-badge 를 잡아 한다 %>
+          <% const _edCart = Number(typeof cartCount !== 'undefined' ? cartCount : 0) || 0; %>
+          <span data-cart-badge style="<%= _edCart > 0 ? '' : 'display:none' %>"
+                class="absolute -top-1.5 -right-1.5 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full"><%= _edCart %></span>
         </a>
         <% if (Number(_cfg.use_search_bar) !== 0) { %>
           <button type="button" id="yd-dw-search" aria-label="검색" class="yd-ed-ico"><i class="bi bi-search text-lg"></i></button>
@@ -160,6 +188,101 @@
   .yd-ed-navlink.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -6px; height: 1px; background: currentColor; }
   .yd-ed-ico { display: inline-flex; opacity: .92; text-decoration: none; }
   .yd-ed-ico:hover { opacity: 1; }
+
+  /* ── 메뉴 트랙 (넘치면 가로 슬라이더) ──────────────────────────────────────
+   * 기본은 overflow:visible 이다. 스크립트가 죽어도 메뉴는 전부 보여야 하고,
+   * 무엇보다 overflow 를 걸면 하위메뉴 드롭다운(.yd-md)이 세로로 잘린다.
+   * 넘칠 때만 스크립트가 .is-scrollable 을 붙여 스크롤 컨테이너로 바꾸고,
+   * 그때는 드롭다운을 position:fixed 로 띄워 잘림을 피한다(아래 .is-fixed).
+   */
+  .yd-ed-navwrap { --ed-fade: transparent; }
+  .yd-ed-track { display: flex; overflow: visible; }
+  /* 항목이 다 들어오면 auto 마진이 남는 폭을 반씩 나눠 가운데 정렬(예전 flex-1 좌우와 같은 결과).
+     넘치는 순간 auto 는 0 이 되므로 첫 항목이 왼쪽으로 잘려 나가는 일이 없다. */
+  .yd-ed-nav { min-width: max-content; margin-inline: auto; }
+  .yd-ed-navwrap.is-scrollable .yd-ed-track {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .yd-ed-navwrap.is-scrollable .yd-ed-track::-webkit-scrollbar { display: none; }
+  /* 화살표가 첫·끝 항목을 가리지 않도록 트랙 안쪽에 자리를 만든다 */
+  .yd-ed-navwrap.is-scrollable .yd-ed-nav { margin-inline: 0; padding-inline: 1.6rem; }
+
+  /* 끝단 페이드 — 잘린 항목이 "사라지는" 느낌으로 이어짐을 알린다.
+     투명 헤더 상태에서는 --ed-fade 가 transparent 라 그라데이션이 통째로 무효가 된다. */
+  .yd-ed-navwrap::before,
+  .yd-ed-navwrap::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3rem;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .25s ease;
+  }
+  .yd-ed-navwrap::before { left: 0; background: linear-gradient(90deg, var(--ed-fade), rgba(255, 255, 255, 0)); }
+  .yd-ed-navwrap::after { right: 0; background: linear-gradient(270deg, var(--ed-fade), rgba(255, 255, 255, 0)); }
+  .yd-ed-navwrap.can-prev::before,
+  .yd-ed-navwrap.can-next::after { opacity: 1; }
+
+  /* 화살표 — 획만. 넘칠 때만 나타나고, 끝에 닿으면 흐려져 "여기가 끝"을 말한다. */
+  .yd-ed-navbtn {
+    position: absolute;
+    top: 50%;
+    z-index: 3;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-50%);
+    transition: opacity .2s ease, transform .2s ease;
+  }
+  .yd-ed-navwrap.is-scrollable .yd-ed-navbtn { display: inline-flex; }
+  .yd-ed-navbtn.is-prev { left: -.4rem; }
+  .yd-ed-navbtn.is-next { right: -.4rem; }
+  /* 갈 수 있는 방향만 보인다 — 끝에 닿은 쪽은 흐린 잔상이 아니라 아예 사라지는 편이
+     "여기가 끝"을 더 분명하게 말한다(로고 옆에 죽은 화살표가 붙어 답답해지는 것도 막는다). */
+  .yd-ed-navwrap.can-prev .yd-ed-navbtn.is-prev,
+  .yd-ed-navwrap.can-next .yd-ed-navbtn.is-next { opacity: .5; }
+  .yd-ed-navbtn:hover { opacity: 1; }
+  .yd-ed-navbtn.is-prev:hover { transform: translate(-2px, -50%); }
+  .yd-ed-navbtn.is-next:hover { transform: translate(2px, -50%); }
+  .yd-ed-navbtn:disabled { cursor: default; pointer-events: none; }
+  .yd-ed-navbtn:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; opacity: 1; }
+
+  /*
+   * 스크롤 모드의 드롭다운 — 트랙의 overflow 가 세로로 자르므로 뷰포트 기준 fixed 로 띄운다.
+   * (fixed 는 조상의 overflow 클리핑을 벗어난다. 이 헤더에는 transform/filter 조상이 없어야
+   *  좌표가 뷰포트 기준으로 유지된다 — 새로 걸지 말 것.)
+   * 좌표는 스크립트가 인라인으로 넣는다. 여닫기는 그대로 CSS(:hover/:focus-within)라
+   * 스크립트가 죽어도 메뉴 자체는 동작한다.
+   */
+  .yd-ed-hdr .yd-md.is-fixed { position: fixed; right: auto; }
+  /* 카테고리 패널(분리형 몰)도 같은 트랙 안에 있다 — Tailwind 의 left-1/2·-translate-x-1/2 를 되돌린다 */
+  .yd-ed-navwrap.is-scrollable #gnb-cat-panel.is-fixed {
+    position: fixed;
+    transform: none;   /* Tailwind 의 -translate-x-1/2 무효화. 위쪽 여백(mt-3)은 그대로 둔다 */
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .yd-ed-navwrap.is-scrollable .yd-ed-track { scroll-behavior: auto; }
+    .yd-ed-navbtn { transition-duration: .01ms !important; }
+  }
 
   /*
    * 아이콘의 기기별 노출 — Tailwind 유틸(md:hidden / hidden md:inline-flex)만으로는 안 된다.
@@ -220,6 +343,8 @@
   /* 굳은 상태 */
   .yd-ed-hdr.is-solid { background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.06); text-shadow: none; }
   .yd-ed-hdr.is-solid, .yd-ed-hdr.is-solid .yd-ed-navlink, .yd-ed-hdr.is-solid .yd-ed-ico, .yd-ed-hdr.is-solid .yd-ed-logo { color: #14110d; }
+  /* 배경이 흰색으로 굳은 뒤에야 끝단 페이드가 성립한다(투명 상태에서는 뒤가 히어로다) */
+  .yd-ed-hdr.is-solid .yd-ed-navwrap { --ed-fade: #fff; }
 
   /*
    * 풀블리드 히어로가 없는 페이지(상품목록·상세·마이페이지…) — 겹칠 대상이 없다.
@@ -236,6 +361,7 @@
   body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-navlink,
   body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-ico,
   body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-logo { color: #14110d; }
+  body:not(.yd-overlay-header) .yd-ed-hdr .yd-ed-navwrap { --ed-fade: #fff; }
 </style>
 
 <%# 드롭다운 패널의 모양·모션·위치 보정 — 드로어형 스킨과 공용 %>
@@ -248,5 +374,128 @@
     function onScroll() { h.classList.toggle('is-solid', window.scrollY > after); }
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
+  })();
+
+  /*
+   * 메뉴 트랙 — 넘칠 때만 가로 슬라이더로 전환한다.
+   *
+   * 스크립트가 하는 일은 (1) 넘침 판정 (2) 끝 도달 상태 (3) 드롭다운 좌표뿐이다.
+   * 메뉴의 여닫기·이동은 전부 CSS·링크라 이 스크립트가 죽어도 내비게이션은 살아 있다.
+   */
+  (function () {
+    var wrap = document.querySelector('.yd-ed-navwrap');
+    if (!wrap) return;
+    var track = wrap.querySelector('.yd-ed-track');
+    var hdr = document.querySelector('.yd-ed-hdr');
+    var prev = wrap.querySelector('.yd-ed-navbtn.is-prev');
+    var next = wrap.querySelector('.yd-ed-navbtn.is-next');
+    var panels = [].slice.call(wrap.querySelectorAll('.yd-md'));
+    var catPanel = wrap.querySelector('#gnb-cat-panel');
+    if (!track) return;
+
+    function scrollable() { return wrap.classList.contains('is-scrollable'); }
+
+    function clearFixed() {
+      panels.concat(catPanel ? [catPanel] : []).forEach(function (p) {
+        p.classList.remove('is-fixed');
+        p.style.left = '';
+        p.style.top = '';
+      });
+    }
+
+    /* 패널은 뷰포트 기준 fixed 다 — 항목 왼쪽에 맞추되 화면 밖으로 나가면 안쪽으로 당긴다
+       (예전 .is-flip 우측정렬을 대신한다. 좌표를 직접 주므로 잘림·뒤집힘이 없다). */
+    function place(panel, anchor) {
+      if (!panel || !anchor) return;
+      panel.classList.add('is-fixed');
+      var a = anchor.getBoundingClientRect();
+      var w = panel.getBoundingClientRect().width;
+      panel.style.left = Math.max(8, Math.min(a.left, window.innerWidth - w - 16)) + 'px';
+      panel.style.top = (hdr ? hdr.getBoundingClientRect().bottom : a.bottom) + 'px';
+    }
+
+    /* 열려 있는 것만 다시 잰다 — 스크롤마다 12개를 재는 건 낭비다. */
+    function placeOpen() {
+      if (!scrollable()) return;
+      var item = wrap.querySelector('.yd-ed-item:hover, .yd-ed-item:focus-within');
+      if (item) place(item.querySelector('.yd-md'), item);
+      if (catPanel && !catPanel.classList.contains('hidden')) place(catPanel, catPanel.parentElement);
+    }
+
+    function syncEdges() {
+      if (!scrollable()) return;
+      var max = track.scrollWidth - track.clientWidth;
+      var x = track.scrollLeft;
+      wrap.classList.toggle('can-prev', x > 2);
+      wrap.classList.toggle('can-next', x < max - 2);
+      if (prev) prev.disabled = x <= 2;
+      if (next) next.disabled = x >= max - 2;
+    }
+
+    /* overflow:visible 상태에서도 scrollWidth 는 넘친 내용까지 센다 — 그래서 전환 전에 판정할 수 있다. */
+    function measure() {
+      var over = track.scrollWidth - track.clientWidth > 2;
+      var changed = over !== scrollable();
+      wrap.classList.toggle('is-scrollable', over);
+      if (!over) {
+        wrap.classList.remove('can-prev', 'can-next');
+        track.scrollLeft = 0;
+        if (changed) clearFixed();
+      }
+      syncEdges();
+    }
+
+    function page(dir) {
+      track.scrollBy({ left: dir * Math.max(160, track.clientWidth * 0.7), behavior: 'smooth' });
+    }
+    if (prev) prev.addEventListener('click', function () { page(-1); });
+    if (next) next.addEventListener('click', function () { page(1); });
+
+    var ticking = false;
+    function onFrame() {
+      ticking = false;
+      syncEdges();
+      placeOpen();
+    }
+    function schedule() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(onFrame);
+    }
+
+    track.addEventListener('scroll', schedule, { passive: true });
+    /* 히어로 페이지의 헤더는 absolute 라 스크롤과 함께 올라간다 → 열린 패널도 따라가야 한다. */
+    window.addEventListener('scroll', function () { if (scrollable()) schedule(); }, { passive: true });
+    wrap.addEventListener('pointerover', placeOpen);
+    wrap.addEventListener('focusin', placeOpen);
+    /* 카테고리 패널은 클릭 토글이라 열린 다음 프레임에 좌표를 잡는다 */
+    wrap.addEventListener('click', function () { window.requestAnimationFrame(placeOpen); });
+
+    var rt = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(rt);
+      rt = setTimeout(function () { measure(); placeOpen(); }, 150);
+    });
+
+    measure();
+    /* 웹폰트가 늦게 오면 메뉴 폭이 달라진다 — 그때 한 번 더 잰다(안 하면 넘침을 놓친다). */
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+
+    /*
+     * 첫 방문 한 번만, 트랙을 살짝 밀었다 되돌린다 — 정지된 화면에서 "옆으로 더 있다"를
+     * 가장 빨리 알리는 신호다. 페이지마다 반복하면 잔소리가 되므로 세션당 1회로 묶는다.
+     */
+    (function hint() {
+      if (!scrollable()) return;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      try {
+        if (sessionStorage.getItem('ydEdNavHint') === '1') return;
+        sessionStorage.setItem('ydEdNavHint', '1');
+      } catch (e) { return; }
+      setTimeout(function () {
+        track.scrollTo({ left: 28, behavior: 'smooth' });
+        setTimeout(function () { track.scrollTo({ left: 0, behavior: 'smooth' }); }, 560);
+      }, 700);
+    })();
   })();
 </script>

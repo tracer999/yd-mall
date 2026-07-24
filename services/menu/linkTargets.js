@@ -35,7 +35,7 @@ const FEATURE_ICONS = {
     RAIL_CART: 'cart',
     HEADER_CART: 'cart',
     RAIL_WISHLIST: 'heart',
-    RAIL_BRAND_WISHLIST: 'bookmark-heart',
+    RAIL_ORDERS: 'receipt',
     HEADER_SEARCH: 'search',
     HEADER_LOGIN: 'box-arrow-in-right',
     HEADER_MYPAGE: 'person',

@@ -55,7 +55,7 @@
 | `/admin/feature-menus` (일반 메뉴 관리) | `gnb` | 상단 GNB 기능 메뉴 |
 | `/admin/system-menus` (시스템 메뉴 설정) | `header_util`, `right_rail` | 헤더 유틸 + 우측 레일 (추가·삭제 불가) |
 
-> 화면 분리 기준은 **`position` 이지 `is_system` 이 아닙니다.** `CATEGORY`(gnb)가 `is_system = 1` 이고 `RAIL_BRAND_WISHLIST` · `RAIL_RECENT` 는 `is_system = 0` 이라, `is_system` 으로 가르면 GNB 버튼이 시스템 화면으로 끌려오고 레일 2종이 빠집니다.
+> 화면 분리 기준은 **`position` 이지 `is_system` 이 아닙니다.** `CATEGORY`(gnb)가 `is_system = 1` 이고 `RAIL_RECENT` 는 `is_system = 0` 이라, `is_system` 으로 가르면 GNB 버튼이 시스템 화면으로 끌려오고 최근본상품이 빠집니다.
 
 ### 3.1 목록 (GET)
 
@@ -302,7 +302,7 @@
 | HEADER_CS | **`/cs`** | header_util | 시스템 (`/boards/notice` 아님) |
 | RAIL_CART | `/cart` | right_rail | 시스템 |
 | RAIL_WISHLIST | `/mypage/likes` | right_rail | 시스템 |
-| RAIL_BRAND_WISHLIST | `/mypage/brand-likes` | right_rail | |
+| RAIL_ORDERS | `/mypage/orders` | right_rail | |
 | RAIL_RECENT | (NULL) | right_rail | 클라이언트 동작 |
 | RAIL_TOP | (NULL) | right_rail | 필수 (클라이언트 동작) |
 

@@ -582,16 +582,25 @@ exports.getDetail = async (req, res) => {
             ? "p.visibility IN ('PUBLIC','MEMBER_ONLY')"
             : "p.visibility = 'PUBLIC'";
 
-        // 1) 수동 등록분 (판매중 상태만)
+        /*
+         * 1) 수동 등록분 (판매중 상태만)
+         *
+         * 추천 카드는 목록에서 바로 [담기]·[찜]을 한다(설계: 상세 하단 추천 슬라이더).
+         *  - product_type: 옵션상품은 옵션을 골라야 하므로 카드에서 담지 않고 상세로 보낸다.
+         *    (상세페이지가 옵션 UI 를 그리는 판정과 같은 신호를 쓴다 — 어긋나면 안 됨)
+         *  - is_liked: 초기 하트 상태. 없으면 새로고침마다 빈 하트로 돌아가 거짓말을 한다.
+         */
         const [manualRecs] = await pool.query(`
             SELECT p.id, p.name, p.slug, p.main_image, p.price, p.original_price,
                    p.discount_rate, p.status, ${sellableStock.sellableStockSql('p')} AS stock,
-                   p.provider, p.product_badge, p.distribution_badge
+                   p.provider, p.product_badge, p.distribution_badge, p.product_type,
+                   ${req.user ? '(lk.id IS NOT NULL)' : '0'} AS is_liked
             FROM product_recommendations pr
             JOIN products p ON p.id = pr.related_id
+            ${req.user ? 'LEFT JOIN likes lk ON lk.product_id = p.id AND lk.user_id = ?' : ''}
             WHERE pr.product_id = ? AND p.status = 'ON' AND ${vFilterRec}
             ORDER BY pr.display_order ASC
-        `, [id]);
+        `, req.user ? [req.user.id, id] : [id]);
 
         // 수동 등록분만 노출
         const recommendedProducts = manualRecs;

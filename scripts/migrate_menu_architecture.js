@@ -49,7 +49,9 @@ const FEATURE_CATALOG = [
     // ── 우측 레이어(바로접속) ──────────────────────────────────────────────
     ['RAIL_CART',           '장바구니',      '/cart',            'right_rail',  null,          1, 1, 0,  1, '장바구니 바로가기'],
     ['RAIL_WISHLIST',       '찜',            '/mypage/likes',    'right_rail',  null,          1, 1, 0,  2, '찜한 상품'],
-    ['RAIL_BRAND_WISHLIST', '찜한 브랜드',   '/mypage/brand-likes', 'right_rail', 'brand_like', 0, 0, 0, 3, '찜한 브랜드'],
+    // 찜한 브랜드는 이 자리에서 빠졌다 — 찜 화면(/mypage/likes)의 탭으로 들어간다.
+    // (교체: scripts/migrate_rail_orders.js)
+    ['RAIL_ORDERS',         '주문내역',      '/mypage/orders',   'right_rail',  null,          1, 1, 0,  3, '주문내역 바로가기'],
     ['RAIL_RECENT',         '최근본상품',    null,               'right_rail',  null,          1, 0, 0,  4, '최근 본 상품(클라이언트)'],
     ['RAIL_TOP',            'TOP',           null,               'right_rail',  null,          1, 1, 1,  5, '맨 위로'],
 
@@ -80,7 +82,7 @@ const READY_MODULES = new Set([
     'EXHIBITION',        // routes/feature.js  /exhibition  (준비 중)
     'GROUP_BUY',         // routes/feature.js  /group-buy   (준비 중)
     'LIVE',              // routes/feature.js  /live        (준비 중)
-    'RAIL_CART', 'RAIL_WISHLIST', 'RAIL_BRAND_WISHLIST', 'RAIL_RECENT', 'RAIL_TOP',
+    'RAIL_CART', 'RAIL_WISHLIST', 'RAIL_ORDERS', 'RAIL_RECENT', 'RAIL_TOP',
     'HEADER_SEARCH', 'HEADER_LOGIN', 'HEADER_MYPAGE', 'HEADER_CART', 'HEADER_CS',
 ]);
 // 미구현(module_ready=0): RANKING, OUTLET, COUPON, MEMBERSHIP
@@ -88,7 +90,7 @@ const READY_MODULES = new Set([
 /** mall_id=1 초기 ON/OFF. 현행 GNB(오늘특가/베스트/이벤트&혜택)를 보존하고 신상품을 추가. */
 const ENABLED_FOR_MALL1 = new Set([
     'CATEGORY', 'TODAY_DEAL', 'BEST', 'NEW_PRODUCT', 'EVENT',
-    'RAIL_CART', 'RAIL_WISHLIST', 'RAIL_BRAND_WISHLIST', 'RAIL_RECENT', 'RAIL_TOP',
+    'RAIL_CART', 'RAIL_WISHLIST', 'RAIL_ORDERS', 'RAIL_RECENT', 'RAIL_TOP',
     'HEADER_SEARCH', 'HEADER_LOGIN', 'HEADER_MYPAGE', 'HEADER_CART', 'HEADER_CS',
 ]);
 

@@ -202,11 +202,9 @@
             <a href="/cart" class="relative h-full flex flex-col items-center justify-center gap-0.5 <%= isOn('/cart') ? 'text-[var(--gh-primary)]' : 'text-gray-500' %>">
                 <i class="bi <%= isOn('/cart') ? 'bi-bag-fill' : 'bi-bag' %> text-xl"></i>
                 <span class="text-[11px]">장바구니</span>
-                <% if (_cart > 0) { %>
-                    <span class="absolute top-2 right-[26%] bg-[var(--gh-accent)] text-white text-[10px] font-bold min-w-4 h-4 px-1 flex items-center justify-center rounded-full">
-                        <%= _cart %>
-                    </span>
-                <% } %>
+                <%# 0 이어도 렌더 — 갱신은 ydSetCartCount 가 data-cart-badge 를 잡아 한다 %>
+                <span data-cart-badge style="<%= _cart > 0 ? '' : 'display:none' %>"
+                      class="absolute top-2 right-[26%] bg-[var(--gh-accent)] text-white text-[10px] font-bold min-w-4 h-4 px-1 flex items-center justify-center rounded-full"><%= _cart %></span>
             </a>
         </li>
         <li>

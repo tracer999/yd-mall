@@ -1,0 +1,117 @@
+<%
+  /*
+   * 추천 슬라이더 전용 상품 카드 (RecProductCard)
+   *
+   * 공용 product_card.ejs 를 쓰지 않는 이유:
+   *  - 공용 카드는 뱃지·원가 유무에 따라 카드 키가 달라진다. 가로로 나란히 놓는 슬라이더에서는
+   *    한 장만 원가가 있어도 줄이 어긋나 보인다 → 여기서는 모든 줄의 자리를 고정한다.
+   *  - 이미지 아래 [담기] 버튼과 이미지 위 [찜] 하트가 이 카드에만 있다.
+   *
+   * locals:
+   *   product   : 상품 객체 (id, name, slug, main_image, price, original_price,
+   *               discount_rate, status, stock, provider, product_badge,
+   *               product_type, is_liked)
+   *   isLoggedIn: 로그인 여부 (선택) — 비로그인 클릭은 로그인 페이지로 보낸다
+   */
+  const _rIsLoggedIn = (typeof isLoggedIn !== 'undefined') ? !!isLoggedIn : false;
+  const _rStatus = product.status || 'ON';
+  const _rStock = (product.stock != null && product.stock >= 0) ? product.stock : 0;
+  const _rSoldOut = (_rStatus === 'SOLD_OUT') || _rStock <= 0;
+  const _rStopped = _rStatus === 'OFF';
+  const _rComing = _rStatus === 'COMING_SOON';
+  const _rRestock = _rStatus === 'RESTOCK';
+  const _rUnbuyable = _rSoldOut || _rStopped || _rComing || _rRestock;
+  /* 옵션상품은 옵션을 골라야 담을 수 있다 — 카드에서 담지 않고 상세로 보낸다.
+     판정 신호는 상세페이지의 옵션 UI 노출 조건(product_type === 'OPTION')과 같다. */
+  const _rNeedsOption = product.product_type === 'OPTION';
+  const _rBadges = product.product_badge ? product.product_badge.split(',') : [];
+  const _rBadgeMap = {
+    'BEST': { text: 'BEST', cls: 'badge-best' },
+    'NEW': { text: 'NEW', cls: 'badge-new' },
+    'RECOMMEND': { text: '추천', cls: 'badge-recommend' }
+  };
+  const _rIsNew = (typeof isNewProduct === 'function') ? isNewProduct(product) : _rBadges.includes('NEW');
+  const _rBadgeKeys = _rBadges.filter(b => _rBadgeMap[b] && b !== 'NEW');
+  if (_rIsNew) _rBadgeKeys.unshift('NEW');
+  const _rPrice = Number(product.price) || 0;
+  const _rListPrice = (product.original_price && product.original_price > _rPrice) ? Number(product.original_price) : null;
+  const _rDiscount = Number(product.discount_rate) || 0;
+  const _rLiked = !!product.is_liked;
+  const _rPath = (product.slug && product.slug.trim())
+    ? `/products/${encodeURIComponent(product.slug)}`
+    : `/products/view/${product.id}`;
+%>
+<div class="rec-card flex flex-col">
+  <div class="relative">
+    <a href="<%= _rPath %>" class="block">
+      <%# 정사각 프레임 + object-contain: 누끼·실사 어떤 이미지가 와도 찌그러지지 않는다 %>
+      <div class="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-50">
+        <img src="<%= product.main_image || '/images/placeholder.png' %>"
+             alt="<%= product.name %>"
+             loading="lazy"
+             class="h-full w-full object-contain p-2 <%= _rSoldOut && !_rStopped && !_rComing ? 'opacity-60 grayscale-[0.5]' : '' %>">
+
+        <% if (_rBadgeKeys.length > 0) { %>
+          <div class="absolute left-2 top-2 z-10 flex flex-wrap gap-1">
+            <% _rBadgeKeys.forEach(b => { const info = _rBadgeMap[b]; if (info) { %>
+              <span class="product-pill-badge <%= info.cls %>"><%= info.text %></span>
+            <% } }) %>
+          </div>
+        <% } %>
+
+        <% if (_rUnbuyable) { %>
+          <div class="pointer-events-none absolute inset-0 flex items-center justify-center <%= _rSoldOut && !_rStopped && !_rComing && !_rRestock ? 'bg-black/20' : '' %>">
+            <div class="rounded-lg px-3 py-1 text-xs font-bold text-white shadow-md backdrop-blur-sm
+              <%= _rStopped ? 'bg-red-600/90' : (_rRestock ? 'bg-blue-500/90' : (_rComing ? 'bg-orange-400/90' : 'bg-gray-800/85')) %>">
+              <% if (_rStopped) { %>판매중지<% } else if (_rRestock) { %>재입고예정<% } else if (_rComing) { %>COMING SOON<% } else { %>SOLD OUT<% } %>
+            </div>
+          </div>
+        <% } %>
+      </div>
+    </a>
+
+    <%# 찜 하트 — 링크 안에 두면 카드 이동과 클릭이 겹친다. 형제로 띄운다. %>
+    <button type="button"
+            class="rec-like-btn absolute bottom-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-gray-500 shadow-sm backdrop-blur-sm transition hover:bg-white hover:text-[color:var(--gh-primary)]"
+            data-product-id="<%= product.id %>"
+            data-liked="<%= _rLiked ? '1' : '0' %>"
+            data-logged-in="<%= _rIsLoggedIn ? '1' : '0' %>"
+            aria-pressed="<%= _rLiked ? 'true' : 'false' %>"
+            aria-label="<%= product.name %> 찜하기">
+      <i class="bi <%= _rLiked ? 'bi-heart-fill brand-text' : 'bi-heart' %> text-base"></i>
+    </button>
+  </div>
+
+  <%# 담기 — 옵션상품/판매불가는 담을 수 없으므로 같은 자리에 다른 행동을 둔다(높이는 동일) %>
+  <% if (_rUnbuyable) { %>
+    <span class="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-400">
+      <i class="bi bi-bag"></i><%= _rStopped ? '판매중지' : (_rComing ? '준비중' : (_rRestock ? '재입고예정' : '품절')) %>
+    </span>
+  <% } else if (_rNeedsOption) { %>
+    <a href="<%= _rPath %>"
+       class="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-gray-300 text-sm font-semibold text-gray-700 transition hover:border-gray-900 hover:bg-gray-50">
+      <i class="bi bi-bag"></i>옵션 선택
+    </a>
+  <% } else { %>
+    <button type="button"
+            class="rec-add-btn mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-gray-300 text-sm font-semibold text-gray-700 transition hover:border-gray-900 hover:bg-gray-50"
+            data-product-id="<%= product.id %>">
+      <i class="bi bi-bag"></i>담기
+    </button>
+  <% } %>
+
+  <a href="<%= _rPath %>" class="mt-2.5 block">
+    <%# 아래 세 줄은 내용이 없어도 자리를 지킨다 — 카드마다 키가 달라지면 슬라이더 줄이 어긋난다 %>
+    <p class="line-clamp-2 min-h-[2.5em] text-sm leading-[1.25em] text-gray-800"><%= product.name %></p>
+    <p class="min-h-[1.2em] truncate text-xs leading-[1.2em] text-gray-400"><%= product.provider || '' %></p>
+    <p class="min-h-[1.2em] text-xs leading-[1.2em] text-gray-400 <%= _rListPrice ? 'line-through' : 'invisible' %>">
+      <%= Number(_rListPrice || _rPrice).toLocaleString() %>원
+    </p>
+    <p class="mt-0.5 flex items-baseline gap-1">
+      <% if (_rDiscount > 0) { %>
+        <span class="text-base font-bold text-red-600"><%= _rDiscount %>%</span>
+      <% } %>
+      <span class="text-base font-bold text-gray-900"><%= _rPrice.toLocaleString() %>원</span>
+    </p>
+  </a>
+</div>

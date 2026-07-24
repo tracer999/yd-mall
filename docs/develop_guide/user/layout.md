@@ -156,7 +156,7 @@ navigation_config.header_layout_type   →   include 할 스킨 파일
 
 - `rightRailMenus` 가 1건 이상일 때 **스토어프론트 전 페이지**에 include 됩니다(`position: fixed` 라 본문 레이아웃에 영향 없음). `layoutType` 과 무관합니다.
 - **`@media (min-width: 1600px)` 에서만 노출**되며, 이때 레거시 플로팅 TOP 버튼(`#scrollTopBtn`)은 숨겨집니다(중복 방지).
-- 항목: 로그인/마이쇼핑(시스템 고정) + `feature_menu(position='right_rail')` 항목(`RAIL_CART`, `RAIL_WISHLIST`, `RAIL_BRAND_WISHLIST`, `RAIL_RECENT`, `RAIL_TOP`) + 멤버십/앱 QR(설정 시) + TOP(최하단 고정).
+- 항목: 로그인/마이쇼핑(시스템 고정) + `feature_menu(position='right_rail')` 항목(`RAIL_CART`, `RAIL_WISHLIST`, `RAIL_ORDERS`, `RAIL_RECENT`, `RAIL_TOP`) + 멤버십/앱 QR(설정 시) + TOP(최하단 고정).
 - **뱃지는 `RAIL_CART` 에만 붙습니다**(`cartCount > 0` 일 때). 찜(`RAIL_WISHLIST`)·브랜드찜에는 **개수 뱃지가 없습니다** — 미들웨어가 찜 개수를 세지 않습니다.
 - "바로접속" 헤더 버튼으로 레일 본문을 접을 수 있고, 상태는 `localStorage['yd_rail_collapsed']` 에 남습니다.
 - 최근 본 상품은 `localStorage.yd_recent_products` 기반 — 2×2 썸네일 + 클릭 시 전체 목록 패널.

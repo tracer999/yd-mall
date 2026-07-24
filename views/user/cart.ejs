@@ -25,19 +25,25 @@
         </div>
     <% } %>
 
-    <% if (!items || items.length === 0) { %>
-        <div class="bg-white rounded-2xl border border-gray-200 p-10 text-center text-gray-500">
-            <i class="bi bi-bag text-4xl mb-3 text-gray-300"></i>
-            <p class="mb-4">장바구니에 담긴 상품이 없습니다.</p>
-            <a href="/products" class="inline-flex items-center px-5 py-2.5 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-medium hover:bg-[var(--gh-primary-dark)]">상품 보러가기</a>
-        </div>
-    <% } else { %>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <%#
+      빈 상태 블록은 항상 렌더한다. 마지막 줄을 지웠을 때 페이지를 새로 고치지 않고
+      이 블록으로 바꿔치기하려면 DOM 이 미리 있어야 한다(인라인 삭제).
+    %>
+    <% const _cartEmpty = !items || items.length === 0; %>
+    <div id="cart-empty" class="bg-white rounded-2xl border border-gray-200 p-10 text-center text-gray-500" style="<%= _cartEmpty ? '' : 'display:none' %>">
+        <i class="bi bi-bag text-4xl mb-3 text-gray-300"></i>
+        <p class="mb-4">장바구니에 담긴 상품이 없습니다.</p>
+        <a href="/products" class="inline-flex items-center px-5 py-2.5 rounded-xl bg-[var(--gh-primary)] text-white text-sm font-medium hover:bg-[var(--gh-primary-dark)]">상품 보러가기</a>
+    </div>
+
+    <% if (!_cartEmpty) { %>
+        <div id="cart-body" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Cart Items -->
             <div class="lg:col-span-2 space-y-3">
                 <% items.forEach(item => { %>
                     <% const detailPath = (item.slug && item.slug.trim()) ? `/products/${encodeURIComponent(item.slug)}` : `/products/view/${item.product_id}`; %>
-                    <div class="bg-white border border-gray-200 rounded-2xl p-4 flex gap-4 items-center">
+                    <div class="bg-white border border-gray-200 rounded-2xl p-4 flex gap-4 items-center"
+                         data-cart-line="<%= item.cart_id %>" data-product-id="<%= item.product_id %>">
                         <a href="<%= detailPath %>" class="flex-shrink-0">
                             <img src="<%= item.thumbnail_image || item.main_image || 'https://via.placeholder.com/80x80?text=No+Image' %>" alt="" class="w-20 h-20 rounded-xl object-cover bg-gray-100">
                         </a>
@@ -48,13 +54,14 @@
                             <p class="text-xs text-gray-500 mt-0.5 truncate"><%= item.provider || '' %></p>
                             <div class="mt-1 flex items-center gap-2 text-xs text-gray-600">
                                 <span class="text-gray-500">수량</span>
-                                <form action="/cart/update/<%= item.cart_id %>" method="POST" class="inline-flex items-center gap-1">
-                                    <button type="submit" name="quantity" value="<%= Math.max(0, item.quantity - 1) %>"
+                                <%# form 은 그대로 둔다 — JS 가 submit 을 가로채 인라인 갱신하고, 못 잡으면 예전처럼 POST 된다 %>
+                                <form action="/cart/update/<%= item.cart_id %>" method="POST" class="inline-flex items-center gap-1" data-cart-qty-form>
+                                    <button type="submit" name="quantity" value="<%= Math.max(0, item.quantity - 1) %>" data-qty-step="-1"
                                         class="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-500 hover:bg-gray-50">
                                         <i class="bi bi-dash"></i>
                                     </button>
-                                    <span class="px-3 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-800"><%= item.quantity %></span>
-                                    <button type="submit" name="quantity" value="<%= item.quantity + 1 %>"
+                                    <span class="px-3 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-800" data-line-qty><%= item.quantity %></span>
+                                    <button type="submit" name="quantity" value="<%= item.quantity + 1 %>" data-qty-step="1"
                                         class="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-500 hover:bg-gray-50">
                                         <i class="bi bi-plus"></i>
                                     </button>
@@ -63,7 +70,7 @@
                         </div>
                         <div class="flex flex-col items-end gap-2">
                             <p class="text-sm font-semibold text-gray-900"><%= Number(item.price || 0).toLocaleString() %>원</p>
-                            <form action="/cart/remove/<%= item.cart_id %>" method="POST">
+                            <form action="/cart/remove/<%= item.cart_id %>" method="POST" data-cart-remove-form>
                                 <button type="submit" class="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1">
                                     <i class="bi bi-x-circle"></i>
                                     <span>삭제</span>
@@ -80,25 +87,23 @@
                 <dl class="space-y-2 text-sm text-gray-700 mb-4">
                     <div class="flex justify-between">
                         <dt>상품 수</dt>
-                        <dd><%= totalQuantity %>개</dd>
+                        <dd><span data-sum-qty><%= totalQuantity %></span>개</dd>
                     </div>
                     <div class="flex justify-between">
                         <dt>상품 금액</dt>
-                        <dd><%= Number(totalAmount || 0).toLocaleString() %>원</dd>
+                        <dd><span data-sum-amount><%= Number(totalAmount || 0).toLocaleString() %></span>원</dd>
                     </div>
                     <div class="flex justify-between">
                         <dt>배송비</dt>
+                        <%# 무료/유료 두 표현을 다 렌더해 두고 JS 가 토글한다 — 금액만 바꾸면 '무료' 가 남는다 %>
                         <dd>
-                            <% if (shipping.baseFee === 0) { %>
-                                <span class="text-[var(--gh-primary)] font-medium">무료</span>
-                            <% } else { %>
-                                <%= Number(shipping.baseFee).toLocaleString() %>원
-                            <% } %>
+                            <span data-sum-ship-free class="text-[var(--gh-primary)] font-medium" style="<%= shipping.baseFee === 0 ? '' : 'display:none' %>">무료</span>
+                            <span data-sum-ship-paid style="<%= shipping.baseFee === 0 ? 'display:none' : '' %>"><span data-sum-ship><%= Number(shipping.baseFee).toLocaleString() %></span>원</span>
                         </dd>
                     </div>
                     <div class="flex justify-between font-semibold text-gray-900 pt-2 border-t border-gray-100">
                         <dt>총 결제 예상 금액</dt>
-                        <dd><%= Number((totalAmount || 0) + shipping.baseFee).toLocaleString() %>원</dd>
+                        <dd><span data-sum-pay><%= Number((totalAmount || 0) + shipping.baseFee).toLocaleString() %></span>원</dd>
                     </div>
                 </dl>
 
@@ -108,14 +113,14 @@
                     <div class="mb-4 rounded-xl bg-gray-50 border border-gray-100 p-3">
                         <% const pct = Math.min(100, Math.round(((totalAmount || 0) / shipping.freeThreshold) * 100)); %>
                         <div class="h-2 rounded-full bg-gray-200 overflow-hidden">
-                            <div class="h-full bg-[var(--gh-primary)] rounded-full" style="width: <%= pct %>%"></div>
+                            <div class="h-full bg-[var(--gh-primary)] rounded-full" style="width: <%= pct %>%" data-free-bar></div>
                         </div>
-                        <p class="mt-2 text-xs <%= shipping.remainingForFree > 0 ? 'text-gray-600' : 'text-[var(--gh-primary)] font-medium' %>">
-                            <% if (shipping.remainingForFree > 0) { %>
-                                <strong><%= Number(shipping.remainingForFree).toLocaleString() %>원</strong> 더 담으면 무료배송
-                            <% } else { %>
-                                무료배송 대상입니다
-                            <% } %>
+                        <%# 두 문구를 다 렌더해 두고 토글한다 — 수량을 줄여 미달로 돌아가는 경우도 잡아야 한다 %>
+                        <p class="mt-2 text-xs text-gray-600" data-free-remain style="<%= shipping.remainingForFree > 0 ? '' : 'display:none' %>">
+                            <strong><span data-free-remain-amount><%= Number(shipping.remainingForFree).toLocaleString() %></span>원</strong> 더 담으면 무료배송
+                        </p>
+                        <p class="mt-2 text-xs text-[var(--gh-primary)] font-medium" data-free-done style="<%= shipping.remainingForFree > 0 ? 'display:none' : '' %>">
+                            무료배송 대상입니다
                         </p>
                     </div>
                 <% } %>
@@ -154,10 +159,13 @@
                 </form>
 
                 <script>
-                const _cartItems = [];
-                <% items.forEach(item => { %>
-                _cartItems.push({ productId: <%= item.product_id %>, quantity: <%= item.quantity %> });
-                <% }); %>
+                /* 수량은 인라인으로 바뀐다 — 서버 렌더 시점 배열을 그대로 쓰면 옛 수량이 전송된다. */
+                function _collectCartItems() {
+                    return Array.prototype.map.call(document.querySelectorAll('[data-cart-line]'), function (el) {
+                        var q = el.querySelector('[data-line-qty]');
+                        return { productId: Number(el.dataset.productId), quantity: Number(q ? q.textContent.trim() : 0) || 0 };
+                    }).filter(function (i) { return i.productId && i.quantity > 0; });
+                }
 
                 async function shopifyGlobalCartCheckout() {
                     const btn = document.getElementById('shopifyCartBtn');
@@ -169,7 +177,7 @@
                         const selectEl = document.getElementById('shopify-country-select');
                         const countryCode = (selectEl && selectEl.value) || null;
 
-                        const body = { items: _cartItems };
+                        const body = { items: _collectCartItems() };
                         if (countryCode) body.countryCode = countryCode;
 
                         const resp = await fetch('/shopify/cart-from-local', {
@@ -192,5 +200,114 @@
                 </script>
             </div>
         </div>
+
+        <script>
+        /*
+         * 수량 +/- · 삭제를 페이지 이동 없이 처리한다.
+         * form 은 그대로 두고 submit 을 가로채는 방식이라, submitter 를 못 읽는 환경에서는
+         * 예전처럼 POST 되어 서버가 리다이렉트로 응답한다(기능이 사라지지 않는다).
+         */
+        (function () {
+            var root = document.getElementById('cart-body');
+            var emptyBox = document.getElementById('cart-empty');
+            if (!root) return;
+
+            function fmt(n) { return Number(n || 0).toLocaleString(); }
+            function setText(sel, v) {
+                var el = document.querySelector(sel);
+                if (el) el.textContent = v;
+            }
+            function setShown(sel, on) {
+                var el = document.querySelector(sel);
+                if (el) el.style.display = on ? '' : 'none';
+            }
+
+            /* 요약·무료배송 게이지를 서버가 계산해 준 값으로 다시 그린다(클라이언트 재계산 금지). */
+            function applySummary(s) {
+                if (!s) return;
+                setText('[data-sum-qty]', s.totalQuantity);
+                setText('[data-sum-amount]', fmt(s.totalAmount));
+                setText('[data-sum-ship]', fmt(s.shippingFee));
+                setText('[data-sum-pay]', fmt(s.payAmount));
+                setShown('[data-sum-ship-free]', s.shippingFee === 0);
+                setShown('[data-sum-ship-paid]', s.shippingFee !== 0);
+
+                var bar = document.querySelector('[data-free-bar]');
+                if (bar) bar.style.width = s.freeProgressPct + '%';
+                setShown('[data-free-remain]', s.remainingForFree > 0);
+                setShown('[data-free-done]', s.remainingForFree <= 0);
+                setText('[data-free-remain-amount]', fmt(s.remainingForFree));
+            }
+
+            /* 다음 클릭이 옳은 수량을 보내도록 +/- 버튼의 value 까지 같이 옮긴다. */
+            function applyLineQty(cartId, qty) {
+                var line = root.querySelector('[data-cart-line="' + cartId + '"]');
+                if (!line) return;
+                var label = line.querySelector('[data-line-qty]');
+                if (label) label.textContent = qty;
+                var minus = line.querySelector('[data-qty-step="-1"]');
+                var plus = line.querySelector('[data-qty-step="1"]');
+                if (minus) minus.value = Math.max(0, qty - 1);
+                if (plus) plus.value = qty + 1;
+            }
+
+            function removeLine(cartId) {
+                var line = root.querySelector('[data-cart-line="' + cartId + '"]');
+                if (line && line.parentNode) line.parentNode.removeChild(line);
+            }
+
+            function showEmpty() {
+                root.style.display = 'none';
+                if (emptyBox) emptyBox.style.display = '';
+            }
+
+            function handle(form, url, bodyParams, onDone) {
+                if (form.dataset.busy === '1') return;
+                form.dataset.busy = '1';
+                window.ydPostJson(url, bodyParams)
+                    .then(function (r) {
+                        var data = r.data;
+                        if (!data || !data.ok) {
+                            if (data && data.redirect) { location.href = data.redirect; return; }
+                            window.ydToast((data && data.message) || '처리하지 못했습니다.', 'error');
+                            return;
+                        }
+                        onDone(data);
+                        applySummary(data.summary);
+                        window.ydSetCartCount(data.cartCount);
+                        if (data.empty) showEmpty();
+                    })
+                    .catch(function () { window.ydToast('처리하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error'); })
+                    .then(function () { delete form.dataset.busy; });
+            }
+
+            root.addEventListener('submit', function (e) {
+                var form = e.target;
+
+                if (form.matches('[data-cart-qty-form]')) {
+                    var submitter = e.submitter;
+                    if (!submitter) return; // 값을 못 읽으면 기존 폼 전송에 맡긴다
+                    e.preventDefault();
+                    var line = form.closest('[data-cart-line]');
+                    var cartId = line && line.dataset.cartLine;
+                    var qty = Number(submitter.value);
+                    handle(form, form.action, { quantity: qty }, function (data) {
+                        if (data.removedCartId) removeLine(data.removedCartId);
+                        else applyLineQty(cartId, data.quantity);
+                    });
+                    return;
+                }
+
+                if (form.matches('[data-cart-remove-form]')) {
+                    e.preventDefault();
+                    var rline = form.closest('[data-cart-line]');
+                    handle(form, form.action, {}, function (data) {
+                        removeLine(data.removedCartId || (rline && rline.dataset.cartLine));
+                        window.ydToast('장바구니에서 삭제했습니다.');
+                    });
+                }
+            });
+        })();
+        </script>
     <% } %>
 </div>

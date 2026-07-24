@@ -17,8 +17,8 @@ const featureMenuSync = require('../../services/menu/featureMenuSync');
  *   - 배지는 NEW/HOT/SALE 화이트리스트만 허용한다(자유 입력 금지).
  *
  * 화면 분리 필터는 `position` 이다. `is_system` 이 아니다 —
- * CATEGORY(gnb)가 is_system=1 이고 RAIL_BRAND_WISHLIST·RAIL_RECENT 는 is_system=0 이라
- * is_system 으로 가르면 GNB 버튼이 시스템 화면에 끌려오고 레일 2종이 빠진다.
+ * CATEGORY(gnb)가 is_system=1 이고 RAIL_RECENT 는 is_system=0 이라
+ * is_system 으로 가르면 GNB 버튼이 시스템 화면에 끌려오고 최근본상품이 빠진다.
  */
 
 

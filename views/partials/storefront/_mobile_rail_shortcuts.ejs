@@ -4,7 +4,7 @@
   우측레일(feature_menu position='right_rail')은 PC ≥1600px 전용(right_utility.ejs)이라
   모바일에는 노출 경로가 아예 없었다. 관리자가 [시스템 메뉴 설정]에서 켠 항목을 모바일 메뉴
   레이어에 노출한다. 두 섹션으로 나눈다:
-    · 버튼 형태  : 장바구니 / 찜 / 찜한 브랜드 (아이콘 + 라벨 링크)
+    · 버튼 형태  : 장바구니 / 찜 / 주문내역 (아이콘 + 라벨 링크 + 개수 배지)
     · 이미지 형태: 최근본상품 (localStorage 썸네일 그리드 — 서버가 모르는 클라이언트 이력)
   TOP(맨 위로)은 스크롤 동작이라 레이어 메뉴에 의미가 없어 제외한다.
 
@@ -15,14 +15,16 @@
   const _sr = (typeof rightRailMenus !== 'undefined' && Array.isArray(rightRailMenus)) ? rightRailMenus : [];
   // 아이콘·URL 은 코드가 고정한다(RAIL_RECENT 는 default_path 가 비어 있어 여기서 채운다).
   const _srBtnMeta = {
-    RAIL_CART:           { icon: 'bi-bag',            href: '/cart' },
-    RAIL_WISHLIST:       { icon: 'bi-heart',          href: '/mypage/likes' },
-    RAIL_BRAND_WISHLIST: { icon: 'bi-bookmark-heart', href: '/mypage/brand-likes' },
+    RAIL_CART:     { icon: 'bi-bag',     href: '/cart' },
+    RAIL_WISHLIST: { icon: 'bi-heart',   href: '/mypage/likes' },
+    RAIL_ORDERS:   { icon: 'bi-receipt', href: '/mypage/orders' },
   };
   const _srBtns   = _sr.filter(m => _srBtnMeta[m.featureCode] && m.mobileVisible !== 0);
   const _srRecent = _sr.find(m => m.featureCode === 'RAIL_RECENT' && m.mobileVisible !== 0) || null;
-  const _srCart   = (typeof cartCount !== 'undefined' && Number(cartCount) > 0) ? Number(cartCount) : 0;
   const _srMall   = (typeof mallId !== 'undefined' && mallId) ? Number(mallId) : 1;
+  // 배지는 코드별 if 분기 대신 맵 조회로 낸다 — 항목이 늘어도 파셜(PC·모바일)이 갈라지지 않는다.
+  const _srCounts = (typeof railCounts !== 'undefined' && railCounts) ? railCounts : {};
+  const _srCount  = (code) => Number(_srCounts[code]) > 0 ? Number(_srCounts[code]) : 0;
 %>
 <% if (_srBtns.length || _srRecent) { %>
 <div class="yd-mrail border-t border-gray-100">
@@ -33,12 +35,15 @@
     <nav class="grid grid-cols-3 gap-2" aria-label="바로가기">
       <% _srBtns.forEach(function (m) {
            const meta = _srBtnMeta[m.featureCode];
-           const href = (m.href && m.href !== '#') ? m.href : meta.href; %>
+           const href = (m.href && m.href !== '#') ? m.href : meta.href;
+           const cnt  = _srCount(m.featureCode); %>
         <a href="<%= href %>" class="flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 bg-white py-3 text-gray-600 active:bg-gray-50">
           <span class="relative">
             <i class="bi <%= meta.icon %> text-xl" aria-hidden="true"></i>
-            <% if (m.featureCode === 'RAIL_CART' && _srCart > 0) { %>
-              <em class="absolute -top-1.5 -right-2 min-w-[16px] rounded-full bg-[var(--gh-accent)] px-1 text-center text-[10px] not-italic font-bold leading-4 text-white"><%= _srCart %></em>
+            <%# 장바구니 뱃지만 0 이어도 렌더한다 — 담는 즉시 ydSetCartCount 가 붙일 DOM 이 있어야 한다 %>
+            <% if (cnt > 0 || m.featureCode === 'RAIL_CART') { %>
+              <em <%- m.featureCode === 'RAIL_CART' ? 'data-cart-badge' : '' %> style="<%= cnt > 0 ? '' : 'display:none' %>"
+                  class="absolute -top-1.5 -right-2 min-w-[16px] rounded-full bg-[var(--gh-accent)] px-1 text-center text-[10px] not-italic font-bold leading-4 text-white"><%= cnt > 99 ? '99+' : cnt %></em>
             <% } %>
           </span>
           <span class="text-[11px] font-medium"><%= m.name %></span>

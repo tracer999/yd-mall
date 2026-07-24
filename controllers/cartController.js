@@ -6,6 +6,75 @@ const skuService = require('../services/catalog/skuService');
 // B2B — 전용가·수량규칙·장바구니 유형(설계 §6.3)
 const b2bPricingService = require('../services/b2b/b2bPricingService');
 
+/*
+ * 장바구니 한 벌을 읽고 가격·합계·배송비까지 계산한다.
+ * 화면 렌더(getCart)와 인라인 수정 응답(수량 변경·삭제)이 **같은 계산**을 써야
+ * 페이지를 새로 고치지 않아도 요약이 서버 렌더와 어긋나지 않는다.
+ */
+async function loadCartState(req, userId) {
+    const [rows] = await pool.query(`
+        SELECT c.id AS cart_id, c.quantity,
+               p.id AS product_id, p.name, p.provider, p.price, p.original_price, p.discount_rate,
+               p.main_image, p.thumbnail_image, p.slug
+        FROM carts c
+        JOIN products p ON c.product_id = p.id
+        WHERE c.user_id = ?
+        ORDER BY c.created_at DESC
+    `, [userId]);
+
+    /*
+     * B2B 전용가를 특가보다 **먼저** 적용한다(주문서와 같은 순서).
+     * 비활성 컨텍스트면 rows 가 그대로라 B2C 장바구니는 예전과 같다.
+     */
+    const isB2bCart = !!(req.b2b && req.b2b.active);
+    if (isB2bCart) {
+        const priced = await b2bPricingService.resolveForProducts(req.b2b, rows.map(r => r.product_id));
+        for (const r of rows) {
+            const info = priced.get(Number(r.product_id));
+            if (!info || info.priceSource === 'B2C_FALLBACK') continue;
+            r.b2b_list_price = r.price;
+            r.price = info.unitPrice;
+            r.b2b_price_source = info.priceSource;
+            r.b2b_min_qty = info.minOrderQty;
+            r.b2b_qty_error = b2bPricingService.validateQuantity({ min_order_qty: info.minOrderQty }, r.quantity);
+        }
+    }
+
+    // 특가를 반영한 뒤 합계를 낸다 — 장바구니 금액이 주문서 금액과 어긋나면 안 된다.
+    // B2B 라인은 위에서 이미 전용가가 잡혀 특가 대상이 아니다.
+    if (!isB2bCart) await dealSvc.applyDeals(rows, { idKey: 'product_id' });
+
+    let totalQuantity = 0;
+    let totalAmount = 0;
+    rows.forEach(item => {
+        totalQuantity += item.quantity || 0;
+        totalAmount += (item.quantity || 0) * (item.price || 0);
+    });
+
+    // 무료배송 임박 안내가 가장 효과적인 자리다(배송비 문서 §5-2).
+    // 배송지가 아직 없으므로 지역 할증은 계산하지 않는다 — 기본 배송비만 보여준다.
+    const shipping = await calcShippingFee({ mallId: req.mallId || 1, subtotalAmount: totalAmount });
+
+    return { rows, isB2bCart, totalQuantity, totalAmount, shipping };
+}
+
+/** 인라인 갱신용 요약 — 뷰의 '주문 요약' 블록이 그리는 값과 1:1 로 맞춘다. */
+function cartSummaryPayload(state) {
+    const { totalQuantity, totalAmount, shipping } = state;
+    return {
+        itemCount: state.rows.length,
+        totalQuantity,
+        totalAmount,
+        shippingFee: shipping.baseFee,
+        payAmount: totalAmount + shipping.baseFee,
+        freeThreshold: shipping.freeThreshold || null,
+        remainingForFree: shipping.remainingForFree || 0,
+        freeProgressPct: shipping.freeThreshold
+            ? Math.min(100, Math.round((totalAmount / shipping.freeThreshold) * 100))
+            : 0
+    };
+}
+
 // 장바구니 조회
 exports.getCart = async (req, res) => {
     if (!req.user) {
@@ -14,50 +83,7 @@ exports.getCart = async (req, res) => {
 
     try {
         const userId = req.user.id;
-        const [rows] = await pool.query(`
-            SELECT c.id AS cart_id, c.quantity,
-                   p.id AS product_id, p.name, p.provider, p.price, p.original_price, p.discount_rate,
-                   p.main_image, p.thumbnail_image, p.slug
-            FROM carts c
-            JOIN products p ON c.product_id = p.id
-            WHERE c.user_id = ?
-            ORDER BY c.created_at DESC
-        `, [userId]);
-
-        /*
-         * B2B 전용가를 특가보다 **먼저** 적용한다(주문서와 같은 순서).
-         * 비활성 컨텍스트면 rows 가 그대로라 B2C 장바구니는 예전과 같다.
-         */
-        const isB2bCart = !!(req.b2b && req.b2b.active);
-        if (isB2bCart) {
-            const priced = await b2bPricingService.resolveForProducts(req.b2b, rows.map(r => r.product_id));
-            for (const r of rows) {
-                const info = priced.get(Number(r.product_id));
-                if (!info || info.priceSource === 'B2C_FALLBACK') continue;
-                r.b2b_list_price = r.price;
-                r.price = info.unitPrice;
-                r.b2b_price_source = info.priceSource;
-                r.b2b_min_qty = info.minOrderQty;
-                r.b2b_qty_error = b2bPricingService.validateQuantity({ min_order_qty: info.minOrderQty }, r.quantity);
-            }
-        }
-
-        // 특가를 반영한 뒤 합계를 낸다 — 장바구니 금액이 주문서 금액과 어긋나면 안 된다.
-        // B2B 라인은 위에서 이미 전용가가 잡혀 특가 대상이 아니다.
-        if (!isB2bCart) await dealSvc.applyDeals(rows, { idKey: 'product_id' });
-
-        let totalQuantity = 0;
-        let totalAmount = 0;
-        rows.forEach(item => {
-            const q = item.quantity || 0;
-            const price = item.price || 0;
-            totalQuantity += q;
-            totalAmount += q * price;
-        });
-
-        // 무료배송 임박 안내가 가장 효과적인 자리다(배송비 문서 §5-2).
-        // 배송지가 아직 없으므로 지역 할증은 계산하지 않는다 — 기본 배송비만 보여준다.
-        const shipping = await calcShippingFee({ mallId: req.mallId || 1, subtotalAmount: totalAmount });
+        const { rows, isB2bCart, totalQuantity, totalAmount, shipping } = await loadCartState(req, userId);
 
         res.render('user/cart', {
             title: '장바구니',
@@ -94,9 +120,60 @@ exports.getCart = async (req, res) => {
     }
 };
 
+/*
+ * 담기 실패 사유 문구는 서버가 정한다 — 뷰(HTML/JSON 양쪽)가 error 코드를 해석하지 않게.
+ * getCart 의 b2bNotice 와 같은 문장을 쓴다.
+ */
+function cartErrorMessage(code, opts = {}) {
+    switch (code) {
+        case 'stock':
+            return `재고가 부족합니다. (최대 ${opts.max || 0}개)`;
+        case 'b2b_qty':
+            return opts.reason
+                ? `주문 수량 조건을 확인해 주세요 — ${opts.reason}`
+                : '주문 수량 조건을 확인해 주세요.';
+        case 'mixed':
+            return opts.type === 'B2B'
+                ? '개인 구매로 담은 상품이 있어 기업 상품을 함께 담을 수 없습니다. 장바구니를 비운 뒤 다시 담아 주세요.'
+                : '기업 구매로 담은 상품이 있어 함께 담을 수 없습니다. 장바구니를 비운 뒤 다시 담아 주세요.';
+        default:
+            return '장바구니에 담지 못했습니다. 잠시 후 다시 시도해 주세요.';
+    }
+}
+
+// 상세페이지의 담기 레이어는 fetch 로 호출한다. 이 경로는 어떤 분기도 302 를 내면 안 된다
+// (fetch 가 리다이렉트를 따라가 HTML 을 받아오고 .json() 이 깨진다).
+function wantsJson(req) {
+    return req.xhr || String(req.get('accept') || '').includes('application/json');
+}
+
 // 장바구니 추가
 exports.addToCart = async (req, res) => {
+    const asJson = wantsJson(req);
+
+    // 실패는 JSON 이면 메시지로, 폼 전송이면 기존대로 /cart 리다이렉트로 알린다.
+    const fail = (code, opts = {}, redirectUrl = null) => {
+        if (asJson) {
+            return res.status(opts.status || 400).json({
+                ok: false,
+                code,
+                message: cartErrorMessage(code, opts),
+                redirect: opts.redirect || null
+            });
+        }
+        // Express 5 는 redirect('back') 매직 문자열을 없앴다 — 그대로 두면 /back 으로 튄다.
+        return res.redirect(redirectUrl || '/cart');
+    };
+
     if (!req.user) {
+        if (asJson) {
+            return res.status(401).json({
+                ok: false,
+                code: 'auth',
+                message: '로그인이 필요합니다.',
+                redirect: '/auth/login'
+            });
+        }
         return res.redirect('/auth/login');
     }
 
@@ -105,17 +182,17 @@ exports.addToCart = async (req, res) => {
     const qty = Math.max(1, parseInt(req.body.quantity, 10) || 1);
 
     if (!productId) {
-        return res.redirect('back');
+        return fail('invalid');
     }
 
     try {
         const [[product]] = await pool.query('SELECT stock FROM products WHERE id = ? AND status = "ON"', [productId]);
-        if (!product) return res.redirect('back');
+        if (!product) return fail('invalid');
 
         // 판매 SKU 확정: 옵션상품이면 선택 SKU, 아니면 대표 SKU. 재고는 SKU 기준.
         const selectedSkuId = parseInt(req.body.sku_id, 10) || null;
         const sku = await skuService.resolveSkuForLine(productId, selectedSkuId);
-        if (!sku) return res.redirect('back');
+        if (!sku) return fail('invalid');
         const skuId = sku.id;
         const stock = (sku.stock != null && sku.stock >= 0) ? sku.stock : 0;
 
@@ -130,7 +207,7 @@ exports.addToCart = async (req, res) => {
             [userId, cartType]
         );
         if (other.cnt > 0) {
-            return res.redirect(`/cart?error=mixed&type=${cartType}`);
+            return fail('mixed', { type: cartType }, `/cart?error=mixed&type=${cartType}`);
         }
 
         // 같은 SKU 라인만 합친다(옵션이 다르면 별도 라인).
@@ -141,14 +218,15 @@ exports.addToCart = async (req, res) => {
 
         const newQty = existingRows.length > 0 ? existingRows[0].quantity + qty : qty;
         if (newQty > stock) {
-            return res.redirect(`/cart?error=stock&product=${productId}&max=${stock}`);
+            return fail('stock', { max: stock }, `/cart?error=stock&product=${productId}&max=${stock}`);
         }
 
         // B2B 는 최소 주문수량·주문단위를 담는 시점에도 검증한다(주문 시 또 한 번 본다).
         if (cartType === 'B2B') {
             const violations = await b2bPricingService.validateOrderItems(req.b2b, [{ product_id: productId, quantity: newQty }]);
             if (violations.length > 0) {
-                return res.redirect(`/cart?error=b2b_qty&reason=${encodeURIComponent(violations[0].reason)}`);
+                const reason = violations[0].reason;
+                return fail('b2b_qty', { reason }, `/cart?error=b2b_qty&reason=${encodeURIComponent(reason)}`);
             }
         }
 
@@ -164,16 +242,44 @@ exports.addToCart = async (req, res) => {
             );
         }
 
+        if (asJson) {
+            const [[agg]] = await pool.query(
+                'SELECT COALESCE(SUM(quantity), 0) AS cnt FROM carts WHERE user_id = ?',
+                [userId]
+            );
+            return res.json({ ok: true, cartCount: Number(agg.cnt) || 0, addedQuantity: qty });
+        }
         return res.redirect('/cart');
     } catch (err) {
         console.error(err);
+        if (asJson) {
+            return res.status(500).json({ ok: false, code: 'server', message: cartErrorMessage('server') });
+        }
         res.status(500).send('Server Error');
     }
 };
 
+/**
+ * 인라인 수정(수량 변경·삭제) 후 화면이 다시 그려야 할 것들을 한 번에 돌려준다.
+ * 뱃지·요약·라인 수량이 서로 다른 시점의 값을 보이면 안 되므로 한 응답에 담는다.
+ */
+async function inlineCartResponse(req, res, userId, extra = {}) {
+    const state = await loadCartState(req, userId);
+    return res.json(Object.assign({
+        ok: true,
+        cartCount: state.totalQuantity,
+        summary: cartSummaryPayload(state),
+        // 마지막 줄을 지우면 화면은 빈 장바구니로 바뀌어야 한다.
+        empty: state.rows.length === 0
+    }, extra));
+}
+
 // 장바구니 단일 항목 삭제
 exports.removeItem = async (req, res) => {
+    const asJson = wantsJson(req);
+
     if (!req.user) {
+        if (asJson) return res.status(401).json({ ok: false, code: 'auth', message: '로그인이 필요합니다.', redirect: '/auth/login' });
         return res.redirect('/auth/login');
     }
 
@@ -181,21 +287,27 @@ exports.removeItem = async (req, res) => {
     const cartId = parseInt(req.params.id, 10);
 
     if (!cartId) {
+        if (asJson) return res.status(400).json({ ok: false, code: 'invalid', message: '잘못된 요청입니다.' });
         return res.redirect('/cart');
     }
 
     try {
         await pool.query('DELETE FROM carts WHERE id = ? AND user_id = ?', [cartId, userId]);
+        if (asJson) return inlineCartResponse(req, res, userId, { removedCartId: cartId });
         res.redirect('/cart');
     } catch (err) {
         console.error(err);
+        if (asJson) return res.status(500).json({ ok: false, code: 'server', message: cartErrorMessage('server') });
         res.status(500).send('Server Error');
     }
 };
 
 // 장바구니 수량 변경
 exports.updateQuantity = async (req, res) => {
+    const asJson = wantsJson(req);
+
     if (!req.user) {
+        if (asJson) return res.status(401).json({ ok: false, code: 'auth', message: '로그인이 필요합니다.', redirect: '/auth/login' });
         return res.redirect('/auth/login');
     }
 
@@ -204,12 +316,16 @@ exports.updateQuantity = async (req, res) => {
     const qty = parseInt(req.body.quantity, 10);
 
     if (!cartId) {
+        if (asJson) return res.status(400).json({ ok: false, code: 'invalid', message: '잘못된 요청입니다.' });
         return res.redirect('/cart');
     }
 
     try {
+        // 수량 0 은 삭제와 같다(− 를 계속 누르면 여기로 온다).
+        let removed = false;
         if (!qty || qty <= 0) {
             await pool.query('DELETE FROM carts WHERE id = ? AND user_id = ?', [cartId, userId]);
+            removed = true;
         } else {
             // 옵션을 고른 줄은 그 SKU 재고가 상한이고, 아니면 상품의 판매가능재고가 상한이다.
             // 예전엔 products.stock 만 봐서, 옵션상품은 재고가 있어도 수량을 못 늘렸다(그 값이 stale 이라 0).
@@ -227,6 +343,14 @@ exports.updateQuantity = async (req, res) => {
                 const raw = cartItem.sku_id ? cartItem.sku_stock : cartItem.stock;
                 const stock = (raw != null && raw >= 0) ? raw : 0;
                 if (qty > stock) {
+                    if (asJson) {
+                        return res.status(400).json({
+                            ok: false,
+                            code: 'stock',
+                            message: cartErrorMessage('stock', { max: stock }),
+                            max: stock
+                        });
+                    }
                     return res.redirect(`/cart?error=stock&max=${stock}`);
                 }
             }
@@ -235,9 +359,17 @@ exports.updateQuantity = async (req, res) => {
                 [qty, cartId, userId]
             );
         }
+        if (asJson) {
+            return inlineCartResponse(req, res, userId, {
+                cartId,
+                quantity: removed ? 0 : qty,
+                removedCartId: removed ? cartId : null
+            });
+        }
         res.redirect('/cart');
     } catch (err) {
         console.error(err);
+        if (asJson) return res.status(500).json({ ok: false, code: 'server', message: cartErrorMessage('server') });
         res.status(500).send('Server Error');
     }
 };

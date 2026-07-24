@@ -1037,7 +1037,7 @@ CREATE TABLE IF NOT EXISTS `navigation_config` (
   UNIQUE KEY `uk_navconfig_mall` (`mall_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='몰별 내비게이션 정책';
 
--- 찜한 브랜드 (우측 유틸 레일 RAIL_BRAND_WISHLIST)
+-- 찜한 브랜드 (찜 화면 /mypage/likes 의 [브랜드] 탭)
 CREATE TABLE IF NOT EXISTS `brand_likes` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,

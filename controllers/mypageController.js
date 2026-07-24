@@ -584,9 +584,15 @@ exports.getLikes = async (req, res, next) => {
         // 찜한 뒤 특가가 시작됐을 수 있다 — 현재가 기준으로 보여준다.
         await dealSvc.applyDeals(likedProducts);
 
+        // 브랜드 찜은 별도 화면이 아니라 이 화면의 탭이다(우측레일에서 [찜한 브랜드] 버튼이 빠졌다).
+        const likedBrands = await queryLikedBrands(userId);
+        const tab = req.query.tab === 'brand' ? 'brand' : 'product';
+
         res.render('user/mypage/likes', {
             title: '관심 상품',
-            likedProducts
+            likedProducts,
+            likedBrands,
+            tab
         });
     } catch (err) {
         next(err);
@@ -597,33 +603,29 @@ exports.getLikes = async (req, res, next) => {
  * 찜한 브랜드 목록 (brand_likes → categories[type=BRAND])
  * 브랜드별 판매중 상품 수를 함께 보여준다.
  */
-exports.getBrandLikes = async (req, res, next) => {
-    try {
-        const userId = req.user.id;
+async function queryLikedBrands(userId) {
+    const [rows] = await pool.query(
+        `SELECT
+            c.id, c.name, c.logo_image_path,
+            COUNT(p.id) AS product_count
+         FROM brand_likes bl
+         JOIN categories c ON bl.category_id = c.id AND c.type = 'BRAND'
+         LEFT JOIN products p
+                ON p.brand_category_id = c.id
+               AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
+         WHERE bl.user_id = ?
+         GROUP BY c.id, c.name, c.logo_image_path
+         ORDER BY bl.created_at DESC`,
+        [userId]
+    );
+    return rows;
+}
 
-        const [likedBrands] = await pool.query(
-            `SELECT
-                c.id, c.name, c.logo_image_path,
-                COUNT(p.id) AS product_count
-             FROM brand_likes bl
-             JOIN categories c ON bl.category_id = c.id AND c.type = 'BRAND'
-             LEFT JOIN products p
-                    ON p.brand_category_id = c.id
-                   AND p.status IN ('ON','SOLD_OUT','COMING_SOON','RESTOCK')
-             WHERE bl.user_id = ?
-             GROUP BY c.id, c.name, c.logo_image_path
-             ORDER BY bl.created_at DESC`,
-            [userId]
-        );
-
-        res.render('user/mypage/brand_likes', {
-            title: '찜한 브랜드',
-            likedBrands
-        });
-    } catch (err) {
-        next(err);
-    }
-};
+/*
+ * 찜한 브랜드는 찜 화면의 [브랜드] 탭으로 합쳐졌다.
+ * 라우트는 남긴다 — 북마크·외부 링크·기존 몰의 커스텀 메뉴가 아직 이 주소를 가리킬 수 있다.
+ */
+exports.getBrandLikes = (req, res) => res.redirect(301, '/mypage/likes?tab=brand');
 
 exports.getRecentViews = async (req, res, next) => {
     try {

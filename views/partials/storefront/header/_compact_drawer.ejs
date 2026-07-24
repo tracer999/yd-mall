@@ -74,11 +74,10 @@
                     <a href="/cart" aria-label="장바구니" title="장바구니"
                        class="relative flex items-center justify-center w-10 h-10 -mr-2 rounded-full text-gray-600 hover:text-[var(--gh-primary)] hover:bg-gray-50 transition-colors">
                         <i class="bi bi-bag text-xl"></i>
-                        <% if (typeof cartCount !== 'undefined' && cartCount > 0) { %>
-                            <span class="absolute top-0.5 right-0 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                                <%= cartCount %>
-                            </span>
-                        <% } %>
+                        <%# 0 이어도 렌더 — 갱신은 ydSetCartCount 가 data-cart-badge 를 잡아 한다 %>
+                        <% const _cdCart = Number(typeof cartCount !== 'undefined' ? cartCount : 0) || 0; %>
+                        <span data-cart-badge style="<%= _cdCart > 0 ? '' : 'display:none' %>"
+                              class="absolute top-0.5 right-0 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full"><%= _cdCart %></span>
                     </a>
                 </div>
             </div>

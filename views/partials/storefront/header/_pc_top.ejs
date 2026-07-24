@@ -104,11 +104,10 @@
                     </a>
                     <a href="/cart" class="flex flex-col items-center gap-0.5 text-gray-600 hover:text-[var(--gh-primary)] transition-colors relative">
                         <i class="bi bi-bag text-xl"></i><span class="hidden sm:inline text-xs">장바구니</span>
-                        <% if (typeof cartCount !=='undefined' && cartCount> 0) { %>
-                            <span class="absolute -top-1.5 right-1 sm:right-3 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                                <%= cartCount %>
-                            </span>
-                        <% } %>
+                        <%# 0 이어도 렌더 — 갱신은 ydSetCartCount 가 data-cart-badge 를 잡아 한다 %>
+                        <% const _ptCart = Number(typeof cartCount !== 'undefined' ? cartCount : 0) || 0; %>
+                        <span data-cart-badge style="<%= _ptCart > 0 ? '' : 'display:none' %>"
+                              class="absolute -top-1.5 right-1 sm:right-3 bg-[var(--gh-accent)] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full"><%= _ptCart %></span>
                     </a>
                     <%# 고객센터는 시스템 메뉴이지만 ON/OFF 가능 (feature_menu.HEADER_CS).
                         표준 URL(default_path)도 데이터에서 온다 — 하드코딩 금지. %>
